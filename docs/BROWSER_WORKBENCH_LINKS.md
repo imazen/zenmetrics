@@ -60,14 +60,19 @@ lists every CLI metric name with its browser status. It is served with
 {
   "schema": 1,
   "workbench": "https://metrics.imazen.org/",
+  "contract": "docs/BROWSER_WORKBENCH_LINKS.md",
+  "workbench_url": "https://metrics.imazen.org/?metric={name}",
+  "dashboard_url": "https://imazen.github.io/zenmetrics/#models?metric={name}",
   "metrics": [
-    {"name": "psnr", "status": "score+map", "module": "core",
-     "maps": ["squared_error"], "reason": null,
-     "workbench_url": "https://metrics.imazen.org/?metric=psnr",
-     "dashboard_url": "https://imazen.github.io/zenmetrics/#models?metric=psnr"}
+    {"name": "psnr", "status": "score+map", "module": "full", "maps": ["squared_error"], "reason": null},
+    {"name": "ssim2-gpu", "status": "unavailable", "module": null, "maps": [], "reason": "GPU implementation …"}
   ]
 }
 ```
+
+Every CLI name appears once, in the CLI's order. `workbench_url` and
+`dashboard_url` are templates: replace `{name}` with the entry's `name`.
+`maps` lists the map names the metric's evaluation published in the check.
 
 `status` is one of:
 
@@ -79,8 +84,10 @@ lists every CLI metric name with its browser status. It is served with
 | `nn-cpu-wasm` | Learned metric run in the browser on CPU only. |
 | `unavailable` | Not runnable in the browser; `reason` gives the measured cause. |
 
-`module` names the lazily loaded asset group that serves the metric
-(`core`, `classic`, `nr`, `nn`), or `null` when unavailable. Every status
+`module` names the asset group that serves the metric: `core` (loaded with
+the page), `full` (the CPU metric module, imported on demand), `nn` (the
+learned-metric runtime and that model's weights, fetched on demand), or
+`null` when unavailable. Every status
 other than `unavailable` is executed in headless Chromium by
 `scripts/checkpoint/check-pages.py` on every deployment; the check fails if
 the file and the measured behaviour disagree.

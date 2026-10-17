@@ -360,6 +360,74 @@ fn main() {
     }
     println!(
         "{}",
-        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps,"profiles":profiles,"odd_vsi_identity":odd_vsi})
+        serde_json::json!({"score":result.score(),"map":result.diffmap(),"spatial_maps":maps,"profiles":profiles,"odd_vsi_identity":odd_vsi,"scalars":scalars()})
     );
+}
+
+/// Every browser-scored metric's scalars on the Pages check's fixture: the
+/// same RGBA bytes (`r[i] = (13 i + 17 row) mod 256`, `d = r − 7`), 256×256,
+/// or 1024×1024 for metrics that refuse the smaller size. Scored by the
+/// native build of the module's own scoring entry (Zensim through the
+/// module's `Reference`, as the worker scores it).
+fn scalars() -> serde_json::Value {
+    let fixture = |side: usize| {
+        let len = side * side * 4;
+        let r: Vec<u8> = (0..len)
+            .map(|i| {
+                if i % 4 == 3 {
+                    255
+                } else {
+                    ((i * 13 + i / (side * 4) * 17) % 256) as u8
+                }
+            })
+            .collect();
+        let d: Vec<u8> = r
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| if i % 4 == 3 { 255 } else { v.saturating_sub(7) })
+            .collect();
+        (r, d)
+    };
+    let small = fixture(256);
+    let big = fixture(1024);
+    let names: Vec<String> =
+        serde_json::from_str(&zenmetrics_browser::available_metrics()).unwrap();
+    let mut out = serde_json::Map::new();
+    for name in names {
+        let run = |(r, d): &(Vec<u8>, Vec<u8>), side: u32| {
+            if name == "zensim" {
+                zenmetrics_browser::Reference::with_profile(r, side, side, side as usize * 4, "b")
+                    .ok()
+                    .and_then(|prepared| prepared.score(d, side as usize * 4).ok())
+                    .map(|score| serde_json::json!({"metric":"zensim","score":score}).to_string())
+                    .ok_or_else(|| "zensim failed".to_string())
+            } else {
+                zenmetrics_browser::score_json(
+                    &name,
+                    r,
+                    d,
+                    side,
+                    side,
+                    side as usize * 4,
+                    "standard_4k",
+                )
+            }
+        };
+        let (fixture_side, scored) = match run(&small, 256) {
+            Err(e)
+                if e.to_lowercase().contains("requires at least")
+                    || e.to_lowercase().contains("too small") =>
+            {
+                (1024, run(&big, 1024))
+            }
+            other => (256, other),
+        };
+        let scored: serde_json::Value =
+            serde_json::from_str(&scored.unwrap_or_else(|e| panic!("{name}: {e}"))).unwrap();
+        out.insert(
+            name.clone(),
+            serde_json::json!({"fixture": fixture_side, "score": scored}),
+        );
+    }
+    serde_json::Value::Object(out)
 }

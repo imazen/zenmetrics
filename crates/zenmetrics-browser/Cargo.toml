@@ -19,26 +19,29 @@ serde_json = { workspace = true }
 bytemuck = { workspace = true }
 cvvdp = { workspace = true, features = ["std", "parallel"] }
 iwssim = { workspace = true, features = ["std", "parallel"] }
-gmsd = { workspace = true, features = ["std", "parallel"] }
-psnrhvs = { workspace = true, features = ["std", "parallel"] }
-haarpsi = { workspace = true, features = ["std", "parallel"] }
+gmsd = { workspace = true, features = ["std", "parallel"], optional = true }
+psnrhvs = { workspace = true, features = ["std", "parallel"], optional = true }
+haarpsi = { workspace = true, features = ["std", "parallel"], optional = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 # SSIMULACRA2's native spatial terms (`compute_ssimulacra2_maps`) for the
 # unified-surface adapter in `src/ssim2_map.rs`; the scalar route stays on
 # zenmetrics-api's `cpu-ssim2`.
 fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", default-features = false }
-fsim = { workspace = true, features = ["std", "parallel"] }
-vsi = { workspace = true, features = ["std", "parallel"] }
-msssim = { workspace = true, features = ["std", "parallel"] }
-vif = { workspace = true, features = ["std", "parallel"] }
-mad-iqa = { workspace = true, features = ["std", "parallel"] }
-mdctpsnr = { workspace = true, features = ["std", "parallel"] }
-vmaf = { workspace = true, features = ["simd", "parallel"] }
-nlpd = { path = "../nlpd", features = ["parallel"] }
+fsim = { workspace = true, features = ["std", "parallel"], optional = true }
+vsi = { workspace = true, features = ["std", "parallel"], optional = true }
+msssim = { workspace = true, features = ["std", "parallel"], optional = true }
+vif = { workspace = true, features = ["std", "parallel"], optional = true }
+mad-iqa = { workspace = true, features = ["std", "parallel"], optional = true }
+mdctpsnr = { workspace = true, features = ["std", "parallel"], optional = true }
+vmaf = { workspace = true, features = ["simd", "parallel"], optional = true }
+nlpd = { path = "../nlpd", features = ["parallel"], optional = true }
+piqe = { workspace = true, features = ["std"], optional = true }
+niqe = { workspace = true, features = ["std"], optional = true }
+brisque = { workspace = true, features = ["std"], optional = true }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
-zenpng = { path = "../../../zenpng" }
-zenwebp = { path = "../../../zenwebp", default-features = false }
-zenjxl = { path = "../../../zenjxl", default-features = false, features = ["decode"] }
+zenpng = { path = "../../../zenpng", optional = true }
+zenwebp = { path = "../../../zenwebp", default-features = false, optional = true }
+zenjxl = { path = "../../../zenjxl", default-features = false, features = ["decode"], optional = true }
 zenpixels = { version = ">=0.2.16, <0.4.0" }
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimental"] }
 enough = "0.4.5"
@@ -50,26 +53,35 @@ rayon = "1.12.0"
 [features]
 # Reuse the CLI's CPU dispatch and decoder sources without its networking,
 # fleet process management or native-only command dependencies.
-default = ["cpu-metrics", "cpu-cvvdp", "cpu-iwssim", "cpu-gmsd", "cpu-psnrhvs", "cpu-haarpsi", "cpu-fsim", "cpu-vsi", "cpu-msssim", "cpu-vif", "cpu-vifvec", "cpu-iwssim-piq", "cpu-mad", "cpu-mdctpsnr", "cpu-vmaf", "png", "jpeg", "webp", "jxl"]
-cpu-metrics = []
+default = ["full"]
+# The full module: every CPU metric the browser scores. The viewer loads it
+# the first time a metric other than Zensim is chosen.
+full = ["cpu-metrics", "cpu-cvvdp", "cpu-iwssim", "cpu-gmsd", "cpu-psnrhvs", "cpu-haarpsi", "cpu-fsim", "cpu-vsi", "cpu-msssim", "cpu-vif", "cpu-vifvec", "cpu-iwssim-piq", "cpu-mad", "cpu-mdctpsnr", "cpu-vmaf", "nr", "png", "jpeg", "webp", "jxl"]
+# The first-load module is built with `--no-default-features --features core`:
+# the JPEG decoder and encoder and Zensim. PNG, WebP and JPEG XL uploads
+# decode in the full module.
+core = ["jpeg"]
+# No-reference PIQE, NIQE and BRISQUE through the CLI's `nr` adapter.
+nr = ["dep:piqe", "dep:niqe", "dep:brisque"]
+cpu-metrics = ["dep:nlpd"]
 cpu-cvvdp = []
 cpu-iwssim = []
-cpu-gmsd = []
-cpu-psnrhvs = []
-cpu-haarpsi = []
-cpu-fsim = []
-cpu-vsi = []
-cpu-msssim = []
-cpu-vif = []
-cpu-vifvec = []
+cpu-gmsd = ["dep:gmsd"]
+cpu-psnrhvs = ["dep:psnrhvs"]
+cpu-haarpsi = ["dep:haarpsi"]
+cpu-fsim = ["dep:fsim"]
+cpu-vsi = ["dep:vsi"]
+cpu-msssim = ["dep:msssim"]
+cpu-vif = ["dep:vif"]
+cpu-vifvec = ["dep:vif"]
 cpu-iwssim-piq = []
-cpu-mad = []
-cpu-mdctpsnr = []
-cpu-vmaf = []
-png = []
+cpu-mad = ["dep:mad-iqa"]
+cpu-mdctpsnr = ["dep:mdctpsnr"]
+cpu-vmaf = ["dep:vmaf"]
+png = ["dep:zenpng"]
 jpeg = []
-webp = []
-jxl = []
+webp = ["dep:zenwebp"]
+jxl = ["dep:zenjxl"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-rayon = { version = "1.3.0", features = ["no-bundler"] }
@@ -83,3 +95,12 @@ imgref = { workspace = true }
 # archmage copy zensim links (registry 0.9.30), or the disable has no effect.
 archmage = "=0.9.30"
 jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }
+
+# The oracles exercise every metric, so they need the full module's features.
+[[example]]
+name = "browser_oracle"
+required-features = ["full"]
+
+[[example]]
+name = "loop_norm_calibrate"
+required-features = ["full"]

@@ -89,6 +89,8 @@ details summary { cursor: pointer; color: var(--muted); }
 .metricbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
 .metricbar label{display:flex;gap:6px;align-items:center;font-weight:600}.metricbar select{max-width:min(70vw,360px)}
 .metricbar .barscore{font:600 15px var(--mono);margin-left:auto}.viewer-tools{justify-content:space-between}#pixel{font:12px var(--mono)}
+table.sweep{width:100%;border-collapse:collapse;font:12px var(--mono)}table.sweep td,table.sweep th{text-align:right;padding:2px 6px;border-bottom:1px solid var(--line)}table.sweep tr.pick{cursor:pointer}table.sweep tr.on{background:var(--line)}#jxl-chart{width:100%;max-height:200px}#jxl-sweep-distances{flex:1;min-width:0}
+.metric-links{flex-basis:100%;font-size:13px;color:var(--muted)}.metric-links a{margin-right:10px}
 .metricbar #loop-distance-range{width:150px}.metricbar #loop-distance{width:5.5em;font-family:var(--mono)}
 .loopline{height:2.9em;overflow:hidden;margin:6px 0}
 .loopstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
@@ -109,7 +111,8 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="metricbar" role="toolbar" aria-label="Metric and map"><label>Metric <select id="metric" aria-label="Quality metric"><option value="zensim">Zensim</option></select></label>
 <label>Map <select id="map-name" aria-label="Map; choosing another metric's map switches the metric"><option value="">Compare to list the maps</option></select></label>
 <label title="The target distance of the JPEG XL loop below">Loop distance <input id="loop-distance-range" type="range" min="0" max="1000" aria-label="Loop target distance, logarithmic"><input id="loop-distance" type="number" min="0.1" max="25" step="0.1" value="1" aria-label="Loop target distance"></label>
-<span class="barscore"><span id="bar-label">Score</span> <b id="bar-score">–</b></span></div>
+<span class="barscore"><span id="bar-label">Score</span> <b id="bar-score">–</b></span>
+<span id="metric-links" class="metric-links"></span></div>
 <div class="grid"><div>
 <section class="panel"><h2>Images</h2>
 <label class="file" id="drop-reference"><input id="reference" type="file" accept=".jpg,.jpeg,.png,.webp,.jxl"><b>Reference</b><span id="name-reference">Choose or drop a file</span></label>
@@ -117,6 +120,7 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="row"><button id="demo">Demo scene</button><button id="swap">Swap images</button></div>
 <div class="row"><label>Encoder <select id="codec"><option value="jpeg">JPEG · zenjpeg</option><option value="webp">WebP · zenwebp</option><option value="avif">AVIF · zenavif</option><option value="jxl">JPEG XL · jxl-encoder</option></select></label></div>
 <div class="row"><label for="quality">Quality</label><input id="quality" type="range" min="5" max="100" value="40"><span id="quality-value">40</span></div>
+<div class="row" id="jxl-distance-row" hidden><label for="jxl-distance">JPEG XL distance</label><input id="jxl-distance" type="number" min="0.1" max="25" step="0.1" placeholder="from quality"></div>
 <button id="generate">Encode with zenjpeg</button> <button id="download-jpeg" disabled>Save encoded file</button>
 <p class="note">The encoded reference becomes the distorted image, and a new quality or encoder encodes it again. Each encoder uses its own scale: JPEG and WebP quality, AVIF quality at speed 6, JPEG XL quality mapped to a distance at effort 7. WebP, AVIF and JPEG XL load their modules the first time they are used. JPEG, PNG, WebP and JPEG XL use Zen decoders. SDR RGB8 ingress matches the CLI: transparency is preserved and scoring refuses non-opaque pixels. ICC metadata is not applied. Use already composited sRGB images for color-managed comparison.</p>
 </section>
@@ -134,6 +138,14 @@ details summary { cursor: pointer; color: var(--muted); }
 <details><summary>Brave: turn Shields off · Browser requirements</summary><p>In Brave, turn Shields off for this site, then reload. Relaxed SIMD128, shared memory and working Web Workers are required. HTTPS and cross-origin isolation enable the Rayon worker pool. WebGPU readiness is checked separately; the selectable metrics in this build run on the CPU.</p></details>
 <output id="status" class="status">Starting threaded SIMD WASM…</output>
 <p class="note" id="score-info"></p><details><summary>Run the same native metric</summary><pre id="cli-snippet" style="white-space:pre-wrap"></pre><button id="copy-cli">Copy CLI command</button><p class="note">Use the same opaque sRGB files. Generated JPEG candidates can be downloaded below. Zensim scoring and its map use the selected SDR model.</p></details>
+</section>
+<section class="panel" id="jxl-panel"><h2>JPEG XL impact</h2>
+<p class="note">Encodes the reference with jxl-encoder at each distance (effort below), decodes it with zenjxl-decoder and scores the decoded image with the metric in the top bar. Choose a row to load that encode as the distorted image and see its map.</p>
+<div class="row"><label for="jxl-sweep-distances">Distances</label><input id="jxl-sweep-distances" value="0.5, 1, 1.5, 2, 3, 4, 6, 8, 12" aria-label="Comma-separated JPEG XL distances"></div>
+<div class="row"><label for="jxl-sweep-effort">Effort</label><input id="jxl-sweep-effort" type="number" min="1" max="9" value="7"><button id="jxl-sweep-run">Run sweep</button><button id="jxl-sweep-cancel" disabled>Stop</button></div>
+<svg id="jxl-chart" viewBox="0 0 320 170" role="img" aria-label="Metric score against bits per pixel for each JPEG XL distance"></svg>
+<table id="jxl-table" class="sweep"><thead><tr><th>Distance</th><th>Bytes</th><th>bpp</th><th id="jxl-score-head">Score</th></tr></thead><tbody></tbody></table>
+<p id="jxl-status" class="note"></p>
 </section>
 </div><div>
 <section class="panel"><h2>Image comparison</h2>

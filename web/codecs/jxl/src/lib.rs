@@ -128,6 +128,29 @@ pub fn roundtrip(
     Ok(Coded { file, rgba })
 }
 
+/// [`roundtrip`] at an explicit Butteraugli `distance` (the viewer's JPEG XL
+/// impact sweep steps through distances, not qualities).
+#[wasm_bindgen]
+pub fn roundtrip_distance(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    distance: f32,
+    effort: u8,
+) -> Result<Coded, JsError> {
+    console_error_panic_hook::set_once();
+    if !(distance.is_finite() && (0.1..=25.0).contains(&distance)) {
+        return Err(JsError::new("distance must be within 0.1 to 25"));
+    }
+    let rgb = rgb(rgba, width, height).map_err(|e| JsError::new(&e))?;
+    let file = LossyConfig::new(distance)
+        .with_effort(effort)
+        .encode(&rgb, width, height, PixelLayout::Rgb8)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    let rgba = decode(&file, width, height).map_err(|e| JsError::new(&e))?;
+    Ok(Coded { file, rgba })
+}
+
 /// The distance [`roundtrip`] encodes `quality` at.
 #[wasm_bindgen]
 pub fn quality_distance(quality: f32) -> f32 {

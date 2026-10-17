@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let worker;
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0},
-  catalog:[], metrics:[], mapName:'', mapNames:[], loopDefaults:[], defaultMaps:{}, generated:false, codec:'jpeg', steerBuiltin:false};
+  catalog:[], metrics:[], coverage:new Map(), modules:{}, urlApplied:false, mapName:'', mapNames:[], loopDefaults:[], defaultMaps:{}, generated:false, codec:'jpeg', steerBuiltin:false};
 // The default map of each metric: its fused map where it publishes one.
 const mapLabels={zensim:'Zensim error',butteraugli:'Butteraugli error',dssim:'DSSIM fused error (all scales)',cvvdp:'CVVDP masked error',gmsd:'GMSD similarity',psnr:'PSNR squared error',fsim:'FSIM luminance similarity',fsimc:'FSIMc luminance similarity',haarpsi:'HaarPSI similarity',vsi:'VSI saliency-weighted contribution',msssim:'MS-SSIM fused −ln error (all levels)',nlpd:'NLPD fused difference (all levels)',psnrhvs:'PSNR-HVS 8×8 CSF-weighted block error',mdctpsnr:'mDCT-PSNR window detection probability',mad:'MAD high-quality strategy (masked local MSE)',iwssim:'IW-SSIM fused −ln error (all scales)',vif:'VIF fused information loss (all scales)',vifvec:'VIF vector fused information loss (all subbands)','vmaf-v1':'VMAF v1 SPEED chroma-U block difference',ssim2:'SSIMULACRA2 weighted error (fused terms)'};
 const codecInfo={jpeg:{label:'zenjpeg',ext:'jpg',mime:'image/jpeg'},webp:{label:'zenwebp',ext:'webp',mime:'image/webp'},avif:{label:'zenavif',ext:'avif',mime:'image/avif'},jxl:{label:'jxl-encoder',ext:'jxl',mime:'image/jxl'}};
@@ -11,7 +11,77 @@ const phases={1:'Decoding',2:'Encoding',3:'Preparing reference',4:'Scoring',5:'B
 // The map route of a scoring metric: the metric itself when this build
 // exports its spatial map. The map always follows the selected metric.
 function mapRoute(metric){return S.catalog.includes(metric)?metric:null;}
+// Every CLI metric name with its browser status (coverage.json, beside the
+// page). The menus list what runs here; the rest stays selectable from a
+// link and shows the measured reason instead of a score.
+const coverageLoad=fetch(new URL('coverage.json',document.baseURI),{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();});
+const dashboard='https://imazen.github.io/zenmetrics/';
+const statusLabel={'score+map':'score and map','score-only':'score only','nn-webgpu':'learned · WebGPU','nn-cpu-wasm':'learned · CPU','unavailable':'not runnable in the browser'};
+function applyCoverage(coverage,error){
+  if(coverage)for(const entry of coverage.metrics)S.coverage.set(entry.name,entry);
+  else status(`coverage.json unavailable (${error.message}); only the core module's metrics are listed.`,true);
+  const entries=coverage?coverage.metrics:S.coreMetrics.map(name=>({name,status:'score+map',maps:['diffmap']}));
+  S.metrics=entries.filter(e=>e.status!=='unavailable').map(e=>e.name);
+  S.catalog=[...new Set([...S.catalog,...entries.filter(e=>e.status==='score+map').map(e=>e.name)])];
+  const group=(label,list)=>{const g=document.createElement('optgroup');g.label=label;
+    g.append(...list.map(e=>{const o=new Option(e.status==='score+map'?e.name:`${e.name} (${statusLabel[e.status]})`,e.name);
+      if(e.status==='unavailable'){o.disabled=true;o.title=e.reason;}return o;}));return g;};
+  const selected=$('metric').value;
+  $('metric').replaceChildren(group('Scored in this page',entries.filter(e=>e.status==='score+map'||e.status==='score-only')),
+    group('Learned (downloads weights)',entries.filter(e=>e.status.startsWith('nn-'))),
+    group('Not runnable in the browser',entries.filter(e=>e.status==='unavailable')));
+  $('metric').value=S.metrics.includes(selected)?selected:'zensim';
+  applyUrl();syncMetric();
+}
+// The URL contract (docs/BROWSER_WORKBENCH_LINKS.md): query keys, or the same
+// keys in the fragment; the query wins.
+function urlParams(){const out=new Map(new URLSearchParams(location.hash.slice(1)));for(const [k,v] of new URLSearchParams(location.search))out.set(k,v);return out;}
+function applyUrl(){
+  if(S.urlApplied)return;S.urlApplied=true;
+  const p=urlParams(),errors=[];
+  const number=(key,lo,hi)=>{if(!p.has(key))return undefined;const v=Number(p.get(key));if(!(Number.isFinite(v)&&v>=lo&&v<=hi)){errors.push(`${key}=${p.get(key)} is outside ${lo}–${hi}`);return undefined;}return v;};
+  const metric=p.get('metric');
+  if(metric!==undefined){
+    if(!(S.allMetrics||[]).includes(metric))errors.push(`metric=${metric} is not a CLI metric name`);
+    else{const o=[...$('metric').options].find(o=>o.value===metric);if(o){o.disabled=false;$('metric').value=metric;o.disabled=S.coverage.get(metric)?.status==='unavailable';}}
+  }
+  if(p.has('map'))S.requestedMap=p.get('map');
+  if(p.has('codec')){const c=p.get('codec');if(codecInfo[c]){$('codec').value=c;S.codec=c;$('generate').textContent=`Encode with ${codecInfo[c].label}`;}else errors.push(`codec=${c} is not one of ${Object.keys(codecInfo).join(', ')}`);}
+  const q=number('q',1,100);if(q!==undefined){$('quality').value=q;$('quality-value').textContent=$('quality').value;}
+  const d=number('distance',.1,25);if(d!==undefined){if(S.codec==='jxl')$('jxl-distance').value=d;else errors.push('distance needs codec=jxl');}
+  if(p.has('model')){const m=p.get('model');if([...$('zensim-model').options].some(o=>o.value===m))$('zensim-model').value=m;else errors.push(`model=${m} is not a Zensim model`);}
+  if(p.has('display')){const v=p.get('display');if([...$('display').options].some(o=>o.value===v))$('display').value=v;else errors.push(`display=${v} is not a CVVDP display`);}
+  if(p.has('ep')){const v=p.get('ep');if(['webgpu','wasm'].includes(v))S.ep=v;else errors.push(`ep=${v} is not webgpu or wasm`);}
+  if(p.has('sweep')){if(p.get('sweep')==='jxl')S.sweepOnLoad=true;else errors.push(`sweep=${p.get('sweep')} is not jxl`);}
+  syncCodec();
+  if(errors.length){S.urlErrors=errors;status(`Link parameters refused: ${errors.join('; ')}`,true);}
+}
+// Rewrite the address bar to the current state, so it is always a link here.
+function writeUrl(){
+  if(!S.urlApplied)return;
+  const metric=$('metric').value,p=new URLSearchParams({metric});
+  const map=mapRoute(metric)&&S.mapMetric===metric&&S.mapName&&S.mapName!==defaultMapOf(metric)?S.mapName:S.requestedMap;
+  if(map)p.set('map',map);
+  if(S.generated){p.set('codec',$('codec').value);if(S.codec==='jxl'&&$('jxl-distance').value)p.set('distance',$('jxl-distance').value);else p.set('q',$('quality').value);}
+  if(metric==='zensim'&&$('zensim-model').value!=='b')p.set('model',$('zensim-model').value);
+  if(metric==='cvvdp')p.set('display',$('display').value);
+  if(S.coverage.get(metric)?.status?.startsWith('nn-')&&S.ep)p.set('ep',S.ep);
+  history.replaceState(null,'',`${location.pathname}?${p}`);
+}
+function metricLinks(){
+  const metric=$('metric').value,e=S.coverage.get(metric),q=encodeURIComponent(metric);
+  const node=$('metric-links');node.replaceChildren();
+  const link=(text,href)=>{const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener';a.textContent=text;node.append(a);};
+  link('Model card ↗',`${dashboard}#models?metric=${q}`);link('Speed ↗',`${dashboard}#speed?metric=${q}`);link('Agreement ↗',`${dashboard}#agreement?metric=${q}`);
+  link('Coverage',new URL('coverage.json',document.baseURI).href);
+  const note=document.createElement('span');note.id='metric-status';
+  note.textContent=e?`${metric}: ${statusLabel[e.status]}${e.module?` · ${e.module} module`:''}${e.reason?` · ${e.reason}`:''}`:'';node.append(note);
+  if(S.urlErrors){const errors=document.createElement('span');errors.id='link-errors';errors.className='error';errors.textContent=` Link parameters refused: ${S.urlErrors.join('; ')}`;node.append(errors);}
+}
+function syncCodec(){$('jxl-distance-row').hidden=$('codec').value!=='jxl';}
+async function startScene(){await demoPair();if(S.sweepOnLoad)runJxlSweep();}
 function showScore(result) {
+  document.body.dataset.firstScoreMs??=performance.now().toFixed(1);
   const values=result.score.values||[{column:result.score.metric,value:result.score.score}];
   $('score').textContent=values.map(v=>typeof v.value==='number'?v.value.toPrecision(7):v.value).join(' / ');
   $('score-label').textContent=result.score.metric;
@@ -49,20 +119,23 @@ function startWorker() {
   worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
   worker.onmessage=({data})=>{
     if(data.type==='progress'){status(data.message);return;}
+    if(data.type==='prefetch-failed'){status(`The full metric module did not load: ${data.message}`,true);return;}
+    if(data.type==='module'){S.modules[data.name]=data;document.body.dataset.modules=['core',...Object.keys(S.modules)].join(' ');$('startup-timing').textContent+=` · ${data.name} module loaded on demand: WASM ${data.startup.wasmMilliseconds.toFixed(1)} ms, Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;return;}
     if(data.type==='loop-frame'){paintLive(data);return;}
     if(data.type==='loop-progress'){if(L.running&&L.runEpoch===L.epoch)$('loop-info').textContent=data.message||`Encoding: scored ${data.scored} reconstructions (last ${data.score.toFixed(4)})…`;return;}
     if(data.type==='ready'){
       const startupMilliseconds=performance.now()-startupStart;
       $('startup-timing').textContent=`Worker startup ${startupMilliseconds.toFixed(1)} ms · WASM load/init ${data.startup.wasmMilliseconds.toFixed(1)} ms · Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;
-      S.ready=true;S.catalog=data.maps;S.metrics=data.metrics;S.loopDefaults=data.loopDefaults;const selected=$('metric').value;
-      $('metric').replaceChildren(...data.metrics.map(name=>{const o=document.createElement('option');o.value=name;o.textContent=S.catalog.includes(name)?name:`${name} (score only)`;return o;}));
-      $('metric').value=data.metrics.includes(selected)?selected:'zensim';syncMetric();$('compare').disabled=false;
+      S.ready=true;S.loopDefaults=data.loopDefaults;S.allMetrics=data.allMetrics;S.coreMetrics=data.metrics;S.catalog=[...data.maps];S.metrics=[...data.metrics];
+      $('compare').disabled=false;
       status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`);
-      if(!S.reference)demoPair();
+      document.body.dataset.modules='core';S.modules={};
+      if(S.prefetched)worker.postMessage({type:'prefetch'});
+      coverageLoad.then(applyCoverage,error=>applyCoverage(null,error)).then(()=>{if(!S.reference)startScene();});
       return;
     }
     const request=requests.get(data.id);if(!request){if(data.type==='error'){S.ready=false;$('compare').disabled=true;status(data.message,true);}return;}
-    if(data.type==='control'){request.control=new Int32Array(data.buffer,data.offset,4);if(request.cancelled)Atomics.store(request.control,0,1);return;}
+    if(data.type==='control'){const control=new Int32Array(data.buffer,data.offset,4);(request.controls??=[]).push(control);request.control=control;if(request.cancelled)Atomics.store(control,0,1);return;}
     if(data.type==='score'){if(!request.cancelled&&request.revision===S.revision)showScore(data);return;}
     finishRequest(data.id,data.type==='error'?new Error(request.cancelled?'Cancelled':data.message):null,data);
     if(data.fatal)restartWorker('WASM runtime failed; starting a fresh worker.');
@@ -80,7 +153,7 @@ setInterval(()=>{
 $('cancel').onclick=()=>{
   S.dirty=false;++S.revision;
   for(const request of requests.values()){
-    request.cancelled=true;if(request.control)Atomics.store(request.control,0,1);
+    request.cancelled=true;for(const control of request.controls||[])Atomics.store(control,0,1);
   }
   status('Cancelling…');
   // Some native metric adapters and the encoders have no Stop API; dispose of their worker too.
@@ -110,25 +183,28 @@ for(const side of ['reference','distorted']) {
   drop.ondragleave=()=>drop.classList.remove('drag');
   drop.ondrop=event=>{event.preventDefault();drop.classList.remove('drag');loadFile(side,event.dataTransfer.files[0]);};
 }
-function schedule(){S.dirty=true;if($('live').checked)compare();}
+function schedule(){S.dirty=true;if($('live').checked)return compare();}
 function mapUnavailable(metric){return `${metric} has no spatial map in this build; the score is computed without one.`;}
 function setMaps(result){
   S.map=result.map;S.mapMetric=result.mapMetric;S.mapProfile=result.mapProfile;S.mapWidth=result.mapWidth;S.mapHeight=result.mapHeight;S.similarity=result.similarity;S.geometry=result.geometry;
   S.mapName=result.mapName||'';S.mapNames=result.mapNames||[];S.mapPolarity=result.mapPolarity;S.pendingMap=undefined;
   if(result.defaultMap)S.defaultMaps[result.mapMetric]=result.defaultMap;
-  buildMenus();syncLoopSteer();
+  buildMenus();syncLoopSteer();writeUrl();
 }
 async function compare() {
   if(!S.ready||S.pending||!S.reference||!S.distorted)return;
   const r=S.reference,d=S.distorted;
   if(r.width!==d.width||r.height!==d.height){status(`Sizes differ: ${r.width}×${r.height} vs ${d.width}×${d.height}. Images are never resized for scoring.`,true);return;}
-  const metric=$('metric').value,route=mapRoute(metric);
+  const metric=$('metric').value,route=mapRoute(metric),entry=S.coverage.get(metric);
+  if(entry?.status==='unavailable'){S.map=null;$('score').textContent='–';$('bar-score').textContent='–';$('score-info').textContent='';status(`${metric} is not runnable in the browser: ${entry.reason}`,true);paint();return;}
+  if(entry?.status?.startsWith('nn-'))return compareLearned(metric,entry);
   const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';$('compute-timing').textContent='Computing…';status(`Computing ${metric}…`);
   try {
     const request={type:'compare',metric,mapMetric:route,mapName:route===S.mapMetric?S.mapName:(S.requestedMap||''),zensimProfile:$('zensim-model').value,reference:r.data,distorted:d.data,width:r.width,height:r.height,display:$('display').value};
     const result=await rpc(request);
     if(revision!==S.revision)return;
     if(!request.mapName)result.defaultMap=result.mapName;
+    if(!S.prefetched){S.prefetched=true;document.body.dataset.prefetchMs=performance.now().toFixed(1);worker.postMessage({type:'prefetch'});}
     S.requestedMap=undefined;
     setMaps(result);
     showScore(result);
@@ -148,7 +224,7 @@ $('compare').onclick=compare;
 function syncMetric(){
   const metric=$('metric').value;
   $('display-row').hidden=metric!=='cvvdp';
-  buildMenus();snippet();syncLoopSteer(true);
+  buildMenus();snippet();syncLoopSteer(true);metricLinks();writeUrl();
 }
 // The Map menu (top bar) and the loop's Steer menu both list every metric's
 // maps, grouped by metric: the evaluated metric's own list, else the maps
@@ -214,19 +290,24 @@ async function showCachedMap(name){
 }
 $('swap').onclick=()=>{[S.reference,S.distorted]=[S.distorted,S.reference];S.generated=false;const a=$('name-reference'),b=$('name-distorted');[a.textContent,b.textContent]=[b.textContent,a.textContent];S.map=null;S.revision++;paint();schedule();scheduleLoop();};
 $('quality').oninput=()=>{$('quality-value').textContent=$('quality').value;};
-$('quality').onchange=()=>{if(S.generated)generate();};
-$('codec').onchange=()=>{S.codec=$('codec').value;$('generate').textContent=`Encode with ${codecInfo[S.codec].label}`;if(S.generated)generate();};
+$('quality').onchange=()=>{if(S.generated)generate();writeUrl();};
+$('jxl-distance').onchange=()=>{if(S.generated)generate();writeUrl();};
+$('codec').onchange=()=>{S.codec=$('codec').value;syncCodec();$('generate').textContent=`Encode with ${codecInfo[S.codec].label}`;if(S.generated)generate();writeUrl();};
 async function generate() {
   if(!S.ready||!S.reference)return;
   const name=$('codec').value,info=codecInfo[name],quality=Number($('quality').value);
+  const distance=name==='jxl'&&$('jxl-distance').value!==''?Number($('jxl-distance').value):undefined;
+  if(distance!==undefined&&!(distance>=.1&&distance<=25)){status('JPEG XL distance must be within 0.1 to 25',true);return;}
   const revision=++S.revision;S.map=null;status(`Encoding with ${info.label}…`);
   try{
-    const r=S.reference;const result=await rpc({type:'generate',codec:name,reference:r.data,width:r.width,height:r.height,quality},300);
+    const r=S.reference;const result=await rpc({type:'generate',codec:name,reference:r.data,width:r.width,height:r.height,quality,distance},300);
     if(revision!==S.revision)return;
     S.encoded=result.encoded;S.encodedCodec=name;S.generated=true;$('download-jpeg').disabled=false;
     S.distorted={width:result.width,height:result.height,data:new Uint8ClampedArray(result.rgba)};
-    $('name-distorted').textContent=`${info.label} · quality ${quality} · ${(result.bytes/1024).toFixed(1)} KiB`;
-    paint();schedule();
+    $('name-distorted').textContent=`${info.label} · ${distance!==undefined?`distance ${distance}`:`quality ${quality}`} · ${(result.bytes/1024).toFixed(1)} KiB`;writeUrl();
+    // Callers that await this (the demo) start the encoder loop only after
+    // the first comparison, so its module's compile does not delay the score.
+    paint();await schedule();
   }catch(error){status(error.message,true);}
 }
 $('generate').onclick=generate;
@@ -610,3 +691,87 @@ $('loop-layer').onchange=paintLoop;
 $('loop-play').onclick=()=>{if(L.timer)loopStop();else loopPlay();};
 $('palette').addEventListener('change',paintLoop);
 drawChart();
+
+// JPEG XL impact: encode the reference at each distance, score each decoded
+// image with the selected metric, and plot score against bits per pixel.
+const J={rows:[],running:false,stop:false,epoch:0,metric:null};
+function primaryValue(score){const v=(score.values||[{column:score.metric,value:score.score}])[0];return {column:v.column,value:typeof v.value==='number'?v.value:Number(v.value)};}
+// One score of `metric` for a pair, without a map: the CPU modules, or the
+// learned-metric runtime for NN metrics.
+async function scoreFor(metric,reference,distorted,width,height){
+  const entry=S.coverage.get(metric);
+  if(entry?.status==='unavailable')throw new Error(`${metric} is not runnable in the browser: ${entry.reason}`);
+  if(entry?.status?.startsWith('nn-'))return learnedScore(metric,reference,distorted,width,height);
+  const result=await rpc({type:'compare',metric,mapMetric:null,zensimProfile:$('zensim-model').value,reference,distorted,width,height,display:$('display').value},300);
+  return result.score;
+}
+function drawJxlChart(){
+  const svg=$('jxl-chart'),rows=J.rows.filter(r=>Number.isFinite(r.value));svg.replaceChildren();
+  if(!rows.length)return;
+  const ns='http://www.w3.org/2000/svg',el=(name,attrs,text)=>{const e=document.createElementNS(ns,name);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!==undefined)e.textContent=text;svg.append(e);return e;};
+  const xs=rows.map(r=>r.bpp),ys=rows.map(r=>r.value);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const X=v=>40+270*(x1>x0?(v-x0)/(x1-x0):.5),Y=v=>145-130*(y1>y0?(v-y0)/(y1-y0):.5);
+  el('line',{x1:40,y1:145,x2:310,y2:145,stroke:'currentColor',opacity:.4});el('line',{x1:40,y1:15,x2:40,y2:145,stroke:'currentColor',opacity:.4});
+  el('text',{x:175,y:165,'text-anchor':'middle','font-size':10,fill:'currentColor'},'bits per pixel');
+  el('text',{x:42,y:12,'font-size':10,fill:'currentColor'},`${J.metric} · ${rows[0].column}`);
+  for(const [v,y] of [[y0,Y(y0)],[y1,Y(y1)]])el('text',{x:36,y:y+3,'text-anchor':'end','font-size':9,fill:'currentColor'},v.toPrecision(4));
+  for(const [v,x] of [[x0,X(x0)],[x1,X(x1)]])el('text',{x,y:157,'text-anchor':'middle','font-size':9,fill:'currentColor'},v.toFixed(2));
+  const sorted=[...rows].sort((a,b)=>a.bpp-b.bpp);
+  el('polyline',{points:sorted.map(r=>`${X(r.bpp)},${Y(r.value)}`).join(' '),fill:'none',stroke:'var(--accent)','stroke-width':1.5});
+  for(const r of rows){const c=el('circle',{cx:X(r.bpp),cy:Y(r.value),r:r===J.selected?5:3.5,fill:'var(--accent)'});c.style.cursor='pointer';c.onclick=()=>pickJxl(r);
+    el('title',{},`distance ${r.distance}: ${r.value}`);c.append(svg.lastChild);}
+}
+function renderJxlTable(){
+  const body=$('jxl-table').tBodies[0];body.replaceChildren();
+  $('jxl-score-head').textContent=J.rows[0]?.column||'Score';
+  for(const r of J.rows){
+    const tr=body.insertRow();tr.className='pick'+(r===J.selected?' on':'');tr.onclick=()=>pickJxl(r);
+    for(const v of [r.distance,r.bytes,r.bpp.toFixed(3),r.error?'error':r.value.toPrecision(6)])tr.insertCell().textContent=v;
+    if(r.error)tr.title=r.error;
+  }
+  drawJxlChart();
+}
+// Load one sweep encode as the distorted image; the viewer scores and maps it.
+function pickJxl(row){
+  if(!S.reference||row.width!==S.reference.width)return;
+  J.selected=row;renderJxlTable();
+  S.distorted={width:row.width,height:row.height,data:new Uint8ClampedArray(row.rgba)};
+  S.encoded=row.encoded;S.encodedCodec='jxl';S.generated=true;$('download-jpeg').disabled=false;
+  $('codec').value='jxl';S.codec='jxl';syncCodec();$('jxl-distance').value=row.distance;$('generate').textContent=`Encode with ${codecInfo.jxl.label}`;
+  $('name-distorted').textContent=`jxl-encoder · distance ${row.distance} · ${(row.bytes/1024).toFixed(1)} KiB`;
+  S.map=null;S.revision++;paint();writeUrl();schedule();
+}
+async function runJxlSweep(){
+  if(!S.ready||!S.reference||J.running)return;
+  const metric=$('metric').value,entry=S.coverage.get(metric);
+  if(entry?.status==='unavailable'){$('jxl-status').textContent=`${metric} is not runnable in the browser: ${entry.reason}`;return;}
+  const distances=$('jxl-sweep-distances').value.split(',').filter(s=>s.trim()!=='').map(s=>Number(s.trim()));
+  const effort=Number($('jxl-sweep-effort').value);
+  if(!distances.length||distances.some(d=>!(d>=.1&&d<=25))){$('jxl-status').textContent='Distances must be numbers within 0.1 to 25';return;}
+  if(!(Number.isInteger(effort)&&effort>=1&&effort<=9)){$('jxl-status').textContent='Effort must be 1 to 9';return;}
+  const epoch=++J.epoch,r=S.reference;J.rows=[];J.selected=null;J.metric=metric;J.running=true;J.stop=false;
+  $('jxl-sweep-run').disabled=true;$('jxl-sweep-cancel').disabled=false;renderJxlTable();
+  const started=performance.now();
+  try{
+    for(const distance of distances){
+      if(J.stop||epoch!==J.epoch)break;
+      $('jxl-status').textContent=`Distance ${distance}: encoding…`;
+      const coded=await rpc({type:'generate',codec:'jxl',reference:r.data,width:r.width,height:r.height,distance,effort},300);
+      const row={distance,bytes:coded.bytes,bpp:coded.bytes*8/(r.width*r.height),width:coded.width,height:coded.height,rgba:coded.rgba,encoded:coded.encoded,value:NaN,column:'',metric};
+      $('jxl-status').textContent=`Distance ${distance}: scoring with ${metric}…`;
+      try{const score=await scoreFor(metric,r.data,coded.rgba,r.width,r.height);Object.assign(row,primaryValue(score),{score});}
+      catch(error){row.error=error.message;}
+      if(epoch!==J.epoch)return;
+      J.rows.push(row);renderJxlTable();
+    }
+    $('jxl-status').textContent=`${J.stop?'Stopped':'Done'}: ${J.rows.length} encodes scored with ${metric} in ${((performance.now()-started)/1000).toFixed(1)} s.`;
+  }catch(error){$('jxl-status').textContent=`Sweep failed: ${error.message}`;}
+  finally{if(epoch===J.epoch){J.running=false;$('jxl-sweep-run').disabled=false;$('jxl-sweep-cancel').disabled=true;}}
+}
+$('jxl-sweep-run').onclick=runJxlSweep;
+$('jxl-sweep-cancel').onclick=()=>{J.stop=true;};
+
+// Learned (NN) metrics run in nn.js, imported on first use.
+async function learnedScore(){throw new Error('The learned-metric runtime is not part of this build');}
+async function compareLearned(metric){status(`${metric}: the learned-metric runtime is not part of this build`,true);}

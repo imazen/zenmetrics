@@ -7,11 +7,19 @@ cd "$(dirname "$0")/../.."
 [ ! -e "$CHECKPOINT_OUT" ] || { echo 'Output already exists; refusing overwrite' >&2; exit 2; }
 [ "$(wasm-bindgen --version)" = 'wasm-bindgen 0.2.129' ] || { echo 'wasm-bindgen-cli 0.2.129 required' >&2; exit 2; }
 export RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128,+relaxed-simd -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=2147483648 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base'
-cargo +nightly-2026-10-06 build --locked --release -p zenmetrics-browser \
-  --target wasm32-unknown-unknown -Z build-std=std,panic_abort
-mkdir -p "$CHECKPOINT_OUT/pkg"
-wasm-bindgen --target web --out-dir "$CHECKPOINT_OUT/pkg" \
-  "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/zenmetrics_browser.wasm"
+# Two builds of one crate: `pkg/` is the first-load core module (decoders,
+# JPEG encoder, Zensim); `pkg-full/` scores every CPU metric and is imported
+# the first time another metric is chosen. The builds run in turn in one
+# target directory; each is bound to its package directory before the next.
+build_module() { # <features> <pkg dir>
+  cargo +nightly-2026-10-06 build --locked --release -p zenmetrics-browser \
+    --no-default-features --features "$1" --target wasm32-unknown-unknown -Z build-std=std,panic_abort
+  mkdir -p "$CHECKPOINT_OUT/$2"
+  wasm-bindgen --target web --out-dir "$CHECKPOINT_OUT/$2" \
+    "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/zenmetrics_browser.wasm"
+}
+build_module core pkg
+build_module full pkg-full
 cp web/metrics/*.html web/metrics/*.js "$CHECKPOINT_OUT/"
 # The encoder modules: a separate, single-threaded build (web/codecs).
 bash scripts/checkpoint/build-codecs.sh

@@ -30,10 +30,13 @@ def main():
         if not (args.build/'pkg/zenmetrics_browser_bg.wasm').is_file():
             parser.error('Compiled browser module required')
         args.out.mkdir(parents=True)
-        for name in ('pkg','codecs','index.html','app.js','worker.js','LICENSE-AGPL3'):
+        for name in ('pkg','pkg-full','codecs','index.html','app.js','worker.js','LICENSE-AGPL3'):
             source=args.build/name
             if source.is_dir(): shutil.copytree(source,args.out/name)
             else: shutil.copyfile(source,args.out/name)
+        # Every CLI metric's browser status, verified against the module by
+        # check-pages.py; also read cross-origin by the dashboard.
+        shutil.copyfile(Path(__file__).resolve().parents[2] / 'web/metrics/coverage.json', args.out / 'coverage.json')
         provenance={'schema':2,'source_commit':args.source,'files':{
             str(path.relative_to(args.out)):hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(args.out.rglob('*')) if path.is_file()}}
@@ -70,7 +73,7 @@ def main():
     generation = Path('assets') / args.source
     destination = args.out / generation
     destination.mkdir(parents=True)
-    for name in ('app.js', 'worker.js', 'pkg', 'codecs'):
+    for name in ('app.js', 'worker.js', 'pkg', 'pkg-full', 'codecs'):
         if (args.out / name).exists():
             shutil.move(str(args.out / name), destination / name)
     text = text.replace('src="app.js"', f'src="{generation}/app.js"')

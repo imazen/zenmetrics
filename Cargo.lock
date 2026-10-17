@@ -7896,6 +7896,7 @@ name = "zenmetrics-browser"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.30",
+ "brisque",
  "butteraugli",
  "bytemuck",
  "clap",
@@ -7913,7 +7914,9 @@ dependencies = [
  "mad-iqa",
  "mdctpsnr",
  "msssim",
+ "niqe",
  "nlpd",
+ "piqe",
  "psnrhvs",
  "rayon",
  "rgb",

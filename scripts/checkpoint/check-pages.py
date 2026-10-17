@@ -15,6 +15,8 @@ parser.add_argument('site', type=Path)
 parser.add_argument('--url', help='Check an already deployed HTTPS site instead')
 parser.add_argument('--oracle', type=Path, help='Independent native map outputs')
 parser.add_argument('--report', type=Path, help='Measured browser results')
+parser.add_argument('--write-coverage', type=Path,
+                    help='Write the measured coverage file here instead of checking the site copy against it')
 args = parser.parse_args()
 
 
@@ -32,6 +34,61 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *_):
         pass
+
+
+WORKBENCH = 'https://metrics.imazen.org/'
+DASHBOARD = 'https://imazen.github.io/zenmetrics/#models?metric='
+
+
+def unavailable_reason(name, refusal):
+    """The measured reason a CLI name does not run here: its class, and the
+    module's own refusal message, which the check received."""
+    if name.endswith('-gpu'):
+        return (f'GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. '
+                f'Score the CPU metric {name[:-4]} here. Browser refusal: {refusal}')
+    if name.startswith('hdrvdp'):
+        return ('Scores absolute-luminance HDR input; this page decodes SDR sRGB8 only. '
+                f'Browser refusal: {refusal}')
+    return f'Browser refusal: {refusal}'
+
+
+def measured_coverage(result):
+    core = set(result['modules']['core']['metrics'])
+    entries = []
+    for name in result['cliNames']:
+        entry = {'name': name, 'status': 'unavailable', 'module': None, 'maps': [], 'reason': None}
+        if name in result['metrics']:
+            maps = result['mapNames'].get(name, [])
+            entry.update(status='score+map' if maps else 'score-only', maps=maps,
+                         module='core' if name in core else 'full')
+        else:
+            entry['reason'] = unavailable_reason(name, result['refused'][name])
+        entries.append(entry)
+    return {'schema': 1, 'workbench': WORKBENCH, 'contract': 'docs/BROWSER_WORKBENCH_LINKS.md',
+            'workbench_url': WORKBENCH + '?metric={name}', 'dashboard_url': DASHBOARD + '{name}',
+            'metrics': entries}
+
+
+def coverage_text(coverage):
+    """One line per metric, so diffs show which statuses changed."""
+    head = ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in coverage.items() if k != 'metrics')
+    rows = ',\n'.join('    ' + json.dumps(e, separators=(', ', ': ')) for e in coverage['metrics'])
+    return '{\n' + head + ',\n  "metrics": [\n' + rows + '\n  ]\n}\n'
+
+
+def check_coverage(committed, measured):
+    """The shipped coverage file must describe what the browser just did."""
+    for key in ('schema', 'workbench', 'workbench_url', 'dashboard_url'):
+        assert committed.get(key) == measured[key], ('coverage.json', key)
+    got = {e['name']: e for e in committed['metrics']}
+    want = {e['name']: e for e in measured['metrics']}
+    assert list(got) == list(want), ('coverage.json names differ from the CLI catalog',
+                                     sorted(set(got) ^ set(want)))
+    for name, w in want.items():
+        g = got[name]
+        for key in ('status', 'module', 'maps'):
+            assert g.get(key) == w[key], (name, key, g.get(key), w[key])
+        assert (g['status'] == 'unavailable') == bool(g.get('reason')), (name, 'reason')
 
 
 server = None
@@ -130,7 +187,7 @@ try:
             worker.onmessage = ({data}) => {
               if(data.type==='control'){if(!(data.buffer instanceof SharedArrayBuffer)||data.offset%4)throw new Error('Shared atomic control required');sharedControls++;return;}
               if(data.type==='score'){publishedScore=data.score;earlyScores++;return;}
-              if(data.type==='progress')return;
+              if(data.type==='progress'||data.type==='module')return;
               if(data.type==='result'&&JSON.stringify(data.score)!==JSON.stringify(publishedScore))throw new Error('Final score differs from published scalar');
               clearTimeout(timer);resolve(data);
             };
@@ -138,6 +195,12 @@ try:
           });
           let response = wait(); worker.postMessage({type:'init',threads:2});
           const ready = await response;
+          // The core module answers at start; `catalog` imports the full one.
+          if(ready.module!=='core'||JSON.stringify(ready.metrics)!=='["zensim"]'||JSON.stringify(ready.maps)!=='["zensim"]')throw new Error('Core module catalog '+JSON.stringify([ready.metrics,ready.maps]));
+          response=wait();worker.postMessage({type:'catalog'});
+          const catalog=await response;
+          if(catalog.type!=='catalog'||!catalog.modules.full)throw new Error('Full module did not load: '+JSON.stringify(catalog));
+          const allMaps=[...new Set([...ready.maps,...catalog.modules.full.maps])],allScored=[...new Set([...ready.metrics,...catalog.modules.full.metrics])];
           if (ready.type !== 'ready' || ready.threads !== 2 || !Number.isFinite(ready.startup?.wasmMilliseconds) || !Number.isFinite(ready.startup?.poolMilliseconds)) throw new Error(JSON.stringify(ready));
           const width=64,height=64,reference=new Uint8Array(width*height*4),distorted=new Uint8Array(reference.length);
           for(let y=0;y<height;y++) for(let x=0;x<width;x++) for(let c=0;c<4;c++) {
@@ -192,7 +255,7 @@ try:
           const noMap=await response;if(noMap.type!=='error'||!noMap.message.includes('Model C spatial maps'))throw new Error('C map was silently substituted');
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',zensimProfile:'b-hdr',reference,distorted,width,height});
           if((await response).type!=='error')throw new Error('HDR model accepted through SDR ingress');
-          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!ready.maps.includes(name))throw new Error('Missing map catalog '+name);
+          for(const name of ['fsim','fsimc','haarpsi','vsi','msssim','ssim2','nlpd','psnrhvs','mdctpsnr','mad','iwssim','vif','vifvec','vmaf-v1'])if(!allMaps.includes(name))throw new Error('Missing map catalog '+name);
           const oddWidth=257,oddHeight=253,odd=new Uint8Array(oddWidth*oddHeight*4);
           for(let i=0;i<odd.length;i++)odd[i]=i%4===3?255:(i*17+Math.floor(i/(oddWidth*4))*13)%256;
           const oddMaps={};
@@ -244,17 +307,31 @@ try:
           for(let i=0;i<r.length;i++){r[i]=i%4===3?255:(i*13+Math.floor(i/1024)*17)%256;d[i]=i%4===3?255:Math.max(0,r[i]-7);}
           const inputBig={width:1024,height:1024},rBig=new Uint8Array(1024*1024*4),dBig=new Uint8Array(rBig.length);
           for(let i=0;i<rBig.length;i++){rBig[i]=i%4===3?255:(i*13+Math.floor(i/4096)*17)%256;dBig[i]=i%4===3?255:Math.max(0,rBig[i]-7);}
-          const metrics={};
-          for(const metric of ready.metrics) {
-            response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:r,distorted:d,...input,display:'standard_4k'});
-            let got=await response;
+          // Every metric the modules score: its score, and its own native
+          // map where it publishes one. Every other CLI name must be refused.
+          const metrics={},mapNames={},scalarFixture={},refused={};
+          for(const metric of allScored) {
+            const mapMetric=allMaps.includes(metric)?metric:null;
+            response=wait();worker.postMessage({type:'compare',metric,mapMetric,reference:r,distorted:d,...input,display:'standard_4k'});
+            let got=await response;scalarFixture[metric]=256;
             // Some metrics refuse 256x256 by design (e.g. five-scale MS-SSIM
             // variants with a fixed pre-downscale need >= 704 px); score those once at 1024x1024.
             if(got.type==='error'&&/requires at least|too small/i.test(got.message||'')){
-              response=wait();worker.postMessage({type:'compare',metric,mapMetric:'psnr',reference:rBig,distorted:dBig,...inputBig,display:'standard_4k'});
-              got=await response;
+              response=wait();worker.postMessage({type:'compare',metric,mapMetric,reference:rBig,distorted:dBig,...inputBig,display:'standard_4k'});
+              got=await response;scalarFixture[metric]=1024;
             }
             if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
+            if(got.score.module!==(ready.metrics.includes(metric)?'core':'full'))throw new Error(metric+' scored in module '+got.score.module);
+            if(mapMetric){
+              if(!got.map||got.map.length!==got.mapWidth*got.mapHeight||got.mapMetric!==metric)throw new Error(metric+' map missing');
+              mapNames[metric]=got.mapNames;
+            } else if(got.map!==null)throw new Error(metric+' returned a map it does not publish');
+          }
+          for(const metric of catalog.all.filter(m=>!allScored.includes(m))) {
+            response=wait();worker.postMessage({type:'compare',metric,mapMetric:null,reference:r,distorted:d,...input,display:'standard_4k'});
+            const got=await response;
+            if(got.type!=='error')throw new Error(metric+' is outside the catalog but returned '+got.type);
+            refused[metric]=got.message;
           }
           const hd={width:1920,height:1080},hr=new Uint8Array(hd.width*hd.height*4),hdist=new Uint8Array(hr.length);
           for(let i=0;i<hr.length;i++){hr[i]=i%4===3?255:(i*17+Math.floor(i/(hd.width*4))*13)%256;hdist[i]=i%4===3?255:Math.max(0,hr[i]-7);}
@@ -278,7 +355,7 @@ try:
           response=wait();worker.postMessage({type:'compare',metric:'zensim',mapMetric:'zensim',reference,distorted,width,height});
           const afterCancel=await response;if(afterCancel.type!=='result'||afterCancel.score.score!==first.score.score)throw new Error('Cancellation damaged next score');
           if(sharedControls<38||earlyScores<38)throw new Error("Missing live controls or early scores");
-          worker.terminate();return {oddMaps,startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
+          worker.terminate();return {oddMaps,mapNames,scalarFixture,refused,cliNames:catalog.all,modules:catalog.modules,startup:ready.startup,timings:{cold:{reference:first.referenceMilliseconds,score:first.scoreMilliseconds,map:first.mapMilliseconds,total:first.milliseconds},warm:{reference:second.referenceMilliseconds,score:second.scoreMilliseconds,map:second.mapMilliseconds,total:second.milliseconds}},profiles,shared_control_messages:sharedControls,early_score_messages:earlyScores,zensim_1080p_ms:large.milliseconds,atomic_cancellation:true,score:first.score,map:Array.from(first.map),spatial,metrics,ssim2_1080p_worker_ms:timed.milliseconds,ssim2_1080p_score_ms:timed.scoreMilliseconds,jpeg_upload_recovery:true,jpeg_bytes:Array.from(jpeg.encoded)};
         }''')
         assert len(result['map']) == 4096
         assert all(math.isfinite(value) for value in result['map'])
@@ -292,7 +369,7 @@ try:
           const wait = () => new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Worker deadline expired')), 120000);
             worker.onmessage = ({data}) => {
-              if(['control','score','progress'].includes(data.type))return;
+              if(['control','score','progress','module'].includes(data.type))return;
               if(data.type==='loop-progress'){if(!data.message)progress++;return;}
               if(data.type==='loop-frame'){if(data.recon.length!==data.width*data.height*4||data.map.length!==data.width*data.height)throw new Error('loop frame size');frames++;return;}
               clearTimeout(timer);data.type==='error'?reject(new Error(data.message)):resolve(data);
@@ -350,6 +427,13 @@ try:
         }''')
         # Both file controls exercise the UI's independent upload revisions.
         jpeg=bytes(result.pop('jpeg_bytes'))
+        # The full module is fetched only after the demo's first score, then
+        # in the background, so offline use below needs no fetch.
+        page.wait_for_function("(document.body.dataset.modules||'').includes('full')",timeout=120000)
+        first_score_ms=float(page.evaluate("document.body.dataset.firstScoreMs"))
+        prefetch_ms=float(page.evaluate("document.body.dataset.prefetchMs"))
+        assert first_score_ms < prefetch_ms, (first_score_ms, prefetch_ms)
+        result['lazy_full_module']={'first_score_ms':first_score_ms,'prefetch_posted_ms':prefetch_ms}
         observed=[]
         context.on('request',lambda request:observed.append(request.url))
         context.set_offline(True)
@@ -494,6 +578,59 @@ try:
         page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})
         page.wait_for_function("document.getElementById('loop-info').textContent.includes('Not a jxl-encoder loop trace')", timeout=10000)
         result['loop_player'] = True
+        # The URL contract (docs/BROWSER_WORKBENCH_LINKS.md) and the links back.
+        links = context.new_page()
+        links.goto(url + '?metric=psnr-y&codec=jxl&distance=2')
+        links.wait_for_function("document.getElementById('score-label').textContent==='psnr-y' && document.getElementById('status').textContent.includes('768×512')", timeout=120000)
+        assert links.locator('#metric').input_value() == 'psnr-y'
+        assert links.locator('#name-distorted').inner_text().startswith('jxl-encoder · distance 2 · ')
+        assert links.locator('#jxl-distance').input_value() == '2'
+        from urllib.parse import urlparse, parse_qs
+        query = parse_qs(urlparse(links.url).query)
+        assert query.get('metric') == ['psnr-y'] and query.get('codec') == ['jxl'] and query.get('distance') == ['2'], links.url
+        hrefs = links.locator('#metric-links a').evaluate_all('a => a.map(x => x.href)')
+        assert 'https://imazen.github.io/zenmetrics/#models?metric=psnr-y' in hrefs, hrefs
+        assert 'https://imazen.github.io/zenmetrics/#speed?metric=psnr-y' in hrefs, hrefs
+        links.locator('#metric').select_option('gmsd')
+        links.wait_for_function("new URL(location.href).searchParams.get('metric')==='gmsd'", timeout=10000)
+        # JPEG XL impact: two distances scored with the selected metric; a row
+        # loads its encode as the distorted image.
+        links.locator('#jxl-sweep-distances').fill('1, 4')
+        links.locator('#jxl-sweep-run').click()
+        links.wait_for_function("document.getElementById('jxl-status').textContent.startsWith('Done: 2 encodes scored with gmsd')", timeout=300000)
+        rows = links.locator('#jxl-table tbody tr')
+        assert rows.count() == 2
+        sweep = [[c.inner_text() for c in rows.nth(i).locator('td').all()] for i in range(2)]
+        assert all(math.isfinite(float(r[3])) and int(r[1]) > 0 for r in sweep), sweep
+        assert links.locator('#jxl-chart circle').count() == 2
+        rows.nth(1).click()
+        links.wait_for_function("document.getElementById('name-distorted').textContent.startsWith('jxl-encoder · distance 4 · ') && document.getElementById('map-info').textContent.startsWith('gmsd ·')", timeout=120000)
+        assert links.locator('#score').inner_text() == sweep[1][3] or abs(float(links.locator('#score').inner_text()) - float(sweep[1][3])) <= abs(float(sweep[1][3])) * 1e-6, (links.locator('#score').inner_text(), sweep[1])
+        result['jxl_impact_sweep'] = sweep
+        links.close()
+        # A metric with no browser route opens with its measured reason, no score.
+        gpu = context.new_page()
+        gpu.goto(url + '?metric=ssim2-gpu')
+        gpu.wait_for_function("document.getElementById('status').textContent.includes('ssim2-gpu is not runnable in the browser')", timeout=120000)
+        assert gpu.locator('#metric').input_value() == 'ssim2-gpu' and gpu.locator('#score').inner_text() == '–'
+        assert 'not runnable in the browser' in gpu.locator('#metric-status').inner_text()
+        gpu.close()
+        # Bad parameters are refused by name; the fragment form is read too.
+        bad = context.new_page()
+        bad.goto(url + '?metric=nope&q=500#codec=webp')
+        bad.wait_for_function("document.getElementById('metric-links').textContent.includes('Link parameters refused')", timeout=120000)
+        refusal_text = bad.locator('#link-errors').inner_text()
+        assert 'metric=nope' in refusal_text and 'q=500' in refusal_text, refusal_text
+        assert bad.locator('#codec').input_value() == 'webp'
+        bad.close()
+        result['url_contract'] = True
+        # Every CLI metric name's browser status, from the executions above.
+        measured = measured_coverage(result)
+        result['coverage'] = measured
+        if args.write_coverage:
+            args.write_coverage.write_text(coverage_text(measured))
+        else:
+            check_coverage(json.loads((args.site / 'coverage.json').read_text()), measured)
         if args.oracle:
             oracle=json.loads(args.oracle.read_text())
             assert result['score']['score']==oracle['score']
@@ -502,6 +639,16 @@ try:
                 got=result['profiles'][name]
                 delta=max((abs(a-b) for a,b in zip(got['map'] or [],expected['map'] or [])),default=0)
                 assert got == expected, {'profile':name,'browser_score':got['score'],'native_score':expected['score'],'max_map_delta':delta}
+            # Every browser-scored metric against the native build of the same
+            # entry on the same fixture. Differences are recorded per column.
+            values=lambda s:{v['column']:v['value'] for v in s.get('values',[{'column':s.get('metric','zensim'),'value':s.get('score')}])}
+            assert set(oracle['scalars'])==set(result['metrics']),sorted(set(oracle['scalars'])^set(result['metrics']))
+            result['native_scalar_delta']={}
+            for name,expected in oracle['scalars'].items():
+                assert result['scalarFixture'][name]==expected['fixture'],name
+                got,want=values(result['metrics'][name]),values(expected['score'])
+                assert list(got)==list(want),(name,got,want)
+                result['native_scalar_delta'][name]={c:(0.0 if got[c]==want[c] else abs(got[c]-want[c]) if isinstance(got[c],(int,float)) and isinstance(want[c],(int,float)) else f'{got[c]} vs {want[c]}') for c in got}
             result['native_map_max_abs_delta']={}
             for name,expected in oracle['spatial_maps'].items():
                 got=result['spatial'][name]

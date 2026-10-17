@@ -11,6 +11,7 @@ mod loop_map;
 #[path = "../../zenmetrics-cli/src/metrics/mod.rs"]
 #[allow(dead_code, unreachable_pub, unexpected_cfgs)]
 mod metrics;
+#[cfg(feature = "cpu-metrics")]
 mod ssim2_map;
 
 use zensim::{DiffmapWeighting, PrecomputedReference, RgbSlice, Zensim, ZensimProfile};
@@ -670,7 +671,10 @@ pub fn available_metrics() -> String {
         &metrics::MetricKind::value_variants()
             .iter()
             .filter(|m| {
-                !m.requires_gpu()
+                // The core module scores Zensim through `Reference` only;
+                // its CLI dispatch has every other metric compiled out.
+                (cfg!(feature = "cpu-metrics") || **m == metrics::MetricKind::Zensim)
+                    && !m.requires_gpu()
                     && m.scoring_compiled_in()
                     && !matches!(
                         m,
@@ -681,6 +685,32 @@ pub fn available_metrics() -> String {
             .collect::<Vec<_>>(),
     )
     .expect("static metric names serialize")
+}
+
+/// Every metric name of the native CLI catalog (`MetricKind`), in its
+/// order, whether or not this module scores it.
+#[wasm_bindgen]
+pub fn all_metric_names() -> String {
+    use clap::ValueEnum;
+    serde_json::to_string(
+        &metrics::MetricKind::value_variants()
+            .iter()
+            .map(|m| m.name())
+            .collect::<Vec<_>>(),
+    )
+    .expect("static metric names serialize")
+}
+
+/// Which build this is: `"core"` (first load: decoders, JPEG encoder and
+/// Zensim) or `"full"` (every CPU metric).
+#[wasm_bindgen]
+pub fn module_name() -> String {
+    if cfg!(feature = "cpu-metrics") {
+        "full"
+    } else {
+        "core"
+    }
+    .into()
 }
 
 /// Score a selected SDR CPU metric using the same adapter as the native CLI.
@@ -695,20 +725,34 @@ pub fn score_rgba(
     stride: usize,
     display: &str,
 ) -> Result<String, JsError> {
-    let kind = <metrics::MetricKind as clap::ValueEnum>::from_str(metric, false)
-        .map_err(|e| JsError::new(&e))?;
+    score_json(metric, reference, distorted, width, height, stride, display)
+        .map_err(|e| JsError::new(&e))
+}
+
+/// [`score_rgba`] with a plain error, callable natively (the browser oracle).
+pub fn score_json(
+    metric: &str,
+    reference: &[u8],
+    distorted: &[u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    display: &str,
+) -> Result<String, String> {
+    let kind = <metrics::MetricKind as clap::ValueEnum>::from_str(metric, false)?;
     if kind.requires_gpu()
         || matches!(
             kind,
             metrics::MetricKind::Hdrvdp | metrics::MetricKind::Hdrvdp3
         )
     {
-        return Err(JsError::new(
-            "Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable",
-        ));
+        return Err(
+            "Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable"
+                .into(),
+        );
     }
-    let image = |bytes: &[u8]| -> Result<decode::Rgb8Image, JsError> {
-        let pixels = rgb(bytes, width, height, stride).map_err(|e| JsError::new(&e))?;
+    let image = |bytes: &[u8]| -> Result<decode::Rgb8Image, String> {
+        let pixels = rgb(bytes, width, height, stride)?;
         Ok(decode::Rgb8Image {
             pixels: pixels.into_iter().flatten().collect(),
             width,
@@ -718,13 +762,13 @@ pub fn score_rgba(
     let r = image(reference)?;
     let d = image(distorted)?;
     let screen = if kind.needs_display() {
-        Some(metrics::display::parse_display(display).map_err(|e| JsError::new(&e))?)
+        Some(metrics::display::parse_display(display)?)
     } else {
         None
     };
     let values =
         metrics::run_metric_display(kind, &r, &d, metrics::GpuRuntime::Cpu, screen.as_ref())
-            .map_err(|e| JsError::new(&e.to_string()))?;
+            .map_err(|e| e.to_string())?;
     let values: Vec<_> = values.into_iter().map(|(column,value)| serde_json::json!({"column":column,
         "value":if value.is_finite() {serde_json::json!(value)} else {serde_json::json!(value.to_string())}})).collect();
     Ok(
@@ -733,11 +777,16 @@ pub fn score_rgba(
     )
 }
 
+/// The decoder for this format is in the other module.
+#[allow(dead_code)]
+const NOT_IN_MODULE: &str = "decoder not in this module";
+
 /// Decode SDR file bytes with Zen codecs, preserving PNG/WebP/JXL alpha.
 /// Returns dimensions followed by little-endian packed RGBA8 pixels.
 /// ICC profiles are not applied; scoring still requires explicit opaque input.
 #[wasm_bindgen]
 pub fn decode_image(bytes: &[u8], filename: &str) -> Result<Vec<u32>, JsError> {
+    #[allow(dead_code)]
     fn rgba(buffer: &zenpixels::PixelBuffer) -> Result<(Vec<u8>, u32, u32), String> {
         let pixels = buffer.as_slice();
         if matches!(
@@ -765,26 +814,44 @@ pub fn decode_image(bytes: &[u8], filename: &str) -> Result<Vec<u32>, JsError> {
             .map_err(|e| e.to_string())?;
         Ok((output, w, h))
     }
-    let decoded: Result<(Vec<u8>, u32, u32), String> = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        zenpng::decode(bytes, &zenpng::PngDecodeConfig::default(), &control())
-            .map_err(|e| e.to_string())
-            .and_then(|output| {
-                if output
-                    .info
-                    .cicp
-                    .as_ref()
-                    .is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
-                {
-                    return Err("HDR PNG requires an absolute-nits scoring path".into());
-                }
-                rgba(&output.pixels)
-            })
-    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
-        zenwebp::decoder::decode_rgba(bytes).map_err(|e| e.to_string())
-    } else if bytes.starts_with(&[0xff, 0x0a]) || bytes.starts_with(b"\0\0\0\x0cJXL ") {
-        zenjxl::decode(bytes, None, &[])
-            .map_err(|e| e.to_string())
-            .and_then(|output| rgba(&output.pixels))
+    let png = bytes.starts_with(b"\x89PNG\r\n\x1a\n");
+    let webp = bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP");
+    let jxl = bytes.starts_with(&[0xff, 0x0a]) || bytes.starts_with(b"\0\0\0\x0cJXL ");
+    let decoded: Result<(Vec<u8>, u32, u32), String> = if png {
+        #[cfg(feature = "png")]
+        {
+            zenpng::decode(bytes, &zenpng::PngDecodeConfig::default(), &control())
+                .map_err(|e| e.to_string())
+                .and_then(|output| {
+                    if output
+                        .info
+                        .cicp
+                        .as_ref()
+                        .is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+                    {
+                        return Err("HDR PNG requires an absolute-nits scoring path".into());
+                    }
+                    rgba(&output.pixels)
+                })
+        }
+        #[cfg(not(feature = "png"))]
+        Err(NOT_IN_MODULE.into())
+    } else if webp {
+        #[cfg(feature = "webp")]
+        {
+            zenwebp::decoder::decode_rgba(bytes).map_err(|e| e.to_string())
+        }
+        #[cfg(not(feature = "webp"))]
+        Err(NOT_IN_MODULE.into())
+    } else if jxl {
+        #[cfg(feature = "jxl")]
+        {
+            zenjxl::decode(bytes, None, &[])
+                .map_err(|e| e.to_string())
+                .and_then(|output| rgba(&output.pixels))
+        }
+        #[cfg(not(feature = "jxl"))]
+        Err(NOT_IN_MODULE.into())
     } else {
         decode::decode_rgb8_from_bytes(bytes, filename)
             .map_err(|e| e.to_string())
@@ -980,6 +1047,8 @@ impl SpatialMap {
 }
 
 /// Every map an evaluation published, primary first.
+// The core module has no unified-interface metric.
+#[cfg_attr(not(feature = "cpu-metrics"), allow(dead_code))]
 fn evaluation_maps(e: &dyn zenmetrics_abstractions::Evaluation) -> Vec<SpatialMap> {
     use zenmetrics_abstractions::MapPolarity;
     e.maps()
@@ -1002,6 +1071,8 @@ fn evaluation_maps(e: &dyn zenmetrics_abstractions::Evaluation) -> Vec<SpatialMa
         .collect()
 }
 
+// The core module has no unified-interface metric.
+#[cfg_attr(not(feature = "cpu-metrics"), allow(dead_code))]
 fn evaluate_spatial_map(
     metric: &mut dyn zenmetrics_abstractions::Metric,
     r: &[[u8; 3]],
@@ -1030,6 +1101,8 @@ fn evaluate_spatial_map(
 }
 
 /// Every map the metric publishes for an already shaped input pair.
+// The core module has no unified-interface metric.
+#[cfg_attr(not(feature = "cpu-metrics"), allow(dead_code))]
 fn evaluate_native_map(
     metric: &mut dyn zenmetrics_abstractions::Metric,
     r: zenmetrics_abstractions::Image<'_>,
@@ -1102,7 +1175,11 @@ fn yuv420_image(
 /// Spatial exports compiled in this browser build. No alternate metric is substituted.
 #[wasm_bindgen]
 pub fn available_spatial_maps() -> String {
-    let mut names = vec!["zensim", "butteraugli", "dssim", "gmsd", "psnr", "ssim2"];
+    let mut names = vec!["zensim"];
+    #[cfg(feature = "cpu-metrics")]
+    names.extend(["butteraugli", "dssim", "psnr", "ssim2"]);
+    #[cfg(feature = "cpu-gmsd")]
+    names.push("gmsd");
     #[cfg(feature = "cpu-cvvdp")]
     names.push("cvvdp");
     #[cfg(feature = "cpu-fsim")]
@@ -1170,7 +1247,6 @@ fn compute_maps(
     let _ = display; // Also valid when the CVVDP feature is disabled.
     let r = rgb(reference, width, height, stride)?;
     let d = rgb(distorted, width, height, stride)?;
-    let (w, h) = (width as usize, height as usize);
     let fail = |e: String| e;
     let maps: Vec<SpatialMap> = match metric {
         "zensim" => vec![SpatialMap::difference(
@@ -1179,7 +1255,9 @@ fn compute_maps(
             height,
             zensim_diffmap(&r, &d, width, height)?,
         )],
+        #[cfg(feature = "cpu-metrics")]
         "butteraugli" => {
+            let (w, h) = (width as usize, height as usize);
             let r: &[rgb::RGB<u8>] = bytemuck::cast_slice(&r);
             let d: &[rgb::RGB<u8>] = bytemuck::cast_slice(&d);
             let scored = butteraugli::butteraugli(
@@ -1195,6 +1273,7 @@ fn compute_maps(
                 .to_vec();
             vec![SpatialMap::difference("diffmap", width, height, values)]
         }
+        #[cfg(feature = "cpu-metrics")]
         "dssim" => dssim_maps(&r, &d, width, height)?,
         #[cfg(feature = "cpu-fsim")]
         "fsim" | "fsimc" => {
@@ -1252,8 +1331,11 @@ fn compute_maps(
                 .map_err(|e| fail(e.to_string()))?;
             vec![SpatialMap::difference("diffmap", width, height, values)]
         }
+        #[cfg(feature = "cpu-gmsd")]
         "gmsd" => evaluate_spatial_map(&mut gmsd::Gmsd, &r, &d, width, height)?,
+        #[cfg(feature = "cpu-metrics")]
         "ssim2" => evaluate_spatial_map(&mut ssim2_map::Ssimulacra2, &r, &d, width, height)?,
+        #[cfg(feature = "cpu-metrics")]
         "psnr" => {
             // Per-pixel mean squared sRGB code-value error, in normalized units.
             let values = r
@@ -1352,6 +1434,7 @@ fn zensim_diffmap(
 /// DSSIM's own default scale weights (`dssim-core` `DEFAULT_WEIGHTS`, which
 /// it does not export). Set explicitly so the fused map uses the weights the
 /// score uses; `dssim_weights_match_the_default_score` pins them.
+#[cfg(feature = "cpu-metrics")]
 const DSSIM_SCALE_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
 
 /// DSSIM's per-scale SSIM maps (`ssim_0` full resolution … `ssim_4`) and a
@@ -1360,6 +1443,7 @@ const DSSIM_SCALE_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
 /// `1 − mean|avg_n − s|`, with `avg_n` its mean SSIM raised to `0.5ⁿ`; each
 /// cell's `w_n/Σw · |avg_n − s|` is spread evenly over the full-resolution
 /// pixels it covers, so the fused mean is the weighted sum exactly.
+#[cfg(feature = "cpu-metrics")]
 fn dssim_maps(
     r: &[[u8; 3]],
     d: &[[u8; 3]],
