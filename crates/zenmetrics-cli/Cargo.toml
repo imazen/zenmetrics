@@ -45,6 +45,7 @@ default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr"]
 # adds the ONNX Runtime CUDA engine (ZENMETRICS_NN_ENGINE=ort-cuda).
 nn = ["dep:zenmetrics-nn", "dep:zenmetrics-abstractions"]
 nn-ort = ["nn", "zenmetrics-nn/ort"]
+nn-webgpu = ["nn-ort", "zenmetrics-nn/ort-webgpu"]
 # Classical no-reference metrics (piqe, niqe, brisque) — in-tree ports
 # scored through `zenmetrics-abstractions::PairedNoReference`, so batch /
 # score-pairs emit both `<m>` (distorted) and `<m>_ref` (reference).

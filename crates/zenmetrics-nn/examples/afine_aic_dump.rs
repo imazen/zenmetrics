@@ -6,16 +6,18 @@
 //! ```text
 //! cargo run --release -p zenmetrics-nn --features model-tests,ort \
 //!   --example afine_aic_dump -- \
-//!   <model_dir> <pairs.tsv> <out.tsv> [engine=rten|ort-cuda] [variants=native,...]
+//!   <model_dir> <pairs.tsv> <out.tsv> [engine=rten|ort-cuda|ort-webgpu] [variants=native,...]
 //! ```
 //!
 //! `pairs.tsv`: `ref_path<TAB>dist_path[<TAB>name]` rows (`#`/header
 //! lines skipped); `name` defaults to the distorted filename. Output
 //! TSV: one row per (pair, variant) with columns
 //! `pair variant n_r n_d fid s_r s_d s_f lambda afine_all`. The fused
-//! ort-cuda graph emits only `afine_all` (sub-score fields blank).
-//! Engines: `rten` (default) or `ort-cuda` (feature `ort`, needs
-//! `ORT_DYLIB_PATH` plus the CUDA/cuDNN libs on `LD_LIBRARY_PATH`).
+//! ort graphs emit only `afine_all` (sub-score fields blank).
+//! Engines: `rten` (default), `ort-cuda` (feature `ort`, needs
+//! `ORT_DYLIB_PATH` plus the CUDA/cuDNN libs on `LD_LIBRARY_PATH`) or
+//! `ort-webgpu` (feature `ort-webgpu`, additionally needs
+//! `ZENMETRICS_NN_WEBGPU_EP_LIB`).
 
 use std::io::Write;
 
@@ -56,8 +58,10 @@ fn main() {
         None | Some("rten") => Engine::Rten,
         #[cfg(feature = "ort")]
         Some("ort-cuda") => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        Some("ort-webgpu") => Engine::OrtWebgpu,
         Some(other) => {
-            eprintln!("unknown engine {other:?} (rten | ort-cuda)");
+            eprintln!("unknown engine {other:?} (rten | ort-cuda | ort-webgpu)");
             std::process::exit(2);
         }
     };

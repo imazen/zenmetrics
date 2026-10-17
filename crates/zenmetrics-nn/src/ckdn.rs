@@ -107,10 +107,11 @@ impl Ckdn {
                 }),
             ),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => (
-                Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => (
+                Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                     &dir.join("ckdn_full.onnx"),
                     "ckdn",
+                    gpu,
                 )?)),
                 None,
             ),

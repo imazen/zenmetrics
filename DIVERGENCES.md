@@ -682,6 +682,45 @@ and the [measured panel](benchmarks/pieapp_review_2026-10-16/cli.json).
   upstream's batch size; chunk-vs-whole equivalence is unit-tested, scores are
   bit-identical by construction (concatenated inputs, per-patch outputs).
 
+## ort-webgpu engine (`Engine::OrtWebgpu`, feature `ort-webgpu`)
+
+A third ORT engine, running the same exported graphs on ONNX Runtime's
+WebGPU plugin EP (`libonnxruntime_providers_webgpu.so` from the
+version-matched `onnxruntime-ep-webgpu` package, registered from
+`ZENMETRICS_NN_WEBGPU_EP_LIB`). Sessions keep the shared builder's
+deterministic-compute setting and additionally forbid CPU fallback: a
+graph that leaves a node on the CPU fails to commit. Memory pattern stays
+ON — the CUDA-side arena-retention bug does not exist in this EP, and
+disabling planning does not change the observed device-memory peak.
+Full receipt:
+[`benchmarks/ort_webgpu_2026-10-17/`](benchmarks/ort_webgpu_2026-10-17/README.md).
+
+- **DIVERGES (capability):** five models cannot commit a session at all
+  because their graphs carry CPU-assigned host ops — `Cast`,
+  `ConstantOfShape`, `EyeLike`, `Gather`, `SequenceAt` shape/metadata
+  housekeeping that ORT will not place on the WebGPU EP and
+  `session.disable_cpu_ep_fallback` then rejects: **afine, arniqa, ckdn,
+  deepdc, musiq**. `from_dir` fails loudly at load (`BadModel`), the same
+  failure mode as an unregistered EP.
+- **DIVERGES (capacity):** the fused pair graphs for **dists, lpips_vgg,
+  stlpips_vgg** exhaust a 16 GB RTX 4080's device memory at 2048² under
+  the WebGPU EP's allocation model (`vkAllocateMemory` →
+  `VK_ERROR_OUT_OF_DEVICE_MEMORY`); every scored pair at ≤1024² matches
+  the goldens (worst 6e-8). The same graphs complete the full 64–2048²
+  ladder on ort-cuda, whose allocator pools and reuses device memory.
+- **PASS at the 1e-3-JND gate with bit-identical repeats:** lpips_alex
+  2.28e-6, lpips_squeeze 1.50e-6, stlpips_alex 2.57e-6, dreamsim 1.35e-5,
+  maniqa 8.35e-6, liqe 4.42e-5, hyperiqa 5.98e-6, paq2piq 3.13e-5,
+  wadiqam_fr_live 2.37e-6, wadiqam_fr_tid 5.09e-6, wadiqam_nr_live
+  2.02e-7, wadiqam_nr_tid 6.81e-6, pieapp 9.19e-7, wd_s1..s5 ≤ 2.5e-6
+  JND (2026-10-17, i265, RTX 4080 via Vulkan).
+- **DIVERGES (selection):** the adapter is `ZENMETRICS_NN_WEBGPU_DEVICE`
+  (index into the EP's GPU-device list) else a discrete-vendor name
+  preference then the last enumerated GPU — the safe ort API exposes no
+  per-adapter discreteness flag, so the choice is logged once
+  (`ort-webgpu: using WebGPU EP GPU device i of n`) and the env pin is
+  the deterministic override.
+
 ## Maintenance rule
 
 Every metric port or reference-version bump updates this file **in the

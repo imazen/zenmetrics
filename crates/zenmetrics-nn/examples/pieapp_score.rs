@@ -1,5 +1,5 @@
 //! Score a caller-supplied TSV of ref_path/dist_path with PieAPP.
-//! Usage: pieapp_score MODEL_DIR PAIRS_TSV OUTPUT_TSV rten|ort-cuda.
+//! Usage: pieapp_score MODEL_DIR PAIRS_TSV OUTPUT_TSV rten|ort-cuda|ort-webgpu.
 //! The caller explicitly chooses this NC-weight measurement tool.
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -46,12 +46,14 @@ fn main() {
     assert_eq!(
         args.len(),
         5,
-        "MODEL_DIR PAIRS_TSV OUTPUT_TSV rten|ort-cuda"
+        "MODEL_DIR PAIRS_TSV OUTPUT_TSV rten|ort-cuda|ort-webgpu"
     );
     let engine = match args[4].as_str() {
         "rten" => Engine::Rten,
         #[cfg(feature = "ort")]
         "ort-cuda" => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        "ort-webgpu" => Engine::OrtWebgpu,
         other => panic!("unknown or unbuilt engine {other}"),
     };
     let mut model = PieApp::from_dir(

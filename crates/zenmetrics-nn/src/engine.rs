@@ -430,6 +430,39 @@ pub(crate) mod ort_engine {
     use super::{ImageGraph, NamedInput, PairGraph};
     use crate::Error;
 
+    /// GPU execution provider for the shared [`OrtGpuPair`],
+    /// [`OrtGpuImage`] and [`OrtGpuTrunk`] session wrappers.
+    #[derive(Clone, Copy)]
+    pub(crate) enum Ep {
+        /// CUDA + CPU providers (`ORT_DYLIB_PATH`, TF32 off).
+        Cuda,
+        /// WebGPU plugin EP (`ZENMETRICS_NN_WEBGPU_EP_LIB`), discrete
+        /// adapter preferred, CPU fallback forbidden.
+        #[cfg(feature = "ort-webgpu")]
+        Webgpu,
+    }
+
+    impl Ep {
+        /// The GPU provider an [`Engine`](crate::Engine) selects, if it is
+        /// an ONNX Runtime GPU engine.
+        pub(crate) fn of(engine: crate::Engine) -> Option<Self> {
+            match engine {
+                crate::Engine::OrtCuda => Some(Self::Cuda),
+                #[cfg(feature = "ort-webgpu")]
+                crate::Engine::OrtWebgpu => Some(Self::Webgpu),
+                _ => None,
+            }
+        }
+
+        fn name(self) -> &'static str {
+            match self {
+                Self::Cuda => "ort-cuda",
+                #[cfg(feature = "ort-webgpu")]
+                Self::Webgpu => "ort-webgpu",
+            }
+        }
+    }
+
     /// ONNX Runtime is loaded once per process, from `ORT_DYLIB_PATH` when it
     /// is set, else from the platform's default library search.
     fn environment() -> Result<&'static Environment, Error> {
@@ -479,6 +512,112 @@ pub(crate) mod ort_engine {
             .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))
     }
 
+    /// Session construction for the selected GPU execution provider.
+    fn gpu_session(env: &Environment, path: &Path, ep: Ep) -> Result<Session, Error> {
+        match ep {
+            Ep::Cuda => cuda_session(env, path),
+            #[cfg(feature = "ort-webgpu")]
+            Ep::Webgpu => webgpu_session(env, path),
+        }
+    }
+
+    /// Registers the WebGPU plugin EP library once per process. The path
+    /// comes from `ZENMETRICS_NN_WEBGPU_EP_LIB` — the
+    /// `libonnxruntime_providers_webgpu.so` shipped by the
+    /// `onnxruntime-ep-webgpu` pip package / `Microsoft.ML.OnnxRuntime.EP.WebGpu`
+    /// NuGet, version-matched to the loaded onnxruntime core.
+    #[cfg(feature = "ort-webgpu")]
+    fn webgpu_library(env: &Environment) -> Result<(), Error> {
+        static REG: OnceLock<Result<(), String>> = OnceLock::new();
+        REG.get_or_init(|| {
+            let lib = std::env::var("ZENMETRICS_NN_WEBGPU_EP_LIB").map_err(|_| {
+                "ZENMETRICS_NN_WEBGPU_EP_LIB unset — point it at \
+                 libonnxruntime_providers_webgpu.so (pip package \
+                 onnxruntime-ep-webgpu matched to the loaded onnxruntime)"
+                    .to_string()
+            })?;
+            env.register_ep_library("webgpu", lib)
+                .map(|_| ())
+                .map_err(|e| format!("registering the WebGPU EP library: {e}"))
+        })
+        .as_ref()
+        .map_err(|e| Error::Engine(e.clone()))?;
+        Ok(())
+    }
+
+    /// A GPU-type device belonging to the WebGPU plugin EP.
+    #[cfg(feature = "ort-webgpu")]
+    fn is_webgpu_gpu(d: &ort::device::Device) -> bool {
+        matches!(d.ep(), Ok("WebGpuExecutionProvider"))
+            && d.hardware_device().ty() == ort::memory::DeviceType::GPU
+    }
+
+    /// Index into the WebGPU EP's GPU-device list of the adapter to run
+    /// on. `ZENMETRICS_NN_WEBGPU_DEVICE` pins an index; otherwise a device
+    /// whose vendor name marks it discrete (NVIDIA/AMD/ATI) wins, else the
+    /// last GPU the EP enumerates. The safe ort API exposes no per-adapter
+    /// discreteness flag — the vendor-name preference and the pin are the
+    /// resolution; the choice is logged once per process so a wrong pick
+    /// is observable.
+    #[cfg(feature = "ort-webgpu")]
+    fn webgpu_device_index(env: &Environment) -> Result<usize, Error> {
+        static IDX: OnceLock<Result<usize, String>> = OnceLock::new();
+        IDX.get_or_init(|| {
+            let n = env.devices().filter(is_webgpu_gpu).count();
+            let discrete = env.devices().filter(is_webgpu_gpu).position(|d| {
+                match d.hardware_device().vendor() {
+                    Ok(v) => v.contains("NVIDIA") || v.contains("AMD") || v.contains("ATI"),
+                    Err(_) => false,
+                }
+            });
+            let i = if let Ok(v) = std::env::var("ZENMETRICS_NN_WEBGPU_DEVICE") {
+                v.parse::<usize>()
+                    .map_err(|_| format!("ZENMETRICS_NN_WEBGPU_DEVICE={v}: expected an index"))?
+            } else {
+                discrete.unwrap_or_else(|| n.saturating_sub(1))
+            };
+            if i >= n {
+                return Err(format!(
+                    "the WebGPU EP exposes {n} GPU device(s), index {i} out of range"
+                ));
+            }
+            eprintln!("ort-webgpu: using WebGPU EP GPU device {i} of {n}");
+            Ok(i)
+        })
+        .as_ref()
+        .copied()
+        .map_err(|e| Error::Engine(e.clone()))
+    }
+
+    /// The WebGPU adapter [`webgpu_device_index`] selected.
+    #[cfg(feature = "ort-webgpu")]
+    fn webgpu_device(env: &Environment) -> Result<ort::device::Device<'_>, Error> {
+        env.devices()
+            .filter(is_webgpu_gpu)
+            .nth(webgpu_device_index(env)?)
+            .ok_or_else(|| Error::Engine("the WebGPU EP exposes no GPU device".into()))
+    }
+
+    /// WebGPU plugin EP session: same graph and determinism as
+    /// [`cuda_session`], but provider selection goes through the device
+    /// API (plugin EPs are not named providers) and CPU fallback is
+    /// disabled — a graph that leaves a node on the CPU fails to commit.
+    /// Memory pattern stays ON here: the CUDA-side arena-retention bug it
+    /// is disabled for does not exist in the WebGPU EP, and without buffer
+    /// planning every intermediate takes a dedicated device allocation —
+    /// DISTS at 2048² exhausts 16 GB that way.
+    #[cfg(feature = "ort-webgpu")]
+    fn webgpu_session(env: &Environment, path: &Path) -> Result<Session, Error> {
+        webgpu_library(env)?;
+        let device = webgpu_device(env)?;
+        Session::builder(env)
+            .and_then(|b| b.with_deterministic_compute(true).map_err(Into::into))
+            .and_then(|b| b.with_disable_cpu_fallback().map_err(Into::into))
+            .and_then(|b| b.with_devices([device], None).map_err(Into::into))
+            .and_then(|mut b| b.commit_from_file(path))
+            .map_err(|e| Error::BadModel(format!("{}: {e}", path.display())))
+    }
+
     /// Extract the one named output from a session run, consuming each
     /// [`ort::session::SessionOutputs`] value as it is read so every
     /// original is released after its copy. Indexing a borrowed
@@ -498,25 +637,34 @@ pub(crate) mod ort_engine {
         found.ok_or_else(|| Error::BadModel(format!("missing output {want}")))
     }
 
-    /// The CUDA execution provider via [`cuda_session`].
-    pub(crate) struct OrtCudaPair {
+    /// The fused pair-graph session on the selected GPU provider via
+    /// [`gpu_session`].
+    pub(crate) struct OrtGpuPair {
         session: Mutex<Session>,
         output: &'static str,
+        ep: Ep,
     }
 
-    impl OrtCudaPair {
-        pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
-            let session = cuda_session(environment()?, path)?;
+    impl OrtGpuPair {
+        pub(crate) fn load(
+            path: &Path,
+            output: &'static str,
+            engine: crate::Engine,
+        ) -> Result<Self, Error> {
+            let ep = Ep::of(engine)
+                .ok_or_else(|| Error::Engine(format!("{engine:?} is not an ORT GPU engine")))?;
+            let session = gpu_session(environment()?, path, ep)?;
             Ok(Self {
                 session: Mutex::new(session),
                 output,
+                ep,
             })
         }
     }
 
-    impl PairGraph for OrtCudaPair {
+    impl PairGraph for OrtGpuPair {
         fn engine(&self) -> &'static str {
-            "ort-cuda"
+            self.ep.name()
         }
 
         fn score(&self, r: Vec<f32>, d: Vec<f32>, h: usize, w: usize) -> Result<f64, Error> {
@@ -539,26 +687,34 @@ pub(crate) mod ort_engine {
         }
     }
 
-    /// [`OrtCudaPair`] for a single-image graph with named inputs —
-    /// [`ImageGraph`] on the same CUDA session configuration.
-    pub(crate) struct OrtCudaImage {
+    /// [`OrtGpuPair`] for a single-image graph with named inputs —
+    /// [`ImageGraph`] on the same session configuration.
+    pub(crate) struct OrtGpuImage {
         session: Mutex<Session>,
         output: &'static str,
+        ep: Ep,
     }
 
-    impl OrtCudaImage {
-        pub(crate) fn load(path: &Path, output: &'static str) -> Result<Self, Error> {
-            let session = cuda_session(environment()?, path)?;
+    impl OrtGpuImage {
+        pub(crate) fn load(
+            path: &Path,
+            output: &'static str,
+            engine: crate::Engine,
+        ) -> Result<Self, Error> {
+            let ep = Ep::of(engine)
+                .ok_or_else(|| Error::Engine(format!("{engine:?} is not an ORT GPU engine")))?;
+            let session = gpu_session(environment()?, path, ep)?;
             Ok(Self {
                 session: Mutex::new(session),
                 output,
+                ep,
             })
         }
     }
 
-    impl ImageGraph for OrtCudaImage {
+    impl ImageGraph for OrtGpuImage {
         fn engine(&self) -> &'static str {
-            "ort-cuda"
+            self.ep.name()
         }
 
         fn score(&self, inputs: &[NamedInput]) -> Result<f64, Error> {
@@ -609,20 +765,24 @@ pub(crate) mod ort_engine {
         }
     }
     /// Multi-output VGG feature graph with bounded host output retention.
-    pub(crate) struct OrtCudaTrunk {
+    pub(crate) struct OrtGpuTrunk {
         session: Mutex<Session>,
+        ep: Ep,
     }
-    impl OrtCudaTrunk {
-        pub(crate) fn load(path: &Path) -> Result<Self, Error> {
-            let session = cuda_session(environment()?, path)?;
+    impl OrtGpuTrunk {
+        pub(crate) fn load(path: &Path, engine: crate::Engine) -> Result<Self, Error> {
+            let ep = Ep::of(engine)
+                .ok_or_else(|| Error::Engine(format!("{engine:?} is not an ORT GPU engine")))?;
+            let session = gpu_session(environment()?, path, ep)?;
             Ok(Self {
                 session: Mutex::new(session),
+                ep,
             })
         }
     }
-    impl super::Trunk for OrtCudaTrunk {
+    impl super::Trunk for OrtGpuTrunk {
         fn engine(&self) -> &'static str {
-            "ort-cuda"
+            self.ep.name()
         }
         fn run(&self, input: Vec<f32>, h: usize, w: usize) -> Result<Vec<super::Tap>, Error> {
             let input = Tensor::from_array(([1usize, 3, h, w], input))

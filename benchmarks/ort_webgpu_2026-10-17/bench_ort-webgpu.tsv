@@ -1,0 +1,7 @@
+host	engine	rten_threads	metric	mode	size	n	median_ms	min_ms	score
+i265	ort-webgpu	default	lpips_vgg	compute	256	50	8.468	7.832	3.23269993066787720e-1
+i265	ort-webgpu	default	lpips_vgg	warm	256	50	9.665	8.967	3.23269993066787720e-1
+i265	ort-webgpu	default	lpips_vgg	e2e	256	50	11.026	9.952	3.23269993066787720e-1
+i265	ort-webgpu	default	lpips_vgg	compute	1024	22	136.322	132.431	3.56550782918930054e-1
+i265	ort-webgpu	default	lpips_vgg	warm	1024	22	140.747	138.339	3.56550782918930054e-1
+i265	ort-webgpu	default	lpips_vgg	e2e	1024	21	146.099	142.065	3.56550782918930054e-1

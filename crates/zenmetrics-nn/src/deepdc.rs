@@ -67,9 +67,10 @@ impl DeepDc {
                 channels.len(),
             )?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join("deepdc_full.onnx"),
                 "deepdc",
+                gpu,
             )?)),
         };
         Ok(Self {

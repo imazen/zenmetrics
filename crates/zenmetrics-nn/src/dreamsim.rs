@@ -89,9 +89,10 @@ impl Dreamsim {
         let backend = match engine {
             Engine::Rten => Backend::Trunk(engine::load(&dir.join("dreamsim_trunk.onnx"), 3)?),
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Backend::Pair(Box::new(engine::ort_engine::OrtCudaPair::load(
+            gpu => Backend::Pair(Box::new(engine::ort_engine::OrtGpuPair::load(
                 &dir.join("dreamsim_full.onnx"),
                 "dreamsim",
+                gpu,
             )?)),
         };
         Ok(Self { backend, channels })

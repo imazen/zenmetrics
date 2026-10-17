@@ -1,5 +1,6 @@
 //! Score a PNG pair TSV with all five Cool-Chic WD columns. Caller supplies
-//! model directory, input TSV, output TSV, and `rten` or `ort-cuda`.
+//! model directory, input TSV, output TSV, and `rten`, `ort-cuda` or
+//! `ort-webgpu`.
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
@@ -38,6 +39,8 @@ fn main() {
         "rten" => Engine::Rten,
         #[cfg(feature = "ort")]
         "ort-cuda" => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        "ort-webgpu" => Engine::OrtWebgpu,
         other => panic!("unbuilt engine {other}"),
     };
     let mut metric = WassersteinDistortion::from_dir(&args[1], engine).expect("load WD");

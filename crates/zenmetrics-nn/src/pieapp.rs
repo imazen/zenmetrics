@@ -58,7 +58,9 @@ impl PieApp {
         let graph: Box<dyn ImageGraph> = match engine {
             Engine::Rten => engine::load_image(&path)?,
             #[cfg(feature = "ort")]
-            Engine::OrtCuda => Box::new(engine::ort_engine::OrtCudaImage::load(&path, "patches")?),
+            gpu => Box::new(engine::ort_engine::OrtGpuImage::load(
+                &path, "patches", gpu,
+            )?),
         };
         Ok(Self { graph })
     }

@@ -55,6 +55,8 @@ fn coolchic_five_column_ladder_and_warm_stride() {
         Ok("rten") => Engine::Rten,
         #[cfg(feature = "ort")]
         Ok("ort-cuda") => Engine::OrtCuda,
+        #[cfg(feature = "ort-webgpu")]
+        Ok("ort-webgpu") => Engine::OrtWebgpu,
         other => panic!("unbuilt engine {other:?}"),
     };
     let mut wd = WassersteinDistortion::from_dir(&models, engine).unwrap();

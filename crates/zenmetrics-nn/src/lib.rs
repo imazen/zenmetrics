@@ -104,6 +104,12 @@ pub enum Engine {
     /// `ort`). The library is loaded at run time from `ORT_DYLIB_PATH`.
     #[cfg(feature = "ort")]
     OrtCuda,
+    /// ONNX Runtime with the WebGPU plugin execution provider (feature
+    /// `ort-webgpu`, implies `ort`). The provider shared library is
+    /// registered at run time from `ZENMETRICS_NN_WEBGPU_EP_LIB`; sessions
+    /// forbid CPU fallback.
+    #[cfg(feature = "ort-webgpu")]
+    OrtWebgpu,
 }
 
 use zenmetrics_abstractions as za;
