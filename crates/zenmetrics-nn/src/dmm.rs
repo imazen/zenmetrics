@@ -1,4 +1,4 @@
-//! Isolated bisection experiment: lartg; not qualified for shipping.
+//! Isolated bisection experiment: orm2r_order; not qualified for shipping.
 //! DMM (Chen et al., "Debiased Mapping for Full-Reference Image Quality
 //! Assessment", IEEE TIP 2025; upstream `Baoliang93/DMM`, MIT, pip
 //! `DMM_PyTorch`). Parity target: the upstream package, CPU, fp32.
@@ -595,32 +595,58 @@ fn dlarfg(alpha: f32, x: &mut [f32]) -> (f32, f32) {
     (beta, tau)
 }
 
-/// SLARTG, reference-LAPACK 3.12.0: nonnegative cosine and r signed
-/// like f. SLARTGP instead forces r positive and is not SBDSQR's routine.
-fn dlartg(f: f32, g: f32) -> (f32, f32, f32) {
-    let f1 = f.abs();
-    let g1 = g.abs();
+/// DLARTGP: scaled safe Givens rotation. Returns (cs, sn, r).
+fn dlartgp(f: f32, g: f32) -> (f32, f32, f32) {
+    let safmn2 = 2f32.powi(((D_SAFMIN / D_EPS).ln() / 2f32.ln() / 2.0) as i32);
+    let safmx2 = 1.0 / safmn2;
     if g == 0.0 {
-        return (1.0, 0.0, f);
+        return (1.0f32.copysign(f), 0.0, f.abs());
     }
     if f == 0.0 {
-        return (0.0, 1.0f32.copysign(g), g1);
+        return (0.0, 1.0f32.copysign(g), g.abs());
     }
-    let safmax = 1.0 / D_SAFMIN;
-    let rtmin = D_SAFMIN.sqrt();
-    let rtmax = (safmax / 2.0).sqrt();
-    if f1 > rtmin && f1 < rtmax && g1 > rtmin && g1 < rtmax {
-        let d = (f * f + g * g).sqrt();
-        let r = d.copysign(f);
-        (f1 / d, g / r, r)
+    let (mut f1, mut g1) = (f, g);
+    let scale = f1.abs().max(g1.abs());
+    let (cs, sn, mut r);
+    if scale >= safmx2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale >= safmx2 && count < 20 {
+            count += 1;
+            f1 *= safmn2;
+            g1 *= safmn2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmx2;
+        }
+    } else if scale <= safmn2 {
+        let mut count = 0;
+        let mut scale = scale;
+        while scale <= safmn2 {
+            count += 1;
+            f1 *= safmx2;
+            g1 *= safmx2;
+            scale = f1.abs().max(g1.abs());
+        }
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
+        for _ in 0..count {
+            r *= safmn2;
+        }
     } else {
-        let u = safmax.min(D_SAFMIN.max(f1).max(g1));
-        let fs = f / u;
-        let gs = g / u;
-        let d = (fs * fs + gs * gs).sqrt();
-        let r = d.copysign(f);
-        (fs.abs() / d, gs / r, r * u)
+        r = (f1 * f1 + g1 * g1).sqrt();
+        cs = f1 / r;
+        sn = g1 / r;
     }
+    if r < 0.0 {
+        return (-cs, -sn, -r);
+    }
+    (cs, sn, r)
 }
 
 /// DLAS2: singular values of the 2x2 lower-triangular [f 0; g h].
@@ -834,30 +860,25 @@ fn dgebd2(a: &mut [f32; 256], d: &mut [f32; 16], e: &mut [f32; 15], tq: &mut [f3
     }
 }
 
-/// DORG2R/dorgbr 'Q': build Q1 = H_0·...·H_15 in place, column-wise.
-/// `a` holds the dgebd2 storage (reflector tails below the diagonal).
-fn dorg2r_q(a: &mut [f32; 256], tq: &[f32; 16]) {
+/// SORMBR('Q','L','N') -> SORM2R: apply the stored GEBD2 reflectors
+/// directly to the bidiagonal left vectors. SGESDD uses this path rather
+/// than materializing Q and multiplying Q*Ub, which rounds differently.
+fn sorm2r_q(a: &[f32; 256], tq: &[f32; 16], u: &mut [f32; 256]) {
     for i in (0..16).rev() {
         let tau = tq[i];
-        if i < 15 {
-            a[i * 16 + i] = 1.0;
-            for c in (i + 1)..16 {
-                let mut w = a[i * 16 + c];
-                for r in (i + 1)..16 {
-                    w += a[r * 16 + i] * a[r * 16 + c];
-                }
-                a[i * 16 + c] -= tau * w;
-                for r in (i + 1)..16 {
-                    a[r * 16 + c] -= tau * a[r * 16 + i] * w;
-                }
+        if tau == 0.0 {
+            continue;
+        }
+        for c in 0..16 {
+            let mut w = u[i * 16 + c];
+            for r in (i + 1)..16 {
+                w += a[r * 16 + i] * u[r * 16 + c];
             }
-        }
-        for r in (i + 1)..16 {
-            a[r * 16 + i] *= -tau;
-        }
-        a[i * 16 + i] = 1.0 - tau;
-        for r in 0..i {
-            a[r * 16 + i] = 0.0;
+            let temp = -tau * w;
+            u[i * 16 + c] += temp;
+            for r in (i + 1)..16 {
+                u[r * 16 + c] += a[r * 16 + i] * temp;
+            }
         }
     }
 }
@@ -1063,12 +1084,12 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 let mut oldcs = 1.0;
                 let mut oldsn = 1.0;
                 for i in (ll - 1)..(m - 1) {
-                    let (csn, sn, r) = dlartg(d[i] * cs, e[i]);
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i]);
                     cs = csn;
                     if i > ll - 1 {
                         e[i - 1] = oldsn * r;
                     }
-                    let (ocs, osn, dd) = dlartg(oldcs * r, d[i + 1] * sn);
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i + 1] * sn);
                     oldcs = ocs;
                     oldsn = osn;
                     d[i] = dd;
@@ -1096,12 +1117,12 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 let mut oldsn = 1.0;
                 for i in (ll..m).rev() {
                     // i 0-based from m-1 down to ll
-                    let (csn, sn, r) = dlartg(d[i] * cs, e[i - 1]);
+                    let (csn, sn, r) = dlartgp(d[i] * cs, e[i - 1]);
                     cs = csn;
                     if i < m - 1 {
                         e[i] = oldsn * r;
                     }
-                    let (ocs, osn, dd) = dlartg(oldcs * r, d[i - 1] * sn);
+                    let (ocs, osn, dd) = dlartgp(oldcs * r, d[i - 1] * sn);
                     oldcs = ocs;
                     oldsn = osn;
                     d[i] = dd;
@@ -1129,7 +1150,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 (d[ll - 1].abs() - shift) * (1.0f32.copysign(d[ll - 1]) + shift / d[ll - 1]);
             let mut g = e[ll - 1];
             for i in (ll - 1)..(m - 1) {
-                let (cosr, sinr, r) = dlartg(f, g);
+                let (cosr, sinr, r) = dlartgp(f, g);
                 if i > ll - 1 {
                     e[i - 1] = r;
                 }
@@ -1137,7 +1158,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 e[i] = cosr * e[i] - sinr * d[i];
                 g = sinr * d[i + 1];
                 d[i + 1] *= cosr;
-                let (cosl, sinl, r) = dlartg(f, g);
+                let (cosl, sinl, r) = dlartgp(f, g);
                 d[i] = r;
                 f = cosl * e[i] + sinl * d[i + 1];
                 d[i + 1] = cosl * d[i + 1] - sinl * e[i];
@@ -1165,7 +1186,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
             let mut f = (d[m - 1].abs() - shift) * (1.0f32.copysign(d[m - 1]) + shift / d[m - 1]);
             let mut g = e[m - 2];
             for i in (ll..m).rev() {
-                let (cosr, sinr, r) = dlartg(f, g);
+                let (cosr, sinr, r) = dlartgp(f, g);
                 if i < m - 1 {
                     e[i] = r;
                 }
@@ -1173,7 +1194,7 @@ fn dbdsqr(d: &mut [f32; 16], e: &mut [f32; 15], u: &mut [f32; 256]) {
                 e[i - 1] = cosr * e[i - 1] - sinr * d[i];
                 g = sinr * d[i - 1];
                 d[i - 1] *= cosr;
-                let (cosl, sinl, r) = dlartg(f, g);
+                let (cosl, sinl, r) = dlartgp(f, g);
                 d[i] = r;
                 f = cosl * e[i - 1] + sinl * d[i - 1];
                 d[i - 1] = cosl * d[i - 1] - sinl * e[i - 1];
@@ -1263,8 +1284,7 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
     let mut e = [0f32; 15];
     let mut tq = [0f32; 16];
     dgebd2(&mut a, &mut d, &mut e, &mut tq);
-    // a now holds reflector tails below diag; build Q1 in place
-    dorg2r_q(&mut a, &tq); // a <- Q1
+    // Retain reflectors for direct SORM2R application.
     // dbdsdc scale
     let orgnrm = d
         .iter()
@@ -1272,7 +1292,11 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
         .max(e.iter().fold(0.0f32, |m, &x| m.max(x.abs())));
     if orgnrm == 0.0 {
         let mut s = [0f32; 16];
-        let u = a; // Q1 (identity for zero matrix)
+        let mut u = [0.0; 256];
+        for i in 0..16 {
+            u[i * 16 + i] = 1.0;
+        }
+        sorm2r_q(&a, &tq, &mut u);
         s.copy_from_slice(&d);
         return (u, s);
     }
@@ -1307,17 +1331,8 @@ fn svd16(m: &[f32; 256]) -> ([f32; 256], [f32; 16]) {
             }
         }
     }
-    // U = Q1 @ Ub ; s = ds * orgnrm
-    let mut u = [0f32; 256];
-    for i in 0..16 {
-        for j in 0..16 {
-            let mut acc = 0.0;
-            for r in 0..16 {
-                acc += a[i * 16 + r] * ub[r * 16 + j];
-            }
-            u[i * 16 + j] = acc;
-        }
-    }
+    sorm2r_q(&a, &tq, &mut ub);
+    let u = ub;
     let mut s = [0f32; 16];
     for i in 0..16 {
         s[i] = ds[i] * orgnrm;
