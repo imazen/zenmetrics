@@ -25,7 +25,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `HDR_VDP_2` | `hdrvdp` | needs the absolute-luminance display configuration | HDR-VDP-2 version and display parameters | same |
 | `proposal-Butteraugli` | `butteraugli` (3-norm column) | tracks our libjxl 3-norm with Pearson 0.99997 after an affine map (pub ≈ 2.09·ours − 1.10); exact values not recovered | libjxl revision, intensity target, aggregation and any JND mapping applied | AIC2026_METRICS_AND_FITTING.md |
 | `CAMBI` | `cambi` | native median 1.3e-4, max 0.178; settings unresolved | CAMBI options (window, top-k, thresholds, EOTF, bit depth, any scaling or crop) | [aic_more_2026-10-15](../benchmarks/aic_more_2026-10-15/README.md) |
-| `proposal-DVIFM`, `proposal-DVIFM-0.2`, `proposal-DVIFM-0.2-use_chroma` | `dvifmish` port mode (unpublished; ports of the author's four released C++ variants) | no released variant reproduces any column: best Spearman 0.941 (`port-lap-v0.3` vs `proposal-DVIFM-0.2`), 0.751 vs `proposal-DVIFM`, 0.865 vs `-use_chroma` (61 crop pairs, 2026-10-17); the releases were retuned on AIC2026 after the columns were computed | which DVIFM build, constants and JND map produced each column | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
+| `proposal-DVIFM`, `proposal-DVIFM-0.2`, `proposal-DVIFM-0.2-use_chroma` | `dvifmish` port mode (unpublished; ports of the author's four released C++ variants) | no released variant reproduces any column: best Spearman 0.941 (`port-lap-v0.3` vs `proposal-DVIFM-0.2`), 0.751 vs `proposal-DVIFM`, 0.865 vs `-use_chroma` (61 crop pairs, 2026-10-17); the releases were retuned on AIC2026 after the columns were computed. We use the current releases (dvifmish port mode) and do not try to reproduce these older columns | which DVIFM build, constants and JND map produced each column | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
 
 ## Identified: the column matches pyiqa defaults
 
@@ -33,16 +33,18 @@ Scoring the 61 crop pairs with pyiqa 0.1.16 (`create_metric(name)` defaults, CPU
 2026-10-17) reproduces these columns. This identifies the published pipeline; the
 zenmetrics implementations below follow the upstream releases, so where they differ
 from the column the difference is the convention, not a defect. Ports that follow the
-column's convention are being written outside this repository.
+column's convention are being added in `crates/zenmetrics-pyiqa-ports`, the one crate under
+pyiqa's non-commercial terms (TOPIQ, TOPIQ-PIPAL, WaDIQaM, AHIQ, CW-SSIM, DMM). MSSWD has no
+licence and is ported outside this repository.
 
 | Column | pyiqa metric | median \|Δ\| | max \|Δ\| | Spearman | zenmetrics |
 |---|---|---|---|---|---|
-| `TOPIQ` | `topiq_fr` (KADID) | 3.6e-5 | 2.7e-4 | 1.0000 | not implemented (non-commercial weights) |
-| `TOPIQ-PIPAL` | `topiq_fr-pipal` | 2.4e-5 | 1.5e-4 | 1.0000 | not implemented (non-commercial weights) |
+| `TOPIQ` | `topiq_fr` (KADID) | 3.6e-5 | 2.7e-4 | 1.0000 | port in progress in `zenmetrics-pyiqa-ports` (non-commercial crate) |
+| `TOPIQ-PIPAL` | `topiq_fr-pipal` | 2.4e-5 | 1.5e-4 | 1.0000 | port in progress in `zenmetrics-pyiqa-ports` (non-commercial crate) |
 | `MSSWD` | `msswd` (learned) | 4.2e-6 | 2.4e-4 | 0.9999 | not implemented (no licence); the official random-projection MS-SWD is a different method |
 | `WaDIQaM` | `wadiqam_fr` (KADID-trained) | 1.7e-6 | 1.2e-5 | 1.0000 | `wadiqam-*` use the official deepIQA LIVE/TID weights, a different model (best Spearman −0.74) |
 | `AHIQ` | `ahiq` | 2.5e-6 | 1.0e-5 | 1.0000 | `ahiq` follows upstream `test.py` nine-crop (median \|Δ\| 0.14) |
-| `PieAPP` | `pieapp` | 2.3e-5 | 1.9e-4 | 0.9999 | `pieapp`, comparison running |
+| `PieAPP` | `pieapp` | 2.3e-5 | 1.9e-4 | 0.9999 | `pieapp` (upstream convention): median 6.6e-3, max 0.042, Spearman 0.9975 |
 | `CKDN` | `ckdn` | 4.0e-5 | 1.4e-4 | 0.9999 | `ckdn` matches to the same residual |
 | `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim` max 1.1e-4 |
 
@@ -65,9 +67,7 @@ Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6,
 
 ## Not yet compared against the published column
 
-| Column | Ours | Status |
-|---|---|---|
-| `PieAPP` | `pieapp` | implemented and qualified against upstream; the column matches pyiqa 0.1.16 defaults (see above); our port's comparison is running (2026-10-17) |
+None: every implemented column has been compared (2026-10-17).
 
 ## Not implemented: what we would need
 
@@ -75,8 +75,9 @@ Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6,
 |---|---|---|
 | `AIMOS` | not identified in any public source | what AIMOS is, and its reference |
 | `proposal-IDFIQA` | reference code has no licence. The authors' AIC-4 evaluation script reproduces the column (61 crop pairs: median \|Δ\| 4.7e-6, max 3.3e-4 JND, Spearman 1.0; 2026-10-17); a port is being written outside this repository | a licence for the reference code |
-| `HaarXYB-*`, `HaarY-*`, `HaarYCoCg-* deltaL1248` (site-only names) | unidentified, no published values | what these are |
-| `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (site-only names) | MSU VQMT implementation, no published values | none unless the values are published |
+| `HaarXYB-*`, `HaarY-*`, `HaarYCoCg-* deltaL1248` (site-only names) | unidentified; no per-image values in any CSV and listed as excluded in the site config, yet the authors' rank-distribution figure (792 five-source subsets) shows six of them taking the top six ranks, ahead of FSIMc, HaarPSI and SSIMULACRA2 | what they are (colour space, masking, "deltaL1248"), and the code or per-image values |
+| FSIM, FSIMc and VSI at `-k2`/`-k3`/`-k4` and `-nodownscale`; `SSIM-pyiqa-f32` and `SSIMc-pyiqa-f32` at `-k2` to `-k6` (site-only names) | downscale-factor variants with fitted JND maps in the site config but no per-image values in any CSV; FSIMc-k4 ranks ninth in the authors' rank-distribution figure, above FSIMc | the per-image values, and which factor the published FSIM, FSIMc and VSI columns used |
+| `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (site-only names) | MSU VQMT implementation; the site config has a fitted JND map for both, so values exist, but none are published | the per-image values |
 
 ## Reproduced
 

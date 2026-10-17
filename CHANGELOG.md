@@ -57,6 +57,16 @@ Workspace conventions per the global rules:
 
 - Add archive-bound, non-installable exact-steering smoke transport and per-smoke GNU time receipts; registered fit execution is unchanged.
 
+## zenmetrics-pyiqa-ports
+
+### Added
+
+- New unpublished crate for ports whose only reference code is pyiqa (pyiqa 0.1.16 defaults, the convention behind several AIC2026 columns), under pyiqa's non-commercial terms; skeleton only, models in progress.
+
+### QUEUED BREAKING CHANGES
+
+- None.
+
 ## zenmetrics-nn
 
 ### Added

@@ -95,6 +95,12 @@ no copy across an ABI, one CLI, and `zenmetrics-py` gets the metrics for free.
 ported from a permissive upstream (keeping its notice in a `LICENSE-<origin>` file, the
 gmsd convention), or written from the paper when the upstream is NC, has no licence, or
 is pyiqa's own (TOPIQ). We never port from pyiqa's files and never read TReS's code.
+**Exception (owner decision 2026-10-17):** `crates/zenmetrics-pyiqa-ports` holds ports whose
+only reference code is pyiqa, following pyiqa 0.1.16's defaults (the convention behind
+several AIC2026 columns: TOPIQ, TOPIQ-PIPAL, WaDIQaM, AHIQ, CW-SSIM, DMM). That one crate
+carries pyiqa's terms (PolyForm Noncommercial 1.0.0 + S-Lab 1.0), is `publish = false`, is
+reached from the CLI only through the non-default `pyiqa-ports` feature, and nothing in it
+may be copied into another crate. The rule above holds everywhere else.
 Noncommercial status belongs to **weights**: each card records `weights_licence`
 (`permissive` / `unknown` / `nc`), we redistribute only `permissive` weights, and
 loading `unknown` or `nc` weights fetches them from their origin and requires an

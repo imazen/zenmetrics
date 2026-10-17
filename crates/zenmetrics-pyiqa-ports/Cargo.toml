@@ -1,0 +1,23 @@
+[package]
+name = "zenmetrics-pyiqa-ports"
+version = "0.1.0"
+description = "Ports of IQA metrics whose only reference code is pyiqa (non-commercial terms)"
+edition.workspace = true
+rust-version.workspace = true
+# Derived from pyiqa (IQA-PyTorch), which is under PolyForm Noncommercial 1.0.0
+# plus the S-Lab License 1.0. This crate carries those terms; nothing else in the
+# workspace does. See README.md.
+license-file = "LICENSE-pyiqa"
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["rten"]
+rten = ["zenmetrics-nn/rten"]
+ort = ["zenmetrics-nn/ort"]
+
+[dependencies]
+zenmetrics-nn = { path = "../zenmetrics-nn", default-features = false }
+zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }

@@ -3,7 +3,8 @@
 Which models are allowed, and from which source, is decided in
 [`docs/PYIQA_UPSTREAM_LICENSES_2026-10-15.md`](../../docs/PYIQA_UPSTREAM_LICENSES_2026-10-15.md)
 and [`docs/PYIQA_PORT_PLAN.md`](../../docs/PYIQA_PORT_PLAN.md). Port from the original
-upstream package, never from pyiqa's files. For NC or unlicensed upstreams, write the
+upstream package, never from pyiqa's files. (The one exception is `crates/zenmetrics-pyiqa-ports`, see
+`docs/PYIQA_PORT_PLAN.md`; never move code from it into this crate.) For NC or unlicensed upstreams, write the
 code from the paper.
 
 `lpips` and `dists` are the templates: LPIPS has a per-tap head over a network with
