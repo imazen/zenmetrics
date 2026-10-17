@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits.
+- Expose the existing ownership-checked claim release as a quiescent stopped-allocation operator example; preserve ledger history and retry limits (`afd81b53`).
 
 - Bind scientific STEER hidden activations to native inspection, retain full-budget resource receipts, and add a separately pinned program-pack profile.
 
