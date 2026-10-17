@@ -1,0 +1,60 @@
+{
+  "audits": [
+    {
+      "expected_cells": 328,
+      "present_requested_cells": 0,
+      "requested_sizes": [
+        "cid22",
+        "2k"
+      ],
+      "requested_threads": [
+        1,
+        20
+      ],
+      "adapter_inventory_sha256": "006900ebf5d7a1e0decd6879ca75266df74da73b118645149c536efd71953636",
+      "status_counts": {},
+      "extra_cells": 0,
+      "complete": false,
+      "contract": "Selected public CPU competitor adapters; refusals are attempts, not latency measurements",
+      "raw": "/home/lilith/tmp/iqa-compete/refresh-0347/raw.jsonl",
+      "raw_sha256": "192b280e9f144f3153108ceee1458eb97f4ed1776e22f6505029ed1f545fa1fd",
+      "pairs": "/home/lilith/tmp/iqa-compete/inputs/pairs.json",
+      "pairs_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+      "missing_count": 328,
+      "pending_count": 0,
+      "full_receipt": "/home/lilith/tmp/iqa-compete/competitor-coverage-first2-v2.json"
+    },
+    {
+      "expected_cells": 1148,
+      "present_requested_cells": 0,
+      "requested_sizes": [
+        "cid22",
+        "aic-small",
+        "aic-medium",
+        "aic-large",
+        "2k",
+        "4k",
+        "8k"
+      ],
+      "requested_threads": [
+        1,
+        20
+      ],
+      "adapter_inventory_sha256": "006900ebf5d7a1e0decd6879ca75266df74da73b118645149c536efd71953636",
+      "status_counts": {},
+      "extra_cells": 0,
+      "complete": false,
+      "contract": "Selected public CPU competitor adapters; refusals are attempts, not latency measurements",
+      "raw": "/home/lilith/tmp/iqa-compete/refresh-0347/raw.jsonl",
+      "raw_sha256": "192b280e9f144f3153108ceee1458eb97f4ed1776e22f6505029ed1f545fa1fd",
+      "pairs": "/home/lilith/tmp/iqa-compete/inputs/pairs.json",
+      "pairs_sha256": "5f3593cdeee0b48210ef9426270719e62f4fddf4a203b6abf4b1be4ab98c9c5e",
+      "missing_count": 1148,
+      "pending_count": 0,
+      "full_receipt": "/home/lilith/tmp/iqa-compete/competitor-coverage-all7-v1.json"
+    }
+  ],
+  "controls": 6,
+  "control_log": "/home/lilith/tmp/iqa-compete/competitor-coverage-tests-v2.log",
+  "qualification": "Inventory and refusal audit only; native/Python timing stages not started"
+}

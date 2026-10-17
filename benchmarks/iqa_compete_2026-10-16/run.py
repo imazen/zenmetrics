@@ -314,7 +314,7 @@ def main():
         if not snapshot.exists():snapshot.write_bytes(adapter.read_bytes())
         if sha(snapshot)!=digest:raise ValueError('adapter snapshot hash mismatch')
         args.python_adapter=snapshot.resolve()
-        meta.update(engine='numpy' if args.python_package in ['scikit-image','flip-evaluator'] else 'torch',impl=args.python_package,package=args.python_package,impl_binary_sha=sha(args.python_executable),adapter_sha256=digest)
+        meta.update(engine='numpy' if args.python_package in ['scikit-image','flip-evaluator'] else 'torch',impl=args.python_package,impl_version=None,package=args.python_package,impl_binary_sha=sha(args.python_executable),adapter_sha256=digest)
     output = args.root / f"{meta['host']}.jsonl"
     inventory = json.loads(subprocess.check_output([args.binary, 'inventory'], text=True))
     if not (args.root / 'inventory.json').exists():

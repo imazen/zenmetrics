@@ -241,3 +241,10 @@ A completed CPU first-score warmup can supply an explicitly untimed comparison
 reference after the process exceeds its timing deadline. Its original timeout,
 zero samples and missing timing statistics remain unchanged. Comparisons and
 charts disclose the reference kind; see [the qualification contract](UNTIMED_REFERENCES.md).
+
+`just iqa-compete-competitor-coverage` audits the selected libvmaf, libjxl
+and Python CPU adapter matrix independently of the Rust audit. Missing rows,
+insufficient samples, missing Rust comparisons and unexpected adapter failures
+remain explicit. Refusals count as attempts, never as compute latency. Python
+package versions come from the child adapter; startup failures retain an unknown
+package version rather than inheriting the Rust CLI version.

@@ -1180,3 +1180,9 @@ iqa-compete-freeze-model-tests:
 # No metric execution: fresh exact-pair comparisons, immutable receipts and audit.
 iqa-compete-refresh-i265 raw pairs output sizes="cid22,2k":
     python3 benchmarks/iqa_compete_2026-10-16/refresh.py '{{raw}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --gpu-runtime cuda --nn-cuda
+
+iqa-compete-competitor-coverage raw pairs output sizes="cid22,2k" implementations="libvmaf,libjxl,scikit-image,piq,torchmetrics,pytorch-msssim,lpips,DISTS-pytorch,stlpips-pytorch,DeepDC-PyTorch,flip-evaluator,cvvdp":
+    python3 benchmarks/iqa_compete_2026-10-16/competitor_coverage.py '{{raw}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --implementations '{{implementations}}'
+
+iqa-compete-competitor-coverage-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_competitor_coverage.py
