@@ -309,7 +309,7 @@ fn codec_encode_estimate(
     // stills); a codec whose estimate cares about alpha still gets a sound
     // typical figure from the opaque path.
     let image = ImageCharacteristics::new(width, height, zenpixels::PixelDescriptor::RGB8_SRGB);
-    let env = ComputeEnvironment::new().with_cores(cores as usize);
+    let env = ComputeEnvironment::conservative().with_cores(cores as usize);
 
     // Each arm builds the codec's public trait-config type at a representative
     // mid-quality default and calls the trait method. `est` is `cores`-scaled.
