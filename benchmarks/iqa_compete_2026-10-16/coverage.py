@@ -9,6 +9,7 @@ def main():
     p.add_argument('raw',type=P);p.add_argument('inventory',type=P);p.add_argument('pairs',type=P);p.add_argument('output',type=P)
     p.add_argument('--sizes',default='cid22,2k');p.add_argument('--threads',default='1,20')
     p.add_argument('--gpu-runtime',choices=['cuda','wgpu']);p.add_argument('--nn-cuda',action='store_true')
+    p.add_argument('--coverage-first',action='store_true',help='Apply owner CID22-only parity coverage contract to retained observations too')
     p.add_argument('--require-complete',action='store_true');a=p.parse_args()
     assert not a.output.exists(),'Preserve earlier coverage receipts'
     raw=a.raw.read_bytes();inventory=json.loads(a.inventory.read_text());pairs=json.loads(a.pairs.read_text())
@@ -44,7 +45,7 @@ def main():
         if status in ['ok','variant_mismatch']:
             if row.get('n',0)<(row.get('required_samples',10) if row.get('coverage_first') else 10):reason='fewer than required actual Rust rounds'
             elif row.get('reproduction_required'):reason='GPU mismatch reproduction pending'
-            elif key[1]!='cpu' and row.get('ref_score') is None and (not row.get('coverage_first') or (key[2]=='cid22' and key[3]==threads[0])):reason='same-pair CPU comparison missing'
+            elif key[1]!='cpu' and row.get('ref_score') is None and (not (a.coverage_first or row.get('coverage_first')) or (key[2]=='cid22' and key[3]==threads[0])):reason='same-pair CPU comparison missing'
         elif status=='partial':reason='sampling incomplete'
         elif status.startswith('skipped:process_exit_'):reason='unexpected process failure requires investigation'
         elif 'diagnostic_' in status:reason='diagnostic adapter does not qualify'
@@ -57,7 +58,7 @@ def main():
         missing_cells=missing,pending_qualification=pending,status_counts=dict(counts),
         per_size={size:dict(expected=sum(k[2]==size for k in expected),present=sum(k[2]==size for k in expected&actual.keys()),timed=sum(k[2]==size and actual[k]['status'] in ['ok','variant_mismatch'] for k in expected&actual.keys()),statuses=dict(collections.Counter(actual[k]['status'].split(':',1)[0] for k in expected&actual.keys() if k[2]==size))) for size in sizes},
         timing_quality_counts=dict(collections.Counter(r.get("timing_quality","legacy_unmonitored") for k,r in actual.items() if k in expected)),extra_cells=len(actual.keys()-expected),
-        complete=not missing and not pending,
+        coverage_first=a.coverage_first,complete=not missing and not pending,
         contract='CPU routes for non-GPU names, requested GPU routes and optional learned ORT-CUDA; explicit refusals are attempts, not timings')
     a.output.write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps({k:v for k,v in receipt.items() if k not in ['missing_cells','pending_qualification']}|dict(missing_count=len(missing),pending_count=len(pending))))
