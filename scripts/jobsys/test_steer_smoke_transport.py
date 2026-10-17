@@ -66,6 +66,35 @@ class SteerSmokeTransport(unittest.TestCase):
             p.write_text(json.dumps(dict(schema='bounded-smoke-program-v1',files={'scripts/rev4_featpot/'+n:'a'*64 for n in required},data={'benchmarks/e33_fit_contract_2026-10-10.json':'b'*64})))
             self.assertEqual(len(pack.bounded_smoke_sources(p,sha(p.read_bytes()))),6)
 
+    def test_scientific_activation_requires_native_match_and_fixed_tau(self):
+        for smooth in [False, True]:
+            expected=dict(execution_contract='registered-fit', spec='example'+(':sh1' if smooth else ''),
+                steer_activation=dict(schema='steer-hidden-activation-v1',kind='smooth_hinge' if smooth else 'relu',tau=.125 if smooth else None))
+            decoded=dict(hidden_activation='SmoothHinge' if smooth else 'Relu')
+            qualified.verify_steer_activation(decoded,expected)
+            for bad in [{},dict(hidden_activation='Tanh'),dict(hidden_activation='Relu' if smooth else 'SmoothHinge')]:
+                with self.assertRaises(ValueError):qualified.verify_steer_activation(bad,expected)
+            for bad in [expected|dict(execution_contract='local-smoke'),expected|dict(steer_activation=expected['steer_activation']|dict(tau=.25))]:
+                with self.assertRaises(ValueError):qualified.verify_steer_activation(decoded,bad)
+
+    def test_scientific_resource_policy_preserves_historical_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d);a=['v2_lodo_mlp.py']
+            self.assertFalse(exe.measure_resources(a,p))
+            (p/'build_meta.json').write_text(json.dumps(dict(steer_scientific=dict(schema='steer-scientific-fit-v1',epochs=120,pairs_per_epoch=50000))))
+            self.assertTrue(exe.measure_resources(a,p))
+            (p/'build_meta.json').write_text(json.dumps(dict(steer_scientific=dict(schema='steer-scientific-fit-v1',epochs=1,pairs_per_epoch=49999))))
+            with self.assertRaises(ValueError):exe.measure_resources(a,p)
+
+    def test_scientific_source_inventory_cannot_be_smoke(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'pins.json'
+            required=['v2_lodo_mlp.py','v2_confirm_fit.py','v2_common.py','v2_teacher.py','v2_smoke_contract.py','steer_exact_smoke.py']
+            v=dict(schema='steer-scientific-program-v1',files={'scripts/rev4_featpot/'+n:'a'*64 for n in required},data={'benchmarks/e33_fit_contract_2026-10-10.json':'b'*64})
+            p.write_text(json.dumps(v));self.assertEqual(len(pack.scientific_steer_sources(p,sha(p.read_bytes()))),6)
+            with self.assertRaises(ValueError):pack.bounded_smoke_sources(p,sha(p.read_bytes()))
+            with self.assertRaises(ValueError):pack.scientific_steer_sources(p,'0'*64)
+
 
     def test_timed_control_preserves_fresh_destination(self):
         # Independent child contract: a strict trainer refuses any existing destination.

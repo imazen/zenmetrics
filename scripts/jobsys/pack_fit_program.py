@@ -222,12 +222,12 @@ def registered_sources(path, pin):
     return files
 
 
-def bounded_smoke_sources(path, pin):
+def _steer_sources(path, pin, schema):
     if path is None or pin is None or digest(path)!=pin:
         raise ValueError("bounded smoke source inventory/hash required")
     record=json.loads(Path(path).read_text())
-    if record.get("schema")!="bounded-smoke-program-v1":
-        raise ValueError("bounded smoke inventory schema")
+    if record.get("schema")!=schema:
+        raise ValueError("STEER source inventory schema")
     files=record["files"]
     required={"scripts/rev4_featpot/"+n for n in ["v2_lodo_mlp.py","v2_confirm_fit.py",
         "v2_common.py","v2_teacher.py","v2_smoke_contract.py","steer_exact_smoke.py"]}
@@ -242,20 +242,28 @@ def bounded_smoke_sources(path, pin):
     return files
 
 
+def bounded_smoke_sources(path, pin):
+    return _steer_sources(path, pin, 'bounded-smoke-program-v1')
+
+
+def scientific_steer_sources(path, pin):
+    return _steer_sources(path, pin, 'steer-scientific-program-v1')
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered", "bounded-smoke"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered", "bounded-smoke", "steer"), default="p0")
     p.add_argument("--source-pins", type=Path)
     p.add_argument("--source-pins-sha256")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    pins = bounded_smoke_sources(args.source_pins,args.source_pins_sha256) if args.profile == "bounded-smoke" else registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
+    pins = scientific_steer_sources(args.source_pins,args.source_pins_sha256) if args.profile == "steer" else bounded_smoke_sources(args.source_pins,args.source_pins_sha256) if args.profile == "bounded-smoke" else registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
     for name, expected in pins.items():
         path = args.source / name
         if digest(path) != expected:
@@ -263,7 +271,7 @@ def main() -> None:
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
     wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA, "v2r5s2recipe28": V2R5_DATA, "v40": V40_PINS["data"], "e33": E33_PINS["data"]}.get(args.profile, {})
-    if args.profile == "bounded-smoke":
+    if args.profile in ("bounded-smoke", "steer"):
         wanted = json.loads(args.source_pins.read_text())["data"]
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
@@ -277,10 +285,11 @@ def main() -> None:
     if args.profile == "registered":
         files["registered_fit_contract.py"] = args.executor.with_name("registered_fit_contract.py")
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
-    if args.profile == "bounded-smoke":
+    if args.profile in ("bounded-smoke", "steer"):
         files["bin/steer_exact_smoke"] = args.bin_dir / "steer_exact_smoke"
+    if args.profile == "bounded-smoke":
         files["bounded_smoke_policy.json"] = args.source / "benchmarks/steer_smoke_policy_2026-10-16.json"
-    if args.profile in ("v2d1", "v2e29", "v40", "e33", "bounded-smoke"):
+    if args.profile in ("v2d1", "v2e29", "v40", "e33", "bounded-smoke", "steer"):
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
         files["qualified_fit_contract.py"] = args.executor.with_name("qualified_fit_contract.py")
         files["harvest_fit_cells.py"] = args.executor.with_name("harvest_fit_cells.py")
@@ -292,6 +301,9 @@ def main() -> None:
     metadata = json.loads(args.build_meta.read_text())
     if metadata.get("schema") != "fleet-fits-build-v1":
         raise ValueError("build metadata missing or wrong schema")
+    if args.profile == 'steer' and metadata.get('steer_scientific') != {
+            'schema': 'steer-scientific-fit-v1', 'epochs': 120, 'pairs_per_epoch': 50000}:
+        raise ValueError('scientific STEER metadata must bind full registered budget')
     if args.profile == "registered":
         binding=metadata.get("registered_fit",{})
         if set(binding)!={"data_sha256","contract_sha256"} or any(len(v)!=64 for v in binding.values()):

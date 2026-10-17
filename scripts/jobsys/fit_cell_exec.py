@@ -104,6 +104,20 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
     return cap
 
 
+def measure_resources(argv: list, program: Path) -> bool:
+    if argv[0] == 'steer_exact_smoke.py' or '--local-smoke-budget' in argv:
+        return True
+    path = program / 'build_meta.json'
+    if not path.is_file():
+        return False
+    policy = json.loads(path.read_text()).get('steer_scientific')
+    if policy is None:
+        return False
+    if policy != {'schema': 'steer-scientific-fit-v1', 'epochs': 120, 'pairs_per_epoch': 50000}:
+        raise ValueError('invalid archive-bound scientific STEER resource policy')
+    return True
+
+
 def run_capped(command: list, env: dict, cap: int, dest: Path, name: Path) -> str:
     """Run the fit; at `cap` seconds kill its whole process group and raise with a diagnosis."""
     started = time.monotonic()
@@ -335,10 +349,12 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    if measure_resources(argv, PROGRAM) and argv[0] != 'steer_exact_smoke.py' and '--local-smoke-budget' not in argv:
+        env['ZEN_STEER_ARGV_SHA'] = argv_sha
     command = [sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]]
     cap = registered_wall_cap(argv, kind["data_sha"])
     resource = None
-    if argv[0] == "steer_exact_smoke.py" or "--local-smoke-budget" in argv:
+    if measure_resources(argv, PROGRAM):
         # The strict driver owns creation of its fresh destination. Stage timing
         # beside it, retaining failed-run timing separately, and export on success.
         resource = dest.parent / f".{name.name}.resources-{time.time_ns()}.txt"
