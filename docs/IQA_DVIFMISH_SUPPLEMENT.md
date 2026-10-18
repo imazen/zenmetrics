@@ -117,3 +117,22 @@ not change admission thresholds, sampled-round gates or required clean rounds.
 The wrapper hash and cadence are bound in the resulting control receipt.
 This addresses prior-holder activity as an experiment; it does not establish
 the cause of the original flags or guarantee a clean retry.
+
+## Resource-accounting diagnostic
+
+`resource-accounting/` beside the harness is a standalone, unpublished binary
+using sysinfo 0.36.1. It repeats the pinned zenbench refresh order and records
+raw per-core global use, owner percentage, cumulative owner CPU milliseconds,
+interval deltas, nonzero process observations and independent native `ps`
+cumulative CPU times. Idle, persistent-eight-worker and short-lived-worker
+panels distinguish startup, steady activity and thread churn. Mac runs retain
+native `iostat` user/system/idle and BSD `time` user/system totals as independent
+observations. These native samples have their own displayed cadence; they are
+not claimed to have exactly the same endpoints as each 200-ms sysinfo interval.
+No diagnostic output qualifies timings or changes the benchmark gate.
+
+Build with `just iqa-resource-accounting-build`. Under the existing shared
+heavy lock and `run-heavy --mem 12G --jobs 8`, run
+`just iqa-resource-accounting-run BINARY NEW_OUTPUT`. The source and standalone
+lock belong to this repository; compiled binaries and raw observations remain
+outside git. The diagnostic never replaces an existing competition binary.

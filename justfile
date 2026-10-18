@@ -1744,3 +1744,10 @@ iqa-mac-service-check bundle output wrapper lock:
 
 iqa-mac-coverage-check:
     TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/test_prepare_coverage.py
+
+# Independent resource accounting; caller uses the existing shared heavy lock.
+iqa-resource-accounting-build:
+    cargo build --locked --release --manifest-path benchmarks/iqa_compete_2026-10-16/resource-accounting/Cargo.toml
+
+iqa-resource-accounting-run binary output:
+    bash benchmarks/iqa_compete_2026-10-16/resource-accounting/run.sh '{{binary}}' '{{output}}'

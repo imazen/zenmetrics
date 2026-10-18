@@ -1,0 +1,11 @@
+[package]
+name = "iqa-resource-accounting"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+sysinfo = "=0.36.1"
+serde_json = "=1.0.145"
