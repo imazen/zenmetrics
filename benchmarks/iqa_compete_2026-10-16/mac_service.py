@@ -9,6 +9,47 @@ import plistlib
 import subprocess
 import sys
 import time
+import fcntl
+
+
+def predecessor_complete(gate):
+    """Require the final report for the frozen predecessor and a free controller lock."""
+    output = Path(gate['output'])
+    if not (output / 'report.json').exists() or not (output / 'identity.json').exists():
+        return False
+    saved = json.loads((output / 'identity.json').read_bytes())
+    frozen = saved['frozen']
+    if frozen['manifest_sha256'] != gate['manifest_sha256']:
+        raise ValueError('predecessor manifest changed')
+    canonical = lambda value: json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    identity = hashlib.sha256(canonical(saved)).hexdigest()
+    report = json.loads((output / 'report.json').read_bytes())
+    if report.get('identity') != identity:
+        raise ValueError('predecessor report identity changed')
+    if not report.get('complete'):
+        return False
+    expected = [f'{i:06d}-' + hashlib.sha256(canonical(c)).hexdigest()[:16]
+                for i, c in enumerate(frozen['manifest']['cells'])]
+    cells = report.get('cells', [])
+    if not expected or [c.get('cell_id') for c in cells] != expected or any(c.get('status') not in ('ok', 'unsupported', 'failed') for c in cells):
+        raise ValueError('predecessor final cell inventory differs')
+    with (output / 'coordinator.lock').open('rb') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+    return True
+
+
+def wait_for_predecessors(gates, service_dir):
+    if not gates:
+        return
+    while True:
+        pending = [g['output'] for g in gates if not predecessor_complete(g)]
+        (service_dir / 'queue-wait.json').write_text(json.dumps(dict(pending=pending, checked_unix=time.time())) + '\n')
+        if not pending:
+            return
+        time.sleep(30)
 
 
 def verify(bundle):
@@ -61,6 +102,8 @@ def main():
     p.add_argument('--domain', choices=['user', 'gui'], default='user', help='user supports a Mac accessed only over SSH')
     p.add_argument('--lock', type=Path)
     p.add_argument('--command-sha256')
+    p.add_argument('--after', nargs=2, action='append', default=[], metavar=('BUNDLE', 'OUTPUT'), help='Wait for this frozen predecessor to finish before starting')
+    p.add_argument('--after-sha256')
     p.add_argument('--jobs', type=int, default=8)
     p.add_argument('--timeout-seconds', type=int, default=1100)
     a = p.parse_args()
@@ -90,12 +133,19 @@ def main():
             command = json.loads(raw)
             if command[:5] != [sys.executable, str(bundle / 'durable.py'), 'run', str(bundle / 'manifest.json'), str(output)]:
                 raise ValueError('service command identifies another experiment')
+            gates = []
+            if a.after_sha256:
+                after_raw = (service_dir / 'service-after.json').read_bytes()
+                if hashlib.sha256(after_raw).hexdigest() != a.after_sha256:
+                    raise ValueError('predecessor configuration changed')
+                gates = json.loads(after_raw)
         except (OSError, ValueError) as e:
             print('Permanent bundle/config failure: ' + str(e), file=sys.stderr)
             return 0  # KeepAlive must not spin on integrity failure; retained stderr is authoritative.
         # Hold an idle-sleep assertion only for this service process lifetime.
         awake = subprocess.Popen(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
         try:
+            wait_for_predecessors(gates, service_dir)
             rc = supervise(command, output)
         finally:
             awake.terminate()
@@ -114,8 +164,21 @@ def main():
                '--run-heavy', str(a.run_heavy.resolve()), '--memory', '12G', '--jobs', str(a.jobs)]
     raw = (json.dumps(command, indent=2) + '\n').encode()
     (service_dir / 'service-command.json').write_bytes(raw)
+    after_args = []
+    if a.after:
+        gates = []
+        for prior_bundle, prior_output in a.after:
+            prior_bundle = Path(prior_bundle).resolve()
+            prior_output = Path(prior_output).resolve()
+            if prior_output == output:
+                raise ValueError('service cannot depend on itself')
+            verify(prior_bundle)
+            gates.append(dict(output=str(prior_output), manifest_sha256=hashlib.sha256((prior_bundle / 'manifest.json').read_bytes()).hexdigest()))
+        after_raw = (json.dumps(gates, indent=2) + '\n').encode()
+        (service_dir / 'service-after.json').write_bytes(after_raw)
+        after_args = ['--after-sha256', hashlib.sha256(after_raw).hexdigest()]
     plist.parent.mkdir(parents=True, exist_ok=True)
-    payload = dict(Label=label, ProgramArguments=[sys.executable, str(bundle / 'mac_service.py'), 'execute', str(bundle), str(output), '--command-sha256', hashlib.sha256(raw).hexdigest()],
+    payload = dict(Label=label, ProgramArguments=[sys.executable, str(bundle / 'mac_service.py'), 'execute', str(bundle), str(output), '--command-sha256', hashlib.sha256(raw).hexdigest(), *after_args],
                    LimitLoadToSessionType='Background' if a.domain == 'user' else 'Aqua',
                    RunAtLoad=True, KeepAlive=dict(SuccessfulExit=False), ThrottleInterval=30,
                    WorkingDirectory=str(bundle), StandardOutPath=str(service_dir / 'service.stdout.log'),

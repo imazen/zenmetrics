@@ -140,6 +140,29 @@ def manifest(path):
                 raise Refusal(f'missing frozen input hash: {name}')
             config[role] = str(relative(root, name))
             config[role + '_sha256'] = hashes[name]
+        assets = cell.get('asset_paths', [])
+        if not isinstance(assets, list) or any(name not in hashes for name in assets):
+            raise Refusal('every worker asset requires a frozen input hash')
+        allowed = {'ZENMETRICS_NN_MODEL_DIR', 'ZENMETRICS_NN_ENGINE', 'ZENMETRICS_NN_ACCEPT_WEIGHTS',
+                   'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND'}
+        worker_env = cell.get('worker_environment', {})
+        if not isinstance(worker_env, dict) or set(worker_env) - allowed:
+            raise Refusal('unknown worker environment key')
+        resolved_env = {}
+        for key, val in worker_env.items():
+            if not isinstance(val, str):
+                raise Refusal('worker environment values must be strings')
+            if key in ('ZENMETRICS_NN_MODEL_DIR', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB'):
+                target = relative(root, val)
+                files = [p for p in target.rglob('*') if p.is_file()] if target.is_dir() else [target]
+                if not files or any(str(p.relative_to(root)) not in assets for p in files):
+                    raise Refusal('worker environment path lacks active asset hashes')
+                val = str(target)
+            resolved_env[key] = val
+        if worker_env:
+            config['worker_environment'] = resolved_env
+        if assets:
+            config['asset_sha256'] = {str(relative(root, name)): hashes[name] for name in assets}
         config['impl_binary_sha'] = binary_sha
         config['durable_cell_id'] = f'{index:06d}-' + digest(encoded(cell))[:16]
         configs.append(config)
@@ -155,7 +178,17 @@ def environment(config, scratch):
                 'OPENBLAS_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
         env[key] = str(config['threads'])
     env.update(TMPDIR=str(scratch), ZENBENCH_NO_SAVE='1', ZENBENCH_CPU_POLICY='unrestricted')
+    if config.get('worker_environment'):
+        for key in ('ZENMETRICS_NN_MODEL_DIR', 'ZENMETRICS_NN_ENGINE', 'ZENMETRICS_NN_ACCEPT_WEIGHTS', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND'):
+            env.pop(key, None)
+        env.update(config['worker_environment'])
     return env
+
+
+def verify_assets(config):
+    for path, expected in config.get('asset_sha256', {}).items():
+        if file_hash(path) != expected:
+            raise Refusal('active model/runtime asset changed: ' + path)
 
 
 def observation():
@@ -185,7 +218,7 @@ def validate_row(log, config):
     row = rows[0]
     for key in ('metric_name', 'reference', 'distorted', 'width', 'height', 'threads',
                 'timing_phase', 'only_mode', 'cold_repeat', 'durable_cell_id',
-                'reference_sha256', 'distorted_sha256', 'impl_binary_sha'):
+                'reference_sha256', 'distorted_sha256', 'impl_binary_sha', 'worker_environment', 'asset_sha256'):
         if row.get(key) != config.get(key):
             raise Refusal('IQA_ROW identity mismatch: ' + key)
     if row.get('mode') != config['only_mode']:
@@ -376,6 +409,7 @@ def watchdog(attempt, parent_fd, lock_fds, seconds):
         record['returncode'] = rc
         try:
             config = load(attempt / 'config.json')
+            verify_assets(config)
             if file_hash(intent['binary']) != config['impl_binary_sha'] or any(
                     file_hash(config[role]) != config[role + '_sha256'] for role in ('reference', 'distorted')):
                 raise Refusal('binary/input changed during attempt')
@@ -541,6 +575,7 @@ def run(args):
                         if cell['status'] != 'pending' or STOP:
                             continue
                         # Re-hash before each attempt; changed inputs cannot consume results.
+                        verify_assets(cell['config'])
                         if file_hash(args.manifest) != frozen['manifest_sha256'] or file_hash(binary) != frozen['binary_sha256']:
                             raise Refusal('manifest/binary content changed during run')
                         for role in ('reference', 'distorted'):

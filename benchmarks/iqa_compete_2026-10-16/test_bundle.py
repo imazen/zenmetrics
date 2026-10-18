@@ -14,6 +14,8 @@ from unittest.mock import Mock, patch
 import mac_service
 import prepare_durable
 import select_durable
+import durable
+import fcntl
 
 
 def write_hashes(bundle):
@@ -39,6 +41,32 @@ def make_bundle(bundle):
 
 
 class BundleTests(unittest.TestCase):
+    def test_predecessor_requires_exact_terminal_inventory_and_controller_exit(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            output = Path(tmp)
+            gate = dict(output=tmp, manifest_sha256='frozen-manifest')
+            self.assertFalse(mac_service.predecessor_complete(gate))
+            cell = dict(metric_name='fixture')
+            saved = dict(frozen=dict(manifest_sha256='frozen-manifest', manifest=dict(cells=[cell])), policy={})
+            durable.atomic(output / 'identity.json', saved)
+            row = dict(cell_id='000000-' + durable.digest(durable.encoded(cell))[:16], status='failed')
+            report = dict(identity=durable.digest(durable.encoded(saved)), complete=False, cells=[row])
+            durable.atomic(output / 'report.json', report)
+            (output / 'coordinator.lock').touch()
+            self.assertFalse(mac_service.predecessor_complete(gate))
+            report['complete'] = True
+            durable.atomic(output / 'report.json', report)
+            with (output / 'coordinator.lock').open('rb') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                self.assertFalse(mac_service.predecessor_complete(gate))
+            self.assertTrue(mac_service.predecessor_complete(gate))
+            report['cells'] = []
+            durable.atomic(output / 'report.json', report)
+            with self.assertRaisesRegex(ValueError, 'inventory'):
+                mac_service.predecessor_complete(gate)
+            with self.assertRaisesRegex(ValueError, 'manifest changed'):
+                mac_service.predecessor_complete(dict(gate, manifest_sha256='other'))
+
     def test_subset_preserves_all_phases_and_refuses_unknown_selection(self):
         cells = [dict(metric_name=m, size_name='small', threads=t, timing_phase=p)
                  for m in ('psnr', 'gmsd') for t in (1, 8) for p in ('cold', 'warm')]

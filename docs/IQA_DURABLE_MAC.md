@@ -152,3 +152,42 @@ attempt; they cannot be promised away by a software watchdog.
 Never edit a manifest in place to resume a different experiment. Retain original
 attempt directories and logs, including failures. Bundle integrity failures
 require fixing the input/setup, not accepting a new hash into an old run.
+
+## Sequential families and neural exports
+
+Install the next bundle with an explicit predecessor:
+
+```sh
+just bench-iqa-mac NEXT_BUNDLE NEXT_RESULTS install --after PREVIOUS_BUNDLE PREVIOUS_RESULTS
+```
+
+Repeat this for remaining non-neural methods, then NN CPU, then NN Metal.
+The next service waits for the predecessor's frozen manifest identity, complete
+terminal cell inventory and released controller lock. Exhausted failures remain
+failed in that report and do not block the next family. An incomplete report or
+integrity refusal does block it. Pending dependencies are visible in
+`NEXT_RESULTS.service/queue-wait.json`. Every family still uses the same heavy
+lock and per-attempt watchdog; waiting services perform no measurements.
+
+`just iqa-durable-nn-prepare TEMPLATE BINARY BUILD INVENTORY MODELS OUTPUT ENGINE`
+freezes NN scalar cells using an existing input bundle. `MODELS` is a JSON map
+from metric names to caller-supplied export directories. The native-host build
+receipt must bind both binary and inventory SHA-256. `ENGINE` is `rten` for CPU
+or `ort-webgpu` for Metal; the latter requires `--ort-library` and
+`--webgpu-library`. Restricted weights retain the scorer's explicit
+`--accept-weights` contract. This preparation step requires the Python `onnx`
+package to discover external tensors, including Constant-node tensors whose
+filenames have no extension. The resulting bundle requires only Python stdlib
+and the included native files at execution time.
+
+Model graphs, metadata, heads, external tensors and supplied runtime libraries
+are hashed into the manifest. Each attempt rechecks its active model/runtime
+files before and after execution. Its resolved engine/environment and asset
+hashes travel with the retained config and row. NN routes are scheduled for
+scalar scores because this adapter has no qualified NN native-map route.
+Metal uses the existing ORT WebGPU engine, which disables CPU fallback; runtime
+or resource refusals remain failed attempts, never CPU timings labelled Metal.
+These records qualify the timing protocol, not numerical parity for every model.
+
+Controls: `just iqa-durable-check` and, with a preparation interpreter containing
+ONNX, `just iqa-durable-nn-check /absolute/path/to/python`.

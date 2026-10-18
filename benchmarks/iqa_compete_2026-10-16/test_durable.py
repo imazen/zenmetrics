@@ -51,6 +51,34 @@ if behavior=='duplicate':print('IQA_ROW '+json.dumps(r),flush=True)
 
 
 class DurableTests(unittest.TestCase):
+    def test_model_environment_is_frozen_contained_and_rehashed(self):
+        value = self.freeze('ok', phase='cold')
+        models = self.root / 'models'
+        models.mkdir()
+        asset = models / 'fixture.onnx'
+        asset.write_bytes(b'frozen graph')
+        value['input_sha256']['models/fixture.onnx'] = durable.file_hash(asset)
+        value['cells'][0].update(asset_paths=['models/fixture.onnx'], worker_environment={
+            'ZENMETRICS_NN_MODEL_DIR': 'models', 'ZENMETRICS_NN_ENGINE': 'rten'})
+        self.path.write_text(json.dumps(value))
+        _, configs, _ = durable.manifest(self.path)
+        config = configs[0]
+        self.assertEqual(durable.environment(config, self.root)['ZENMETRICS_NN_MODEL_DIR'], str(models))
+        result = self.finish(self.start())
+        self.assertEqual(result['cells'][0]['status'], 'ok')
+        asset.write_bytes(b'changed graph')
+        with self.assertRaisesRegex(durable.Refusal, 'asset changed'):
+            durable.verify_assets(config)
+        asset.write_bytes(b'frozen graph')
+        value['cells'][0]['asset_paths'] = []
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(durable.Refusal, 'active asset hashes'):
+            durable.manifest(self.path)
+        value['cells'][0]['worker_environment'] = {'LD_PRELOAD': 'unreviewed'}
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(durable.Refusal, 'environment key'):
+            durable.manifest(self.path)
+
     def setUp(self):
         scratch = Path.home() / 'tmp'
         scratch.mkdir(exist_ok=True)

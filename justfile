@@ -1684,8 +1684,14 @@ iqa-durable-prepare binary pairs output revision *options:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' {{options}}
 
 # Start a copied, frozen ARM64 bundle; no compiler or model download needed.
-bench-iqa-mac bundle output action="install":
-    python3 '{{bundle}}/mac_service.py' '{{action}}' '{{bundle}}' '{{output}}' --run-heavy '{{bundle}}/tools/run-heavy' --lock "$HOME/tmp/mac-heavy.lock"
+bench-iqa-mac bundle output action="install" *options:
+    python3 '{{bundle}}/mac_service.py' '{{action}}' '{{bundle}}' '{{output}}' --run-heavy '{{bundle}}/tools/run-heavy' --lock "$HOME/tmp/mac-heavy.lock" {{options}}
+
+iqa-durable-nn-prepare template binary build inventory models output engine *options:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_nn_durable.py '{{template}}' '{{binary}}' '{{build}}' '{{inventory}}' '{{models}}' '{{output}}' --engine '{{engine}}' {{options}}
+
+iqa-durable-nn-check python="python3":
+    TMPDIR="$HOME/tmp" '{{python}}' benchmarks/iqa_compete_2026-10-16/test_nn_bundle.py
 
 iqa-durable-run manifest output wrapper lock *options:
     python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
