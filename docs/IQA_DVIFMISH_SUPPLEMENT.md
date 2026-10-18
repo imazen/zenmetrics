@@ -107,3 +107,13 @@ and `python3 benchmarks/iqa_compete_2026-10-16/linux_service.py status
 the 512 supplement had five successful cells and 91 pending; larger was
 queued. The sequence freezes 96 and 576 cells respectively. Original coverage
 inputs and attempt ledgers remain separate.
+
+The first Mac control completed all 96 cells and matched all six i265 score
+bit patterns, but nine of 240 warm rounds carried CPU-load flags with zero
+heavy processes. It remains unqualified and retained. A fresh control can use
+`--cooldown-seconds 2`: an explicitly recorded wrapper waits after acquiring
+the shared lock, before each attempt and outside every metric clock. It does
+not change admission thresholds, sampled-round gates or required clean rounds.
+The wrapper hash and cadence are bound in the resulting control receipt.
+This addresses prior-holder activity as an experiment; it does not establish
+the cause of the original flags or guarantee a clean retry.

@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+import shlex
 import sys
 from mac_service import verify
 from prepare_coverage import freeze
@@ -15,7 +16,10 @@ def main():
     p.add_argument('bundle', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--lock', type=Path, required=True)
+    p.add_argument('--cooldown-seconds', type=int, default=0, help='Quiet interval after acquiring the shared lock, before each attempt; outside all clocks')
     a = p.parse_args()
+    if not 0 <= a.cooldown_seconds <= 60:
+        p.error('cooldown must be within 0..60 seconds')
     source = a.bundle.resolve()
     verify(source)
     manifest = json.loads((source / 'manifest.json').read_bytes())
@@ -26,8 +30,14 @@ def main():
     a.output.mkdir(parents=True, exist_ok=False)
     bundle, results = a.output / 'bundle', a.output / 'results'
     freeze(source, bundle, cells)
+    wrapper = bundle / 'tools/run-heavy'
+    if a.cooldown_seconds:
+        quiet_wrapper = a.output.resolve() / 'quiet-run-heavy.sh'
+        quiet_wrapper.write_text('#!/bin/sh\nset -eu\nsleep ' + str(a.cooldown_seconds) + '\nexec ' + shlex.quote(str(wrapper.resolve())) + ' \"$@\"\n')
+        quiet_wrapper.chmod(0o755)
+        wrapper = quiet_wrapper
     command = [sys.executable, str(bundle / 'durable.py'), 'run', str(bundle / 'manifest.json'), str(results),
-        '--run-heavy', str(bundle / 'tools/run-heavy'), '--lock', str(a.lock), '--memory', '12G', '--jobs', '8',
+        '--run-heavy', str(wrapper), '--lock', str(a.lock), '--memory', '12G', '--jobs', '8',
         '--timeout-seconds', '1100', '--max-attempts', '2']
     (a.output / 'command.json').write_text(json.dumps(command, indent=2) + '\n')
     with (a.output / 'controller.log').open('xb') as log:
@@ -52,7 +62,7 @@ def main():
             rounds += len(samples)
     if any(len(values) != 1 for values in bits.values()):
         raise RuntimeError('dvifmish cold/warm/scalar/map/thread score bits differ')
-    receipt = dict(report_sha256=sha(results / 'report.json'), cells=len(cells), clean_warm_rounds=rounds,
+    receipt = dict(cooldown_seconds=a.cooldown_seconds, wrapper_sha256=sha(wrapper), report_sha256=sha(results / 'report.json'), cells=len(cells), clean_warm_rounds=rounds,
         binary_sha256=manifest['binary_sha256'], scores={name:next(iter(values)) for name,values in bits.items()},
         coverage='four port presets and default talk-faithful-luma float/int; native block maps; explicit one/eight-worker budgets',
         qualification='Within-route exact library and timing-protocol controls; no new perceptual qualification or publication')
