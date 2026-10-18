@@ -51,6 +51,10 @@ DASHBOARD = 'https://imazen.github.io/zenmetrics/#models?metric='
 def unavailable_reason(name, refusal):
     """The measured reason a CLI name does not run here: its class, and the
     module's own refusal message, which the check received."""
+    if name == 'cw-ssim-pyiqa':
+        return ('No weights are needed, but its implementation in zenmetrics-pyiqa-ports carries '
+                'PolyForm Noncommercial 1.0.0 and S-Lab 1.0 terms. That code is excluded from the '
+                f'default public WASM module. Browser refusal: {refusal}')
     if name.endswith('-gpu'):
         return (f'GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. '
                 f'Score the CPU metric {name[:-4]} here. Browser refusal: {refusal}')
@@ -93,13 +97,18 @@ NN_WORKER_JS = r"""
 # The CLI's learned metrics (zenmetrics-nn): the CPU modules refuse them.
 LEARNED = {'lpips-alex', 'lpips-vgg', 'lpips-squeeze', 'dists', 'stlpips-alex', 'stlpips-vgg', 'deepdc', 'ckdn',
            'afine', 'dreamsim', 'arniqa', 'maniqa', 'liqe', 'musiq', 'hyperiqa', 'paq2piq', 'pieapp',
-           'wadiqam-fr-live', 'wadiqam-fr-tid', 'wadiqam-nr-live', 'wadiqam-nr-tid', 'wd', 'ahiq', 'dmm'}
+           'wadiqam-fr-live', 'wadiqam-fr-tid', 'wadiqam-nr-live', 'wadiqam-nr-tid', 'wd', 'ahiq', 'dmm',
+           'topiq-fr', 'topiq-fr-pipal', 'wadiqam-pyiqa', 'ahiq-pyiqa', 'dmm-pyiqa', 'pieapp-pyiqa'}
 
 
 NN_MODELS = set(json.loads((REPO / 'web/metrics/nn-models.json').read_text())['models'])
 
 
 def card_of(name):
+    if name in {'topiq-fr', 'topiq-fr-pipal'}:
+        return 'topiq'
+    if name.endswith('-pyiqa'):
+        return name
     for prefix in ('stlpips', 'lpips', 'wadiqam'):
         if name.startswith(prefix + '-'):
             return prefix
@@ -110,7 +119,8 @@ def learned_blocker(name, models):
     """Why a learned metric has no browser route: its weights' licence class
     (card.toml), or the absence of a whole-graph export the browser can run."""
     import tomllib
-    card = REPO / 'crates/zenmetrics-nn/models' / card_of(name) / 'card.toml'
+    crate = 'zenmetrics-pyiqa-ports' if name.endswith('-pyiqa') or name.startswith('topiq-') else 'zenmetrics-nn'
+    card = REPO / 'crates' / crate / 'models' / card_of(name) / 'card.toml'
     meta = tomllib.loads(card.read_text())
     weights = meta.get('weights', {})
     licence_class = weights.get('licence_class', 'unknown')
@@ -119,9 +129,9 @@ def learned_blocker(name, models):
         return (f'Weights licence class "{licence_class}" ([weights] in {rel}): '
                 'the browser does not redistribute these weights.')
     assert name not in models
-    if name == 'dmm':
+    if name in {'dmm', 'dmm-pyiqa'}:
         return (f'Permissive weights ([weights] in {rel}), but the score needs a 16×16 SVD per patch over '
-                'two VGG16 taps (crates/zenmetrics-nn/src/dmm.rs, a LAPACK port whose residual floors are '
+                f'two VGG16 taps (crates/{crate}/src/dmm.rs, a LAPACK port whose residual floors are '
                 'owner-gated); the browser has no graph or route for it and does not restate the solver.')
     return (f'Permissive weights ([weights] in {rel}), but the frozen export set has no whole-graph '
             'export for it: its score needs zenmetrics-nn host code between graph runs, '
