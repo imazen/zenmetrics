@@ -1768,3 +1768,7 @@ iqa-scalar-priority action config *options:
 
 iqa-scalar-priority-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_scalar_priority.py
+
+# Project recorded durable attempts into a fixed chart snapshot (new output only).
+iqa-chart-export root output host:
+    python3 benchmarks/iqa_compete_2026-10-16/export_chart_snapshot.py {{root}} {{output}} --host {{host}}

@@ -309,3 +309,8 @@ scalar NN cells as well as non-NN cells, preserving each source's remaining
 attempt cap and original frozen evidence. Upcoming maps and disabled geometries
 are refused by the scheduler. The original deadline and full resume graphs remain
 historical artifacts; they must not be restarted as the active queue.
+
+A fixed attempt-level chart projection for both hosts is committed at
+[the chart snapshot](../benchmarks/iqa_chart_snapshot_2026-10-18/README.md).
+It preserves source-report hashes and explicit warm qualification rather than
+silently combining controls, historical binaries or retries into headline rows.
