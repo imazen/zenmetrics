@@ -45,7 +45,9 @@ just snap-cargo @ build --release -p cpu-profile --features compete,metrics-para
 freezes the binary, controller, launch helper, exact RGB input bytes, source/build
 receipt and hash manifest. `BUILD_JSON` must identify the binary SHA-256, source
 commit and actual feature set; retain compiler, dependency pins and build command
-there too. Optional `--metrics psnr,gmsd` and `--sizes cid22,aic-small` select a
+there too. `--resource-wrapper /absolute/path/run-heavy` also freezes a local
+copy of the resource wrapper and its macOS implementation under `tools/`.
+Optional `--metrics psnr,gmsd` and `--sizes cid22,aic-small` select a
 subset. `--threads 1,8` and `--cold-repeats 3` are explicit defaults.
 
 The default input provenance is the existing S67 scaling panel. The 4K and 8K
@@ -75,9 +77,14 @@ python3 BUNDLE/mac_service.py stop BUNDLE RESULTS
 python3 BUNDLE/mac_service.py start BUNDLE RESULTS
 ```
 
+Service configuration and stdout/stderr live in `RESULTS.service`, beside the
+measurement output. `progress.json` is the live compact cell count; `report.json`
+contains full phase rows after completion, interruption, or a status command.
+
 The default launchd domain is `user`, which supports SSH-only sessions; `--domain
 gui` is explicit. The service holds an idle-sleep assertion while running and
-throttles restarts. Completion and permanent integrity/configuration failure stop
+throttles restarts. A missing controller heartbeat triggers an owned-child kill
+and automatic restart; worker deadlines are supervised independently. Completion and permanent integrity/configuration failure stop
 restarts; inspect the saved report and service stderr to distinguish them. A
 LaunchAgent does not execute before the user session exists after a reboot.
 Hardware failure, disk failure and forced power loss can interrupt the current

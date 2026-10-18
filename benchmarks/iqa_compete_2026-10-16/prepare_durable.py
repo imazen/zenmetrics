@@ -27,6 +27,7 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--source-commit', required=True)
     p.add_argument('--build-receipt', type=Path, required=True, help='JSON recording actual compiler, features, source and dependency identities')
+    p.add_argument('--resource-wrapper', type=Path, help='Copy an explicit run-heavy wrapper and its adjacent macOS implementation into this local bundle')
     p.add_argument('--metrics', default='all')
     p.add_argument('--sizes', default='cid22,aic-small,aic-medium,aic-large,2k,4k,8k')
     p.add_argument('--threads', default='1,8', help='Explicit worker counts, frozen in the manifest')
@@ -65,6 +66,12 @@ def main():
     shutil.copy2(a.binary, a.output / 'bin/iqa-compete')
     for path, name in inputs:
         shutil.copy2(path, a.output / 'inputs' / name)
+    if a.resource_wrapper:
+        (a.output / 'tools').mkdir()
+        shutil.copy2(a.resource_wrapper, a.output / 'tools/run-heavy')
+        companion = a.resource_wrapper.with_name('run-heavy-macos.py')
+        if companion.is_file():
+            shutil.copy2(companion, a.output / 'tools/run-heavy-macos.py')
     for name in ('durable.py', 'mac_service.py'):
         shutil.copy2(HERE / name, a.output / name)
     shutil.copy2(a.inputs_meta, a.output / 'inputs.meta.json')
@@ -92,6 +99,7 @@ def main():
                                   input_provenance_sha256=sha(a.inputs_meta), corpus_scope='single S67 reference/distortion; scaling study, not perceptual ranking',
                                   metrics=metrics, sizes=sizes, threads=counts, inventory=inventory))
     (a.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (a.output / 'USAGE.txt').write_text('Run with Python 3: python3 durable.py run manifest.json /absolute/results --run-heavy /absolute/bundle/tools/run-heavy --lock ~/tmp/mac-heavy.lock --memory 12G --jobs 8\nUse mac_service.py install for launchd restart, status to inspect, stop to unload, start to resume. See the repository docs/IQA_DURABLE_MAC.md. This bundle is a single-pair scaling experiment, not a perceptual ranking.\n')
     hashes = {str(path.relative_to(a.output)): sha(path) for path in sorted(a.output.rglob('*')) if path.is_file()}
     (a.output / 'SHA256SUMS.json').write_text(json.dumps(hashes, indent=2) + '\n')
     print(json.dumps(dict(bundle=str(a.output.resolve()), cells=len(cells), metrics=len(metrics), manifest_sha256=sha(a.output / 'manifest.json'))))
