@@ -47,9 +47,10 @@ def main():
     p.add_argument('inventory', type=Path)
     p.add_argument('models', type=Path, help='JSON metric -> caller-supplied model directory')
     p.add_argument('output', type=Path)
-    p.add_argument('--engine', choices=['rten', 'ort-webgpu'], required=True)
+    p.add_argument('--engine', choices=['rten', 'ort-cuda', 'ort-webgpu'], required=True)
     p.add_argument('--ort-library', type=Path)
     p.add_argument('--webgpu-library', type=Path)
+    p.add_argument('--runtime-library', type=Path, action='append', default=[], help='Freeze a CUDA runtime dependency beside the ORT provider')
     p.add_argument('--accept-weights', default='', help='Explicit accepted weight terms, passed to the existing scorer')
     p.add_argument('--metrics', default='all')
     a = p.parse_args()
@@ -66,6 +67,10 @@ def main():
     if set(metrics) - sources.keys():
         raise ValueError('missing caller-supplied model directories: ' + str(sorted(set(metrics) - sources.keys())))
     runtime = {}
+    if a.engine == 'ort-cuda':
+        if not a.ort_library:
+            raise ValueError('CUDA requires an explicit ORT runtime library')
+        runtime = {'ORT_DYLIB_PATH': a.ort_library}
     if a.engine == 'ort-webgpu':
         if not a.ort_library or not a.webgpu_library:
             raise ValueError('Metal requires explicit ORT core and WebGPU provider libraries')
@@ -91,6 +96,13 @@ def main():
         inputs[name] = sha(target)
         runtime_env[key] = name
         runtime_assets.append(name)
+    if a.engine == 'ort-cuda':
+        for source in sorted(a.ort_library.parent.glob('libonnxruntime_providers_*.so')) + a.runtime_library:
+            name = 'runtime/' + source.name
+            shutil.copy2(source, a.output / name)
+            inputs[name] = sha(a.output / name)
+            runtime_assets.append(name)
+        runtime_env['LD_LIBRARY_PATH'] = 'runtime'
     per_model = {}
     for metric, files in exports.items():
         source_dir = Path(sources[metric]).resolve()
@@ -115,7 +127,7 @@ def main():
                               ZENMETRICS_NN_ENGINE=a.engine, ZENMETRICS_NN_ACCEPT_WEIGHTS=a.accept_weights)
             if a.engine == 'ort-webgpu':
                 worker_env['WGPU_BACKEND'] = 'metal'
-            cells.append(dict(template, metric_name=metric, device='cpu' if a.engine == 'rten' else 'metal',
+            cells.append(dict(template, metric_name=metric, device={'rten': 'cpu', 'ort-cuda': 'cuda', 'ort-webgpu': 'metal'}[a.engine],
                               worker_environment=worker_env, asset_paths=per_model[metric] + runtime_assets))
     manifest.update(binary_sha256=sha(a.binary), input_sha256=inputs, cells=cells)
     manifest['metadata'].update(metrics=metrics, engine=a.engine, features=build['features'],
@@ -123,7 +135,8 @@ def main():
                                 runner_sha256={name: sha(a.output / name) for name in ('durable.py', 'mac_service.py', 'admission_recovery.py')},
                                 source_commit=build['source_commit'], build_receipt_sha256=sha(a.build),
                                 maps='NN routes have no qualified native-map adapter; scalar-only schedule',
-                                runtime='ORT WebGPU on Metal with CPU fallback disabled' if runtime else 'RTEN CPU')
+                                runtime={'rten': 'RTEN CPU', 'ort-cuda': 'ORT CUDA provider required; unsupported graph nodes may use its CPU provider',
+                                         'ort-webgpu': 'ORT WebGPU on Metal with CPU fallback disabled'}[a.engine])
     (a.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (a.output / 'SHA256SUMS.json').unlink()
     hashes = {path.relative_to(a.output).as_posix(): sha(path) for path in sorted(a.output.rglob('*')) if path.is_file()}

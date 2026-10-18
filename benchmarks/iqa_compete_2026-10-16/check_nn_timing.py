@@ -17,18 +17,22 @@ def main():
     p.add_argument('output', type=Path)
     p.add_argument('--metric', default='lpips-alex')
     p.add_argument('--size', default='cid22')
+    p.add_argument('--lock', type=Path, default=Path.home() / 'tmp/mac-heavy.lock')
+    p.add_argument('--threads', type=int, default=1)
     a = p.parse_args()
     source = a.bundle.resolve()
-    with (Path.home() / 'tmp/mac-heavy.lock').open('a') as lock:
+    with a.lock.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         verify(source)
     manifest = json.loads((source / 'manifest.json').read_bytes())
     cells = [c for c in manifest['cells'] if c['metric_name'] == a.metric and
-             c['size_name'] == a.size and c['threads'] == 1 and c['cold_repeat'] == 0]
+             c['size_name'] == a.size and c['threads'] == a.threads and c['cold_repeat'] == 0]
     if len(cells) != 2 or {c['timing_phase'] for c in cells} != {'cold', 'warm'}:
         raise ValueError('control requires exactly one cold and one warm scalar cell')
     used = {c[k] for c in cells for k in ('reference', 'distorted')}
     used.update(name for c in cells for name in c['asset_paths'])
+    if manifest['metadata'].get('cpu_placement'):
+        used.add(manifest['metadata']['cpu_placement']['zenbench'])
     manifest.update(cells=cells, input_sha256={name: manifest['input_sha256'][name] for name in used})
     manifest['metadata'].update(control_only=True, source_bundle_manifest_sha256=sha(source / 'manifest.json'))
     root = a.output.resolve()
@@ -49,7 +53,7 @@ def main():
     verify(bundle)
     results = root / 'results'
     command = [sys.executable, str(bundle / 'durable.py'), 'run', str(bundle / 'manifest.json'), str(results),
-               '--run-heavy', str(bundle / 'tools/run-heavy'), '--lock', str(Path.home() / 'tmp/mac-heavy.lock'),
+               '--run-heavy', str(bundle / 'tools/run-heavy'), '--lock', str(a.lock),
                '--memory', '12G', '--jobs', '1', '--timeout-seconds', '1100', '--max-attempts', '1']
     (root / 'command.json').write_text(json.dumps(command, indent=2) + '\n')
     with (root / 'controller.log').open('xb') as log:
@@ -60,10 +64,20 @@ def main():
     cold, warm = report['cold'][0], report['warm'][0]
     if cold['score_bits'] != warm['score_bits']:
         raise RuntimeError('NN cold/warm score bits differ')
+    budgets = []
+    if cold['worker_environment']['ZENMETRICS_NN_ENGINE'] == 'ort-cuda':
+        for cell in report['cells']:
+            log = Path(cell['attempts'][-1]['executed_command']['worker_command'][-1]).parent / 'worker.log'
+            configured = [int(line.split()[1]) for line in log.read_text().splitlines()
+                          if line.startswith('IQA_ORT_THREADS ')]
+            if not configured or any(n != a.threads for n in configured):
+                raise RuntimeError('ORT session thread budget was not explicitly configured')
+            budgets.extend(configured)
     receipt = dict(metric=a.metric, engine=cold['worker_environment']['ZENMETRICS_NN_ENGINE'],
                    source_bundle_manifest_sha256=manifest['metadata']['source_bundle_manifest_sha256'],
                    report_sha256=sha(results / 'report.json'), score_bits=cold['score_bits'],
                    cold_elapsed_ns=cold['cold_elapsed_ns'], warm_median_ns=warm['median_ns'],
+                   threads=a.threads, ort_intra_threads_observed=budgets or None,
                    qualification='Real worker protocol and within-engine repeat identity; not full model parity')
     (root / 'control.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt))
