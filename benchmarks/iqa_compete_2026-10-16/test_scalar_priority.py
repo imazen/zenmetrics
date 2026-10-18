@@ -65,6 +65,30 @@ class ScalarPriorityTests(unittest.TestCase):
             self.assertEqual(len(json.loads((root/'retained-coverage.json').read_text())), 8)
 
 
+    def test_nn_successor_retains_caps_and_disables_dimensions(self):
+        import json
+        cells = [dict(metric_name='nn', only_mode=mode, width=w, height=h,
+                      timing_phase='cold', cold_repeat=0, threads=8, size_name='misleading')
+                 for mode,w,h in [('score',7680,4320),('score',4320,7680),
+                                  ('score',3840,2160),('score+map',3840,2160)]]
+        configs = [dict(c,durable_cell_id=str(i)) for i,c in enumerate(cells)]
+        frozen = dict(manifest=dict(cells=cells))
+        evidence = {'2':[dict(record=dict(status='failed'),path='old',sha256='hash')]}
+        captured=[]
+        def freeze(source,target,selected,lineage):
+            captured.extend(selected)
+            return dict(bundle=str(target),manifest_sha256='hash',cells=len(selected))
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root=Path(directory)
+            config=dict(sources=[],nn=[dict(name='nn-cpu',bundle='old',output='old',max_attempts=2)],
+                        disabled_geometries=[[7680,4320]],results=str(root/'results'),lock='lock')
+            with patch.object(priority,'retained',return_value=(None,frozen,configs,evidence)), patch.object(priority,'freeze',side_effect=freeze):
+                plan=priority.prepare(config,root,[])
+            self.assertEqual(captured,[cells[2]])
+            self.assertEqual(plan['phases'][0]['max_attempts'],1)
+            coverage=json.loads((root/'retained-coverage.json').read_text())
+            self.assertEqual([c['status'] for c in coverage],['disabled-by-user','disabled-by-user','pending','maps-not-scheduled'])
+
     def test_execute_refuses_any_upcoming_map(self):
         import json
         with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
