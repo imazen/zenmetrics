@@ -217,7 +217,7 @@ def build(output, cards):
     cx_body+='<h2>Historical cost model and CPU task-clock panel · i265</h2><p>The following operation inventories and one-pair task-clock data retain their original measurement scope. They do not replace the qualified two-host observations above. Neural operation counts, memory traffic and halo/span annotations remain partial.</p>'
     cx_body+='<h2>Counted operations</h2>'+table(['Metric','flops / original pixel at 1024²','Halo pixels','Counter','Counted source commit'],[[e(m),fmt(r['flops_per_px']),fmt(r['halo_px']),e(t['counter']),e(t['source_commit'])] for m,(t,r) in sorted(tallies.items())])
     missing_tallies=sorted(set(by_name)-set(tallies))
-    cx_body+='<p>Not counted: '+e(', '.join(missing_tallies) or 'none')+'. The count is an operation inventory, not elapsed runtime.</p><h2>Measured runtime</h2>'
+    cx_body+='<p>Not counted: '+e(', '.join(missing_tallies) or 'none')+'. The count is an operation inventory, not elapsed runtime. Generic butteraugli rows report the headline max output of a shared call; they do not independently time pnorm3.</p><h2>Measured runtime</h2>'
     timing_rows=[[e(r['metric']),e(r['shape']),r['threads'],fmt(r['cpu_ms']),fmt(r['wall_ms']),r['n'],source_link(r['source'],commit,Path(r['source']).name)] for r in measured]
     for name in ('pieapp','pieapp-pyiqa'):
         for shape in ('1024x1024','3840x2160'):
@@ -306,6 +306,9 @@ def screenshot_coverage(tallies, measured, comparisons, commit):
         if name=='HaarPSI_Y':reason='Counted grayscale route differs from the colour HaarPSI column; no direct column comparison is qualified.'
         if name=='PSNR-HVS-Y':reason='Draft mapping uses the Ponomarenko luma route; the AIC column uses Daala. Combined Daala output cost is not a separately measured luma-only cost.'
         if name=='PSNR_Y':reason='Draft count maps to libvmaf luma; published AIC PSNR-Y uses studio BT.601. Timing coverage does not qualify that ingress match.'
+        if name=='Butteraugli-3norm':
+            timed='shared call; headline max timing' if any(r['metric']==m for r in measured) else 'not timed'
+            reason='Generic butteraugli benchmark rows report the max output of a shared call. They are not independent pnorm3 timing measurements; proposal-butteraugli has a separate scoped supplement.'
         if name.startswith(('HaarXYB','HaarY-','HaarYCoCg')):
             counted=timed='not measured; unidentified';reason='Method search completed: 0 of 11 Haar variants identified; method gate fails. No scoring configuration or candidate fit is qualified; published per-image values remain unavailable.'
         elif 'DVIFM' in name:

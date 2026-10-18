@@ -166,3 +166,8 @@ measurements. DVIFM core counts remain partial and its aggregate timings do not
 identify the historical published columns. Fixed-luma FSIM's three tallies and
 36 timing observations describe unmerged PR 92, not master CLI routes. These
 measurements are shown separately from historical i265 weight-table fits.
+
+Generic `butteraugli` benchmark rows report the headline max output of a shared
+call. They are not independently measured pnorm3 timings. The screenshot coverage
+label retains this distinction; the explicit proposal route has its own scoped
+r5900xt supplement.
