@@ -22,9 +22,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--models', nargs='+', choices=['afine', 'arniqa', 'ckdn', 'deepdc', 'musiq'],
+                        default=['afine', 'arniqa', 'ckdn', 'deepdc', 'musiq'])
     args = parser.parse_args()
     result = dict(scope='unique observations across capability passes; not final CPU placements', models={})
-    for model in ['afine', 'arniqa', 'ckdn', 'deepdc']:
+    for model in args.models:
         log = args.directory / (model + '.log')
         receipt = args.directory / (model + '.json')
         identity = json.loads(receipt.read_text())

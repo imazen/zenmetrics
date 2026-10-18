@@ -92,3 +92,52 @@ Provider/API references: [WebGPU EP](https://onnxruntime.ai/docs/execution-provi
 [Python API](https://onnxruntime.ai/docs/api/python/api_summary.html).
 The classifications above come from the retained native logs, rather than an
 operator support table or an inference from the generic refusal alone.
+
+## MUSIQ extension — same frozen runtime
+
+The completed 512 Metal phase adds MUSIQ as a fifth strict session refusal;
+the four-graph audit above did not cover it. The existing matching-wheel probe,
+extended with the explicit frozen filename `models/musiq/musiq.onnx`, reproduces
+the same disabled-CPU-fallback error. Both fallback controls remain disabled,
+no inference executes, and no build, service or frozen-asset change was made.
+
+MUSIQ logs **92 unique registry-miss node/op observations**: Gather 34,
+Unsqueeze 29, Concat 29. It logs **zero explicit CPU-preferred nodes**. The
+same limits apply: these span capability passes, include optimized node names,
+and are not final CPU placement counts or universal operator/dtype verdicts.
+
+Exact names, expressed without dropping any observations:
+
+- For every block index 0 through 13: `/blocks.I/Gather`,
+  `/blocks.I/Gather_1`, `/blocks.I/Unsqueeze_6`,
+  `/blocks.I/Unsqueeze_7`, `/blocks.I/Concat_1`, `/blocks.I/Concat_3`.
+- Remaining Gather names: `/Gather_5`, `Gather`, `Gather_token_24`,
+  `Gather_token_26`, `Gather_token_28`, `Gather_token_30`.
+- Remaining Unsqueeze name: `/Unsqueeze_1`; remaining Concat: `/Concat_3`.
+
+Graph SHA256 before and after:
+`26f6bae026b21ec91dc66dc8f6f0dce6170f46da23b9f3d674acfd036ea5d823`.
+Core and plugin hashes equal those recorded above. Probe source SHA256:
+`f7422bc38d0f41ba85eae74ba187b9a899eb1848f4c3e56c8c15f1185b9aaae3`.
+Resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.32GiB |
+min-avail 18271MiB | peak-load 4.22`, under the shared Mac lock and 12G/8-job
+policy. This is a session diagnostic, not a throughput measurement.
+
+Raw `musiq-v2/{musiq.log,musiq.json}` and coordinator log are retained beside
+the first audit artifacts on both hosts. The initial `musiq-v1` filename
+refusal is also retained; it stopped before session creation and is not a
+capability observation. `musiq-classification-v2.json` in the coordinator
+artifact root binds log and receipt hashes and has SHA256
+`560de1c44f7e0d1a57273a6a6f6884be8146699a3c40844e863f286fd43521eb`.
+
+Reproduce with the earlier probe command plus `--model musiq`; classify with:
+
+```sh
+just iqa-webgpu-node-classify "$HOME/tmp/iqa-mac-webgpu-audit.noindex/musiq-v2" "$HOME/tmp/iqa-mac-webgpu-audit.noindex/musiq-classification-fresh.json" --models musiq
+```
+
+The scheduled coordinator reports the completed Metal panel as 144 successful
+and 40 exhausted cells, covering 18/23 successful models. The five refused
+models each account for eight cells with two attempts. The MUSIQ diagnostic
+independently reproduces its error, rather than treating the earlier four-model
+audit as evidence for a fifth model. Original attempt metadata remains intact.

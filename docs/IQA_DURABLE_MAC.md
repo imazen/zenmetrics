@@ -248,3 +248,9 @@ separates registry misses from supported nodes deliberately preferred on CPU;
 A-FINE and DeepDC show both. The [node audit](../benchmarks/mac_validation_2026-10-18/WEBGPU_NODE_AUDIT.md)
 retains exact observations and provenance. No fallback or frozen manifest was
 changed. Original attempts remain unqualified and the queue advances.
+
+The subsequent MUSIQ session audit reproduces the fifth strict Metal refusal:
+92 registry-miss observations (Gather/Unsqueeze/Concat), zero explicit
+CPU-preference messages. The [MUSIQ extension](../benchmarks/mac_validation_2026-10-18/WEBGPU_NODE_AUDIT.md#musiq-extension--same-frozen-runtime)
+records exact names, unchanged graph/runtime hashes and separate receipts.
+The four-model audit alone did not cover MUSIQ.

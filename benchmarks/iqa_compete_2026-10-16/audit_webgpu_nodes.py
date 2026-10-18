@@ -38,7 +38,8 @@ def probe(a):
     gpu=[d for d in devices if d.ep_name=='WebGpuExecutionProvider' and str(d.device.type).lower().endswith('gpu')]
     if len(gpu)!=1:
         raise ValueError('require exactly one WebGPU GPU: '+repr(devices))
-    model=a.bundle/'models'/a.model/(a.model+'_full.onnx')
+    filename='musiq.onnx' if a.model=='musiq' else a.model+'_full.onnx'
+    model=a.bundle/'models'/a.model/filename
     identity=dict(model_sha256=sha(model),frozen_core_sha256=sha(core),wheel_core_sha256=sha(installed),plugin_sha256=sha(plugin),
         ort_version=ort.__version__,ort_build=ort.get_build_info(),fallback_disabled=True,python_wrapper_fallback=False,
         device=str(gpu[0]),session_only=True,intra_op=1,inter_op=1,deterministic=True,script_sha256=sha(Path(__file__)))
@@ -72,7 +73,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--bundle',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
-    p.add_argument('--model',choices=['afine','arniqa','ckdn','deepdc'])
+    p.add_argument('--model',choices=['afine','arniqa','ckdn','deepdc','musiq'])
     p.add_argument('--info',action='store_true')
     p.add_argument('--worker',action='store_true')
     a=p.parse_args()
@@ -88,7 +89,7 @@ def main():
         print('waiting shared mac-heavy.lock',flush=True)
         fcntl.flock(lock,fcntl.LOCK_EX)
         print('acquired shared mac-heavy.lock',flush=True)
-        for model in ([a.model] if a.model else ['afine','arniqa','ckdn','deepdc']):
+        for model in ([a.model] if a.model else ['afine','arniqa','ckdn','deepdc','musiq']):
             command=[str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','8','--',sys.executable,str(Path(__file__).resolve()),'--worker','--bundle',str(a.bundle.resolve()),'--output',str(a.output.resolve()/(model+'.json')),'--model',model]
             if a.info:command.append('--info')
             with (a.output/(model+'.log')).open('xb') as log:

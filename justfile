@@ -1759,5 +1759,5 @@ iqa-resource-accounting-external diagnostic worker config output:
 iqa-webgpu-node-audit python bundle output:
     '{{python}}' benchmarks/iqa_compete_2026-10-16/audit_webgpu_nodes.py --bundle '{{bundle}}' --output '{{output}}'
 
-iqa-webgpu-node-classify directory output:
-    python3 benchmarks/iqa_compete_2026-10-16/classify_webgpu_nodes.py '{{directory}}' '{{output}}'
+iqa-webgpu-node-classify directory output *options:
+    python3 benchmarks/iqa_compete_2026-10-16/classify_webgpu_nodes.py '{{directory}}' '{{output}}' {{options}}

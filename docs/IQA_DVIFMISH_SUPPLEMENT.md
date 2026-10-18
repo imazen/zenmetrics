@@ -280,3 +280,16 @@ The maintained installer omits unsupported install-time `--memory`; the frozen
 Mac service already supplies `--memory 12G` to durable execution. The regression
 now exercises the actual service CLI and generated commands for both phases,
 including memory, jobs, lock and dependencies. No frozen bundle edit is needed.
+
+### Corrected Mac 512 production completion — 2026-10-18
+
+An independent read of the actual production `report.json` verifies
+`complete=true`, `qualified=true`, all 96 cells `ok`, and all 240 recorded
+warm samples `gate_clean=true` (72 cold rows, 24 ten-round warm rows).
+This is the production supplement, separate from the earlier strict control.
+The report remains at
+`~/benchmark-results/iqa-mac-20261018-dvifmish-counters.noindex/512-dvifmish/report.json`
+on mac, with coordinator copy
+`/home/lilith/benchmark-artifacts/iqa-dvifmish-mac-20261018/corrected-production-512-report.json`.
+SHA256: `06c5f1635c5834eb91b65fcb4b97ccc4b33d61556a5d22afa2bbc1dd1c242725`.
+The larger supplement retains its original dependencies; no service changed.
