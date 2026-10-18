@@ -1,9 +1,14 @@
-//! Compute-only IQA benchmark. File IO/preparation and model warmup are outside zenbench.
+//! IQA benchmark: resident-input cold construction/call or warmed zenbench rounds.
 #[allow(unexpected_cfgs)]
 #[path = "../iqa_compete_maps.rs"]
 mod maps;
 use serde_json::{Value, json};
-use std::{env, fs, hint::black_box, path::Path, time::Duration};
+use std::{
+    env, fs,
+    hint::black_box,
+    path::Path,
+    time::{Duration, Instant},
+};
 #[cfg(iqa_compete_ingress)]
 use zenmetrics_cli::decode;
 use zenmetrics_cli::{
@@ -115,6 +120,49 @@ fn load() -> Vec<f64> {
     })
     .unwrap_or_default()
 }
+#[path = "iqa_compete_timing/mod.rs"]
+mod timing;
+use timing::cold_call;
+
+fn make_call(
+    config: &Value,
+    kind: MetricKind,
+    r: &'static Rgb8Image,
+    d: &'static Rgb8Image,
+    map: bool,
+) -> Result<Option<maps::Call>, String> {
+    let name = kind.name();
+    if name.ends_with("-gpu") {
+        #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
+        return maps::gpu_score(
+            name,
+            r,
+            d,
+            config["gpu_runtime"]
+                .as_str()
+                .unwrap_or("explicit-runtime-required"),
+            map,
+        )
+        .map(Some);
+        #[cfg(not(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu")))]
+        return Err("GPU metric requires a GPU benchmark build and explicit device".into());
+    }
+    // This constructor returns a real refusal rather than native()'s Option.
+    if name == "cvvdp" {
+        return maps::cvvdp_score(r, d, map).map(Some);
+    }
+    if map {
+        return Ok(maps::native(name, r, d));
+    }
+    let display = parse_display("standard_fhd")?;
+    let _ = config; // Used by GPU builds.
+    Ok(Some(Box::new(move || {
+        run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(&display))
+            .map(|v| v[0].1)
+            .map_err(|e| e.to_string())
+    })))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let a: Vec<String> = env::args().collect();
     if a.get(1).is_some_and(|s| s == "prepare") {
@@ -179,15 +227,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pixels,
         })
     };
+    let input_load_start = Instant::now();
     let r: &'static Rgb8Image = Box::leak(Box::new(read("reference")?));
     let d: &'static Rgb8Image = Box::leak(Box::new(read("distorted")?));
+    let input_load_ns = input_load_start.elapsed().as_nanos();
     let name = config["metric_name"].as_str().ok_or("metric name")?;
     let only_mode = config["only_mode"].as_str();
     if only_mode.is_some_and(|mode| !["score", "score+map"].contains(&mode)) {
         return Err("unknown isolated mode".into());
     }
-    if only_mode.is_some() && !name.ends_with("-gpu") {
-        return Err("isolated modes currently require a GPU metric".into());
+    let timing_phase = config["timing_phase"].as_str().unwrap_or("warm");
+    if !["cold", "warm"].contains(&timing_phase) {
+        return Err("unknown timing phase".into());
+    }
+    if timing_phase == "cold" && (only_mode.is_none() || config["probe_only"] == true) {
+        return Err("cold timing requires only_mode and cannot be a probe".into());
     }
     let only_map = only_mode == Some("score+map");
     let primary_mode = if only_map { "score+map" } else { "score" };
@@ -196,8 +250,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .find(|k| k.name() == name)
         .ok_or("unknown metric")?;
-    let display = Box::leak(Box::new(parse_display("standard_fhd")?));
-    let display: &'static _ = display;
     let admitted_unix_ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
@@ -227,36 +279,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err(format!("busy load {before:?}").into());
     }
-    let mut score: maps::Call = if name.ends_with("-gpu") {
-        #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
-        let call = maps::gpu_score(
-            name,
-            r,
-            d,
-            config["gpu_runtime"]
-                .as_str()
-                .unwrap_or("explicit-runtime-required"),
-            only_map,
-        );
-        #[cfg(not(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu")))]
-        let call: Result<maps::Call, String> =
-            Err("GPU metric requires a GPU benchmark build and explicit device".into());
-        match call {
-            Ok(call) => call,
-            Err(error) => Box::new(move || Err(error.clone())),
+    let mut row = config.clone();
+    row["mode"] = json!(primary_mode);
+    row["timing_phase"] = json!(timing_phase);
+    row["input_load_ns"] = json!(input_load_ns);
+    row["load_before"] = json!(before);
+    row["admitted_unix_ns"] = json!(admitted_unix_ns);
+    row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
+    row["declared_columns"] = json!(kind.column_names());
+    row["headline_declared_column"] = json!(kind.column_names()[0]);
+    // Config fields carry input identity, but cannot supply observed results.
+    for field in [
+        "median_ns",
+        "cold_elapsed_ns",
+        "score",
+        "score_bits",
+        "n",
+        "status",
+    ] {
+        row.as_object_mut()
+            .ok_or("config must be an object")?
+            .remove(field);
+    }
+    if timing_phase == "cold" {
+        let mut unsupported = false;
+        let (result, elapsed_ns) = cold_call(|| {
+            make_call(&config, kind, r, d, only_map)?.ok_or_else(|| {
+                unsupported = true;
+                "No qualified native-map adapter for this metric".to_owned()
+            })
+        });
+        row["n"] = json!(0);
+        match result {
+            Ok(value) if value.is_finite() => {
+                row["n"] = json!(1);
+                row["status"] = json!("ok");
+                row["median_ns"] = json!(elapsed_ns);
+                row["cold_elapsed_ns"] = json!(elapsed_ns);
+                row["score"] = json!(value);
+                row["score_bits"] = json!(format!("{:016x}", value.to_bits()));
+            }
+            Ok(value) => {
+                row["status"] = json!("failed");
+                row["error"] = json!("nonfinite_score");
+                row["score_bits"] = json!(format!("{:016x}", value.to_bits()));
+            }
+            Err(error) => {
+                row["status"] = json!(if unsupported { "unsupported" } else { "failed" });
+                row["error"] = json!(error);
+            }
         }
-    } else if name == "cvvdp" {
-        maps::cvvdp_score(r, d, false)?
-    } else {
-        Box::new(move || {
-            run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))
-                .map(|v| v[0].1)
-                .map_err(|e| e.to_string())
-        })
+        row["notes"] = json!(
+            "First scorer construction and evaluation in this process; raw input loading excluded; no warmup"
+        );
+        row["load_after"] = json!(load());
+        println!("IQA_ROW {}", serde_json::to_string(&row)?);
+        return Ok(());
+    }
+    let mut score = match make_call(&config, kind, r, d, only_map) {
+        Ok(Some(call)) => call,
+        Ok(None) => {
+            row["status"] = json!("unsupported");
+            row["n"] = json!(0);
+            row["load_after"] = json!(load());
+            println!("IQA_ROW {}", serde_json::to_string(&row)?);
+            return Ok(());
+        }
+        Err(error) => Box::new(move || Err(error.clone())),
     };
+    let display = parse_display("standard_fhd")?;
     if config["probe_only"].as_bool().unwrap_or(false) {
-        let warmup = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))?;
-        let values = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(display))?;
+        let warmup = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(&display))?;
+        let values = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(&display))?;
         assert_eq!(
             warmup.iter().map(|(_, v)| v.to_bits()).collect::<Vec<_>>(),
             values.iter().map(|(_, v)| v.to_bits()).collect::<Vec<_>>(),
@@ -280,15 +374,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "IQA_WARMUP {}",
         json!({"initialization_and_warmup_ns":warmup_start.elapsed().as_nanos(),"completed":true,"score_bits":first.as_ref().ok().map(|v|format!("{:016x}",v.to_bits()))})
     );
-    let mut row = config.clone();
-    row["mode"] = json!(primary_mode);
-    row["load_before"] = json!(before);
-    row["admitted_unix_ns"] = json!(admitted_unix_ns);
-    row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
-    row["declared_columns"] = json!(kind.column_names());
-    row["headline_declared_column"] = json!(kind.column_names()[0]);
     if let Err(e) = first {
-        row["status"] = json!(format!("skipped:{e}"));
+        row["status"] = if config["timing_phase"].is_string() {
+            row["error"] = json!(e);
+            json!("failed")
+        } else {
+            json!(format!("skipped:{e}"))
+        };
         row["n"] = json!(0);
         row["load_after"] = json!(load());
         println!("IQA_ROW {}", serde_json::to_string(&row)?);
@@ -302,7 +394,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let first = first?;
     if !first.is_finite() {
-        row["status"] = json!("skipped:nonfinite_score");
+        row["status"] = if config["timing_phase"].is_string() {
+            row["error"] = json!("nonfinite_score");
+            json!("failed")
+        } else {
+            json!("skipped:nonfinite_score")
+        };
         row["n"] = json!(0);
         row["score_bits"] = json!(format!("{:016x}", first.to_bits()));
         row["load_after"] = json!(load());
@@ -369,7 +466,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(first),
         ),
     ]));
-    let required_samples = config["required_samples"].as_u64().unwrap_or(10) as usize;
+    let required_samples = if config["timing_phase"].as_str() == Some("warm") {
+        10
+    } else {
+        config["required_samples"].as_u64().unwrap_or(10) as usize
+    };
     if !(1..=10).contains(&required_samples) {
         return Err("required_samples must be within 1..=10".into());
     }
@@ -463,7 +564,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .last
                     .load(std::sync::atomic::Ordering::Relaxed),
             )
-        } else if arm == 0 {
+        } else if only_map || arm == 0 {
             first
         } else {
             *map_first.as_ref().unwrap().as_ref().unwrap()
@@ -517,7 +618,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             row["status"] = json!("partial");
             row["partial_reason"] =
                 json!("chunk time budget reached before required zenbench rounds");
-            println!("IQA_PARTIAL {}", serde_json::to_string(&row)?);
+            let prefix = if only_mode.is_some() {
+                "IQA_ROW"
+            } else {
+                "IQA_PARTIAL"
+            };
+            println!("{prefix} {}", serde_json::to_string(&row)?);
         } else {
             println!("IQA_ROW {}", serde_json::to_string(&row)?);
         }
