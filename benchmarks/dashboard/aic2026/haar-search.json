@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "source_commit": "51b3fae310b34be4c5befcfe5e7c2176cf0c1f3a",
+  "aggregate_source_git_blob": "20354800510ac88f3f5a88b101da46c86b11e9f2",
+  "method_count": 40,
+  "twelve_source_pools": 91,
+  "five_source_subsets_per_pool": 792,
+  "matched_chart_labels": 12,
+  "available_competitors": 64,
+  "mean_abs_rank_error": 9.666666666666666,
+  "max_abs_rank_error": 43.0,
+  "chart_reading_uncertainty": 0.5,
+  "haar_variants_identified": 0,
+  "haar_variants_total": 11,
+  "pointwise_train_finite": 1372,
+  "pointwise_test_finite": 678,
+  "pointwise_rows_excluded": 3718,
+  "qualification": "Available-roster exploratory diagnostic only. Missing competitors prevent exact chart comparison. Method gate fails; no Haar candidate fitting or scoring configuration is qualified. Figure center marker is called median following the brief, but the figure does not label its statistic."
+}

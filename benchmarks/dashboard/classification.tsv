@@ -1046,3 +1046,4 @@ benchmarks/aic_refusals_2026-10-18/summary.tsv	ignored	AIC convention numerical 
 benchmarks/aic_refusals_2026-10-18/hdrvdp2-octave.tsv	ignored	Independent numerical oracle panel, not runtime data
 benchmarks/aic_refusals_2026-10-18/hdrvdp2-oracle-summary.tsv	ignored	Independent numerical oracle aggregate, not runtime data
 benchmarks/aic_refusals_2026-10-18/qualification.meta	ignored	AIC convention source and resource receipt, not runtime observations
+benchmarks/dashboard/aic2026/haar-search.json	ignored	Aggregate-only Haar chart method-identification outcome; no private code or per-image data

@@ -28,6 +28,10 @@ citation links permit optional outbound navigation, never resource loading.
 
 `publish_extension.py` verifies identical viewer/AIC commit identities before
 copying the extension and refreshing the viewer's file hashes.
+Production runs serialize without cancelling an active build. Repeated
+evidence/lint pushes on 2026-10-18 cancelled the cold WASM build before any
+extension could deploy; finishing the active run lets its caches populate.
+The newest queued follow-up then deploys, with its own strict source checks.
 `verify_live.py --url https://metrics.imazen.org/aic2026/ --source <commit>`
 requires HTTP 200 and that source identity on every generated page.
 The HTTP verifier identifies itself as `zenmetrics-site-verification/1.0`.
@@ -124,3 +128,14 @@ Those explicit routes have separate names/configurations and no cost tally
 yet. Do not transfer an old route's tally to them silently. Screenshot DVIFM,
 luma-only FSIM and Haar work remains pending until committed evidence arrives.
 The owner also requested the landing link to https://gigapixels.imazen.org/.
+
+### Haar chart qualification
+
+The completed aggregate method search identifies 0/11 Haar variants. Forty
+methods across 91 twelve-source pools (792 five-source subsets each) remain
+outside the chart's 0.5-rank reading uncertainty. Only 12/31 chart labels match
+the available 64-column roster, so its ranks cannot establish exact chart
+reproduction. No candidate fitting is qualified. Public `haar-search.json`
+contains aggregates only; private inputs and implementation stay private.
+The chart does not label its center marker's statistic: “median” is a
+provisional transcription convention from the brief, not a verified label.

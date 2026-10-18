@@ -23,6 +23,8 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- Record the completed Haar chart search as 0/11 identified variants, qualify the chart's unlabeled center marker, and let active production builds finish before queued evidence updates (`0aea44d1` base).
+
 - Correct AIC2026 implementation statuses and pyiqa column identities; derive the paper coverage denominator from the CLI (`85b58962` base).
 
 - Export hashed two-host IQA attempt snapshots for chart development and freeze scalar/NN successor queues with user-disabled 8K geometry and preserved attempt budgets (`04c353c9`, `f7668c77`).

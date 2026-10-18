@@ -90,6 +90,8 @@ class AIC2026(unittest.TestCase):
         self.assertIn('grayscale route differs',body)
         self.assertIn('Ponomarenko',body)
         self.assertIn('studio BT.601',body)
+        self.assertIn('0 of 11 Haar variants identified',body)
+        self.assertIn('figure does not label that statistic',body)
 
     def test_full_population_density_and_canonical_fields(self):
         v=json.loads((ROOT/'benchmarks/dashboard/aic2026/scatter-example.json').read_text())
@@ -129,6 +131,7 @@ class AIC2026(unittest.TestCase):
             (dash/'aic2026/manifest.json').write_text(json.dumps({'source_commit':'a'*40}))
             merge(viewer,dash,'a'*40)
             self.assertIn('Existing viewer',(viewer/'index.html').read_text())
+            self.assertIn('href="https://gigapixels.imazen.org/"',(viewer/'index.html').read_text())
             self.assertEqual((viewer/'worker.js').read_text(),'existing-worker')
             self.assertIn('aic2026/manifest.json',json.loads((viewer/'site-source.json').read_text())['files'])
 

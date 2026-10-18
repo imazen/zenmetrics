@@ -131,9 +131,14 @@ def reproduction_rows(cards, commit):
             if name == 'A-FINE': impl, status, note = 'afine', 'unreproduced', 'Entry point and multiple-of-32 size handling unresolved; best median 0.11 site-JND.'
             if name.startswith('proposal-DVIFM'): status, note = 'unreproduced', 'Released-build port presets exist outside the CLI; no published column matches. Ask which build/constants/JND map.'
             if 'HaarXYB' in name or 'HaarY-' in name or 'HaarYCoCg' in name or '-vqmt' in name: status = 'MISSING: published values'
-            if name == 'DMM': status = 'fails native gate'; note = 'dmm-pyiqa square resize; worst 0.071 JND versus native oracle, above 0.001 gate (SVD).'
+            if name == 'DMM':
+                status = 'fails native gate'; n, jnd = '61', '0.0024'
+                note = 'Published-column comparison is pyiqa 0.1.16 CUDA fp32 reference: median 2.6e-4/max 2.4e-3 site-JND. This is separate from the Rust dmm-pyiqa native-oracle failure: worst 0.071 JND, above 0.001 gate (SVD).'
             if name in ('TOPIQ', 'TOPIQ-PIPAL', 'AHIQ', 'PieAPP', 'WaDIQaM', 'CW-SSIM'):
                 impl = mapping[name]; status = 'implemented; native gate passes'; note += ' Public non-commercial pyiqa convention; see model card and current reproduction status.'
+            if name == 'CW-SSIM':
+                n, med, mx = '61', '0', '2.2e-16'
+                note = 'pyiqa 0.1.16 reference versus published column: 61 pairs, median 0/max 2.2e-16 raw. Native cw-ssim-pyiqa oracle gate passes, worst 5.4e-13 JND; upstream-convention cw-ssim remains distinct.'
             if name.startswith('proposal-IDFIQA') or name == 'MSSWD': status = 'private; aggregate match'
             if status=='missing': status='MISSING: implementation or comparison'
             if where=='neither' and status=='unverified': status='MISSING: published values'
@@ -307,6 +312,8 @@ def density_plot(example):
 def screenshot_coverage(tallies, measured, comparisons, commit):
     draft_path='scripts/complexity/pedzisz_2026_draft_values.json'
     ranks_path='benchmarks/dashboard/aic2026/screenshot-ranks.tsv'
+    haar_path='benchmarks/dashboard/aic2026/haar-search.json'
+    haar=json.loads((ROOT/haar_path).read_text())
     draft=json.loads((ROOT/draft_path).read_text())
     ranks=list(csv.DictReader((ROOT/ranks_path).read_text().splitlines(),delimiter='\t'))
     aliases={'FSIMc':'fsim','FSIM':'fsim-y','HaarPSI':'haarpsi','SSIMULACRA2':'ssim2','Butteraugli-3norm':'butteraugli','PSNR-HVS':'psnrhvs-daala','PSNR-HVS-Y':'psnrhvs-daala','DSSIM':'dssim','VSI':'vsi','GMSD':'gmsd','VMAF-neg v0':'vmaf-neg','CVVDP':'cvvdp'}
@@ -321,13 +328,13 @@ def screenshot_coverage(tallies, measured, comparisons, commit):
         if name=='PSNR-HVS-Y':reason='Draft mapping uses the Ponomarenko luma route; the AIC column uses Daala. Combined Daala output cost is not a separately measured luma-only cost.'
         if name=='PSNR_Y':reason='Draft count maps to libvmaf luma; published AIC PSNR-Y uses studio BT.601. Timing coverage does not qualify that ingress match.'
         if name.startswith(('HaarXYB','HaarY-','HaarYCoCg')):
-            counted=timed='pending (aicfix)';reason='Method search pending (aicfix); no published per-image values.'
+            counted=timed='not measured; unidentified';reason='Method search completed: 0 of 11 Haar variants identified; method gate fails. No scoring configuration or candidate fit is qualified; published per-image values remain unavailable.'
         elif 'DVIFM' in name:reason='Four released-build presets are being counted and timed by aicfix; published-column build differs.'
         elif name.startswith('FSIM-k'):
             counted=timed='pending (aicfix)';reason='Luma-only fixed-factor route pending aicfix; existing fsim-k* rows count the combined output call.'
         elif '-k' in name:reason='Implemented fixed factor; no published per-image values to qualify column comparison.'
         return [e(name),e(m or 'not established'),counted,timed,e((comparison['column']+': '+comparison['status']) if comparison else 'no unambiguous column comparison'),e(reason)]
-    body='<p>Both requested screenshots are covered entry by entry. Visible median ranks are aggregates transcribed from the authors’ figure, not recomputed rankings. Counts and timings refer to our implementations; the draft values refer to different reference implementations. Pending aicfix rows are not counted as complete.</p><h2>Pedzisz complexity draft · 14 entries</h2>'
+    body='<p>Both requested screenshots are covered entry by entry. Visible center-marker ranks are transcribed from the authors’ figure, not recomputed rankings. They are provisionally called medians following the brief; the figure does not label that statistic. Counts and timings refer to our implementations; the draft values refer to different reference implementations. Pending aicfix rows are not counted as complete.</p><h2>Pedzisz complexity draft · 14 entries</h2>'
     body+=table(['Screenshot name','Our route','Counted','Timed','Column comparison','Reason / qualification'],[coverage(r['draft_name'],r['zenmetrics']) for r in draft['values']])
     body+='<p>'+e(draft['caveat'])+'</p><h2>AIC2026 rank-distribution figure · 31 names</h2>'
     result=[]
@@ -336,6 +343,7 @@ def screenshot_coverage(tallies, measured, comparisons, commit):
         if name.startswith('FSIMc-k'):m='fsim-'+name.split('-')[-1]
         if name.startswith('VSI-k'):m='vsi-'+name.split('-')[-1]
         row=coverage(name,m);row.insert(1,e(r['visible_median_rank']));result.append(row)
-    body+=table(['Screenshot name','Visible median rank','Our route','Counted','Timed','Column comparison','Reason / qualification'],result)
-    body+='<p>Missing one-thread PieAPP timing is skipped by owner; its existing pyiqa reproduction result is retained. Haar method identification and luma-only FSIM fixed-factor coverage remain pending aicfix until committed evidence arrives.</p>'
-    return body,[draft_path,ranks_path,'docs/AIC2026_REPRODUCTION_STATUS.md']
+    body+=table(['Screenshot name','Visible center rank (provisional median)','Our route','Counted','Timed','Column comparison','Reason / qualification'],result)
+    body+='<h2>Haar method search · completed, no identification</h2><p>'+e(str(haar['method_count']))+' methods across '+e(str(haar['twelve_source_pools']))+' twelve-source pools, with '+e(str(haar['five_source_subsets_per_pool']))+' five-source subsets per pool. Best available-roster mean absolute rank error '+fmt(haar['mean_abs_rank_error'])+', maximum '+fmt(haar['max_abs_rank_error'])+' ranks, beyond the '+fmt(haar['chart_reading_uncertainty'])+'-rank reading uncertainty. Only '+str(haar['matched_chart_labels'])+' of 31 chart labels match the '+str(haar['available_competitors'])+' available competitors; this does not establish an exact roster comparison. Zero of 11 Haar variants identified; no candidate fitting. Pointwise targets admit '+str(haar['pointwise_train_finite'])+' train and '+str(haar['pointwise_test_finite'])+' test finite rows, with '+str(haar['pointwise_rows_excluded'])+' excluded. Only aggregate outcomes are public.</p>'
+    body+='<p>Missing one-thread PieAPP timing is skipped by owner; its existing pyiqa reproduction result is retained. DVIFM public count/timing records and luma-only FSIM fixed-factor coverage remain pending aicfix until committed evidence arrives.</p>'
+    return body,[draft_path,ranks_path,haar_path,'docs/AIC2026_REPRODUCTION_STATUS.md']
