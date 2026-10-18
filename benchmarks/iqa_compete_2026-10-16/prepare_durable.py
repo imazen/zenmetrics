@@ -96,6 +96,7 @@ def main():
                             cells.append(cell)
     manifest = dict(schema=1, input_sha256={'inputs/' + name: sha(path) for path, name in inputs}, binary='bin/iqa-compete', binary_sha256=sha(a.output / 'bin/iqa-compete'), cells=cells,
                     metadata=dict(source_commit=a.source_commit, build_platform=platform.platform(), build_arch=platform.machine(),
+                                  runner_sha256={name: sha(a.output / name) for name in ('durable.py', 'mac_service.py', 'admission_recovery.py')},
                                   build_receipt_sha256=sha(a.build_receipt), features=build['features'], cold_definition='fresh process: scorer construction and first evaluation after RGB input loading; OS caches not flushed',
                                   warm_definition='10 zenbench rounds, 100 ms target per round, after initialization and warmup',
                                   input_provenance_sha256=sha(a.inputs_meta), corpus_scope='single S67 reference/distortion; scaling study, not perceptual ranking',

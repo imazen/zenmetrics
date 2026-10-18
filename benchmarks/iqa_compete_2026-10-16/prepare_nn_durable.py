@@ -118,6 +118,7 @@ def main():
                               worker_environment=worker_env, asset_paths=per_model[metric] + runtime_assets))
     manifest.update(binary_sha256=sha(a.binary), input_sha256=inputs, cells=cells)
     manifest['metadata'].update(metrics=metrics, engine=a.engine, features=build['features'],
+                                runner_sha256={name: sha(a.output / name) for name in ('durable.py', 'mac_service.py', 'admission_recovery.py')},
                                 source_commit=build['source_commit'], build_receipt_sha256=sha(a.build),
                                 maps='NN routes have no qualified native-map adapter; scalar-only schedule',
                                 runtime='ORT WebGPU on Metal with CPU fallback disabled' if runtime else 'RTEN CPU')

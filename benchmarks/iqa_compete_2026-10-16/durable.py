@@ -105,6 +105,12 @@ def manifest(path):
     if value.get('schema') != 1 or not isinstance(value.get('metadata'), dict):
         raise Refusal('manifest requires schema=1 and metadata object')
     root = path.parent
+    runners = value['metadata'].get('runner_sha256', {})
+    for name, expected in runners.items():
+        if file_hash(relative(root, name)) != expected:
+            raise Refusal('runner content changed: ' + name)
+    if 'durable.py' in runners and file_hash(SELF) != runners['durable.py']:
+        raise Refusal('executed controller differs from frozen runner')
     binary = relative(root, value.get('binary'))
     binary_sha = file_hash(binary)
     if binary_sha != value.get('binary_sha256'):

@@ -51,6 +51,21 @@ if behavior=='duplicate':print('IQA_ROW '+json.dumps(r),flush=True)
 
 
 class DurableTests(unittest.TestCase):
+    def test_runner_hash_is_bound_to_executed_controller(self):
+        value = self.freeze('ok', phase='cold')
+        runner = self.root / 'durable.py'
+        runner.write_bytes(Path(durable.SELF).read_bytes())
+        value['metadata']['runner_sha256'] = {'durable.py': durable.file_hash(runner)}
+        self.path.write_text(json.dumps(value))
+        durable.manifest(self.path)
+        runner.write_text('changed controller')
+        with self.assertRaisesRegex(durable.Refusal, 'runner content changed'):
+            durable.manifest(self.path)
+        value['metadata']['runner_sha256']['durable.py'] = durable.file_hash(runner)
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(durable.Refusal, 'executed controller'):
+            durable.manifest(self.path)
+
     def test_worker_identity_is_retained_across_exec(self):
         self.freeze('ok', phase='cold')
         self.finish(self.start())
