@@ -27,7 +27,9 @@ fn native_time(pid: u32) -> String {
         .args(["-p", &pid.to_string(), "-o", "time="])
         .output()
         .expect("native ps");
-    assert!(out.status.success(), "native ps failed");
+    if !out.status.success() {
+        return format!("unavailable: ps exit {}", out.status);
+    }
     String::from_utf8(out.stdout)
         .expect("ps UTF8")
         .trim()
@@ -37,13 +39,13 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     assert!(
         args.len() == 4,
-        "usage: iqa-resource-accounting idle|stable|churn WORKERS SAMPLES"
+        "usage: iqa-resource-accounting idle|stable|churn WORKERS SAMPLES; external PID SAMPLES"
     );
     let mode = args[1].as_str();
-    assert!(["idle", "stable", "churn"].contains(&mode));
+    assert!(["idle", "stable", "churn", "external"].contains(&mode));
     let workers: usize = args[2].parse().expect("workers");
     let samples: usize = args[3].parse().expect("samples");
-    assert!((1..=8).contains(&workers) && (1..=300).contains(&samples));
+    assert!((mode == "external" || (1..=8).contains(&workers)) && (1..=300).contains(&samples));
     let stop = Arc::new(AtomicBool::new(false));
     let mut handles = Vec::new();
     if mode == "stable" {
@@ -66,7 +68,11 @@ fn main() {
             }
         }));
     }
-    let pid = std::process::id();
+    let pid = if mode == "external" {
+        u32::try_from(workers).expect("PID")
+    } else {
+        std::process::id()
+    };
     let owner = sysinfo::Pid::from_u32(pid);
     let mut sys = System::new_all();
     let start = Instant::now();
@@ -84,7 +90,13 @@ fn main() {
         sys.refresh_memory();
         sys.refresh_processes(ProcessesToUpdate::All, true);
         let now = Instant::now();
-        let p = sys.process(owner).expect("owner alive");
+        let Some(p) = sys.process(owner) else {
+            println!(
+                "{}",
+                json!({"owner_exited":true,"completed_samples":index,"requested_samples":samples,"qualification":false})
+            );
+            break;
+        };
         let accumulated = p.accumulated_cpu_time();
         let wall_ms = now.duration_since(previous_wall).as_secs_f64() * 1000.0;
         let cores = sys.cpus().len();

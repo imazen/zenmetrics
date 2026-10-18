@@ -136,3 +136,17 @@ heavy lock and `run-heavy --mem 12G --jobs 8`, run
 `just iqa-resource-accounting-run BINARY NEW_OUTPUT`. The source and standalone
 lock belong to this repository; compiled binaries and raw observations remain
 outside git. The diagnostic never replaces an existing competition binary.
+
+The native Mac diagnostic completed all 120 synthetic observations without a
+residual above 0.20: idle 0.11227–0.18625, stable eight-worker
+0.09798–0.15114, churn eight-worker 0.09637–0.15834. This does not reproduce
+the metric flags or prove an accounting defect. Raw Mac observations and
+native receipts remain under `~/tmp/iqa-dvifmish-mac/accounting-v1`.
+
+For an actual frozen warm worker, use `just iqa-resource-accounting-external
+DIAGNOSTIC WORKER CONFIG NEW_OUTPUT` under the same lock/resource wrapper.
+It copies the supplied config unchanged, binds executable/config hashes,
+launches that worker and samples its PID until exit (at most 300 observations).
+Worker output and Mac native `iostat` are retained separately. External
+sampling adds diagnostic activity; none of these rows qualifies benchmark
+performance. The original binary, config and results are untouched.

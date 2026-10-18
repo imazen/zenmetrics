@@ -1751,3 +1751,6 @@ iqa-resource-accounting-build:
 
 iqa-resource-accounting-run binary output:
     bash benchmarks/iqa_compete_2026-10-16/resource-accounting/run.sh '{{binary}}' '{{output}}'
+
+iqa-resource-accounting-external diagnostic worker config output:
+    bash benchmarks/iqa_compete_2026-10-16/resource-accounting/external.sh '{{diagnostic}}' '{{worker}}' '{{config}}' '{{output}}'
