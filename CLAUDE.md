@@ -566,7 +566,10 @@ packed-sRGB-u8 sweep shape and answers a different question.
   DISTS reaches 2/18 pairs, then the resource wrapper kills both combined and
   isolated attempts at 2048² when its available-page proxy falls below 4 GiB;
   full DISTS parity and its warm/cold check remain unvalidated under the 12 GiB
-  guard. [Commands and measurements](benchmarks/mac_validation_2026-10-18/README.md).
+  guard. An isolated one-job retry on 2026-10-18 again completed 2/18 pairs
+  and stopped at 2048² (exit 137, min-avail proxy 3696 MiB); largest passing
+  size is 1024². Warm/cold parity was not reached. No further retry attempted.
+  [Commands and measurements](benchmarks/mac_validation_2026-10-18/README.md).
 
 - **2026-10-18 Mac/Metal validation at a3bc3a98:** CVVDP Mode B walkers
   8/8, CSF halos 5/5, Mode E 12/12, dispatch limits 2/2 and cancellation

@@ -135,3 +135,36 @@ The owned Cargo target directory was removed after all validation processes
 finished. `test ! -e "$HOME/tmp/mac-validate/target"` passed. mac's `df -k /`
 then reported **13,335,312 KiB available**. No existing checkout or other
 session's targets/data were removed.
+
+## DISTS isolated one-job retry (2026-10-18)
+
+At the user's request after reported reduced host load, retried only DISTS,
+with the same source snapshot `a3bc3a98`, ORT core 1.31.0, plugin 0.4.0,
+model files, goldens and Metal backend. No other metric was rerun.
+
+```
+CARGO_BUILD_JOBS=1 RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+run-heavy --mem 12G --jobs 1 -- \
+just nn-parity "$MODEL_DIR" "$LADDER" ort-webgpu model-tests,ort-webgpu dists
+```
+
+The existing pinned scratch snapshot's direct `cargo --locked` delegation
+was reused. Compilation and test execution shared one resource-wrapper run.
+**Result: exit 137 at the next 1415/2048 pair, 2/18 pairs complete.**
+Largest measured passing size: **1024x1024**, score `0.180054665` vs golden
+`0.180055797`, absolute error `1.132e-6`. The other completed pair was
+1415/128, score `0.227918506` vs `0.227918565`, error `5.933e-8`.
+Warm/cold parity was not reached. No further tests were attempted.
+The intentionally caught DMM panel negative controls print panics and pass;
+they are unrelated to the DISTS memory-guard termination.
+
+Resource record:
+`run-heavy: done rc=137 146s | peak-RSS unavailableGiB | min-avail 3696MiB | peak-load 44.60`.
+The monitored available-page proxy again fell below the 4096 MiB floor.
+Peak RSS is unavailable after the process-group kill; no memory peak or
+speed claim is inferred. The 12 GiB guard was not raised.
+
+Raw log: `ort-dists-retry-one-job.log` in the retained raw-log directory
+on dev described above; SHA256 `edafe22e1a657d767101425a1088ddedfe5026dc2314405f63ed4681e24290a3`.
+The owned Mac target was removed again and confirmed absent. After cleanup,
+`df -k /` reported **10,119,616 KiB available**.
