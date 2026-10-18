@@ -1,60 +1,4 @@
 document	table	row	column	value
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	zenmetrics metric	missing (dvifmish, outside zenmetrics)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	3	note	dvifmish (dev [local path] publish=false) has port presets of the author's v0.2/v0.3 builds; not compared to these columns here
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	name	proposal-DVIFM-0.2-use_chroma / DVIFM-0.2.0-use_chroma
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	in CSV?	dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	zenmetrics metric	missing (dvifmish)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	4	note	dataset column (excluded on the site)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	name	proposal-DVIFM-2d / DVIFM-2d
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	zenmetrics metric	missing (dvifmish port-2d-v0.2, probably)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	5	note	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	name	proposal-DVIFM-min / DVIFM-min
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	zenmetrics metric	missing (dvifmish port-min-v0.2, probably)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	6	note	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	name	proposal-DVIFM (dataset)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	in CSV?	dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	zenmetrics metric	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	7	note	older version; ranks differently from -0.2
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	name	proposal-DVIFM-min-v0.2 (excluded)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	zenmetrics metric	missing in zenmetrics; dvifmish port-min-v0.2 has the same name
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	8	note	excluded; placeholder map (a=b=c=1), no values to compare
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	name	proposal-DVIFM-2d-v0.2 (excluded)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	zenmetrics metric	missing in zenmetrics; dvifmish port-2d-v0.2 has the same name
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ| in JND	
@@ -80,112 +24,112 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	11	status	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	11	note	excluded; placeholder map (a=b=c=1), no values to compare
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	name	FSIM-k2 (pyiqa-FSIM-k2)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	zenmetrics metric	fsim (fsim_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	zenmetrics metric	fsim-k2
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	note	= FSIM with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	0	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	name	FSIM-k3 (pyiqa-FSIM-k3)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	zenmetrics metric	fsim (fsim_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	zenmetrics metric	fsim-k3
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	note	= FSIM with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base FSIM map to 7 digits, i.e. the fitted values were these.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	1	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	name	FSIM-k4 (pyiqa-FSIM-k4)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	zenmetrics metric	fsim (fsim_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	zenmetrics metric	fsim-k4
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	note	= FSIM with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	2	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	name	FSIM-nodownscale (pyiqa-FSIM-nodownscale)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	zenmetrics metric	fsim (fsim_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	zenmetrics metric	fsim-nodownscale
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	note	= FSIM with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	3	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	name	FSIMc-k2 (pyiqa-FSIMc-k2)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	zenmetrics metric	fsim (fsimc_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	zenmetrics metric	fsim-k2 (FSIMc output)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	note	= FSIMc with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	4	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	name	FSIMc-k3 (pyiqa-FSIMc-k3)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	zenmetrics metric	fsim (fsimc_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	zenmetrics metric	fsim-k3 (FSIMc output)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	note	= FSIMc with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base FSIMc map to 7 digits, i.e. the fitted values were these.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	5	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	name	FSIMc-k4 (pyiqa-FSIMc-k4)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	zenmetrics metric	fsim (fsimc_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	zenmetrics metric	fsim-k4 (FSIMc output)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	note	= FSIMc with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	6	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	name	FSIMc-nodownscale (pyiqa-FSIMc-nodownscale)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	zenmetrics metric	fsim (fsimc_), auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	zenmetrics metric	fsim-nodownscale (FSIMc output)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	note	= FSIMc with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	7	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	name	VSI-k2 (pyiqa-VSI-k2)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	zenmetrics metric	vsi, auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	zenmetrics metric	vsi-k2
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	note	= VSI with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	8	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	name	VSI-k3 (pyiqa-VSI-k3)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	zenmetrics metric	vsi, auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	zenmetrics metric	vsi-k3
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	note	= VSI with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base VSI map to 7 digits, i.e. the fitted values were these.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	9	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	name	VSI-k4 (pyiqa-VSI-k4)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	zenmetrics metric	vsi, auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	zenmetrics metric	vsi-k4
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	note	= VSI with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	10	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	name	VSI-nodownscale (pyiqa-VSI-nodownscale)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	zenmetrics metric	vsi, auto factor only
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	zenmetrics metric	vsi-nodownscale
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	note	= VSI with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override.
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	11	note	Implemented, counted and timed; no published per-image values. See current reproduction status.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	12	name	pyiqa-VSI-f32
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	12	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	12	zenmetrics metric	vsi
@@ -197,112 +141,112 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	12	status	variant-needed
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	12	note	not in site config; f32 = float input without u8 rounding (the f32 SSIM probes agree with this reading); no option exposed
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	name	SSIM-pyiqa-f32-k2 (pyiqa-SSIM-f32-k2)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	zenmetrics metric	missing (no luma SSIM w/o downscale in CLI; no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	zenmetrics metric	ssim-pyiqa-f32-k2
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	note	= SSIM-pyiqa on unrounded luma after a 2×2 downscale. Test (variant_test.tsv): with the downscale, map_k2 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	13	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	name	SSIM-pyiqa-f32-k3 (pyiqa-SSIM-f32-k3)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	zenmetrics metric	missing (no luma SSIM w/o downscale in CLI; no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	zenmetrics metric	ssim-pyiqa-f32-k3
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	note	= SSIM-pyiqa on unrounded luma after a 3×3 downscale. Test (variant_test.tsv): with the downscale, map_k3 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	14	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	name	SSIM-pyiqa-f32-k4 (pyiqa-SSIM-f32-k4)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	zenmetrics metric	missing (no luma SSIM w/o downscale in CLI; no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	zenmetrics metric	ssim-pyiqa-f32-k4
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	note	= SSIM-pyiqa on unrounded luma after a 4×4 downscale. Test (variant_test.tsv): with the downscale, map_k4 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	15	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	name	SSIM-pyiqa-f32-k5 (pyiqa-SSIM-f32-k5)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	zenmetrics metric	missing (no luma SSIM w/o downscale in CLI; no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	zenmetrics metric	ssim-pyiqa-f32-k5
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	note	= SSIM-pyiqa on unrounded luma after a 5×5 downscale. Test (variant_test.tsv): with the downscale, map_k5 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	16	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	name	SSIM-pyiqa-f32-k6 (pyiqa-SSIM-f32-k6)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	zenmetrics metric	missing (no luma SSIM w/o downscale in CLI; no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	zenmetrics metric	ssim-pyiqa-f32-k6
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	note	= SSIM-pyiqa on unrounded luma after a 6×6 downscale. Test (variant_test.tsv): with the downscale, map_k6 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	17	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	name	SSIMc-pyiqa-f32-k2 (pyiqa-SSIMc-f32-k2)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	zenmetrics metric	missing (ssim has no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	zenmetrics metric	ssimc-pyiqa-f32-k2
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	note	= per-RGB SSIM after a 2×2 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	18	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	name	SSIMc-pyiqa-f32-k3 (pyiqa-SSIMc-f32-k3)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	zenmetrics metric	missing (ssim has no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	zenmetrics metric	ssimc-pyiqa-f32-k3
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	note	= per-RGB SSIM after a 3×3 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	19	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	name	SSIMc-pyiqa-f32-k4 (pyiqa-SSIMc-f32-k4)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	zenmetrics metric	missing (ssim has no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	zenmetrics metric	ssimc-pyiqa-f32-k4
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	note	= per-RGB SSIM after a 4×4 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	20	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	name	SSIMc-pyiqa-f32-k5 (pyiqa-SSIMc-f32-k5)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	zenmetrics metric	missing (ssim has no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	zenmetrics metric	ssimc-pyiqa-f32-k5
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	note	= per-RGB SSIM after a 5×5 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	21	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	name	SSIMc-pyiqa-f32-k6 (pyiqa-SSIMc-f32-k6)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	zenmetrics metric	missing (ssim has no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	zenmetrics metric	ssimc-pyiqa-f32-k6
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	note	= per-RGB SSIM after a 6×6 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	22	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	name	pyiqa-SSIM-f32, pyiqa-SSIMc-f32
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	zenmetrics metric	ssim-pyiqa-f32, ssimc-pyiqa-f32
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	note	not in site config; unrounded-input SSIM without downscale
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	23	note	Implemented; no published values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	name	pyiqa-MS-SSIM-f32, -f32-k2…k6
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	zenmetrics metric	msssim (no factor option)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	zenmetrics metric	ms-ssim-pyiqa-f32 and -k2–-k6
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	status	variant-needed
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	note	not in site config; same downscale reading assumed
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	status	unverifiable
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	24	note	Implemented, counted and timed; no published per-image values.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	25	name	pyiqa-GMSD-materialized-y
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	25	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	5	25	zenmetrics metric	gmsd (probably)
@@ -363,3 +307,91 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	zenmetrics metric	fixed remap of t
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	status	n/a
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	6	5	note	deterministic function of its metric; follows the base metric row
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	our column	lpips_alex
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	AIC-4 column	LPIPS-alex
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	median |Δ|	2.3e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	0	max |Δ|	4.9e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	our column	lpips_vgg
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	AIC-4 column	LPIPS-VGG
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	median |Δ|	3.1e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	1	max |Δ|	1.0e-04
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	2	our column	dists
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	2	AIC-4 column	DISTS
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	2	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	2	median |Δ|	2.8e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	2	max |Δ|	2.5e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	3	our column	stlpips_alex
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	3	AIC-4 column	STLPIPS
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	3	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	3	median |Δ|	3.8e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	3	max |Δ|	9.3e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	4	our column	stlpips_vgg
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	4	AIC-4 column	STLPIPS-VGG
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	4	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	4	median |Δ|	3.4e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	4	max |Δ|	6.0e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	5	our column	deepdc
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	5	AIC-4 column	DeepDC
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	5	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	5	median |Δ|	1.2e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	5	max |Δ|	3.0e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	6	our column	ckdn
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	6	AIC-4 column	CKDN
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	6	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	6	median |Δ|	4.0e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	6	max |Δ|	1.4e-04
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	7	our column	afine (native afine_all)
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	7	AIC-4 column	A-FINE
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	7	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	7	median |Δ|	7.5e-01
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	7	max |Δ|	1.4e+00
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	8	our column	dreamsim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	8	AIC-4 column	DreamSim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	8	n	61
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	8	median |Δ|	2.9e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	0	8	max |Δ|	6.1e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	model	ckdn
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	worst |Δ|	2.981e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	worst JND	5.65e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	model	ckdn
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	worst |Δ|	2.683e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	worst JND	5.09e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	model	afine
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	worst |Δ|	7.228e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	worst JND	1.42e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	model	afine
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	worst |Δ|	9.865e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	worst JND	1.94e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	model	dreamsim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	pairs	21
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	worst |Δ|	2.064e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	worst JND	1.17e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	model	dreamsim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	pairs	21
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst |Δ|	3.577e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst JND	2.03e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst |Δ|	5.295e-08
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst JND	2.13e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst |Δ|	2.582e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst JND	1.04e-05

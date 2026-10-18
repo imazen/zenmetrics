@@ -46,7 +46,7 @@ re-measured: CLI needs HDR sources).
 
 1. **Fixed downscale factor + unrounded-input options** (25 variant-needed rows: 22 site names + 9 screenshot-only names; plus the missing SSIM-pyiqa base):
    FSIM/FSIMc/VSI `-k2/-k3/-k4/-nodownscale` (12), SSIM-pyiqa-f32-k2…k6 and SSIMc-pyiqa-f32-k2…k6 (10),
-   pyiqa-VSI-f32, pyiqa-SSIM-f32, pyiqa-SSIMc-f32, pyiqa-MS-SSIM-f32(-k2…k6). Needs a factor override in
+   pyiqa-VSI-f32, pyiqa-SSIM-f32, pyiqa-SSIMc-f32, pyiqa-MS-SSIM-f32(-k2…k6). Implemented as fixed-factor CLI variants; published values unavailable. Historical design required an override in
    `fsim`/`vsi` (both compute `max(1, round(min/256))` internally) and a luma SSIM without downscale
    (SSIM-pyiqa, also missing as a base metric).
 2. **DVIFM** (13 entries: 9 site names + 4 screenshot aliases): proposal-DVIFM, -0.2, -0.2-use_chroma,
@@ -55,7 +55,7 @@ re-measured: CLI needs HDR sources).
    zenmetrics and not compared to these columns here.
 3. **HaarXYB / HaarY / HaarYCoCg -deltaL1248** (11, all excluded, no values): unidentified.
 4. **Learned models** (10, one each): TOPIQ, TOPIQ-PIPAL, AHIQ, PieAPP, WaDIQaM, DMM, A-FINE, DreamSim,
-   MSSWD, CKDN (CKDN is in progress in the zenmetrics--nnport lane).
+   MSSWD, CKDN (CKDN is now implemented).
 5. **WD_s1…s5** (5): Wasserstein Distortion on VGG-16 features (another lane is probing it).
 6. **Classic lane, unlanded** (5): PSNR-YCbCr611, CIEDE2000, SSIMc exact (commits 94574b8b, ac757d73,
    0a7fa500 exist in the object store, on no branch) plus PSNR-Cb/PSNR-Cr. My numpy probes reproduce
@@ -192,15 +192,15 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | WD_s3 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). |
 | WD_s4 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). the paper's VGG-16 σ=2^4 row |
 | WD_s5 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). |
-| TOPIQ | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| TOPIQ-PIPAL | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| AHIQ | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| PieAPP | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| WaDIQaM | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| DMM | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
+| TOPIQ | site+dataset | topiq-fr | 61 | 3.5e-5 | 2.73e-4 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
+| TOPIQ-PIPAL | site+dataset | topiq-fr-pipal | 61 | 2.4e-5 | 1.54e-4 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
+| AHIQ | site+dataset | ahiq-pyiqa | 61 | 2.5e-6 | 1.0e-5 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
+| PieAPP | site+dataset | pieapp-pyiqa | 61 | 2.3e-5 | 1.9e-4 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
+| WaDIQaM | site+dataset | wadiqam-pyiqa | 61 | 1.7e-6 | 1.2e-5 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
+| DMM | site+dataset | dmm-pyiqa | 61 |  |  |  | implemented | native gate FAILS: worst 0.071 JND, SVD; see AIC2026_REPRODUCTION_STATUS.md |
 | A-FINE | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
 | DreamSim | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| MSSWD | site+dataset | missing |  |  |  |  | missing | learned MS-SWD; on hold: weights only via pyiqa (noncommercial) |
+| MSSWD | site+dataset | private port | 61 | 4.1e-6 | 2.4e-4 |  | implemented | aggregates only; Spearman 0.9999; see AIC2026_REPRODUCTION_STATUS.md |
 | AIMOS | site+dataset | missing |  |  |  |  | missing | unidentified |
 
 ## AIC-4 proposals
@@ -209,7 +209,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 |---|---|---|---|---|---|---|---|---|
 | proposal-Butteraugli | site+dataset | `butteraugli` (`butteraugli_pnorm3`), affine only | 61 | 1.08 | 3.42 | 1.22 | differs | raw med |Δ| 1.08; but pub ≈ 2.083·pnorm3 − 1.079 (Pearson 0.99994, residual med 0.004, max 0.098): pnorm-3 family, different scale/config |
 | proposal-mDCTPSNR / mDCTpsnr-JND | site+dataset | `mdctpsnr` + the reference `-jnd` remap (not a CLI column) | 61 | 7.64e-08 | 1e-06 | 6.08e-07 | reproduced | JND = 0.000475997802·max(0, 80 − dB)^2.3182 applied to our dB |
-| proposal-IDFIQA / IDFIQA | site+dataset | missing |  |  |  |  | missing | CNN features (Khakpour et al.); no licensed code |
+| proposal-IDFIQA / IDFIQA | site+dataset | private port | 61 | 4.2e-6 | 3.33e-4 |  | implemented | aggregates only; Spearman 1.0; 1e-3 JND gate passes; see AIC2026_REPRODUCTION_STATUS.md |
 | proposal-DVIFM-0.2 / DVIFM-0.2.0 | site+dataset | missing (dvifmish, outside zenmetrics) |  |  |  |  | missing | dvifmish (dev ~/work/dvifmish, publish=false) has port presets of the author's v0.2/v0.3 builds; not compared to these columns here |
 | proposal-DVIFM-0.2-use_chroma / DVIFM-0.2.0-use_chroma | dataset | missing (dvifmish) |  |  |  |  | missing | dataset column (excluded on the site) |
 | proposal-DVIFM-2d / DVIFM-2d | site | missing (dvifmish `port-2d-v0.2`, probably) |  |  |  |  | missing |  |
@@ -220,35 +220,35 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | proposal-DVIFM-lap-v0.2 (excluded) | neither | missing in zenmetrics; dvifmish `port-lap-v0.2` has the same name |  |  |  |  | missing | excluded; placeholder map (a=b=c=1), no values to compare |
 | proposal-DVIFM-lap-v0.3 (excluded) | neither | missing in zenmetrics; dvifmish `port-lap-v0.3` has the same name |  |  |  |  | missing | excluded; placeholder map (a=b=c=1), no values to compare |
 
-## Variants (no published values; parameter needed)
+## Variants (implemented; published parity unverifiable)
 
 | name | in CSV? | zenmetrics metric | n | median \|Δ\| | max \|Δ\| | max \|Δ\| in JND | status | note |
 |---|---|---|---|---|---|---|---|---|
-| FSIM-k2 (pyiqa-FSIM-k2) | neither | `fsim` (`fsim_*`), auto factor only |  |  |  |  | variant-needed | = FSIM with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| FSIM-k3 (pyiqa-FSIM-k3) | neither | `fsim` (`fsim_*`), auto factor only |  |  |  |  | variant-needed | = FSIM with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base FSIM map to 7 digits, i.e. the fitted values were these. |
-| FSIM-k4 (pyiqa-FSIM-k4) | neither | `fsim` (`fsim_*`), auto factor only |  |  |  |  | variant-needed | = FSIM with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| FSIM-nodownscale (pyiqa-FSIM-nodownscale) | neither | `fsim` (`fsim_*`), auto factor only |  |  |  |  | variant-needed | = FSIM with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| FSIMc-k2 (pyiqa-FSIMc-k2) | neither | `fsim` (`fsimc_*`), auto factor only |  |  |  |  | variant-needed | = FSIMc with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| FSIMc-k3 (pyiqa-FSIMc-k3) | neither | `fsim` (`fsimc_*`), auto factor only |  |  |  |  | variant-needed | = FSIMc with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base FSIMc map to 7 digits, i.e. the fitted values were these. |
-| FSIMc-k4 (pyiqa-FSIMc-k4) | neither | `fsim` (`fsimc_*`), auto factor only |  |  |  |  | variant-needed | = FSIMc with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| FSIMc-nodownscale (pyiqa-FSIMc-nodownscale) | neither | `fsim` (`fsimc_*`), auto factor only |  |  |  |  | variant-needed | = FSIMc with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| VSI-k2 (pyiqa-VSI-k2) | neither | `vsi`, auto factor only |  |  |  |  | variant-needed | = VSI with a fixed pre-scoring downscale factor 2 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| VSI-k3 (pyiqa-VSI-k3) | neither | `vsi`, auto factor only |  |  |  |  | variant-needed | = VSI with a fixed pre-scoring downscale factor 3 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. Its map equals the base VSI map to 7 digits, i.e. the fitted values were these. |
-| VSI-k4 (pyiqa-VSI-k4) | neither | `vsi`, auto factor only |  |  |  |  | variant-needed | = VSI with a fixed pre-scoring downscale factor 4 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
-| VSI-nodownscale (pyiqa-VSI-nodownscale) | neither | `vsi`, auto factor only |  |  |  |  | variant-needed | = VSI with a fixed pre-scoring downscale factor 1 instead of max(1, round(min(w,h)/256)); the crate computes the factor internally and exposes no override. |
+| FSIM-k2 (pyiqa-FSIM-k2) | neither | `fsim-k2` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIM-k3 (pyiqa-FSIM-k3) | neither | `fsim-k3` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIM-k4 (pyiqa-FSIM-k4) | neither | `fsim-k4` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIM-nodownscale (pyiqa-FSIM-nodownscale) | neither | `fsim-nodownscale` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIMc-k2 (pyiqa-FSIMc-k2) | neither | `fsim-k2` (FSIMc output) |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIMc-k3 (pyiqa-FSIMc-k3) | neither | `fsim-k3` (FSIMc output) |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIMc-k4 (pyiqa-FSIMc-k4) | neither | `fsim-k4` (FSIMc output) |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| FSIMc-nodownscale (pyiqa-FSIMc-nodownscale) | neither | `fsim-nodownscale` (FSIMc output) |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| VSI-k2 (pyiqa-VSI-k2) | neither | `vsi-k2` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| VSI-k3 (pyiqa-VSI-k3) | neither | `vsi-k3` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| VSI-k4 (pyiqa-VSI-k4) | neither | `vsi-k4` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
+| VSI-nodownscale (pyiqa-VSI-nodownscale) | neither | `vsi-nodownscale` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. See current reproduction status. |
 | pyiqa-VSI-f32 | neither | `vsi` |  |  |  |  | variant-needed | not in site config; f32 = float input without u8 rounding (the f32 SSIM probes agree with this reading); no option exposed |
-| SSIM-pyiqa-f32-k2 (pyiqa-SSIM-f32-k2) | neither | missing (no luma SSIM w/o downscale in CLI; no factor option) |  |  |  |  | variant-needed | = SSIM-pyiqa on unrounded luma after a 2×2 downscale. Test (variant_test.tsv): with the downscale, map_k2 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5 |
-| SSIM-pyiqa-f32-k3 (pyiqa-SSIM-f32-k3) | neither | missing (no luma SSIM w/o downscale in CLI; no factor option) |  |  |  |  | variant-needed | = SSIM-pyiqa on unrounded luma after a 3×3 downscale. Test (variant_test.tsv): with the downscale, map_k3 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5 |
-| SSIM-pyiqa-f32-k4 (pyiqa-SSIM-f32-k4) | neither | missing (no luma SSIM w/o downscale in CLI; no factor option) |  |  |  |  | variant-needed | = SSIM-pyiqa on unrounded luma after a 4×4 downscale. Test (variant_test.tsv): with the downscale, map_k4 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5 |
-| SSIM-pyiqa-f32-k5 (pyiqa-SSIM-f32-k5) | neither | missing (no luma SSIM w/o downscale in CLI; no factor option) |  |  |  |  | variant-needed | = SSIM-pyiqa on unrounded luma after a 5×5 downscale. Test (variant_test.tsv): with the downscale, map_k5 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5 |
-| SSIM-pyiqa-f32-k6 (pyiqa-SSIM-f32-k6) | neither | missing (no luma SSIM w/o downscale in CLI; no factor option) |  |  |  |  | variant-needed | = SSIM-pyiqa on unrounded luma after a 6×6 downscale. Test (variant_test.tsv): with the downscale, map_k6 of our numpy values sits within +0.01…+0.13 JND (median) of the base map; without it, +1.6…+10.5 |
-| SSIMc-pyiqa-f32-k2 (pyiqa-SSIMc-f32-k2) | neither | missing (`ssim` has no factor option) |  |  |  |  | variant-needed | = per-RGB SSIM after a 2×2 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without |
-| SSIMc-pyiqa-f32-k3 (pyiqa-SSIMc-f32-k3) | neither | missing (`ssim` has no factor option) |  |  |  |  | variant-needed | = per-RGB SSIM after a 3×3 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without |
-| SSIMc-pyiqa-f32-k4 (pyiqa-SSIMc-f32-k4) | neither | missing (`ssim` has no factor option) |  |  |  |  | variant-needed | = per-RGB SSIM after a 4×4 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without |
-| SSIMc-pyiqa-f32-k5 (pyiqa-SSIMc-f32-k5) | neither | missing (`ssim` has no factor option) |  |  |  |  | variant-needed | = per-RGB SSIM after a 5×5 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without |
-| SSIMc-pyiqa-f32-k6 (pyiqa-SSIMc-f32-k6) | neither | missing (`ssim` has no factor option) |  |  |  |  | variant-needed | = per-RGB SSIM after a 6×6 downscale; same test: +0.02…+0.19 with, +1.3…+3.8 without |
-| pyiqa-SSIM-f32, pyiqa-SSIMc-f32 | neither | missing |  |  |  |  | variant-needed | not in site config; unrounded-input SSIM without downscale |
-| pyiqa-MS-SSIM-f32, -f32-k2…k6 | neither | `msssim` (no factor option) |  |  |  |  | variant-needed | not in site config; same downscale reading assumed |
+| SSIM-pyiqa-f32-k2 (pyiqa-SSIM-f32-k2) | neither | `ssim-pyiqa-f32-k2` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIM-pyiqa-f32-k3 (pyiqa-SSIM-f32-k3) | neither | `ssim-pyiqa-f32-k3` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIM-pyiqa-f32-k4 (pyiqa-SSIM-f32-k4) | neither | `ssim-pyiqa-f32-k4` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIM-pyiqa-f32-k5 (pyiqa-SSIM-f32-k5) | neither | `ssim-pyiqa-f32-k5` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIM-pyiqa-f32-k6 (pyiqa-SSIM-f32-k6) | neither | `ssim-pyiqa-f32-k6` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIMc-pyiqa-f32-k2 (pyiqa-SSIMc-f32-k2) | neither | `ssimc-pyiqa-f32-k2` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIMc-pyiqa-f32-k3 (pyiqa-SSIMc-f32-k3) | neither | `ssimc-pyiqa-f32-k3` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIMc-pyiqa-f32-k4 (pyiqa-SSIMc-f32-k4) | neither | `ssimc-pyiqa-f32-k4` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIMc-pyiqa-f32-k5 (pyiqa-SSIMc-f32-k5) | neither | `ssimc-pyiqa-f32-k5` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| SSIMc-pyiqa-f32-k6 (pyiqa-SSIMc-f32-k6) | neither | `ssimc-pyiqa-f32-k6` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
+| pyiqa-SSIM-f32, pyiqa-SSIMc-f32 | neither | `ssim-pyiqa-f32`, `ssimc-pyiqa-f32` |  |  |  |  | unverifiable | Implemented; no published values. |
+| pyiqa-MS-SSIM-f32, -f32-k2…k6 | neither | `ms-ssim-pyiqa-f32` and `-k2`–`-k6` |  |  |  |  | unverifiable | Implemented, counted and timed; no published per-image values. |
 | pyiqa-GMSD-materialized-y | neither | `gmsd` (probably) |  |  |  |  | unverified | not in site config. "materialized-y" reads as u8-rounded Y; our gmsd scores 8-bit BT.601 luma and matches the CSV GMSD to 5e-6, so the CSV column is likely this variant or indistinguishable from it |
 
 ## JND display columns (not metrics)

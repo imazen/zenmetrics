@@ -2,7 +2,7 @@
 
 Status of every metric column published with the JPEG AIC2026 dataset
 (`metrics_fullres.csv` / `metrics_cropped.csv`, 9,618 rows) against the
-zenmetrics implementation of the same method, as of 2026-10-17. "Reproduced"
+zenmetrics implementation of the same method, as of 2026-10-18. "Reproduced"
 means our implementation matches the published per-image values within the
 stated error on the 61-pair subset (or more); a mismatch is a question about
 the published pipeline, not a claim that either side is wrong. Evidence links
@@ -20,6 +20,8 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 |---|---|---|---|---|
 | `A-FINE` | `afine` (upstream-verified `afine_all`) | not reproduced. No pyiqa release scores these 840×944 crops as given (0.1.15 and 0.1.16 assert H and W divisible by 32). Upstream and pyiqa inference across crop/pad/resize to a multiple of 32, tiling, every output term, input scaling and normalisation variants, CPU and CUDA: best Spearman 0.94 (fidelity term), best median 0.11 site-JND. On near-lossless pairs the column implies a raw fidelity ≈ 0.097 where every variant gives ≈ 0.015 (2026-10-17) | which A-FINE entry point and output, how inputs were brought to a multiple of 32, which checkpoint | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [afine_aic_2026-10-16](../benchmarks/afine_aic_2026-10-16/README.md), [afine_aic_probe](../benchmarks/afine_aic_probe/README.md) |
 | `WD_s1`–`WD_s5` | `wd` (`wd_s1`–`wd_s5`, Cool-Chic convention) | not reproduced. A 4,480-row grid over the Cool-Chic and google/codex conventions (input normalisation, squared or √ distance, variance floor, σ rescale, VGG taps, pixels as a layer, image pyramid, log2σ 0–6) reaches Spearman 0.98–0.99 with a near-constant scale (published/ours ≈ 0.25), but the best log2σ does not follow the column index (s1→1, s2→3, s3→4, s4→5, s5→6); best median 0.13–0.20 site-JND (2026-10-17) | which implementation, layers, normalisation and pyramid, and how the five columns map to σ | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [wd_port_2026-10-16](../benchmarks/wd_port_2026-10-16/README.md) |
+| `proposal-IDFIQA` | private `idfiqa` port | median 4.2e-6, max 3.33e-4 JND, Spearman 1.0 on rten; native oracle 1e-3 JND gate passes on rten, ORT CPU and CUDA | upstream code licence; no code or weights published | aggregate card verified 2026-10-18 |
+| FSIM/FSIMc/VSI fixed-factor and SSIM-family f32 variants | `fsim-k2/k3/k4/nodownscale` (both FSIM outputs), `vsi-k*`, `ssim-pyiqa-f32-k2`–`k6`, `ssimc-pyiqa-f32-k2`–`k6`, `ms-ssim-pyiqa-f32-k2`–`k6` | implemented, counted and timed; published parity unverifiable because no per-image values are available | per-image values and published base downscale factors | [CLI](../crates/zenmetrics-cli/src/metrics/mod.rs), [counts and timings](../benchmarks/iqa_complexity_2026-10-17/README.md) |
 
 ## Identified by configuration search (ports need the option exposed)
 
@@ -41,20 +43,22 @@ Scoring the 61 crop pairs with pyiqa 0.1.16 (`create_metric(name)` defaults, CPU
 2026-10-17) reproduces these columns. This identifies the published pipeline; the
 zenmetrics implementations below follow the upstream releases, so where they differ
 from the column the difference is the convention, not a defect. Ports that follow the
-column's convention are being added in `crates/zenmetrics-pyiqa-ports`, the one crate under
-pyiqa's non-commercial terms (TOPIQ, TOPIQ-PIPAL, WaDIQaM, AHIQ, CW-SSIM, DMM). MSSWD has no
-licence and is ported outside this repository.
+column's convention are implemented in `crates/zenmetrics-pyiqa-ports`, the one crate under
+pyiqa's non-commercial terms (TOPIQ, TOPIQ-PIPAL, WaDIQaM, AHIQ, CW-SSIM, DMM). MSSWD is ported privately; only aggregates can be published.
+The native `dmm-pyiqa` port fails its own 1e-3 JND gate (worst 0.071 JND, SVD);
+matching the resize convention does not qualify native numerical parity.
+See [the port receipt](../crates/zenmetrics-pyiqa-ports/README.md).
 
 | Column | pyiqa metric | median \|Δ\| | max \|Δ\| | Spearman | zenmetrics |
 |---|---|---|---|---|---|
-| `TOPIQ` | `topiq_fr` (KADID) | 3.6e-5 | 2.7e-4 | 1.0000 | port in progress in `zenmetrics-pyiqa-ports` (non-commercial crate) |
-| `TOPIQ-PIPAL` | `topiq_fr-pipal` | 2.4e-5 | 1.5e-4 | 1.0000 | port in progress in `zenmetrics-pyiqa-ports` (non-commercial crate) |
-| `MSSWD` | `msswd` (learned) | 4.2e-6 | 2.4e-4 | 0.9999 | not implemented (no licence); the official random-projection MS-SWD is a different method |
-| `WaDIQaM` | `wadiqam_fr` (KADID-trained) | 1.7e-6 | 1.2e-5 | 1.0000 | `wadiqam-*` use the official deepIQA LIVE/TID weights, a different model (best Spearman −0.74) |
-| `AHIQ` | `ahiq` | 2.5e-6 | 1.0e-5 | 1.0000 | `ahiq` follows upstream `test.py` nine-crop (median \|Δ\| 0.14) |
-| `PieAPP` | `pieapp` | 2.3e-5 | 1.9e-4 | 0.9999 | `pieapp` (upstream convention): median 6.6e-3, max 0.042, Spearman 0.9975 |
+| `TOPIQ` | `topiq_fr` (KADID) | 3.6e-5 | 2.7e-4 | 1.0000 | `topiq-fr`: public non-commercial port; all three engines pass 1e-3 JND |
+| `TOPIQ-PIPAL` | `topiq_fr-pipal` | 2.4e-5 | 1.5e-4 | 1.0000 | `topiq-fr-pipal`: public non-commercial port; all three engines pass 1e-3 JND |
+| `MSSWD` | `msswd` (learned) | 4.1e-6 | 2.4e-4 | 0.9999 | ported privately; aggregates only; redistribution terms unresolved |
+| `WaDIQaM` | `wadiqam_fr` (KADID-trained) | 1.7e-6 | 1.2e-5 | 1.0000 | `wadiqam-pyiqa` passes 1e-3 JND (worst 1.1e-5 ladder / 2.7e-6 AIC JND); official LIVE/TID variants are distinct |
+| `AHIQ` | `ahiq` | 2.5e-6 | 1.0e-5 | 1.0000 | `ahiq-pyiqa` passes 1e-3 JND (worst 1.2e-5 AIC JND); `ahiq` keeps upstream nine-crop |
+| `PieAPP` | `pieapp` | 2.3e-5 | 1.9e-4 | 0.9999 | `pieapp-pyiqa` stride 27 passes 1e-3 JND (worst 2.3e-6); upstream `pieapp` is distinct |
 | `CKDN` | `ckdn` | 4.0e-5 | 1.4e-4 | 0.9999 | `ckdn` matches to the same residual |
-| `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim` max 1.1e-4 |
+| `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim-pyiqa` passes 1e-3 JND (worst 5.4e-13 JND); `cw-ssim` remains distinct |
 
 Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6, Spearman 1.0000):
 `DISTS`, `DeepDC`, `LPIPS-alex`, `LPIPS-VGG`, `STLPIPS`, `STLPIPS-VGG`, `SSIM-pyiqa`,
@@ -81,10 +85,8 @@ None: every implemented column has been compared (2026-10-17).
 
 | Column | Reason | What to ask |
 |---|---|---|
-| `AIMOS` | not identified in any public source | what AIMOS is, and its reference |
-| `proposal-IDFIQA` | reference code has no licence. The authors' AIC-4 evaluation script reproduces the column (61 crop pairs: median \|Δ\| 4.7e-6, max 3.3e-4 JND, Spearman 1.0; 2026-10-17); a port is being written outside this repository | a licence for the reference code |
+| `AIMOS` | still unidentified: private probe scored 16 of 34 no-reference metrics with no match (best hyperiqa ratio, Spearman 0.82) | what AIMOS is, and its reference |
 | `HaarXYB-*`, `HaarY-*`, `HaarYCoCg-* deltaL1248` (site-only names) | unidentified; no per-image values in any CSV and listed as excluded in the site config, yet the authors' rank-distribution figure (792 five-source subsets) shows six of them taking the top six ranks. Per the 2026-10-09 AHG discussion these are experimental metrics tuned on this data, to be ignored | what they are (colour space, masking, "deltaL1248"), and the code or per-image values |
-| FSIM, FSIMc and VSI at `-k2`/`-k3`/`-k4` and `-nodownscale`; `SSIM-pyiqa-f32` and `SSIMc-pyiqa-f32` at `-k2` to `-k6` (site-only names) | downscale-factor variants with fitted JND maps in the site config but no per-image values in any CSV; FSIMc-k4 ranks ninth in the authors' rank-distribution figure, above FSIMc | the per-image values, and which factor the published FSIM, FSIMc and VSI columns used |
 | `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (site-only names) | MSU VQMT implementation; the site config has a fitted JND map for both, so values exist, but none are published | the per-image values |
 
 ## Reproduced

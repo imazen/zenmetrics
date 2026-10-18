@@ -10,7 +10,7 @@ Can a source-grounded count of operations per pixel, weighted by per-operation c
 
 Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of Full-Reference Image Quality Metrics*, a JPEG AIC-4 contribution circulated as a preliminary draft dated 2026-10-07; only part of that draft was seen (screenshots), and no accuracy is claimed for the values transcribed from it. Conventions, halo and parallel-structure extensions: [IQA_COMPLEXITY.md](../IQA_COMPLEXITY.md).
 
-- Tallies: 120 of 115 CLI metric names, counted from zenmetrics source; measured on 112 metrics.
+- Tallies: 120 of 122 CLI metric names, counted from zenmetrics source; measured on 112 metrics.
 - Measurements: i265 (Intel Core Ultra 7 265K), per-call deltas under `perf stat`, decode and setup excluded, 1024×1024, one content pair, three repeats; 1 thread pinned to a P-core, and 8 threads on P-cores 0-7 from a build with each metric crate's threading enabled. Exception: HDR-VDP 2 and 3 have no route in the timing driver; they are timed through `zenmetrics batch --hdr` as (T(4 rows) − T(1 row))/3, which includes the extra rows' 16-bit PNG decode (`measured/i265_hdr_1024.meta`).
 - Weight tables: flop count; the draft's declared weights; measured scalar throughput and latency on the i265 P-core; LLVM 22 cost model (`print<cost-model>`) for arrowlake and, as a different-CPU control, znver5; llvm-mca per-instruction throughput (`-mcpu=arrowlake` uses the Alder Lake model).
 - Halo variants: none; padded domain (W+2h_x)(H+2h_y)/(WH); strip recomputation 1+2h_y/64.
@@ -130,10 +130,11 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 | butteraugli | proposal-Butteraugli | 0.936 (0.921–0.948) | 0.926 | 136.2 | 198 | 1161 |  |
 | dssim | DSSIM | 0.936 (0.916–0.952) | 0.848 | 26.06 | 34.52 | 263.7 |  |
 | psnrhvs-daala | PSNR-HVS | 0.936 (0.918–0.951) | 0.878 | 33.55 | 34.12 | 131.4 |  |
-| dmm | DMM | 0.930 (0.917–0.941) | 0.846 | 7646 | 8082 | 1.055e+05 |  |
+| dmm-pyiqa | DMM | 0.930 (0.917–0.941) | 0.846 | 6916 | 7413 | 1.149e+05 |  |
 | hdrvdp | HDR_VDP_2 | 0.920 (0.896–0.941) | 0.813 | 791.8 | 1024 | 2358 |  |
 | nlpd-iqa | NLPD | 0.920 (0.893–0.942) | 0.706 | 4.989 | 7.793 | 54.81 | ★ |
 | flip-v17 | FLIP | 0.918 (0.903–0.931) | 0.742 | 184.8 | 186.9 | 726.2 |  |
+| topiq-fr-pipal | TOPIQ-PIPAL | 0.915 (0.895–0.932) | 0.591 | – | – | – |  |
 | gmsd | GMSD | 0.913 (0.889–0.932) | 0.889 | 0.6821 | 0.8448 | 22.66 | ★ |
 | fsim | FSIMc | 0.912 (0.895–0.927) | 0.706 | 15.79 | 25.71 | 103 |  |
 | hdrvdp3 | HDR_VDP_3 | 0.912 (0.883–0.936) | 0.655 | 964.9 | 1564 | 2102 |  |
@@ -142,9 +143,11 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 | vsi | VSI | 0.909 (0.887–0.926) | 0.726 | 43.01 | 59.13 | 111.2 |  |
 | mdctpsnr | mDCT-PSNR | 0.908 (0.882–0.929) | 0.767 | 639.4 | 1193 | 1.208e+04 |  |
 | ssim-pyiqa | SSIM-pyiqa | 0.906 (0.876–0.930) | 0.547 | 24.56 | 23.66 | 191.7 |  |
+| wadiqam-pyiqa | WaDIQaM | 0.905 (0.881–0.926) | 0.681 | 3335 | 3961 | 5.402e+04 |  |
 | msssim-libvmaf | MS-SSIM | 0.904 (0.875–0.929) | 0.709 | 38.29 | 53.92 | 120.2 |  |
+| topiq-fr | TOPIQ | 0.903 (0.883–0.920) | 0.874 | – | – | – |  |
 | fsim-y | FSIM | 0.903 (0.884–0.920) | 0.697 | 14.44 | 33.13 | 160.1 |  |
-| pieapp | PieAPP | 0.903 (0.881–0.921) | 0.855 | – | 5.476e+05 | 1.659e+08 |  |
+| pieapp-pyiqa | PieAPP | 0.903 (0.881–0.921) | 0.855 | 2.283e+04 | 2.751e+04 | 5.074e+05 |  |
 | ms-ssim-pyiqa | MS-SSIM-pyiqa | 0.901 (0.871–0.927) | 0.711 | 30.39 | 29.38 | 253.9 |  |
 | vmaf-neg | VMAF-neg | 0.901 (0.883–0.916) | 0.874 | 29.48 | 29.44 | 74.79 |  |
 | ssimc | SSIMc | 0.897 (0.871–0.920) | 0.553 | 48.3 | 47.97 | 622.3 |  |
@@ -161,8 +164,8 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 | dists | DISTS | 0.875 (0.848–0.899) | 0.758 | 9962 | 1.097e+04 | 2.767e+05 |  |
 | lpips-vgg | LPIPS-VGG | 0.868 (0.835–0.899) | 0.636 | 9656 | 1.07e+04 | 2.713e+05 |  |
 | deepdc | DeepDC | 0.856 (0.825–0.883) | 0.676 | 1.281e+04 | 1.377e+04 | 3.375e+05 |  |
-| ahiq | AHIQ | 0.795 (0.736–0.845) | 0.507 | – | – | 2.537e+05 |  |
-| cw-ssim | CW-SSIM | 0.784 (0.737–0.823) | 0.489 | 93.02 | 89.84 | 276 |  |
+| ahiq-pyiqa | AHIQ | 0.795 (0.736–0.845) | 0.507 | 1.803e+05 | 1.909e+05 | 1.037e+06 |  |
+| cw-ssim-pyiqa | CW-SSIM | 0.784 (0.737–0.823) | 0.489 | 69.04 | 65.6 | 175.4 |  |
 | psnr-cr | PSNR-Cr | 0.767 (0.737–0.794) | 0.483 | 3.768 | 3.723 | 44.8 |  |
 | dreamsim | DreamSim | 0.753 (0.724–0.782) | 0.637 | 1551 | 1853 | 2.265e+04 |  |
 | psnr-cb | PSNR-Cb | 0.727 (0.697–0.756) | 0.413 | 3.93 | 3.932 | 44.8 |  |

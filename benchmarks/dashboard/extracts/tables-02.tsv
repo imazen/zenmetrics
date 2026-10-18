@@ -153,9 +153,9 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	24	Actual implementation (identified)	AIC-
 docs/AIC2026_METRICS_AND_FITTING.md	4	24	Ours	—
 docs/AIC2026_METRICS_AND_FITTING.md	4	24	Qualification	cannot reproduce
 docs/AIC2026_METRICS_AND_FITTING.md	4	25	AIC-4 column	proposal-IDFIQA
-docs/AIC2026_METRICS_AND_FITTING.md	4	25	Actual implementation (identified)	AIC-4 submission; variance-guided deep feature correlation (Khakpour, Yademellat, Mansouri, ICCKE 2025); PyTorch + torchvision pretrained backbone; code public on GitHub without a license
-docs/AIC2026_METRICS_AND_FITTING.md	4	25	Ours	—
-docs/AIC2026_METRICS_AND_FITTING.md	4	25	Qualification	"not implemented — no licensed code (the CNN runtime now exists in zenmetrics-nn); planned as ""IDFIQA from the paper"" in PYIQA_PORT_PLAN.md"
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Actual implementation (identified)	AIC-4 variance-guided deep-feature proposal
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Ours	private port (aggregates only)
+docs/AIC2026_METRICS_AND_FITTING.md	4	25	Qualification	rten median 4.2e-6, max 3.33e-4 JND, Spearman 1.0; 1e-3 JND oracle gate passes on all three engines; licence requested
 docs/AIC2026_METRICS_AND_FITTING.md	4	26	AIC-4 column	HDR_VDP_2
 docs/AIC2026_METRICS_AND_FITTING.md	4	26	Actual implementation (identified)	HDR-VDP-2.x, display config TBD
 docs/AIC2026_METRICS_AND_FITTING.md	4	26	Ours	hdrvdp
@@ -201,9 +201,9 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	36	Actual implementation (identified)	mean
 docs/AIC2026_METRICS_AND_FITTING.md	4	36	Ours	ciede2000
 docs/AIC2026_METRICS_AND_FITTING.md	4	36	Qualification	✅ median 3.0e-5, max 3.0e-4
 docs/AIC2026_METRICS_AND_FITTING.md	4	37	AIC-4 column	MSSWD
-docs/AIC2026_METRICS_AND_FITTING.md	4	37	Actual implementation (identified)	learned MS-SWD
-docs/AIC2026_METRICS_AND_FITTING.md	4	37	Ours	—
-docs/AIC2026_METRICS_AND_FITTING.md	4	37	Qualification	not implemented — see the not-implemented table below
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Actual implementation (identified)	learned MS-SWD, pyiqa convention
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Ours	private port (aggregates only)
+docs/AIC2026_METRICS_AND_FITTING.md	4	37	Qualification	median 4.1e-6, max 2.4e-4, Spearman 0.9999
 docs/AIC2026_METRICS_AND_FITTING.md	4	38	AIC-4 column	LPIPS-alex, LPIPS-VGG, DISTS, STLPIPS, STLPIPS-VGG, DeepDC
 docs/AIC2026_METRICS_AND_FITTING.md	4	38	Actual implementation (identified)	upstream packages (lpips 0.1.4, DISTS_pytorch 0.1, stlpips_pytorch 0.0.2, DeepDC_PyTorch 0.2 with ImageNet input normalisation), native resolution
 docs/AIC2026_METRICS_AND_FITTING.md	4	38	Ours	zenmetrics-nn (--features nn): lpips-alex, lpips-vgg, dists, stlpips-alex, stlpips-vgg, deepdc
@@ -221,47 +221,17 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	41	Actual implementation (identified)	upst
 docs/AIC2026_METRICS_AND_FITTING.md	4	41	Ours	zenmetrics-nn afine
 docs/AIC2026_METRICS_AND_FITTING.md	4	41	Qualification	port verified against upstream; published column not reproduced — afine_all sits 0.5–1.4 below the column (median 0.75)
 docs/AIC2026_METRICS_AND_FITTING.md	4	42	AIC-4 column	WaDIQaM
-docs/AIC2026_METRICS_AND_FITTING.md	4	42	Actual implementation (identified)	"official dmaniry/deepIQA top=""weighted"" checkpoints (MIT), FR+NR × {live,tid}"
-docs/AIC2026_METRICS_AND_FITTING.md	4	42	Ours	wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid
-docs/AIC2026_METRICS_AND_FITTING.md	4	42	Qualification	implemented — 29 chainer-oracle pairs pass the 1e-3-JND gate on rten and ort-cuda (worst 7.8e-6 JND); agreement with the published AIC column: not measured
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Actual implementation (identified)	pyiqa KADID checkpoint
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Ours	wadiqam-pyiqa
+docs/AIC2026_METRICS_AND_FITTING.md	4	42	Qualification	native gate passes, worst 1.1e-5 ladder / 2.7e-6 AIC JND; official LIVE/TID variants remain available separately
 docs/AIC2026_METRICS_AND_FITTING.md	4	43	AIC-4 column	WD_s1–WD_s5
 docs/AIC2026_METRICS_AND_FITTING.md	4	43	Actual implementation (identified)	Wasserstein Distortion on VGG-16 features (Cool-Chic), five KonJND scales
 docs/AIC2026_METRICS_AND_FITTING.md	4	43	Ours	wd (wd_s1–wd_s5)
 docs/AIC2026_METRICS_AND_FITTING.md	4	43	Qualification	implemented — 25 upstream pairs pass the 1e-3-JND gate on both engines; published column convention unmatched: best of a bounded convention search still errs by median 0.23–0.37 site JND per column (receipt (../benchmarks/wd_port_2026-10-16/README.md))
-docs/AIC2026_METRICS_AND_FITTING.md	4	44	AIC-4 column	PieAPP, TOPIQ, TOPIQ-PIPAL, AHIQ, DMM, MSSWD, AIMOS
-docs/AIC2026_METRICS_AND_FITTING.md	4	44	Actual implementation (identified)	deep metrics
-docs/AIC2026_METRICS_AND_FITTING.md	4	44	Ours	—
-docs/AIC2026_METRICS_AND_FITTING.md	4	44	Qualification	not on master — PieAPP, AHIQ and DMM are in progress on branches; the others are on hold or unidentified (reasons below)
-docs/AIC2026_METRICS_AND_FITTING.md	5	0	Column(s)	TOPIQ, TOPIQ-PIPAL
-docs/AIC2026_METRICS_AND_FITTING.md	5	0	Documented reason (verbatim where quoted)	"""NC weights: opt-in""; weights are NC (""TOPIQ, DBCNN and PaQ-2-PiQ weights are NC"")"
-docs/AIC2026_METRICS_AND_FITTING.md	5	0	Source on master@origin	docs/PYIQA_PORT_PLAN.md:262; :41
-docs/AIC2026_METRICS_AND_FITTING.md	5	1	Column(s)	PieAPP
-docs/AIC2026_METRICS_AND_FITTING.md	5	1	Documented reason (verbatim where quoted)	"in progress on branch pieapp-port (review fixes); ""NC weights: opt-in""; ""PieAPP, CLIP-IQA, QualiCLIP and URanker are NC upstream"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	1	Source on master@origin	docs/PYIQA_PORT_PLAN.md:262; :42
-docs/AIC2026_METRICS_AND_FITTING.md	5	2	Column(s)	AHIQ
-docs/AIC2026_METRICS_AND_FITTING.md	5	2	Documented reason (verbatim where quoted)	"in progress on branch nn-port; still in the AIC-4 deep-FR queue behind the three that landed (""CKDN, A-FINE, DreamSim, AHIQ, DMM""); ""AHIQ, CKDN, HyperIQA, LIQE, NIMA and UNIQUE publish weights with no stated terms"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	2	Source on master@origin	docs/PYIQA_PORT_PLAN.md:261; :40
-docs/AIC2026_METRICS_AND_FITTING.md	5	3	Column(s)	DMM
-docs/AIC2026_METRICS_AND_FITTING.md	5	3	Documented reason (verbatim where quoted)	"in progress on branch nn-port; in the AIC-4 deep-FR queue (:261) and on the hold row (:245: ""FID, DMM, TOPIQ face variants (need a face detector)"")"
-docs/AIC2026_METRICS_AND_FITTING.md	5	3	Source on master@origin	docs/PYIQA_PORT_PLAN.md:261; :245
-docs/AIC2026_METRICS_AND_FITTING.md	5	4	Column(s)	MSSWD
-docs/AIC2026_METRICS_AND_FITTING.md	5	4	Documented reason (verbatim where quoted)	"""MSSWD on hold (no upstream licence, weights only via pyiqa)""; ""on hold: weights only via pyiqa (noncommercial)"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	4	Source on master@origin	docs/PYIQA_PORT_PLAN.md:264; docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:196
-docs/AIC2026_METRICS_AND_FITTING.md	5	5	Column(s)	AIMOS
-docs/AIC2026_METRICS_AND_FITTING.md	5	5	Documented reason (verbatim where quoted)	"""not identified anywhere public; ask the dataset contacts""; ""unidentified"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	5	Source on master@origin	docs/PYIQA_PORT_PLAN.md:268; docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:197
-docs/AIC2026_METRICS_AND_FITTING.md	5	6	Column(s)	proposal-IDFIQA
-docs/AIC2026_METRICS_AND_FITTING.md	5	6	Documented reason (verbatim where quoted)	"""no licensed code""; ""IDFIQA from the paper"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	6	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:205; docs/PYIQA_PORT_PLAN.md:264
-docs/AIC2026_METRICS_AND_FITTING.md	5	7	Column(s)	proposal-DVIFM (13 site/screenshot names)
-docs/AIC2026_METRICS_AND_FITTING.md	5	7	Documented reason (verbatim where quoted)	"""dvifmish (dev [local path] publish=false) already ports the author's v0.2/v0.3 builds under exactly these preset names; not wired into zenmetrics and not compared to these columns here""; ledger's own wording: ""cannot reproduce"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	7	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:45-48, :206; docs/AIC2026_METRICS_AND_FITTING.md:261
-docs/AIC2026_METRICS_AND_FITTING.md	5	8	Column(s)	HaarXYB-/HaarY-/HaarYCoCg- -deltaL1248 (11 names, all excluded, no values)
-docs/AIC2026_METRICS_AND_FITTING.md	5	8	Documented reason (verbatim where quoted)	"""unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)""; ""unidentified"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	8	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:140-150; :49
-docs/AIC2026_METRICS_AND_FITTING.md	5	9	Column(s)	PSNR-HVS-vqmt, PSNR-HVS-M-vqmt (excluded, no values)
-docs/AIC2026_METRICS_AND_FITTING.md	5	9	Documented reason (verbatim where quoted)	"""missing (MSU VQMT implementation)""; ""excluded; no values"""
-docs/AIC2026_METRICS_AND_FITTING.md	5	9	Source on master@origin	docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md:139; :60
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	AIC-4 column	PieAPP, TOPIQ, TOPIQ-PIPAL, AHIQ, DMM
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Actual implementation (identified)	pyiqa 0.1.16 conventions
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Ours	pieapp-pyiqa, topiq-fr, topiq-fr-pipal, ahiq-pyiqa, dmm-pyiqa
+docs/AIC2026_METRICS_AND_FITTING.md	4	44	Qualification	implemented publicly under non-commercial terms; DMM fails 1e-3 JND, others pass; see the port README
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	0	status	reproduced
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	0	rows	27
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	0	1	status	close
@@ -293,3 +263,62 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	median |Δ|	0.000313
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	max |Δ|	0.00328
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	max |Δ| in JND	0.000576
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	1	note	studio-swing BT.601 Y, u8-rounded; psnr-y (BT.709) and psnr-y601 (full-range) are 1.3 dB off
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	name	PSNR-YCbCr611
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	in CSV?	site+dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	zenmetrics metric	missing on master (lane commit 94574b8b psnr-ycbcr611, unlanded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	median |Δ|	0.000311
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	max |Δ|	0.0035
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	max |Δ| in JND	0.000532
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	2	note	numpy probe reproduces: (6·MSE_Y+MSE_Cb+MSE_Cr)/8 on rounded studio-601 YCbCr, then dB (PSNR-average form is 0.65 dB off)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	name	PSNR-Cb (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	zenmetrics metric	missing (no CLI chroma PSNR)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	median |Δ|	0.00192
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	max |Δ|	0.0169
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	max |Δ| in JND	0.00197
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	3	note	numpy probe: rounded studio-601 Cb at full resolution reproduces
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	name	PSNR-Cr (excluded)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	zenmetrics metric	missing (no CLI chroma PSNR)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	median |Δ|	0.00211
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ|	0.0573
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ| in JND	0.00882
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	status	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	note	as PSNR-Cb; one pair 0.057 dB off
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	name	PSNR-HVS-vmaf (= dataset PSNR-HVS)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	zenmetrics metric	psnrhvs-daala (psnrhvs_daala)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	median |Δ|	0.000871
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ|	0.0154
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ| in JND	0.00449
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	note	dataset PSNR-HVS is the same column (identical values)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	name	PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	median |Δ|	0.00121
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ|	0.0261
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ| in JND	0.00659
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	name	PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	median |Δ|	0.00264
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ|	0.0382
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	note	max 0.038 dB of a 27 dB range
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	name	PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	n	61

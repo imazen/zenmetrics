@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Fixed
+
+- Correct AIC2026 implementation statuses and pyiqa column identities; derive the paper coverage denominator from the CLI (`85b58962` base).
+
+
 - Qualify separate six-route dvifmish supplements with exact scalar/map/thread/phase controls; bind the private Mac CPU-counter correction and fix supported service installer arguments (`3ca65f64`, `d4ee0853`; zenbench `3b1d0f71`).
 
 - Add six pinned dvifmish benchmark routes, native map metadata, private snapshot dependency isolation and separate frozen Linux/Mac supplements (`121ecf3f`, `1e147d80`, `f2e400bc`).

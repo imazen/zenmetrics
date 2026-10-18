@@ -110,14 +110,14 @@
   },
   {
    "column": "DMM",
-   "metric": "dmm",
+   "metric": "dmm-pyiqa",
    "agreement": 0.9297,
    "lo": 0.9172,
    "hi": 0.941,
    "overall": 0.846,
-   "cpu_1t": 7646.231651306153,
-   "cpu_8t": 8082.385063171386,
-   "estimate": 105544.55893285446,
+   "cpu_1t": 6916.084289550781,
+   "cpu_8t": 7413.37776184082,
+   "estimate": 114924.93546621093,
    "kind": "nn-fr",
    "on_front": {
     "cpu_1t": false,
@@ -170,6 +170,23 @@
    "cpu_8t": 186.86771392822266,
    "estimate": 726.2067018521309,
    "kind": "classic-fr",
+   "on_front": {
+    "cpu_1t": false,
+    "cpu_8t": false,
+    "estimate": false
+   }
+  },
+  {
+   "column": "TOPIQ-PIPAL",
+   "metric": "topiq-fr-pipal",
+   "agreement": 0.9153,
+   "lo": 0.8946,
+   "hi": 0.932,
+   "overall": 0.5905,
+   "cpu_1t": null,
+   "cpu_8t": null,
+   "estimate": null,
+   "kind": "classic",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,
@@ -313,6 +330,23 @@
    }
   },
   {
+   "column": "WaDIQaM",
+   "metric": "wadiqam-pyiqa",
+   "agreement": 0.9053,
+   "lo": 0.8813,
+   "hi": 0.9264,
+   "overall": 0.6808,
+   "cpu_1t": 3334.7415924072266,
+   "cpu_8t": 3960.504531860352,
+   "estimate": 54021.163156220435,
+   "kind": "nn-fr",
+   "on_front": {
+    "cpu_1t": false,
+    "cpu_8t": false,
+    "estimate": false
+   }
+  },
+  {
    "column": "MS-SSIM",
    "metric": "msssim-libvmaf",
    "agreement": 0.9038,
@@ -323,6 +357,23 @@
    "cpu_8t": 53.919124603271484,
    "estimate": 120.20876725206375,
    "kind": "classic-fr",
+   "on_front": {
+    "cpu_1t": false,
+    "cpu_8t": false,
+    "estimate": false
+   }
+  },
+  {
+   "column": "TOPIQ",
+   "metric": "topiq-fr",
+   "agreement": 0.9033,
+   "lo": 0.8835,
+   "hi": 0.9197,
+   "overall": 0.8742,
+   "cpu_1t": null,
+   "cpu_8t": null,
+   "estimate": null,
+   "kind": "classic",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,
@@ -348,14 +399,14 @@
   },
   {
    "column": "PieAPP",
-   "metric": "pieapp",
+   "metric": "pieapp-pyiqa",
    "agreement": 0.9027,
    "lo": 0.8808,
    "hi": 0.9208,
    "overall": 0.8546,
-   "cpu_1t": null,
-   "cpu_8t": 547559.7381591797,
-   "estimate": 165875977.04587805,
+   "cpu_1t": 22829.627990722656,
+   "cpu_8t": 27511.50131225586,
+   "estimate": 507355.5577589218,
    "kind": "nn-fr",
    "on_front": {
     "cpu_1t": false,
@@ -637,14 +688,14 @@
   },
   {
    "column": "AHIQ",
-   "metric": "ahiq",
+   "metric": "ahiq-pyiqa",
    "agreement": 0.7953,
    "lo": 0.7359,
    "hi": 0.8445,
    "overall": 0.5072,
-   "cpu_1t": null,
-   "cpu_8t": null,
-   "estimate": 253746.12418258569,
+   "cpu_1t": 180313.1103515625,
+   "cpu_8t": 190901.7562866211,
+   "estimate": 1036686.86835982,
    "kind": "nn-fr",
    "on_front": {
     "cpu_1t": false,
@@ -654,14 +705,14 @@
   },
   {
    "column": "CW-SSIM",
-   "metric": "cw-ssim",
+   "metric": "cw-ssim-pyiqa",
    "agreement": 0.784,
    "lo": 0.7368,
    "hi": 0.8232,
    "overall": 0.4893,
-   "cpu_1t": 93.01900863647461,
-   "cpu_8t": 89.83850479125977,
-   "estimate": 276.0240482904433,
+   "cpu_1t": 69.03648376464844,
+   "cpu_8t": 65.5984878540039,
+   "estimate": 175.40688222141262,
    "kind": "classic-fr",
    "on_front": {
     "cpu_1t": false,

@@ -5,7 +5,7 @@
 # (scripts/dashboard/test_build.py checks there is no overlap).
 
 [[method]]
-name = "TOPIQ (FR, FR-PIPAL, NR)"
+name = "TOPIQ (NR)"
 status = "planned, non-commercial weights opt-in"
 source = "docs/PYIQA_PORT_PLAN.md:243"
 
@@ -61,12 +61,12 @@ source = "docs/PYIQA_PORT_PLAN.md:245"
 
 [[method]]
 name = "MS-SWD"
-status = "on hold (no upstream licence; weights only via pyiqa)"
+status = "private implementation; only aggregate results published"
 source = "docs/PYIQA_PORT_PLAN.md:264"
 
 [[method]]
 name = "IDFIQA (AIC-4 proposal)"
-status = "not implemented: no licensed code; planned from the paper"
+status = "private implementation; native 1e-3 JND pass; only aggregate results published"
 source = "docs/AIC2026_METRICS_AND_FITTING.md:264"
 
 [[method]]

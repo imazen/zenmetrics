@@ -22,6 +22,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+from coverage import cli_metrics
 from evaluate import evaluate, validate  # noqa: E402
 from correlate import weighted, pearson, ranks, boot  # noqa: E402
 
@@ -242,7 +243,7 @@ def main():
         'Metrics*, a JPEG AIC-4 contribution circulated as a preliminary draft dated 2026-10-07; only part of that '
         'draft was seen (screenshots), and no accuracy is claimed for the values transcribed from it. Conventions, '
         'halo and parallel-structure extensions: [IQA_COMPLEXITY.md](../IQA_COMPLEXITY.md).', '',
-        f'- Tallies: {n_tally} of 115 CLI metric names, counted from zenmetrics source; measured on {len(m1)} metrics.',
+        f'- Tallies: {len(set(tal) & set(cli_metrics()))} of {len(cli_metrics())} CLI metric names, counted from zenmetrics source; measured on {len(m1)} metrics.',
         '- Measurements: i265 (Intel Core Ultra 7 265K), per-call deltas under `perf stat`, decode and setup excluded, '
         '1024×1024, one content pair, three repeats; 1 thread pinned to a P-core, and 8 threads on P-cores 0-7 from a '
         'build with each metric crate\'s threading enabled. Exception: HDR-VDP 2 and 3 have no route in the timing driver; '
