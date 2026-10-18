@@ -171,3 +171,17 @@ cumulative CPU and owner classification. No threshold or gate logic changes.
 Trace I/O adds diagnostic activity; this binary cannot qualify timings or
 replace any frozen worker. The normal checkout and pinned zenbench source
 are read-only inputs, with changes confined to the new copies.
+
+The native internal-trace run identifies real foreign Spotlight work in that
+diagnostic: `mdworker_shared` accounts for two to six heavy processes. One
+refresh reports global 0.5589434767 and owner 265.5517273% on 12 logical CPUs,
+yielding residual 0.3376503706; the next reports global 0.8280303160 and owner
+595.0332031%, yielding 0.3321693134. Both match the worker's recorded warm-round
+gate observations exactly. All ten rounds are flagged in that diagnostic.
+This establishes foreign contention in this run, not an owner-accounting bug
+or the cause of every earlier flag. Thresholds and original attempts remain
+unchanged. The diagnostic binary hash is
+`9ea9b1ec685cc0d9f21017adbf23e0fa7ad048b7c065d9865213472d96819c89`;
+its frozen config still names the original worker, so the separate actual-binary
+receipt is mandatory. Native raw evidence lives at
+`~/tmp/iqa-dvifmish-mac/accounting-internal-1`.
