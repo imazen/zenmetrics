@@ -204,6 +204,9 @@ def validate_row(log, config):
         number = row.get(key)
         if type(number) not in (int, float) or not math.isfinite(number) or number < 0 or (key == 'median_ns' and number == 0):
             raise Refusal('invalid timing: ' + key)
+    for key in ('mean_ns', 'p10_ns', 'p90_ns', 'input_load_ns', 'cold_elapsed_ns'):
+        if key in row and (type(row[key]) not in (int, float) or not math.isfinite(row[key]) or row[key] < 0):
+            raise Refusal('invalid timing statistic: ' + key)
     if config['timing_phase'] == 'cold':
         if row['n'] != 1 or row.get('cold_elapsed_ns') != row['median_ns']:
             raise Refusal('cold sample must have n=1 and actual cold_elapsed_ns')
@@ -533,7 +536,7 @@ def run(args):
             if args.action == 'run':
                 while not current['complete'] and not STOP:
                     # One pass visits every pending cell before any retry.
-                    for cell in current['cells']:
+                    for cell in sorted(current['cells'], key=lambda c: len(c['attempts'])):
                         heartbeat()
                         if cell['status'] != 'pending' or STOP:
                             continue
@@ -644,6 +647,9 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
+    except InterruptedError as error:
+        print(f'durable: interrupted: {error}', file=sys.stderr)
+        sys.exit(128 + STOP if STOP else 1)
     except (Refusal, ValueError, OSError, KeyError, TypeError) as error:
         print(f'durable: permanent refusal: {error}', file=sys.stderr)
         sys.exit(2)

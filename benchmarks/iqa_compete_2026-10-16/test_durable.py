@@ -187,6 +187,8 @@ class DurableTests(unittest.TestCase):
         self.assertEqual(report['cells'][0]['status'],'failed')
         self.assertEqual(len(report['cells'][0]['attempts']),2)
         self.assertTrue(self.no_live(pid))
+        order=[json.loads(s)['metric'] for s in (self.root/'execution.jsonl').read_text().splitlines()]
+        self.assertEqual(order,['metric0','metric1','metric0'])
 
     def test_controller_sigkill_resume_no_orphan(self):
         self.crash_control(signal.SIGKILL)
@@ -275,6 +277,16 @@ class DurableTests(unittest.TestCase):
             self.assertFalse((self.root/'execution.jsonl').exists())
             fcntl.flock(guard,fcntl.LOCK_UN)
         self.finish(child)
+
+    def test_sigterm_while_waiting_lock_is_restartable(self):
+        self.freeze()
+        with (self.root/'heavy.lock').open('a') as guard:
+            fcntl.flock(guard,fcntl.LOCK_EX)
+            child=self.start()
+            self.until(lambda:(self.output/'controller-heartbeat').exists())
+            child.terminate();self.finish(child,143)
+        report=self.finish(self.start())
+        self.assertEqual(report['cells'][0]['status'],'ok')
 
     def test_saved_failed_cleanup_blocks_live_group_without_signaling_it(self):
         self.freeze();self.finish(self.start())
