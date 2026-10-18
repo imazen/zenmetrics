@@ -29,3 +29,9 @@ tolerance_jnd = 1e-3
 measured_ladder = "1.3e-15 (3.1e-13 JND)"
 measured_aic2026_61 = "2.3e-15 (5.4e-13 JND); pyiqa vs the published column: max 2.2e-16"
 warm_reference = "caches the size plan (masks, Gaussian) and the reference's bands; bit-identical to cold"
+
+[timing]
+# perf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;
+# benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}.
+one_thread_pcore = "72.4 ms CPU per call"
+eight_threads_pcores = "69.0 ms wall (not threaded: 1.0x)"

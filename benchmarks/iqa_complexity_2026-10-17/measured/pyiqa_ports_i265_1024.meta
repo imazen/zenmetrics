@@ -1,0 +1,8 @@
+commit=da723cac0a34 (crates/zenmetrics-pyiqa-ports source unchanged through 641a3e86)
+binary=examples/pyiqa_ports_reps (zenmetrics-pyiqa-ports --features ort --release, built with just snap-cargo @) sha256=6be2720221a779e1973dd60a0ce2b9b6b56f1a66e39e650354ec94c2cbee4947
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+engine=rten; threads 1 pinned cpu 2, threads 8 pinned cpus 0-7; RTEN/RAYON/OMP thread counts set to the same value (DMM's host-side SVD head also threads by RTEN_NUM_THREADS)
+content=parity-ladder pair 1415 1024x1024 (crates/zenmetrics-pyiqa-ports/models/common/ladder.py: imazen-26 reference, Lanczos downscale; distorted = Gaussian blur 1.0 + noise 6)
+method=scripts/complexity/perf_deltas.py, cold evaluate per call (both images through the whole pipeline); repeats per metric: cw-ssim 3+3, wadiqam 2+3, dmm 1+2, pieapp 1+3, ahiq 1+2 (1 thread + 8 threads; single-thread repeats cut for the slow models to fit 18-minute heavy-lock holds)
+heavy_lock=every run under flock ~/tmp/i265-heavy.lock + run-heavy --mem 14G --jobs 8; peak RSS per hold: cw-ssim+wadiqam 0.68 GiB, dmm 0.53 GiB, pieapp 0.45 GiB (1t) / 0.89 GiB (8t, with ahiq), ahiq 0.75 GiB (1t)
+date=2026-10-18

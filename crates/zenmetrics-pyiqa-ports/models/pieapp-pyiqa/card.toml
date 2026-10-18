@@ -38,3 +38,9 @@ measured_ladder = "rten 1.19e-6 (2.3e-6 JND), ort-cpu 7.2e-7 (1.4e-6 JND), ort-c
 measured_aic2026_61 = "ort-cuda 3.5e-7 (6.8e-7 JND); pyiqa vs the published column: median 2.3e-5, max 1.9e-4"
 goldens_note = "pyiqa runs all patches of an image in one batch (> 14 GiB at 2048x1536); goldens.py with PIQA_FEATURE_CHUNK=256 runs compute_features 256 patches at a time. Chunked and unchunked goldens are bit-identical on the four pairs both computed (64x64 .. 1024x1024)."
 warm_reference = "keeps the reference's planar copy only (the network runs both patches of every pair); bit-identical to cold"
+
+[timing]
+# perf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;
+# benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}.
+one_thread_pcore = "23.9 s CPU per call"
+eight_threads_pcores = "4.95 s wall (4.8x), 28.8 s CPU"

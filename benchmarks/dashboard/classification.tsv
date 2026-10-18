@@ -1026,3 +1026,5 @@ benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-a
 benchmarks/mac_validation_2026-10-18/results.tsv	ignored	Native correctness validation; pass/fail and parity evidence, not performance measurements
 benchmarks/mac_validation_2026-10-18/ort-results.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
 benchmarks/mac_validation_2026-10-18/providers.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
+benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.tsv	ignored	Complexity-study timing table (perf_deltas.py) for the zenmetrics-pyiqa-ports models; not a dashboard metric schema.
+benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.

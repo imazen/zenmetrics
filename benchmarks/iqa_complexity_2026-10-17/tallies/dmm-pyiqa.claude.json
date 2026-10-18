@@ -1,0 +1,164 @@
+{
+ "schema": "iqa-complexity-tally/1",
+ "metric": "dmm-pyiqa",
+ "cli_names": [
+  "dmm-pyiqa"
+ ],
+ "counter": "claude",
+ "source_commit": "PENDING",
+ "kind": "nn-fr",
+ "params": {},
+ "derived": {
+  "TAR": "min(W,H) if min(W,H) <= 128 else max(floor(min(W,H)/48)*32, 128)",
+  "T3": "ceil(ceil(TAR/2)/2)",
+  "T4": "ceil(T3/2)",
+  "G3": "(T3-16)//4+1",
+  "G4": "(T4-16)//4+1",
+  "NPOS": "256*G3*G3+512*G4*G4"
+ },
+ "assumptions": [
+  "Cold pair (DmmPyiqa score_cold): both images resized to TAR x TAR (square, as pyiqa) and through the VGG16-L2pool trunk; every 16x16 patch position of both taps SVD'd for both images (the reference patches are streamed), then the per-patch term, the channel-mean gate and the two-tap sum. TAR = TAR x TAR only for min(W,H) > 128; smaller inputs keep their shape (the tally assumes square inputs there).",
+  "Trunk MACs from models/common/count_macs.py and onnx_macs.py (agree): 125,748,080,640 at 672x672 = 278,460 per TAR pixel (all convolutions, linear in pixels). Element ops at 672^2 from onnx_macs.py, scaled per pixel: Relu 119,218,176, Pow (x^2 in L2 pooling) 50,577,408, Sqrt 12,644,352, Add 12,644,352.",
+  "SVD head MEASURED, not source-counted: dbdsqr's sweep count is data-dependent. perf stat, i265 P-core 2, 1 thread, the 1415 1024x1024 ladder pair, delta of 2 calls minus 1: fp_arith_ops_retired.scalar 12,998,537,446 + 4 x 128b_packed_single 3,461,161,903 = 26.84 G FP operations per call over NPOS = 555,264 patch positions = 48,343 per position (two 16x16 SVDs, the patch term, FMA counted twice as the event does). Recorded under `add` because the counter does not split classes. Cross-check: 256b_packed_single 62,927,392,813 x 8 / 2 images / 2 (FMA) = 125.85 G MACs per image vs 125.75 G counted for the trunk."
+ ],
+ "stages": [
+  {
+   "id": "ingress",
+   "name": "u8 -> f32 /255 planar",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:102-109"
+   ],
+   "images": 2,
+   "elements": "W*H*3",
+   "precision": "f32",
+   "ops": {
+    "load": 1,
+    "cvt": 1,
+    "div": 1,
+    "store": 1
+   },
+   "bytes_read": 1,
+   "bytes_written": 4,
+   "access": "pointwise",
+   "span": "1",
+   "materialize": "full"
+  },
+  {
+   "id": "resize",
+   "name": "square bilinear resize to TAR x TAR (F.interpolate)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:110-131"
+   ],
+   "images": 2,
+   "elements": "3*TAR*TAR",
+   "precision": "f32",
+   "ops": {
+    "mul": 6,
+    "add": 3,
+    "load": 4,
+    "store": 1
+   },
+   "bytes_read": 16,
+   "bytes_written": 4,
+   "access": "resample",
+   "radius": 1,
+   "span": "1",
+   "depends_on": [
+    "ingress"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "trunk_conv",
+   "name": "VGG16 with L2 pooling to relu4_3 [conv]",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:267-292"
+   ],
+   "images": 2,
+   "elements": "TAR*TAR",
+   "precision": "f32",
+   "ops": {
+    "fma": 278460
+   },
+   "access": "conv",
+   "axis": "xy",
+   "radius": "TAR",
+   "span": "TAR",
+   "depends_on": [
+    "resize"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "Relu, L2-pool square/sqrt/eps",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:267-292"
+   ],
+   "images": 2,
+   "elements": "TAR*TAR",
+   "precision": "f32",
+   "ops": {
+    "cmp": 264.0,
+    "mul": 112.0,
+    "sqrt": 28.0,
+    "add": 28.0
+   },
+   "access": "conv",
+   "span": "1",
+   "depends_on": [
+    "trunk_conv"
+   ],
+   "materialize": "full"
+  },
+  {
+   "id": "svd_head",
+   "name": "per patch position: SVD of both patches + sum (s_r-s_d)^2 * wt (MEASURED flops)",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:147-180",
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:216-240",
+    "crates/zenmetrics-pyiqa-ports/src/dmm_svd.rs:10-846"
+   ],
+   "images": 1,
+   "elements": "NPOS",
+   "precision": "f32",
+   "ops": {
+    "add": 48343,
+    "load": 512
+   },
+   "access": "data_dependent",
+   "span": "16*16",
+   "serial": true,
+   "depends_on": [
+    "trunk_pointwise"
+   ],
+   "materialize": "strip",
+   "notes": "two 16x16 SVDs per position; flop total from perf counters, class split not measured"
+  },
+  {
+   "id": "gate",
+   "name": "channel means and SSIM-style gate, exp(-2 S1), tap sum",
+   "source": [
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:139-146",
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:182-190",
+    "crates/zenmetrics-pyiqa-ports/src/dmm.rs:216-240"
+   ],
+   "images": 1,
+   "elements": "768",
+   "precision": "f64",
+   "ops": {
+    "mul": 5,
+    "add": 4,
+    "div": 1,
+    "exp": 1
+   },
+   "access": "reduction",
+   "span": "log2(T3*T3)",
+   "barrier": true,
+   "depends_on": [
+    "svd_head"
+   ],
+   "materialize": "fused"
+  }
+ ]
+}

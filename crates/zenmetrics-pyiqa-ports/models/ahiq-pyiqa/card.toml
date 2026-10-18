@@ -41,3 +41,9 @@ tolerance_jnd = 1e-3
 measured_ladder = "rten 5.1e-8 (1.2e-6 JND), ort-cuda 4.0e-7 (9.3e-6 JND); ort-cpu on 3 of the 15 pairs (64x64, 840x944, 2048x1536: AHIQ costs 20 crops x 2 images whatever the size, and ort-cpu runs > 65 s per score here, so the full ladder does not fit one heavy-lock hold) 4.0e-7 (9.1e-6 JND)"
 measured_aic2026_61 = "ort-cuda 5.2e-7 (1.2e-5 JND); pyiqa vs the published column: median 2.5e-6, max 1.0e-5"
 warm_reference = "caches the 20 crops' deform offsets and reduced reference features (~8.5 MB); bit-identical to cold"
+
+[timing]
+# perf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;
+# benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}.
+one_thread_pcore = "189 s CPU per call"
+eight_threads_pcores = "29.9 s wall (6.3x), 200 s CPU"

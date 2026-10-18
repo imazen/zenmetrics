@@ -35,3 +35,9 @@ measured_aic2026_61_rten = "median 2.17e-4, p90 1.36e-3, max 1.94e-3 (0.011 JND)
 measured_vs_published_column = "port median 8.77e-3 / max 0.115, Spearman 0.9975; pyiqa CPU itself median 9.05e-3 / max 0.114; zenmetrics-nn dmm median 0.075"
 blocker = "SVD solver basis. models/dmm-pyiqa/solver_spread.py, 6 AIC2026 pairs, pyiqa's own taps: torch.svd (MKL) vs SciPy gesdd f32 differ by up to 2.4e-4 (1.3e-3 JND), vs gesvd f32 by up to 5.7e-3 (0.032 JND), vs torch f64 by up to 1.5e-4. On the three 256x256 ladder pairs (160x160 after the resize, 4 patches per relu4_3 channel) the spread is larger: gesdd vs MKL up to 4.3e-3, f64 vs MKL up to 2.4e-2, gesvd up to 0.37; the port deltas there (4.5e-3, 1.26e-2, 7.2e-3) lie inside the f64-vs-MKL spread. The port's residual on those pairs (<= 2.1e-4) lies inside the gesdd-vs-MKL spread. wt consumes the singular basis inside degenerate clusters (see zenmetrics-nn models/dmm/card.toml)."
 warm_reference = "caches every reference patch SVD; the cold path streams them; bit-identical"
+
+[timing]
+# perf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;
+# benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}.
+one_thread_pcore = "7.25 s CPU per call"
+eight_threads_pcores = "1.14 s wall (6.4x), 7.77 s CPU"
