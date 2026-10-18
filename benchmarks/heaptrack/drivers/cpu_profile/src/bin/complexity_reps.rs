@@ -64,6 +64,13 @@ fn main() {
     let dist =
         decode_image_to_rgb8(&zenmetrics_corpus::jpeg_at_quality(20)).expect("decode q20.jpg");
     let (r, d) = (tile(&src, w, h), tile(&dist, w, h));
+    if let Ok(dir) = std::env::var("COMPLEXITY_PAIR_OUT") {
+        let dir = std::path::Path::new(&dir);
+        std::fs::create_dir_all(dir).expect("fixture directory");
+        std::fs::write(dir.join("reference.rgb"), &r.pixels).expect("reference fixture");
+        std::fs::write(dir.join("distorted.rgb"), &d.pixels).expect("distorted fixture");
+        return;
+    }
     let mut last = f64::NAN;
     for _ in 0..reps {
         let cols = run_metric_display(
@@ -73,7 +80,10 @@ fn main() {
             GpuRuntime::Cpu,
             Some(display()),
         )
-        .unwrap_or_else(|e| panic!("{}: {e}", args[2]));
+        .unwrap_or_else(|e| {
+            eprintln!("REFUSED {}: {e}", args[2]);
+            std::process::exit(2);
+        });
         last = black_box(cols[0].1);
     }
     eprintln!("{} {}x{} reps={} score={}", args[2], w, h, reps, last);

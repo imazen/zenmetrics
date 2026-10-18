@@ -22,6 +22,9 @@ EVENTS = ['task-clock', 'cpu_core/cycles/', 'cpu_core/instructions/',
           'cpu_core/arith.fpdiv_active/']
 NAMES = ['task_clock_ms', 'cycles', 'instructions', 'fp_vec128_inst', 'fp_vec256_inst', 'loads', 'stores',
          'fpdiv_active_cycles']
+ACTIVE_EVENTS = EVENTS
+ACTIVE_NAMES = NAMES
+
 COLS = ['metric', 'shape', 'threads', 'repeat', 'extra_reps'] + [n + '_per_call' for n in NAMES + ['wall_ms']] + ['score']
 
 
@@ -53,7 +56,7 @@ def interrupted(signum, _frame):
 
 def run(bin_, shape, metric, reps, cpu, threads=1, timeout=None):
     env = dict(os.environ, RAYON_NUM_THREADS=str(threads), OMP_NUM_THREADS=str(threads), RTEN_NUM_THREADS=str(threads))
-    cmd = ['perf', 'stat', '-x', ',', '-e', ','.join(EVENTS), 'taskset', '-c', str(cpu), bin_, shape, metric, str(reps)]
+    cmd = ['perf', 'stat', '-x', ',', '-e', ','.join(ACTIVE_EVENTS), 'taskset', '-c', str(cpu), bin_, shape, metric, str(reps)]
     t0 = time.monotonic()
     # Own process group, so a timeout kills perf and the metric process under it.
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
@@ -74,13 +77,13 @@ def run(bin_, shape, metric, reps, cpu, threads=1, timeout=None):
     wall = time.monotonic() - t0
     if p.returncode:
         raise RuntimeError(f'{metric} {shape} reps={reps}: rc={p.returncode}\n{p.stderr[-800:]}')
-    values, score = {}, None
+    values, score = {name: float("nan") for name in NAMES if name not in ACTIVE_NAMES}, None
     for line in p.stderr.splitlines():
         parts = line.split(',')
-        if len(parts) > 3 and parts[2] in EVENTS:
+        if len(parts) > 3 and parts[2] in ACTIVE_EVENTS:
             if parts[0] in ('<not counted>', '<not supported>', ''):
                 raise RuntimeError(f'{metric}: event {parts[2]} {parts[0]}')
-            values[NAMES[EVENTS.index(parts[2])]] = float(parts[0])
+            values[ACTIVE_NAMES[ACTIVE_EVENTS.index(parts[2])]] = float(parts[0])
         elif line.startswith(metric + ' '):
             score = line.split('score=')[-1]
     values['wall_ms'] = wall * 1e3
@@ -99,7 +102,13 @@ def main():
     ap.add_argument('--cpu', default='2', help='taskset CPU list, P-cores only on i265 (0-7)')
     ap.add_argument('--threads', type=int, default=1)
     ap.add_argument('--timeout-s', type=float, default=None, help='skip a metric (recorded as error) when one probe run exceeds this')
+    ap.add_argument('--event-profile', choices=['i265', 'portable'], default='i265',
+                    help='portable measures task-clock/cycles/instructions only; other counters are explicitly NaN')
     a = ap.parse_args()
+    global ACTIVE_EVENTS, ACTIVE_NAMES
+    if a.event_profile == 'portable':
+        ACTIVE_EVENTS = ['task-clock', 'cycles', 'instructions']
+        ACTIVE_NAMES = NAMES[:3]
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     prepare_output(a.out)

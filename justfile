@@ -1782,3 +1782,23 @@ aic-convention-check:
     just snap-cargo @ test -p hdrvdp
     just snap-cargo @ test -p zenmetrics-cli --lib
     python3 scripts/checkpoint/test_browser_coverage.py
+
+# Real-process refusal control; build cpu-profile with zenmetrics-cli/nr first.
+complexity-refusal-check bin:
+    python3 scripts/complexity/check_refusals.py --bin "{{bin}}"
+
+# Caller serializes these with the shared heavy lock and resource wrapper.
+aic-perf bin out metrics shapes threads="1" cpus="2":
+    python3 scripts/complexity/perf_deltas.py --bin "{{bin}}" --out "{{out}}" --metrics "{{metrics}}" --shapes "{{shapes}}" --threads {{threads}} --cpu "{{cpus}}" --event-profile portable --repeats 3 --timeout-s 900
+
+# Each audit attempt takes the shared lock and resource wrapper itself.
+aic-refusal-inventory bin out logs shapes="64x64,1024x1024,3840x2160" threads="1,8":
+    python3 scripts/complexity/refusal_inventory.py --lock "$HOME/tmp/dev-heavy.lock" --bin "{{bin}}" --out "{{out}}" --logs "{{logs}}" --shapes "{{shapes}}" --threads "{{threads}}"
+
+# Preliminary draft weighted counts, including explicitly partial private aggregates.
+complexity-draft-compare:
+    python3 scripts/complexity/compare_draft.py
+
+# Caller supplies resource admission; retain OS peak RSS for one prepared-pair process.
+complexity-process-rss bin metric shape threads cpus report:
+    env RAYON_NUM_THREADS={{threads}} OMP_NUM_THREADS={{threads}} RTEN_NUM_THREADS={{threads}} /usr/bin/time -v -o "{{report}}" taskset -c "{{cpus}}" "{{bin}}" "{{shape}}" "{{metric}}" 1

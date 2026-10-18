@@ -24,6 +24,21 @@ class Driver(unittest.TestCase):
     def row(self, metric, value='1', shape='3840x2160', threads=8):
         return '\t'.join([metric, shape, str(threads), '0', '1'] + [value] * 9 + ['0.5']) + '\n'
 
+    def test_portable_events_leave_unmeasured_counters_nan(self):
+        from unittest.mock import Mock, patch
+        import math
+        proc = Mock(returncode=0)
+        proc.communicate.return_value = ('', '1.25,,task-clock,100\n300,,cycles,100\n450,,instructions,100\npsnr 64x64 reps=1 score=42\n')
+        with patch.object(perf_deltas, 'ACTIVE_EVENTS', ['task-clock', 'cycles', 'instructions']), \
+             patch.object(perf_deltas, 'ACTIVE_NAMES', perf_deltas.NAMES[:3]), \
+             patch.object(perf_deltas.subprocess, 'Popen', return_value=proc):
+            values, score = perf_deltas.run('fixture', '64x64', 'psnr', 1, '2')
+        self.assertEqual(values['cycles'], 300)
+        self.assertEqual(values['instructions'], 450)
+        self.assertEqual(score, '42')
+        for name in perf_deltas.NAMES[3:]:
+            self.assertTrue(math.isnan(values[name]), name)
+
     def test_headerless_rows_survive_exactly_and_first_error_is_readable(self):
         path = self.root / 'results.tsv'
         original = self.row('afine', 'error') + self.row('dists') * 3
