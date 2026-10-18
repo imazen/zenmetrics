@@ -13,6 +13,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+#[path = "../benchmark_selection.rs"]
+mod benchmark_selection;
 #[path = "../executable_identity.rs"]
 mod executable_identity;
 #[path = "../optional_dvifm.rs"]
@@ -207,11 +209,7 @@ fn main() -> Result<()> {
         .filter(|v| v["compiled"] == true && v["gpu"] == false)
         .map(|v| v["metric_name"].as_str().unwrap().into())
         .collect();
-    let selected: BTreeSet<String> = if metrics == "all" {
-        compiled.clone()
-    } else {
-        metrics.split(',').map(String::from).collect()
-    };
+    let selected = benchmark_selection::select(metrics, &compiled);
     if !selected.is_subset(&compiled) {
         return Err(format!(
             "Uncompiled CPU metric(s): {:?}; NN/GPU require explicit advanced features",

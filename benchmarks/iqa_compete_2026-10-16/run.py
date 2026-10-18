@@ -392,8 +392,8 @@ def main():
         for line in output.read_text().splitlines():
             r = json.loads(line)
             if not prior_admission_reason(r):done.add((r['metric_name'], r['size_name'], r['threads'], r['mode'], r['device'],r['os']))
-    selected = set(args.metrics.split(',')) if args.metrics else {r['metric_name'] for r in inventory}
-    if args.metrics=='learned':selected=set(LEARNED)
+    from selection import select_metrics
+    selected = {r['metric_name'] for r in inventory}
     excluded=set(filter(None,args.exclude_metrics.split(',')))
     if not excluded <= {r['metric_name'] for r in inventory}:raise ValueError('excluded metric absent from executable inventory')
     if args.python_package and not args.metrics:
@@ -404,7 +404,7 @@ def main():
         selected &= LEARNED
     if getattr(args,"coverage_first",False) and not args.metrics and not args.gpu_runtime and args.engine != "ort-cuda" and not args.python_package:
         selected -= {r["metric_name"] for r in inventory if r["gpu"]}
-    selected-=excluded
+    selected = select_metrics(args.metrics, selected, learned=LEARNED) - excluded
     if not selected <= {r['metric_name'] for r in inventory}:
         raise ValueError('selected metric absent from executable inventory')
     available = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()

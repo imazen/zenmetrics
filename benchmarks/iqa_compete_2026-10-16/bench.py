@@ -18,6 +18,7 @@ import urllib.request
 from resources import locked, scoped, resource_executable
 from run import LEARNED, PYTHON_METRICS, metadata, sha
 from native_run import ADAPTERS
+from selection import select_metrics
 
 BASE = Path(__file__).resolve().parent
 REPO = BASE.parents[1]
@@ -121,7 +122,8 @@ def main():
     run(['bash', str(BASE / 'build_cpu.sh'), 'cached'], 'rust-build', True)
     rust = snapshot / 'target/release/iqa-compete'
     inventory = json.loads(subprocess.check_output([rust, 'inventory'], text=True))
-    selected = {r['metric_name'] for r in inventory if a.gpu_runtime != 'none' or not r['gpu']} if a.metrics == 'all' else set(a.metrics.split(','))
+    selected = select_metrics(a.metrics, {r['metric_name'] for r in inventory
+                                        if a.gpu_runtime != 'none' or not r['gpu']})
     if not selected <= {r['metric_name'] for r in inventory}:
         raise ValueError('Unknown metric selection')
     if selected & LEARNED and not a.model_root:
