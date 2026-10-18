@@ -36,7 +36,9 @@ permissions:
   contents: read
 concurrency:
   group: cloudflare-pages-production
-  cancel-in-progress: true
+  # Finish the current verified build; retain only the newest queued follow-up.
+  # Static evidence updates must not repeatedly cancel the cold WASM build.
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
