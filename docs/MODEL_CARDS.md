@@ -9906,6 +9906,155 @@ target/release/zenmetrics score --metric stlpips-vgg --reference ref.png --disto
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=stlpips-vgg) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=stlpips-vgg) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=stlpips-vgg)
 
+## topiq-fr
+
+FR · Classical · CPU · Not documented
+
+**Paper: citation needed.**
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** no evidence
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** not recorded
+
+**Cli contract:** TOPIQ-FR, KADID-10k checkpoint (pyiqa topiq_fr; the AIC2026 TOPIQ
+column): CFANet on ResNet50, no resize, higher is better. Needs
+feature pyiqa-ports; code and weights are non-commercial, so
+ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric topiq-fr --reference ref.png --distorted dist.png
+```
+
+No-reference: the score describes the distorted image; the CLI still takes both paths.
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "cli_contract": "TOPIQ-FR, KADID-10k checkpoint (pyiqa topiq_fr; the AIC2026 TOPIQ\ncolumn): CFANet on ResNet50, no resize, higher is better. Needs\nfeature pyiqa-ports; code and weights are non-commercial, so\nZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr."
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=topiq-fr) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=topiq-fr) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=topiq-fr)
+
+## topiq-fr-pipal
+
+FR · Classical · CPU · Not documented
+
+**Paper: citation needed.**
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** no evidence
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** not recorded
+
+**Cli contract:** TOPIQ-FR, PIPAL checkpoint (pyiqa topiq_fr-pipal; AIC2026
+TOPIQ-PIPAL). As topiq-fr, with
+ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric topiq-fr-pipal --reference ref.png --distorted dist.png
+```
+
+No-reference: the score describes the distorted image; the CLI still takes both paths.
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "cli_contract": "TOPIQ-FR, PIPAL checkpoint (pyiqa topiq_fr-pipal; AIC2026\nTOPIQ-PIPAL). As topiq-fr, with\nZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal."
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=topiq-fr-pipal) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=topiq-fr-pipal) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=topiq-fr-pipal)
+
 ## vif
 
 FR · Classical · CPU · Reported results

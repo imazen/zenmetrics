@@ -218,9 +218,9 @@ dashboard_guard() {
   local from="$1" to="$2"
   local changed
   changed=$(jj diff --ignore-working-copy --from "$from" --to "$to" --name-only 2>/dev/null |
-            grep -E '^(benchmarks/|scripts/dashboard/)' || true)
+            grep -E '^(benchmarks/|scripts/dashboard/|web/dashboard/|crates/zenmetrics-cli/src/metrics/|crates/zenmetrics-nn/models/|docs/|DIVERGENCES\.md|README\.md)' || true)
   if [ -z "$changed" ]; then
-    echo "safe_push: dashboard guard: no benchmarks/ or dashboard changes — not applicable."
+    echo "safe_push: dashboard guard: no dashboard-relevant changes — not applicable."
     return 0
   fi
   local here; here="$(cd "$(dirname "$0")" && pwd)"
@@ -235,7 +235,7 @@ dashboard_guard() {
     rm -rf "$scratch"; return 0
   fi
   echo "safe_push: dashboard guard: building the dashboard from ${to:0:12}..."
-  if ! (cd "$scratch/tree" && python3 scripts/dashboard/build.py --output "$scratch/out") >"$scratch/build.log" 2>&1; then
+  if ! (cd "$scratch/tree" && { [ ! -r scripts/dashboard/regenerate.py ] || python3 scripts/dashboard/regenerate.py; } && python3 scripts/dashboard/build.py --output "$scratch/out") >"$scratch/build.log" 2>&1; then
     echo "" >&2
     echo "safe_push: REFUSED — dashboard guard: the outgoing tree does not build the dashboard:" >&2
     grep -E 'Error|error' "$scratch/build.log" | tail -3 >&2

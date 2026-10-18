@@ -43,7 +43,7 @@ def rows():
     source=(ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
     names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',function(source,'name')))
     columns={};expressions={}
-    for kind,expr in re.findall(r'MetricKind::(\w+)\s*=>\s*(.*?)(?=,\s*(?:MetricKind|\n\s*}))',function(source,'column_names'),re.S):
+    for kind,expr in re.findall(r'MetricKind::(\w+)\s*=>\s*(.*?)(?=,\s*(?:MetricKind|\n\s*}))',re.sub(r'//[^\n]*','',function(source,'column_names')),re.S):
         expressions[kind]=' '.join(expr.split())
         literals=re.findall(r'"([^"]+)"',expr)
         if expr.strip().startswith('&['):
