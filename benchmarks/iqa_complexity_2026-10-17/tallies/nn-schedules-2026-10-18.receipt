@@ -1,0 +1,109 @@
+{
+  "schema": "iqa-nn-schedule-audit/1",
+  "date": "2026-10-18",
+  "onnx_version": "1.23.2",
+  "graphs": [
+    {
+      "file": "liqe_trunk.onnx",
+      "sha256": "a6d7e4dcd37b5cf4858b74556c4e9700c7a4be7efca14dfef85c80d5e72d3026",
+      "trunk_macs": {
+        "conv": 115605504,
+        "matmul": 4293206016
+      },
+      "trunk_pointwise": {
+        "add": 11656060,
+        "div": 3317522,
+        "mul": 8373248,
+        "sqrt": 1288,
+        "cmp": 352801,
+        "exp": 2203200
+      }
+    },
+    {
+      "file": "musiq.onnx",
+      "sha256": "26f6bae026b21ec91dc66dc8f6f0dce6170f46da23b9f3d674acfd036ea5d823",
+      "checks": [
+        {
+          "shape": [
+            256,
+            256
+          ],
+          "patch_rows": 257,
+          "transformer_tokens": 258,
+          "stem_macs_per_patch": 7127040,
+          "transformer_and_head_macs": {
+            "matmul": 6041807232
+          },
+          "transformer_and_head_pointwise": {
+            "add": 50429455,
+            "mul": 30712320,
+            "div": 9866436,
+            "sqrt": 7482,
+            "cmp": 5569704,
+            "exp": 5591376,
+            "trig": 4161024
+          }
+        },
+        {
+          "shape": [
+            1024,
+            1024
+          ],
+          "patch_rows": 1217,
+          "transformer_tokens": 1218,
+          "stem_macs_per_patch": 7127040,
+          "transformer_and_head_macs": {
+            "matmul": 41095047552
+          },
+          "transformer_and_head_pointwise": {
+            "add": 532732495,
+            "mul": 144990720,
+            "div": 144798276,
+            "sqrt": 35322,
+            "cmp": 124513704,
+            "exp": 124616016,
+            "trig": 19643904
+          }
+        },
+        {
+          "shape": [
+            1000,
+            750
+          ],
+          "patch_rows": 961,
+          "transformer_tokens": 962,
+          "stem_macs_per_patch": 7127040,
+          "transformer_and_head_macs": {
+            "matmul": 29809748352
+          },
+          "transformer_and_head_pointwise": {
+            "add": 358701903,
+            "mul": 114516480,
+            "div": 93677636,
+            "sqrt": 27898,
+            "cmp": 77656488,
+            "exp": 77737296,
+            "trig": 15515136
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "Frozen graph dimensions and logical operation formulas; no inference or timings.",
+  "limitations": [
+    "LIQE qualifies the CPU rten single-crop route, not the 15-crop ORT route.",
+    "MUSIQ stem geometry combines frozen weights/attributes with the committed exporter schedule.",
+    "Norm and softmax counts use the explicit logical decompositions in each tally, not engine kernels.",
+    "MUSIQ resampling/hash arithmetic, traffic and global halo/span remain uncounted.",
+    "External weight payloads, numerical parity and dynamic engine allocation are not qualified."
+  ],
+  "sources_sha256": {
+    "crates/zenmetrics-nn/src/liqe.rs": "fa99903c500ed24d7a325e019bb0b9181c030c81e45880cfee1d5e828c97d83f",
+    "crates/zenmetrics-nn/src/musiq.rs": "904f3a395f41a88a1e8594c3207a31bbff87c55b3163e97e62699c007f4b3aa6",
+    "crates/zenmetrics-nn/models/liqe/export.py": "256768c397c270f4f0b7b237ded0f06f955d76ee07d6eff7c7ab7df73b02dfba",
+    "crates/zenmetrics-nn/models/musiq/export.py": "419936533b368961c151a5e77fa99c0ddf82ab806cdd35060ef907dc2d3e0e9f",
+    "scripts/complexity/test_nn_schedules.py": "fecce95e06b21e944348661c10a90217ceee8ff0fc846e9df9905a6c9ae3c57c",
+    "benchmarks/iqa_complexity_2026-10-17/tallies/liqe.swe2.json": "51c9bfe219b76096db358af786a4f0d6e72ca9188e670efa4407dc3822cfcb5d",
+    "benchmarks/iqa_complexity_2026-10-17/tallies/musiq.swe2.json": "26ca231c61ac63381e45ecdaf63147bf880981f3b89340ff02be8e49652a030e"
+  }
+}

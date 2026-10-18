@@ -5,66 +5,212 @@
   "liqe"
  ],
  "counter": "swe2",
- "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "source_commit": "4c97b2f8",
  "kind": "nn-nr",
- "params": {},
+ "params": {
+  "crop": 224,
+  "dim": 512,
+  "prompts": 495,
+  "patches": 15
+ },
  "derived": {},
  "assumptions": [
-  "liqe_full.onnx: CLIP ViT-B/32 over 15 identical top-left 224^2 patches (upstream sel convention); onnx_macs.py at [15,3,224,224] -> 66,135,974,400 MACs + 402,727,909 elems; constant per image."
+  "CPU rten route only: liqe_trunk.onnx runs once on the top-left 224x224 crop. Ort engines execute the 15-crop liqe_full.onnx graph and are outside this tally. Source: Liqe::from_dir and score_image.",
+  "Frozen trunk: 115605504 Conv MACs plus 4293206016 Gemm/MatMul MACs. Counts include the class token in the 50-token ViT sequence. Constants, tensor movement and shape bookkeeping are excluded from floating operation counts.",
+  "Graph pointwise counts use inferred static tensor shapes, not total_elem_ops (which includes constant payloads). Logical affine layer norm of width d per row: add=4*d-1, mul=2*d, div=d+2, sqrt=1. Stable softmax of n values: add=2*n-1, cmp=n-1, exp=n, div=n. Sigmoid: mul=1 for negation, add=1, exp=1, div=1. ReduceL2 counts squares, n-1 additions and one root. Conv/Gemm biases count one add per output.",
+  "The host f64 head still iterates all 15 copies of the embedding: 495*15*512 multiply/add pairs. It is not a single GEMV. Scale/add per patch, averaging, exponentials, bucket sums and final MOS are counted separately.",
+  "Partial model: graph copy traffic, global attention reach, span and buffers are not derived. Fixed crop costs apply only when both axes are at least 224; evaluator totals below that are algebraic extrapolations, not accepted scorer inputs. No timing or parity claim follows from these counts."
  ],
  "stages": [
   {
-   "id": "graph_conv",
-   "name": "liqe ViT-B/32 x15 + 495-prompt head [conv]",
+   "id": "crop",
+   "name": "top-left planar RGB8 crop",
    "source": [
-    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+    "crates/zenmetrics-nn/src/liqe.rs:115-132"
    ],
    "images": 1,
-   "elements": "1",
+   "elements": "3*crop*crop",
    "precision": "f32",
    "ops": {
-    "fma": 1734082560.0
+    "load": 1,
+    "store": 1,
+    "cvt": 1,
+    "div": 1
    },
-   "access": "block",
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "op-type split from ['liqe_full'] by_op: conv MACs"
+   "depends_on": [],
+   "notes": ""
   },
   {
-   "id": "graph_matmul",
-   "name": "liqe ViT-B/32 x15 + 495-prompt head [matmul]",
+   "id": "trunk_conv",
+   "name": "single-crop patch embedding",
    "source": [
-    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+    "crates/zenmetrics-nn/models/liqe/export.py:65-76"
    ],
    "images": 1,
    "elements": "1",
    "precision": "f32",
    "ops": {
-    "fma": 64401891839.99999
+    "fma": 115605504
    },
-   "access": "block",
+   "access": "conv",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "op-type split from ['liqe_full'] by_op: matmul MACs"
+   "depends_on": [
+    "crop"
+   ],
+   "notes": ""
   },
   {
-   "id": "graph_pointwise",
-   "name": "liqe ViT-B/32 x15 + 495-prompt head [activations/norm/elem]",
+   "id": "trunk_matmul",
+   "name": "single-crop ViT including class token",
    "source": [
-    "crates/zenmetrics-nn/src/liqe.rs:1-140"
+    "crates/zenmetrics-nn/models/liqe/export.py:65-76"
    ],
    "images": 1,
    "elements": "1",
    "precision": "f32",
    "ops": {
-    "add": 273318433.0,
-    "cmp": 15.0,
-    "div": 2265612.0,
-    "mul": 284903160.0,
-    "sqrt": 51.0,
-    "exp": 33048495.0
+    "fma": 4293206016
    },
-   "access": "block",
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
+   "depends_on": [
+    "trunk_conv"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "trunk_pointwise",
+   "name": "trunk logical normalization and pointwise ops",
+   "source": [
+    "crates/zenmetrics-nn/models/liqe/export.py:65-76"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "add": 11656060,
+    "div": 3317522,
+    "mul": 8373248,
+    "sqrt": 1288,
+    "cmp": 352801,
+    "exp": 2203200
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "trunk_matmul"
+   ],
+   "notes": "Static ONNX operator recount; fixed logical norm/softmax decomposition stated in assumptions."
+  },
+  {
+   "id": "head_dot",
+   "name": "all 15 repeated f64 prompt dot products",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:153-164"
+   ],
+   "images": 1,
+   "elements": "prompts*patches*dim",
+   "precision": "f64",
+   "ops": {
+    "mul": 1,
+    "add": 1,
+    "cvt": 2
+   },
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "trunk_pointwise"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "head_patch",
+   "name": "scale and accumulate each patch logit",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:161-166"
+   ],
+   "images": 1,
+   "elements": "prompts*patches",
+   "precision": "f64",
+   "ops": {
+    "mul": 1,
+    "add": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "head_dot"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "head_mean",
+   "name": "average the 15 patch logits",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:171-173"
+   ],
+   "images": 1,
+   "elements": "prompts",
+   "precision": "f64",
+   "ops": {
+    "div": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "head_patch"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "head_pool",
+   "name": "max-sub exp sum; bucket marginal and MOS",
+   "source": [
+    "crates/zenmetrics-nn/src/liqe.rs:174-185"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f64",
+   "ops": {
+    "add": "3*prompts+5",
+    "cmp": "prompts",
+    "exp": "prompts",
+    "mul": 5,
+    "div": 5,
+    "cvt": 1
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [
+    "head_mean"
+   ],
+   "notes": "Source accumulates each sum from zero. Softmax normalization is deferred to five final bucket divisions, not 495 per-logit divisions."
   }
  ]
 }

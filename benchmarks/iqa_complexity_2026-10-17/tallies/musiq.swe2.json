@@ -5,82 +5,375 @@
   "musiq"
  ],
  "counter": "swe2",
- "source_commit": "27979b23aff0f6e11be8866f6429c67d48beac89",
+ "source_commit": "4c97b2f8",
  "kind": "nn-nr",
  "params": {},
- "derived": {},
+ "derived": {
+  "L": "49+144+ceil(W/32)*ceil(H/32)",
+  "T": "L+1"
+ },
  "assumptions": [
-  "musiq.onnx: transformer over patch-hash rows; onnx_macs.py at L=193 -> 24,959,836 MACs (~129,325/row), 223,143 elems; cost scales with the full-res patch group ceil(W/32)*ceil(H/32) plus fixed 49+144.",
-  "two fixed-scale gaussian-resize views (224,384 longer side) + native; row = 3072 px + hash + scale id + mask."
+  "L is the patch-row count: 49+144+ceil(W/32)*ceil(H/32), including the padded fixed-scale groups even for rectangular images. The transformer appends one class token, so T=L+1. The patch stem and embedding run on L; all 14 transformer blocks and final layer norm run on T.",
+  "Frozen musiq.onnx and models/musiq/export.py: root 7x7 stride-2 conv maps a padded 32x32 patch to 16x16. Then padded 3x3 stride-2 max-pool gives 8x8. Conv1, Conv2, Conv3 and Conv-proj therefore run at 8x8, not 16x16. Stem MACs per patch = 7127040; embedding MACs = 16384*384.",
+  "Each block has 3 qkv and 1 output projections at 384x384 plus 384->1152->384 MLP: 1474560 MACs/token/block. Both attention matmuls contribute 2*384*T*T MACs/block. The scalar head uses only CLS (384 MACs plus bias).",
+  "Logical affine group/layer norm uses add=4*d-1, mul=2*d, div=d+2, sqrt=1 per normalized row. Stem groups: three 512-element and two 128-element rows per each of 32 groups per patch. Tanh GELU uses the exported six Mul, two Add and one Tanh per 1152-wide activation; Tanh uses trig class. Stable softmax uses add=2*T-1, cmp=T-1, exp=T, div=T per attention row.",
+  "Partial tally: Gaussian resize weight generation and resampling arithmetic, spatial-hash construction, activation/matrix traffic and global attention halo/span are not derived. Patch-row load/store is logical payload only, including zero padding. Ingress normalizes all original RGB samples. Counts are graph/source logical work, not engine instructions.",
+  "The scorer refuses L>8192 and degenerate resized axes before inference. In particular the standard 3840x2160 evaluator point has L=8353 and is outside the accepted domain; its reported arithmetic is diagnostic extrapolation only. This schema does not encode refusal, so callers must retain this qualification."
  ],
  "stages": [
   {
-   "id": "rows",
-   "name": "patch+hash row assembly",
+   "id": "ingress",
+   "name": "original RGB normalization",
    "source": [
-    "crates/zenmetrics-nn/src/musiq.rs:1-120"
+    "crates/zenmetrics-nn/src/musiq.rs:165-171"
    ],
    "images": 1,
-   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "elements": "3*W*H",
+   "precision": "f32",
+   "ops": {
+    "cvt": 1,
+    "div": 1,
+    "mul": 1,
+    "add": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [],
+   "notes": ""
+  },
+  {
+   "id": "rows",
+   "name": "patch row payload",
+   "source": [
+    "crates/zenmetrics-nn/src/musiq.rs:104-143"
+   ],
+   "images": 1,
+   "elements": "L",
    "precision": "f32",
    "ops": {
     "load": 3075,
     "store": 3075
    },
    "access": "pointwise",
-   "materialize": "full"
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "ingress"
+   ],
+   "notes": ""
   },
   {
-   "id": "graph_conv",
-   "name": "musiq transformer [conv]",
+   "id": "stem_conv",
+   "name": "root at 16x16; remaining convolutions at 8x8",
    "source": [
-    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+    "crates/zenmetrics-nn/models/musiq/export.py:270-279"
    ],
    "images": 1,
-   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "elements": "L",
    "precision": "f32",
    "ops": {
-    "fma": 430.7545610475966
+    "fma": "16*16*64*3*7*7 + 8*8*(64*64 + 64*64*3*3 + 256*64 + 256*64)"
    },
-   "access": "pointwise",
+   "access": "conv",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "op-type split from ['musiq'] by_op: conv MACs"
+   "depends_on": [
+    "rows"
+   ],
+   "notes": ""
   },
   {
-   "id": "graph_matmul",
-   "name": "musiq transformer [matmul]",
+   "id": "stem_norm_512",
+   "name": "root and two 256-channel group norms",
    "source": [
-    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+    "crates/zenmetrics-nn/models/musiq/export.py:270-279"
    ],
    "images": 1,
-   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "elements": "L*32*3",
    "precision": "f32",
    "ops": {
-    "fma": 128894.2454389524
+    "add": "4*512-1",
+    "mul": "2*512",
+    "div": "512+2",
+    "sqrt": 1
    },
    "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "op-type split from ['musiq'] by_op: matmul MACs"
+   "depends_on": [
+    "stem_conv"
+   ],
+   "notes": ""
   },
   {
-   "id": "graph_pointwise",
-   "name": "musiq transformer [activations/norm/elem]",
+   "id": "stem_norm_128",
+   "name": "two 64-channel group norms",
    "source": [
-    "crates/zenmetrics-nn/src/musiq.rs:120-240"
+    "crates/zenmetrics-nn/models/musiq/export.py:276-277"
    ],
    "images": 1,
-   "elements": "49+144+ceil(W/32)*ceil(H/32)",
+   "elements": "L*32*2",
    "precision": "f32",
    "ops": {
-    "add": 1610.7078223991537,
-    "div": 0.07253853751282661,
-    "mul": 563.5674419094742,
-    "cmp": 2.367865117382983,
-    "exp": 83.63693375228908
+    "add": "4*128-1",
+    "mul": "2*128",
+    "div": "128+2",
+    "sqrt": 1
    },
    "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
    "materialize": "full",
-   "notes": "elementwise totals by op class; pure movement ops (Reshape/Transpose/Concat/Slice) excluded; rten materializes activations between layers"
+   "depends_on": [
+    "stem_conv"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "stem_pointwise",
+   "name": "four relus, residual add, 3x3 max-pool",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:272-279"
+   ],
+   "images": 1,
+   "elements": "L",
+   "precision": "f32",
+   "ops": {
+    "add": "256*8*8",
+    "cmp": "64*16*16 + 64*8*8*2 + 256*8*8 + 64*8*8*8"
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "stem_norm_512",
+    "stem_norm_128"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "embed",
+   "name": "patch embedding",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:289-290"
+   ],
+   "images": 1,
+   "elements": "L",
+   "precision": "f32",
+   "ops": {
+    "fma": "16384*384",
+    "add": "3*384"
+   },
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "stem_pointwise"
+   ],
+   "notes": "Embedding bias plus spatial and scale embeddings."
+  },
+  {
+   "id": "mask",
+   "name": "class-token-aware attention mask",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:291-295"
+   ],
+   "images": 1,
+   "elements": "T",
+   "precision": "f32",
+   "ops": {
+    "add": 1,
+    "mul": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "embed"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "blocks_linear",
+   "name": "qkv, output and MLP projections",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:224-233"
+   ],
+   "images": 1,
+   "elements": "T",
+   "precision": "f32",
+   "ops": {
+    "fma": "14*(4*384*384 + 2*384*1152)"
+   },
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "embed"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "attention",
+   "name": "QK and softmax-V matmuls; additive mask",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:229-231"
+   ],
+   "images": 1,
+   "elements": "T*T",
+   "precision": "f32",
+   "ops": {
+    "fma": "14*2*384",
+    "add": "14*6"
+   },
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "blocks_linear",
+    "mask"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "softmax",
+   "name": "six attention heads in each block",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:229-230"
+   ],
+   "images": 1,
+   "elements": "14*6*T",
+   "precision": "f32",
+   "ops": {
+    "add": "2*T-1",
+    "cmp": "T-1",
+    "exp": "T",
+    "div": "T"
+   },
+   "access": "reduction",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "attention"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "layernorm",
+   "name": "two per block plus final layer norm",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:224-233"
+   ],
+   "images": 1,
+   "elements": "(14*2+1)*T",
+   "precision": "f32",
+   "ops": {
+    "add": "4*384-1",
+    "mul": "2*384",
+    "div": "384+2",
+    "sqrt": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "softmax"
+   ],
+   "notes": "The final encoder norm also processes every T token before selecting CLS (export.py:298-299)."
+  },
+  {
+   "id": "block_pointwise",
+   "name": "projection biases, residuals and q scale",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:227-233"
+   ],
+   "images": 1,
+   "elements": "14*T",
+   "precision": "f32",
+   "ops": {
+    "add": "3*384 + 384 + 1152 + 384 + 2*384",
+    "div": 384
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "layernorm"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "gelu",
+   "name": "tanh GELU in each MLP",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:233-233"
+   ],
+   "images": 1,
+   "elements": "14*T*1152",
+   "precision": "f32",
+   "ops": {
+    "mul": 6,
+    "add": 2,
+    "trig": 1
+   },
+   "access": "pointwise",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "full",
+   "depends_on": [
+    "block_pointwise"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "head",
+   "name": "CLS scalar head",
+   "source": [
+    "crates/zenmetrics-nn/models/musiq/export.py:298-299"
+   ],
+   "images": 1,
+   "elements": "1",
+   "precision": "f32",
+   "ops": {
+    "fma": 384,
+    "add": 1
+   },
+   "access": "matmul",
+   "axis": "none",
+   "radius": 0,
+   "span": "1",
+   "materialize": "fused",
+   "depends_on": [
+    "gelu"
+   ],
+   "notes": ""
   }
  ]
 }
