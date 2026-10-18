@@ -22,6 +22,7 @@ on:
       - 'scripts/checkpoint/build-codecs.sh'
       - 'web/codecs/**'
       - 'scripts/checkpoint/*pages.py'
+      - 'scripts/checkpoint/test_browser_coverage.py'
       - 'scripts/checkpoint/vendor-ort.py'
       - 'crates/zenmetrics-nn/src/**'
       - 'benchmarks/browser_nn_2026-10-17/**'
@@ -42,6 +43,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Check browser catalog coverage
+        run: python3 scripts/checkpoint/test_browser_coverage.py
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-10-06

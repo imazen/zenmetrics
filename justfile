@@ -568,6 +568,10 @@ checkpoint-native profile target source runner output:
 checkpoint-browser-build output:
     CHECKPOINT_OUT={{output}} bash scripts/checkpoint/build-browser.sh
 
+# Catch browser/CLI catalog drift before compiling WASM or starting Chromium.
+browser-coverage-check:
+    python3 scripts/checkpoint/test_browser_coverage.py
+
 checkpoint-browser-check package report oracle:
     python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}
 
