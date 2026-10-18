@@ -1761,3 +1761,10 @@ iqa-webgpu-node-audit python bundle output:
 
 iqa-webgpu-node-classify directory output *options:
     python3 benchmarks/iqa_compete_2026-10-16/classify_webgpu_nodes.py '{{directory}}' '{{output}}' {{options}}
+
+# Immutable scalar queue replacement; boundary/rollout acquire the shared lock.
+iqa-scalar-priority action config *options:
+    python3 benchmarks/iqa_compete_2026-10-16/scalar_priority.py '{{action}}' '{{config}}' {{options}}
+
+iqa-scalar-priority-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_scalar_priority.py
