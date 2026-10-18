@@ -8,14 +8,8 @@ import shutil
 from origins import check as check_origins
 
 
-def merge(viewer, dashboard, source):
-    manifest=json.loads((dashboard/'aic2026/manifest.json').read_text())
-    provenance=json.loads((viewer/'site-source.json').read_text())
-    if manifest['source_commit']!=source or provenance['source_commit']!=source:
-        raise ValueError('viewer and AIC source commits differ')
-    if (viewer/'aic2026').exists():raise ValueError('AIC extension already present')
-    shutil.copytree(dashboard/'aic2026',viewer/'aic2026')
-    index=viewer/'index.html';text=index.read_text()
+def style_landing(text, source):
+    if 'class="evidence-header"' in text:raise ValueError("landing theme already present")
     if '<h1>' not in text:raise ValueError('viewer heading changed')
     navigation='<nav aria-label="Results" style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0;border-bottom:2px solid var(--accent)"><a href="/">Image explorer</a><a href="/aic2026/">AIC2026 results</a><a href="/aic2026/reproduction.html">Reproduction evidence</a><a href="/aic2026/complexity.html">Benchmarks</a><a href="https://github.com/imazen/zenmetrics/tree/'+source+'">Source</a><a href="/aic2026/#downloads">Downloads</a></nav>'
     navigation=navigation.replace('</nav>','<a href="https://gigapixels.imazen.org/">Gigapixels</a></nav>')
@@ -32,6 +26,31 @@ def merge(viewer, dashboard, source):
     @media(max-width:600px){.evidence-header{padding:20px 18px;border-radius:12px}.evidence-header nav{gap:10px 18px!important}.evidence-header .evidence-kicker{letter-spacing:.12em}.seg{flex-wrap:wrap;max-width:100%}}
     </style>'''
     text=text.replace('</head>',theme+'</head>',1)
+    return text
+
+
+def refresh_landing(viewer, source):
+    """Apply only landing HTML/CSS, preserving separately versioned viewer/AIC assets."""
+    provenance=json.loads((viewer/'site-source.json').read_text())
+    for name,digest in provenance['files'].items():
+        if hashlib.sha256((viewer/name).read_bytes()).hexdigest()!=digest:
+            raise ValueError('existing asset hash mismatch: '+name)
+    index=viewer/'index.html'
+    index.write_text(style_landing(index.read_text(),source))
+    provenance['landing']={'source_commit':source,'scope':'HTML/CSS navigation only'}
+    provenance['files']['index.html']=hashlib.sha256(index.read_bytes()).hexdigest()
+    (viewer/'site-source.json').write_text(json.dumps(provenance,indent=2)+'\n')
+
+
+def merge(viewer, dashboard, source):
+    manifest=json.loads((dashboard/'aic2026/manifest.json').read_text())
+    provenance=json.loads((viewer/'site-source.json').read_text())
+    if manifest['source_commit']!=source or provenance['source_commit']!=source:
+        raise ValueError('viewer and AIC source commits differ')
+    if (viewer/'aic2026').exists():raise ValueError('AIC extension already present')
+    shutil.copytree(dashboard/'aic2026',viewer/'aic2026')
+    index=viewer/'index.html';text=index.read_text()
+    text=style_landing(text,source)
     index.write_text(text)
     check_origins(viewer/'aic2026')
     provenance['aic2026']={'source_commit':source,'manifest':'aic2026/manifest.json'}
@@ -42,4 +61,7 @@ def merge(viewer, dashboard, source):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--viewer',type=Path,required=True);parser.add_argument('--dashboard',type=Path,required=True);parser.add_argument('--source',required=True);a=parser.parse_args();merge(a.viewer,a.dashboard,a.source)
+    parser=argparse.ArgumentParser();parser.add_argument('--viewer',type=Path,required=True);parser.add_argument('--dashboard',type=Path);parser.add_argument('--landing-only',action='store_true');parser.add_argument('--source',required=True);a=parser.parse_args()
+    if a.landing_only:refresh_landing(a.viewer,a.source)
+    elif a.dashboard:merge(a.viewer,a.dashboard,a.source)
+    else:parser.error('--dashboard is required unless --landing-only is selected')

@@ -11,7 +11,7 @@ from model_cards import cards
 import aic2026
 import repro
 from origins import check as check_origins
-from publish_extension import merge
+from publish_extension import merge, refresh_landing
 
 
 class AIC2026(unittest.TestCase):
@@ -119,6 +119,27 @@ class AIC2026(unittest.TestCase):
         self.assertEqual(next(r for r in rows if r['column']=='DMM')['status'],'fails native gate')
         for col in json.loads((ROOT/aic2026.B/'analysis/aic2026_agreement.json').read_text())['metrics']:
             self.assertTrue(any(col['column'] in r['column'] for r in rows),col['column'])
+
+    def test_landing_refresh_preserves_component_sources_and_assets(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as d:
+            viewer=Path(d)
+            index='<html><head></head><body><header><h1>Viewer</h1></header></body></html>'
+            (viewer/'index.html').write_text(index)
+            (viewer/'worker.js').write_text('unchanged')
+            original={'source_commit':'a'*40,'aic2026':{'source_commit':'b'*40},
+                      'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in viewer.iterdir()}}
+            (viewer/'site-source.json').write_text(json.dumps(original))
+            refresh_landing(viewer,'c'*40)
+            result=json.loads((viewer/'site-source.json').read_text())
+            self.assertEqual(result['source_commit'],original['source_commit'])
+            self.assertEqual(result['aic2026'],original['aic2026'])
+            self.assertEqual(result['files']['worker.js'],original['files']['worker.js'])
+            self.assertEqual(result['landing']['source_commit'],'c'*40)
+            self.assertIn('https://gigapixels.imazen.org/',(viewer/'index.html').read_text())
+            with self.assertRaisesRegex(ValueError,'already present'):refresh_landing(viewer,'c'*40)
+            (viewer/'worker.js').write_text('changed')
+            with self.assertRaisesRegex(ValueError,'hash mismatch'):refresh_landing(viewer,'c'*40)
 
     def test_viewer_merge_keeps_assets_and_rejects_mixed_revisions(self):
         with tempfile.TemporaryDirectory() as d:
