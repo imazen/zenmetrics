@@ -55,7 +55,7 @@ fn nits(image: &Rgb8Image, xyz: bool, peak: f64, bits: u8) -> Vec<f64> {
         })
         .collect();
     if xyz {
-        for p in out.chunks_exact_mut(3) {
+        for p in out.as_chunks_mut::<3>().0 {
             let [r, g, b] = [p[0], p[1], p[2]];
             p[0] = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
             p[1] = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;

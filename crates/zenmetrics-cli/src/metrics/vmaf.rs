@@ -226,7 +226,7 @@ pub(crate) fn cambi_aic2026(
     let stride = d.width as usize * 3;
     let mut y = Vec::with_capacity(w * h);
     for row in d.pixels.chunks_exact(stride).take(h) {
-        for rgb in row.chunks_exact(3).take(w) {
+        for rgb in row.as_chunks::<3>().0.iter().take(w) {
             let t = (8414 * u32::from(rgb[0])
                 + 16519 * u32::from(rgb[1])
                 + 3208 * u32::from(rgb[2])
