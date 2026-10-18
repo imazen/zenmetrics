@@ -129,6 +129,13 @@ table.sweep{width:100%;border-collapse:collapse;font:12px var(--mono)}table.swee
 <label id="zensim-model-row">Zensim model <select id="zensim-model"><option value="b">B · codec target (default)</option><option value="c">C · candidate, scalar only</option><option value="d">D · fast</option><option value="a">A · legacy</option><option value="preview-v0.2">Preview v0.2 · legacy linear</option><option value="preview-v0.1">Preview v0.1 · legacy linear</option></select></label>
 <p id="zensim-model-note" class="note" hidden>C has no spatial map in the pinned library. Choose another map metric explicitly; no model is substituted.</p>
 <div class="row" id="ep-row" hidden><label for="ep">Learned metrics run on</label><select id="ep"><option value="webgpu">WebGPU (onnxruntime-web)</option><option value="wasm">CPU · WebAssembly (onnxruntime-web)</option></select></div>
+<div id="local-weights-row" hidden>
+<p class="note" id="local-weights-note"></p>
+<label>Local ONNX export <input id="local-weights" type="file" accept=".onnx"></label>
+<label><input id="local-consent" type="checkbox"> I accept this model's weight terms for my use.</label>
+<button id="local-load">Load local export</button>
+<p class="note">Selected weights stay in this worker's memory. They are never uploaded, downloaded by this page or saved to browser storage. Reopening the page requires selecting the file again.</p>
+</div>
 <div class="row" id="display-row" hidden><label for="display">CVVDP display</label><select id="display"><option value="standard_4k">Standard 4K</option><option value="standard_fhd">Standard Full HD</option></select></div>
 <div class="row"><button id="compare" class="primary" disabled>Compare</button><button id="cancel" disabled>Cancel</button><label><input id="live" type="checkbox" checked> Live</label></div>
 <div class="score"><div><small id="score-label">Score</small><b id="score">–</b></div><div><small>Compute time</small><b id="elapsed">–</b></div></div>

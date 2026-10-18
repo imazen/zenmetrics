@@ -101,7 +101,9 @@ LEARNED = {'lpips-alex', 'lpips-vgg', 'lpips-squeeze', 'dists', 'stlpips-alex', 
            'topiq-fr', 'topiq-fr-pipal', 'wadiqam-pyiqa', 'ahiq-pyiqa', 'dmm-pyiqa', 'pieapp-pyiqa'}
 
 
-NN_MODELS = set(json.loads((REPO / 'web/metrics/nn-models.json').read_text())['models'])
+NN_MANIFEST = json.loads((REPO / 'web/metrics/nn-models.json').read_text())
+NN_MODELS = set(NN_MANIFEST['models'])
+LOCAL_MODELS = set(NN_MANIFEST.get('local_models', {}))
 
 
 def card_of(name):
@@ -300,6 +302,10 @@ def measured_coverage(result):
             entry.update(status=status, module='nn', reason=reason)
         elif name in result['learned']['statuses']:
             entry['reason'] = result['learned']['statuses'][name][1]
+        elif name in LOCAL_MODELS:
+            # Private exports are explicitly supplied to check-local-weights.py.
+            # The public deployment does not download or host those weights.
+            entry.update(status='nn-local', module='nn', reason='Select the qualified local ONNX export and accept its weight terms. CPU WebAssembly only; weights stay in worker memory.')
         elif name in LEARNED and args.nn_models != 'all' and name in NN_MODELS:
             entry['not_run'] = True
         elif name in LEARNED:
@@ -336,7 +342,7 @@ def check_coverage(committed, measured):
         for key in ('status', 'module', 'maps'):
             assert g.get(key) == w[key], (name, key, g.get(key), w[key])
         # Unavailable entries and CPU-only learned entries carry their reason.
-        assert bool(g.get('reason')) == (g['status'] in ('unavailable', 'nn-cpu-wasm')), (name, 'reason')
+        assert bool(g.get('reason')) == (g['status'] in ('unavailable', 'nn-cpu-wasm', 'nn-local')), (name, 'reason')
 
 
 server = None

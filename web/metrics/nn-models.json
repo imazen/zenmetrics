@@ -328,5 +328,46 @@
    "card": "crates/zenmetrics-nn/models/wd/card.toml",
    "host": "statistics head restated from crates/zenmetrics-nn/src/wd.rs in crates/zenmetrics-browser/src/nn_prep.rs"
   }
+ },
+ "local_models": {
+  "ckdn": {
+   "kind": "pair",
+   "prep": "ckdn",
+   "min_size": 1,
+   "output": "ckdn",
+   "columns": [
+    "ckdn"
+   ],
+   "jnd": 0.005276,
+   "graph": {
+    "file": "ckdn_full.onnx",
+    "sha256": "d6d6b6e8c41b365ea26811613317ef1b5b31b090a03773cf00e4af955193b875",
+    "bytes": 53550724
+   },
+   "licence_class": "unknown",
+   "terms_url": "https://github.com/researchmm/CKDN",
+   "card": "crates/zenmetrics-nn/models/ckdn/card.toml",
+   "provider": "wasm"
+  },
+  "hyperiqa": {
+   "kind": "nr",
+   "prep": "hyperiqa",
+   "min_size": 1,
+   "output": "hyperiqa",
+   "columns": [
+    "hyperiqa",
+    "hyperiqa_ref"
+   ],
+   "jnd": 4.461776,
+   "graph": {
+    "file": "hyperiqa.onnx",
+    "sha256": "32dd643a8ba2c9e8550a576c62b0170a4386566d7c2ff1dbf9c0f90ff008c6ae",
+    "bytes": 109448294
+   },
+   "licence_class": "unknown",
+   "terms_url": "https://github.com/SSL92/hyperIQA",
+   "card": "crates/zenmetrics-nn/models/hyperiqa/card.toml",
+   "provider": "wasm"
+  }
  }
 }

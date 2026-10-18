@@ -89,6 +89,11 @@ self.onmessage = async ({data}) => {
         all:JSON.parse(loaded.api.all_metric_names())});
       return;
     }
+    if (data.type === 'nn-load-local') {
+      const nn=await import(new URL('./nn.js', import.meta.url));
+      await nn.loadLocal(data);
+      postMessage({type:'local-loaded',id:data.id,metric:data.metric});return;
+    }
     if (data.type === 'nn') {
       // Learned metrics: tensors from the full module, inference in nn.js.
       const module=await full(false);

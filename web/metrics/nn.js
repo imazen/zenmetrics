@@ -7,6 +7,7 @@
 const base=new URL('./', import.meta.url);
 let ort, manifest;
 const sessions=new Map();
+const localWeights=new Map();
 const CACHE='zenmetrics-nn-v1';
 // ORT's WebAssembly runtime binds the console when it loads, so lines are
 // intercepted here, before it is imported: while `capture` is set they are
@@ -26,6 +27,7 @@ async function models(){
   return manifest;
 }
 async function runtime(){
+  if(typeof WebAssembly.Suspending!=='function'||typeof WebAssembly.promising!=='function')throw new Error('Learned metrics require WebAssembly JSPI (Suspending and promising). Use a JSPI-capable browser; CPU image metrics remain available.');
   if(!ort){
     ort=await import(new URL('ort/ort.jspi.min.mjs',base));
     ort.env.wasm.wasmPaths=new URL('ort/',base).href;
@@ -42,9 +44,26 @@ async function adapterInfo(){
   return {vendor:info.vendor||'',architecture:info.architecture||'',device:info.device||'',description:info.description||'',fallback:Boolean(adapter.isFallbackAdapter??info.isFallbackAdapter)};
 }
 async function sha256(bytes){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');}
+// User-selected exports stay in worker memory. They have no download URL,
+// never enter Cache Storage and are accepted only for this exact model/hash.
+export async function loadLocal({metric,file,consent}){
+  const model=(await models()).local_models?.[metric];
+  if(!model)throw new Error(`${metric} has no local-weight route`);
+  if(consent!==model.graph.sha256)throw new Error(`Accept the weight terms for ${metric} before loading: ${model.terms_url}`);
+  if(!file||file.name!==model.graph.file||file.size!==model.graph.bytes)throw new Error(`Select ${model.graph.file} (${model.graph.bytes} bytes) for ${metric}`);
+  if(localWeights.has(model.graph.sha256))return;
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  if(await sha256(bytes)!==model.graph.sha256)throw new Error(`Local ${metric} weights do not match the qualified sha256`);
+  localWeights.set(model.graph.sha256,bytes);
+}
 // Weights: Cache Storage first, else a streamed download with progress.
 async function weights(graph,progress){
   const start=performance.now();
+  if(graph.file){
+    const bytes=localWeights.get(graph.sha256);
+    if(!bytes)throw new Error(`Select local weights and accept their terms before scoring ${graph.file}`);
+    return {bytes,source:'local file (memory only)',milliseconds:performance.now()-start};
+  }
   const cache=await caches.open(CACHE).catch(()=>null);
   let response=await cache?.match(graph.url),source='cache';
   if(!response){
@@ -131,17 +150,18 @@ async function run(s,feeds,output){
 // Score `metric` on one RGBA pair. `prepare` is the full module's nn_prepare.
 export async function score({metric,ep,reference,distorted,width,height,prepare,wdLayer,progress}){
   if(!['webgpu','wasm'].includes(ep))throw new Error(`Unknown execution provider ${ep}`);
-  const all=await models(),model=all.models[metric];
+  const all=await models(),model=all.models[metric]||all.local_models?.[metric];
   if(!model)throw new Error(`${metric} has no browser model`);
+  if(all.local_models?.[metric]&&ep!==model.provider)throw new Error(`${metric}'s local-weight route is qualified for CPU WebAssembly; choose wasm`);
   const ort=await runtime();
-  const prep=rgba=>prepare(model.prep,rgba,width,height,width*4,model.min_size);
+  const prep=(rgba,role)=>prepare(model.prep==='ckdn'?`ckdn-${role}`:model.prep,rgba,width,height,width*4,model.min_size);
   let values,runMilliseconds=0;
   if(model.kind==='wadiqam-fr'||model.kind==='wadiqam-nr')return wadiqam();
   if(model.kind==='wd')return wd();
   const s=await session(metric,model.graph,ep,progress);
   const prepStart=performance.now();
   if(model.kind==='pair'){
-    const feeds={...tensors(ort,prep(reference),{x:'r'}),...tensors(ort,prep(distorted),{x:'d'})};
+    const feeds={...tensors(ort,prep(reference,'reference'),{x:'r'}),...tensors(ort,prep(distorted,'distorted'),{x:'d'})};
     const prepMilliseconds=performance.now()-prepStart,runStart=performance.now();
     values=[{column:model.columns[0],value:await run(s,feeds,model.output)}];
     runMilliseconds=performance.now()-runStart;

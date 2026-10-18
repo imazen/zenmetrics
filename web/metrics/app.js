@@ -1,5 +1,7 @@
 const $ = id => document.getElementById(id);
 let worker;
+const localFiles=new Map();
+const localManifest=fetch(new URL('./nn-models.json',import.meta.url)).then(r=>{if(!r.ok)throw new Error('Model manifest unavailable');return r.json();});
 const S = {reference:null, distorted:null, map:null, mode:'overlay', zoom:1, ready:false, pending:false, dirty:false, id:0, revision:0, blink:false, loads:{reference:0,distorted:0},
   catalog:[], metrics:[], coverage:new Map(), modules:{}, urlApplied:false, mapName:'', mapNames:[], loopDefaults:[], defaultMaps:{}, generated:false, codec:'jpeg', steerBuiltin:false};
 // The default map of each metric: its fused map where it publishes one.
@@ -16,7 +18,7 @@ function mapRoute(metric){return S.catalog.includes(metric)?metric:null;}
 // link and shows the measured reason instead of a score.
 const coverageLoad=fetch(new URL('coverage.json',document.baseURI),{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();});
 const dashboard='https://imazen.github.io/zenmetrics/';
-const statusLabel={'score+map':'score and map','score-only':'score only','nn-webgpu':'learned · WebGPU','nn-cpu-wasm':'learned · CPU','unavailable':'not runnable in the browser'};
+const statusLabel={'score+map':'score and map','score-only':'score only','nn-webgpu':'learned · WebGPU','nn-cpu-wasm':'learned · CPU','nn-local':'learned · local weights · CPU','unavailable':'not runnable in the browser'};
 function applyCoverage(coverage,error){
   if(coverage)for(const entry of coverage.metrics)S.coverage.set(entry.name,entry);
   else status(`coverage.json unavailable (${error.message}); only the core module's metrics are listed.`,true);
@@ -223,6 +225,13 @@ $('compare').onclick=compare;
 // One metric choice drives the score, the map and the loop's steering.
 function syncMetric(){
   const metric=$('metric').value;
+  $('local-weights-row').hidden=S.coverage.get(metric)?.status!=='nn-local';
+  $('local-consent').checked=false;$('local-weights').value='';
+  if(S.coverage.get(metric)?.status==='nn-local')localManifest.then(m=>{
+    if($('metric').value!==metric)return;const model=m.local_models[metric],note=$('local-weights-note');
+    note.replaceChildren(document.createTextNode(`Select ${model.graph.file}. Weights licence: ${model.licence_class}. `));
+    const a=document.createElement('a');a.href=model.terms_url;a.textContent='Model weight terms';a.target='_blank';a.rel='noopener';note.append(a);
+  });
   $('display-row').hidden=metric!=='cvvdp';
   $('ep-row').hidden=!S.coverage.get(metric)?.status?.startsWith('nn-');$('ep').value=epFor(metric);
   buildMenus();snippet();syncLoopSteer(true);metricLinks();writeUrl();
@@ -781,7 +790,7 @@ $('jxl-sweep-cancel').onclick=()=>{J.stop=true;};
 // missing WebGPU adapter is an error, never a switch to another provider.
 // A chosen provider (link or menu) wins; otherwise WebGPU, or the CPU for a
 // metric whose WebGPU run missed the parity gate in the Pages check.
-function epFor(metric){return S.ep||(S.coverage.get(metric)?.status==='nn-cpu-wasm'?'wasm':'webgpu');}
+function epFor(metric){return S.ep||(['nn-cpu-wasm','nn-local'].includes(S.coverage.get(metric)?.status)?'wasm':'webgpu');}
 // Nodes each ORT provider ran in the session's first (profiled) run.
 function placementLabel(placement){
   const total={};for(const graph of Object.values(placement||{}))for(const [k,v] of Object.entries(graph||{}))total[k]=(total[k]||0)+v;
@@ -792,7 +801,26 @@ function providerLabel(score){
   const a=score.adapter;
   return `${score.runtime} · ${score.ep==='webgpu'?`WebGPU${a?` (${[a.vendor,a.architecture].filter(Boolean).join(' ')}${a.fallback?', fallback adapter':''})`:''}`:'WASM CPU'}${placementLabel(score.placement)}`;
 }
+async function loadSelectedWeights(metric){
+  if(S.coverage.get(metric)?.status!=='nn-local')return;
+  const selected=localFiles.get(metric);
+  if(!selected)throw new Error(`Select local weights and accept their terms before scoring ${metric}`);
+  await rpc({type:'nn-load-local',metric,...selected},120);
+}
+$('local-load').onclick=async()=>{
+  const metric=$('metric').value;
+  try{
+    const model=(await localManifest).local_models[metric];
+    if(!model)throw new Error('Choose a metric with a local-weight route');
+    if(!$('local-consent').checked)throw new Error('Accept the model weight terms before loading');
+    const file=$('local-weights').files[0];
+    await rpc({type:'nn-load-local',metric,file,consent:model.graph.sha256},120);
+    localFiles.set(metric,{file,consent:model.graph.sha256});
+    S.revision++;compare();
+  }catch(error){status(error.message,true);}
+};
 async function learnedScore(metric,reference,distorted,width,height){
+  await loadSelectedWeights(metric);
   const result=await rpc({type:'nn',metric,ep:epFor(metric),reference,distorted,width,height},900);
   return result.score;
 }
@@ -803,6 +831,7 @@ async function compareLearned(metric,entry){
   const revision=S.revision;S.pending=true;S.dirty=false;$('compare').disabled=true;$('score').textContent='–';$('score-info').textContent='';
   $('compute-timing').textContent='Computing…';status(`Running ${metric} (${epFor(metric)})…`);
   try{
+    await loadSelectedWeights(metric);
     const result=await rpc({type:'nn',metric,ep:epFor(metric),reference:r.data,distorted:d.data,width:r.width,height:r.height},900);
     if(revision!==S.revision)return;
     S.map=null;S.mapMetric=null;S.mapNames=[];S.mapName='';buildMenus();
