@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Freeze durable Linux P-core placement proofs, configure benchmark ORT session budgets explicitly, and run six 512-first CPU/NN CPU/NN CUDA families in a restarting user service (`9954fadd`, `aafa96b8`, `0b2af341`).
+
 - Queue frozen Mac benchmark families and retain NN engine, model and runtime hashes, including external tensors (`4c8ea3f6`, `4a6de1c9`).
 - Recover matching dead Mac admission tickets after verified group cleanup and bind execution to frozen runner hashes (`dcf93f35`, `82161fc3`).
 

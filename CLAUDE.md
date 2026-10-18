@@ -561,6 +561,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-18 — Linux durable benchmark scope placement and ORT budgets.**
+  A user scope's `AllowedCPUs` property can be present while the kernel
+  cpuset remains unrestricted when the controller is not delegated. Each
+  resource wrapper also creates a fresh scope. Durable Linux attempts now
+  set their actual scope boundary and retain zenbench's checked placement
+  proof (`9954fadd`). The first native CUDA control also exposed default ORT
+  session pools despite thread environment variables; those timings stay
+  diagnostic. The durable build uses the existing session-budget snapshot
+  patch and the real control requires the emitted one/eight-worker budget
+  (`aafa96b8`). All five corrected CPU/NN controls pass. See the
+  [launch receipt](benchmarks/iqa_i265_durable_2026-10-18/README.md).
+
 - **2026-10-18 — Mac warm IQA admission after interruption.** An interrupted
   NLPD warm attempt left a running zenbench reservation whose owner had exited.
   Later cold cells continued, while warm attempts refused admission and remained

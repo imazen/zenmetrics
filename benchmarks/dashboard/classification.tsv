@@ -1028,3 +1028,4 @@ benchmarks/mac_validation_2026-10-18/ort-results.tsv	ignored	Native correctness 
 benchmarks/mac_validation_2026-10-18/providers.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
 benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.tsv	ignored	Complexity-study timing table (perf_deltas.py) for the zenmetrics-pyiqa-ports models; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_i265_durable_2026-10-18/launch.json	ignored	Durable Linux launch provenance and protocol/configuration controls; an incomplete single-pair scaling run, not a metric timing dataset.

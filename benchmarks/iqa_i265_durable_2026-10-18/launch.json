@@ -1,0 +1,225 @@
+{
+  "observed_utc": "2026-10-18T10:56:55.523408+00:00",
+  "machine": "i265",
+  "tab": "iqa-i265-bench",
+  "pane": "wY:p2",
+  "source_commits": [
+    "9954fadd86868e2f7aff5582db49d752324845c8",
+    "aafa96b8",
+    "0b2af341fca1e1a5bbb4b906628b224fc108c648"
+  ],
+  "build": {
+    "source_commit": "71c18de8cd5b9460265fea7969833b6f524517ca",
+    "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2",
+    "inventory_sha256": "a1ff3e010889d0ef4419ae3fc22fec2bdfc72e7d727ba884ef74b34a7a304253",
+    "features": "compete,compete-nn,metrics-parallel",
+    "command": "TMPDIR=$HOME/tmp LOCK_SNAP_DIR=$HOME/tmp/zenmetrics-lock-snap flock $HOME/tmp/i265-heavy.lock ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 8 -- just iqa-compete-build durable",
+    "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+    "binary_dependencies": "\tlinux-vdso.so.1 (0x000078b1f38d7000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000078b1f388f000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x000078b1f3769000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x000078b1f1e00000)\n\t/lib64/ld-linux-x86-64.so.2 (0x000078b1f38d9000)\n",
+    "source_files": {
+      "Cargo.lock": "cfaae55e4123af8acbec8c491e04b0b400a6616450524e1b46528b6605d9301e",
+      "ci/sibling-pins.tsv": "14b83844dc1400be566f423c49905eef5d8e897177716103cd3e7fb450338d9e",
+      "benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs": "77408768b425e9f9d49c702b24a38aa242336b5175d8afac15e13b8a3bb74705"
+    },
+    "zenbench_cli_sha256": "88f74927579b0493a6ffd231a1157f29753aaec2e5cd0e7e09911abdc73518df",
+    "benchmark_patch": {
+      "adapter_sha256": "c3a8c50cc84645eb80619f88e5258e89048a167f03c222b0ea2799284990084d",
+      "path": "crates/zenmetrics-nn/src/engine.rs",
+      "original_sha256": "a117334e4bb6895fe67bf040a14396eb4d9080a8cafd0d35c8bf333ba9206f8a",
+      "adapted_sha256": "a16a991f79c47519bb4378825b8c74d5091ce75f5855d0c7a34fc539cc2e2340",
+      "builders": 2,
+      "session_call_sites": 3,
+      "scope": "Benchmark snapshot only; explicit intra-op cell budget, inter-op one; graph operations, providers and deterministic-compute options unchanged"
+    }
+  },
+  "sequence": "/home/lilith/benchmark-bundles/iqa-i265-20261018-coverage/sequence.json",
+  "sequence_sha256": "6e24e57b4f50ae8912346ce9d4e45743d2ba8f0edf6441a8047679e19a86ec12",
+  "service": "iqa-durable-41cfddaddf8a.service",
+  "controls": [
+    {
+      "path": "/home/lilith/benchmark-results/iqa-i265-20261018-cpu-budgeted-control",
+      "control": {
+        "cells": 16,
+        "report_sha256": "7140fae1d344380bbcc86948abbdb756ded45b9b7ba16a53900ebbbaf58ef05e",
+        "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2",
+        "score_bits": {
+          "gmsd/score": "3f502995a9432b5c",
+          "gmsd/score+map": "3f502995a9432b5c",
+          "psnr/score": "4048211a13b5ebac"
+        },
+        "qualification": "Frozen 512 CPU timing protocol and exact cold/warm/map identity; not independent metric parity"
+      },
+      "placement_proofs": 16,
+      "rounds": 30,
+      "all_round_gates_clean": true,
+      "affinity_errors": 0,
+      "resource_summaries": [
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27098MiB | peak-load 1.47",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27082MiB | peak-load 1.47",
+        "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 27089MiB | peak-load 1.47",
+        "run-heavy: done rc=0 2s | peak-RSS 0.02GiB | min-avail 27090MiB | peak-load 1.47",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27091MiB | peak-load 1.43",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27075MiB | peak-load 1.43",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27072MiB | peak-load 1.43",
+        "run-heavy: done rc=0 2s | peak-RSS 0.02GiB | min-avail 27075MiB | peak-load 1.43",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27113MiB | peak-load 1.31",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27101MiB | peak-load 1.31",
+        "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 27118MiB | peak-load 1.31",
+        "run-heavy: done rc=0 2s | peak-RSS 0.02GiB | min-avail 27094MiB | peak-load 1.31",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27123MiB | peak-load 1.31",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27112MiB | peak-load 1.31",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27109MiB | peak-load 1.31",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 27100MiB | peak-load 1.31"
+      ]
+    },
+    {
+      "path": "/home/lilith/benchmark-results/iqa-i265-20261018-nn-cpu-budgeted-1",
+      "control": {
+        "metric": "lpips-alex",
+        "engine": "rten",
+        "source_bundle_manifest_sha256": "78c41a69f0024bec6849c2d3f030c6f63bfedfadfa2311a01ea99986679f631b",
+        "report_sha256": "fe3858fb175d884b421745ca5930e2e8c1ac43373385347d4e9feb21ea22990f",
+        "score_bits": "3f6f725bf4bbb08c",
+        "cold_elapsed_ns": 121791487,
+        "warm_median_ns": 114745568.0,
+        "threads": 1,
+        "ort_intra_threads_observed": null,
+        "qualification": "Real worker protocol and within-engine repeat identity; not full model parity"
+      },
+      "placement_proofs": 2,
+      "rounds": 10,
+      "all_round_gates_clean": true,
+      "affinity_errors": 0,
+      "resource_summaries": [
+        "run-heavy: done rc=0 0s | peak-RSS 0.05GiB | min-avail 27122MiB | peak-load 1.11",
+        "run-heavy: done rc=0 2s | peak-RSS 0.05GiB | min-avail 27041MiB | peak-load 1.11"
+      ]
+    },
+    {
+      "path": "/home/lilith/benchmark-results/iqa-i265-20261018-nn-cpu-budgeted-8",
+      "control": {
+        "metric": "lpips-alex",
+        "engine": "rten",
+        "source_bundle_manifest_sha256": "78c41a69f0024bec6849c2d3f030c6f63bfedfadfa2311a01ea99986679f631b",
+        "report_sha256": "adce8c17715cea5c6b112b68e5e22c4ef53790fa89334e22fe908bab50ba3047",
+        "score_bits": "3f6f725bf4bbb08c",
+        "cold_elapsed_ns": 27858942,
+        "warm_median_ns": 21861404.125,
+        "threads": 8,
+        "ort_intra_threads_observed": null,
+        "qualification": "Real worker protocol and within-engine repeat identity; not full model parity"
+      },
+      "placement_proofs": 2,
+      "rounds": 10,
+      "all_round_gates_clean": true,
+      "affinity_errors": 0,
+      "resource_summaries": [
+        "run-heavy: done rc=0 0s | peak-RSS 0.05GiB | min-avail 27155MiB | peak-load 1.22",
+        "run-heavy: done rc=0 2s | peak-RSS 0.07GiB | min-avail 27143MiB | peak-load 1.22"
+      ]
+    },
+    {
+      "path": "/home/lilith/benchmark-results/iqa-i265-20261018-nn-cuda-budgeted-1",
+      "control": {
+        "metric": "lpips-alex",
+        "engine": "ort-cuda",
+        "source_bundle_manifest_sha256": "5b1a2ec3ff9938071ce4364b4ab4381ca447708c40008020f73d98b0467a90bc",
+        "report_sha256": "c7ec875c0f8f0f9eb3dba28ff6cfc414a5578d84480ff143775fc1c781299fd6",
+        "score_bits": "3f6f725c20000000",
+        "cold_elapsed_ns": 808366139,
+        "warm_median_ns": 2014732.0226022014,
+        "threads": 1,
+        "ort_intra_threads_observed": [
+          1,
+          1
+        ],
+        "qualification": "Real worker protocol and within-engine repeat identity; not full model parity"
+      },
+      "placement_proofs": 2,
+      "rounds": 10,
+      "all_round_gates_clean": true,
+      "affinity_errors": 0,
+      "resource_summaries": [
+        "run-heavy: done rc=0 1s | peak-RSS 1.05GiB | min-avail 27151MiB | peak-load 1.17",
+        "run-heavy: done rc=0 2s | peak-RSS 1.07GiB | min-avail 26393MiB | peak-load 1.17"
+      ]
+    },
+    {
+      "path": "/home/lilith/benchmark-results/iqa-i265-20261018-nn-cuda-budgeted-8",
+      "control": {
+        "metric": "lpips-alex",
+        "engine": "ort-cuda",
+        "source_bundle_manifest_sha256": "5b1a2ec3ff9938071ce4364b4ab4381ca447708c40008020f73d98b0467a90bc",
+        "report_sha256": "1187897e1eaf368e7315aacd78240e81e24bca6e828e4786e4297d523380d862",
+        "score_bits": "3f6f725c20000000",
+        "cold_elapsed_ns": 816130825,
+        "warm_median_ns": 2816361.7105263155,
+        "threads": 8,
+        "ort_intra_threads_observed": [
+          8,
+          8
+        ],
+        "qualification": "Real worker protocol and within-engine repeat identity; not full model parity"
+      },
+      "placement_proofs": 2,
+      "rounds": 10,
+      "all_round_gates_clean": true,
+      "affinity_errors": 0,
+      "resource_summaries": [
+        "run-heavy: done rc=0 1s | peak-RSS 1.05GiB | min-avail 27175MiB | peak-load 1.19",
+        "run-heavy: done rc=0 2s | peak-RSS 1.07GiB | min-avail 26344MiB | peak-load 1.73"
+      ]
+    }
+  ],
+  "progress": [
+    {
+      "name": "512-non-nn",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/512-non-nn",
+      "progress": {
+        "complete": false,
+        "identity": "64b73963684187ad1bf4042fa3439a9377489713a467ecaee633ba5adb92efb1",
+        "latest_cell": "000052-1c52e109bd2473b2",
+        "statuses": {
+          "failed": 0,
+          "ok": 44,
+          "pending": 1307,
+          "unsupported": 9
+        }
+      }
+    },
+    {
+      "name": "512-nn-cpu",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/512-nn-cpu",
+      "progress": null
+    },
+    {
+      "name": "512-nn-cuda",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/512-nn-cuda",
+      "progress": null
+    },
+    {
+      "name": "larger-non-nn",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/larger-non-nn",
+      "progress": null
+    },
+    {
+      "name": "larger-nn-cpu",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/larger-nn-cpu",
+      "progress": null
+    },
+    {
+      "name": "larger-nn-cuda",
+      "output": "/home/lilith/benchmark-results/iqa-i265-20261018-coverage/larger-nn-cuda",
+      "progress": null
+    }
+  ],
+  "verified_dependency_wait": "First stage incomplete; all five successors have no output directory and no measurement has started",
+  "exclusions": [
+    "pieapp (explicit opt-in)",
+    "NN maps (no qualified native-map adapter)"
+  ],
+  "unqualified_earlier_controls": [
+    "/home/lilith/benchmark-results/iqa-i265-20261018-nn-cuda-control"
+  ],
+  "scope": "Single S67 scaling study, protocol/configuration controls only; no claim of full metric numerical parity"
+}
