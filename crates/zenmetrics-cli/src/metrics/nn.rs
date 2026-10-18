@@ -245,22 +245,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn non_permissive_weights_refuse_without_consent() {
-        // `from_dir` checks the consent before reading any file, so the
-        // directory need not exist.
-        let err = match Ckdn::from_dir("/nonexistent-ckdn", Engine::Rten, &WeightsConsent::new()) {
-            Err(e) => e,
-            Ok(_) => panic!("ckdn's weights have no stated licence"),
-        };
-        assert!(
-            matches!(err, zenmetrics_nn::Error::WeightsNotAccepted(t) if t == Ckdn::WEIGHTS),
-            "expected WeightsNotAccepted for ckdn, got {err:?}"
-        );
-    }
-}
