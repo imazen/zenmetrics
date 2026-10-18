@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "verified_date": "2026-10-18",
+  "publication_scope": "Aggregate results only. No private source, checkpoints, graphs, per-image scores, storage URLs or preprocessing implementation is included.",
+  "models": [
+    {
+      "metric": "IDFIQA",
+      "published_column": "proposal-IDFIQA",
+      "published_match": "61 crop pairs, rten: median absolute difference 4.2e-6 JND, maximum 3.33e-4 JND, Spearman 1.0",
+      "native_gate": "Maximum absolute difference <= 0.001 JND passes on rten, ORT CPU and ORT CUDA; warm and cold scores bit-identical",
+      "licence_class": "private implementation; upstream code licence requested",
+      "aggregate_record_git_blob": "59f3f9cc8eaddbdf8929c5fcb5a91ee098ed213c"
+    },
+    {
+      "metric": "MSSWD (learned)",
+      "published_column": "MSSWD",
+      "published_match": "61 crop pairs, rten: median absolute difference 4.11e-6, maximum 2.44e-4, Spearman 0.9999",
+      "native_gate": "82 oracle pairs: worst absolute difference rten 1.71e-6, ORT CPU 1.05e-6, ORT CUDA 1.79e-6 (at most 2.4e-5 JND); gate 0.001 JND; warm and cold bit-identical",
+      "licence_class": "private implementation; checkpoint redistribution terms unresolved",
+      "aggregate_record_git_blob": "626500c97404ec636b90abc385e9f65eef57e887"
+    }
+  ],
+  "aimos": "Unidentified: 16 of 34 no-reference candidates scored, no match. Best hyperiqa ratio, Spearman 0.82.",
+  "data_terms": "The AIC2026 DaRUS dataset listing (DOI 10.18419/DARUS-6156), checked 2026-10-18, states CC BY-SA 4.0. The new AIC2026 pages publish aggregate comparisons only. Current subjective-score version, uncertainty and permission to publish derived charts are requested from the authors; no AIC2026 per-image metric or human labels are exported by this section.",
+  "data_terms_url": "https://doi.org/10.18419/DARUS-6156"
+}

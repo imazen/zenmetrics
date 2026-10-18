@@ -1035,3 +1035,6 @@ benchmarks/iqa_chart_snapshot_2026-10-18/i265/sources.json	ignored	Attempt-level
 benchmarks/iqa_chart_snapshot_2026-10-18/mac/observations.jsonl	ignored	Attempt-level chart development snapshot; source selection and qualification required
 benchmarks/iqa_chart_snapshot_2026-10-18/mac/snapshot.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
 benchmarks/iqa_chart_snapshot_2026-10-18/mac/sources.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/dashboard/aic2026/private-aggregates.json	ignored	AIC2026 static pages aggregate-only publication contract; not per-observation measurements
+benchmarks/dashboard/aic2026/scatter-example.json	ignored	AIC2026 scatter-v2 full-population density example and canonical frozen aggregate diagnostics
+benchmarks/dashboard/aic2026/screenshot-ranks.tsv	ignored	Visible author-figure metric names and median ranks; aggregate screenshot coverage input

@@ -307,6 +307,10 @@ def build(output):
                     registered=sorted(registered),unregistered_count=len(unregistered),
                     glob_matches=matches,source_counts=source_counts,source_mode_counts=source_mode_counts)
     (data/'manifest.json').write_text(json.dumps(manifest, indent=2))
+    from aic2026 import build as build_aic2026
+    build_aic2026(output, families['models'])
+    from origins import check as check_origins
+    check_origins(output)
     scan_output(output)
     print(json.dumps(manifest['counts']))
     return manifest

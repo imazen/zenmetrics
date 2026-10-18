@@ -11,6 +11,8 @@ from playwright.sync_api import sync_playwright
 
 
 def check(directory, screenshots, port=3387):
+    from origins import check as check_origins
+    check_origins(directory)
     if not 3000<=port<=3999:raise ValueError('dashboard port must be 3000–3999')
     manifest=json.loads((directory/'data/manifest.json').read_text())
     handler=functools.partial(SimpleHTTPRequestHandler, directory=str(directory))
@@ -21,6 +23,7 @@ def check(directory, screenshots, port=3387):
         with sync_playwright() as p:
             browser=p.chromium.launch(executable_path=os.environ.get('DASHBOARD_CHROMIUM'))
             page=browser.new_page(viewport={'width':1440,'height':1000},accept_downloads=True)
+            page.on('request',lambda r:errors.append('external origin request: '+r.url) if not r.url.startswith((f'http://127.0.0.1:{port}/','data:','blob:')) else None)
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.on('console',lambda m:errors.append(m.text) if m.type=='error' else None)
             page.on('response',lambda r:errors.append(f'HTTP {r.status}: {r.url}') if r.status>=400 else None)
@@ -195,9 +198,23 @@ def check(directory, screenshots, port=3387):
             page.goto(f'http://127.0.0.1:{port}/#catalog');page.wait_for_function('window.dashboardReady==="catalog"')
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'), 'mobile page overflow'
             if screenshots:page.screenshot(path=str(screenshots/'mobile.png'),full_page=True)
+            aic=json.loads((directory/'aic2026/manifest.json').read_text())
+            for width,theme in [(1440,'light'),(390,'dark')]:
+                page.set_viewport_size({'width':width,'height':900})
+                page.emulate_media(color_scheme=theme)
+                for name in aic['pages']:
+                    page.goto(f'http://127.0.0.1:{port}/aic2026/'+name)
+                    assert page.locator('h1').count()==1,name
+                    assert aic['source_commit'] in page.locator('footer').inner_text(),name
+                    assert page.locator('nav a').count()==len(aic['pages']),name
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),name
+                page.goto(f'http://127.0.0.1:{port}/aic2026/statistics.html')
+                assert page.locator('svg rect').count()>0
+                if screenshots:page.screenshot(path=str(screenshots/('aic-statistics-'+str(width)+'.png')),full_page=True)
+            assert not errors,errors
             browser.close()
         assert not errors, errors
-        print(json.dumps({'pages':6,'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
+        print(json.dumps({'dashboard_views':6,'aic2026_pages':len(aic['pages']),'aic2026_widths':[1440,390],'console_errors':errors,'filters':'pass','csv':'pass','URL_restore':'pass','mobile':'pass','theme':'pass'}))
     except Exception:
         print(json.dumps({'browser_errors':errors}),flush=True)
         raise

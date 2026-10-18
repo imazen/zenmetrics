@@ -70,7 +70,7 @@ def rows():
     compiled=function(source,'scoring_compiled_in')
     nn=set(re.findall(r'MetricKind::(\w+)',compiled.split('let nr')[0]));nr=set(re.findall(r'MetricKind::(\w+)',compiled.split('let nr')[1]))
     cards=[]
-    for p in sorted((ROOT/'crates/zenmetrics-nn/models').glob('*/card.toml')):
+    for p in model_paths():
         card=tomllib.loads(p.read_text());cards.append((p,card))
     scales={}
     for line in (ROOT/'crates/zenmetrics-nn/models/jnd_scale.tsv').read_text().splitlines():
@@ -112,6 +112,11 @@ def rows():
                 parity=('reported gate: '+plain(match[2])+'; observed: '+plain(match[3])) if match else 'no evidence'
             evidence='docs/METRIC_PROVENANCE.md';paper=plain(entry[2])
         yield dict(metric=name,backend='GPU' if kind in gpu else 'CPU',requires_gpu=str(kind in gpu).lower(),needs_display=str(kind in display).lower(),luma_only=str(kind in luma).lower(),columns=columns[kind],column_expression=expressions[kind],nn=str(kind in nn).lower(),nr=str(kind in nr).lower(),kind=card_kind,direction=direction,license=plain(license_name),paper=plain(paper),reference=plain(str(oracle)),parity=parity,evidence=evidence or 'no evidence',jnd_scale=';'.join(c+'='+scales[c] for c in cols if c in scales),column_scope='static feature-off names; enabled implementations may version columns' if not card else 'model output columns')
+
+
+def model_paths():
+    return sorted(p for crate in ('zenmetrics-nn', 'zenmetrics-pyiqa-ports')
+                  for p in (ROOT/'crates'/crate/'models').glob('*/card.toml'))
 
 
 def render():

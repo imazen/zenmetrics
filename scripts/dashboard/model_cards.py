@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import re
 import tomllib
-from catalog import ROOT, rows as catalog_rows, md_tables, plain, function
+from catalog import ROOT, rows as catalog_rows, md_tables, plain, function, model_paths
 import repro
 
 SITE='https://imazen.github.io/zenmetrics/'
@@ -58,7 +58,7 @@ def cards():
     citations=json.loads((ROOT/'scripts/dashboard/citations.json').read_text())
     by_metric={metric:dict(c,key=key) for key,c in citations.items() for metric in c['metrics'] if not metric.startswith('--')}
     nn=[]
-    for path in sorted((ROOT/'crates/zenmetrics-nn/models').glob('*/card.toml')):
+    for path in model_paths():
         nn.append((path,tomllib.loads(path.read_text())))
     entries=ledger()
     source=(ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
@@ -89,7 +89,7 @@ def cards():
         reference=code.get('upstream',parity.get('oracle',row['reference']))
         record_path=path.relative_to(ROOT).as_posix() if path else 'docs/METRIC_PROVENANCE.md'
         implementation_license=row['license']
-        manifest=ROOT/'crates'/('zenmetrics-nn' if row['nn']=='true' or model else metric)/'Cargo.toml'
+        manifest=ROOT/'crates'/(path.parts[-4] if path else 'zenmetrics-nn' if row['nn']=='true' or model else metric)/'Cargo.toml'
         if manifest.is_file():
             license_value=tomllib.loads(manifest.read_text()).get('package',{}).get('license')
             if isinstance(license_value,str):implementation_license=license_value

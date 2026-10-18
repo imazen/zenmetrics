@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Added
+
+- Generate an AIC2026 extension with every CLI configuration, reproduction gaps, public model cards, cost/runtime and preliminary agreement, full-population CID22 scatter diagnostics, and both screenshot inventories (`a6418abc` base). Preserve the existing viewer and reject third-party resource loads.
+
 ### Fixed
 
 - Correct AIC2026 implementation statuses and pyiqa column identities; derive the paper coverage denominator from the CLI (`85b58962` base).
