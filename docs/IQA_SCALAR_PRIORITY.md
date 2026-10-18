@@ -169,3 +169,26 @@ native service state, current progress and replacement predecessor records.
 Existing NN data remains available: Mac 512 CPU 184/184 successful and Metal
 144/184 successful; i265 512 CPU and CUDA each 128/184 successful. Failed cells
 remain failed; bounded queue completion is distinct from full qualification.
+
+### First replacement phase completed
+
+The Mac fast **non-dvifmish** phase subsequently completed 112/112 cells:
+84 cold rows and 28 warm rows with 280/280 gate-clean rounds. Both `complete`
+and `qualified` are true in its actual final report. The eight route names are
+GMSD, PSNR, PSNR-Cb, PSNR-Cr, PSNR-Y, PSNR-Y-studio601, PSNR-Y601 and
+SSIM-pyiqa-f32-k6. The two dvifmish routes in the fastest-ten baseline remain
+part of the following all-six-route dvifmish phase; they are not included in
+this 112-cell completion claim. The service was observed advancing to that
+phase. Final report copy: `fastest-complete-report.json` in the Mac scalar
+artifact directory, SHA256
+`796b68861fc4f8aa0cfcdc1e4737919dfc79f9ee8fa508951506d30fdce2b28a`.
+
+The i265 replacement dvifmish phase subsequently completes 277/277 cells,
+with 207 cold rows and 70 warm rows: all 700 recorded warm rounds are gate-clean.
+Its actual report has `complete=true` and `qualified=true`, SHA256
+`dd593283bbc58252edab5cc72ee3ec2835239523729818498cf97b80a62c0018`.
+Copy: `dvifmish-complete-report.json` in the i265 scalar artifact directory.
+Together with retained original scalar cells, this completes its remaining
+six-route dvifmish scalar workload. The following single classical retry is
+MAD at aic-medium, one worker, warm; its prior attempt remains bound in lineage
+and only one additional attempt is allowed before the original NN phases resume.
