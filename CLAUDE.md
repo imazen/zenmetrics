@@ -1937,3 +1937,13 @@ failed attempts and input-contract refusals remain unchanged. No crate/weights
 publication or public API addition occurred. Source/build hashes, private Mac
 counter correction, true native-map units, dependency waits and resolving
 commands are in [the owning contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).
+
+### Known Bugs: 8K scalar FSIM no-downscale warm resource boundary (2026-10-18)
+
+The frozen corrected Mac scalar worker completes the 7680×4320/eight-worker
+`fsim-nodownscale` cold cell at 11.79 GiB peak host RSS, but its warm cell
+hits the unchanged monitored 12-GiB guard on both allowed attempts (exit 137,
+49s/48s, cleanup verified; peak RSS unavailable). The warm cell remains
+unqualified and exhausted. Smaller retained qualified resolutions are not
+relabeled as 8K coverage. No downsampling, ingress, guard or metric arithmetic
+changed. See [the scalar deadline receipt](docs/IQA_SCALAR_PRIORITY.md#measured-8k-fsim-no-downscale-resource-refusal).

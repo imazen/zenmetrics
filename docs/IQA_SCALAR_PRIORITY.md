@@ -285,3 +285,16 @@ Early measured Mac results have complete cold/warm pairs for VMAF-neg,
 VMAF-v1 and PSNR-HVS-Daala, with all ten warm rounds clean for each. Existing
 quality-evidence restrictions still apply: admission priority is not a new
 human-agreement or Pareto qualification for Daala/FSIM variants.
+
+### Measured 8K FSIM no-downscale resource refusal
+
+In the deadline subset, the 7680×4320/eight-worker scalar
+`fsim-nodownscale` cold cell completes: resource receipt rc0, 106s,
+11.79 GiB peak RSS, minimum available-page proxy 11158 MiB, peak load 10.64.
+Its warm cell exhausts its two existing attempts: monitored memory guard exits
+137 after 49s and 48s, with peak RSS unavailable and minimum available-page
+proxies 9867/9573 MiB. Both records verify process-group cleanup. No warm timing
+is qualified, no guard is raised, and no downsampling/ingress changes are made.
+The earlier retained qualified smaller-resolution pair is distinct from this
+failed new 8K warm cell. The queue advances after bounded failure.
+Retained audit: `mac/fsim-nodownscale-audit.txt` in the successor artifact root.
