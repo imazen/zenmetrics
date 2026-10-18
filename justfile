@@ -1802,3 +1802,7 @@ complexity-draft-compare:
 # Caller supplies resource admission; retain OS peak RSS for one prepared-pair process.
 complexity-process-rss bin metric shape threads cpus report:
     env RAYON_NUM_THREADS={{threads}} OMP_NUM_THREADS={{threads}} RTEN_NUM_THREADS={{threads}} /usr/bin/time -v -o "{{report}}" taskset -c "{{cpus}}" "{{bin}}" "{{shape}}" "{{metric}}" 1
+
+# Requires all six inventory panels; refuses incomplete or duplicate cells.
+aic-refusal-publish logs out *inputs:
+    python3 scripts/complexity/publish_refusals.py --logs "{{logs}}" --out "{{out}}" {{inputs}}
