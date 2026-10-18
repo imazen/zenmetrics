@@ -116,7 +116,9 @@ What closes them, step by step (`hdrvdp3_configs.tsv`, `hdrvdp2_configs.tsv`):
 | `HDR_VDP_2` | **same, codes not rounded to 10 bits** | **0.0278 / 0.230** | **0.00365 / 0.0515** | **0.99997** | **0.9998** | **0.997, 0.18** |
 
 Exact ppd: the paper's 37.84 is CVVDP's centre ppd for `standard_fhd`,
-37.842505866…; a rerun at that exact value is queued on i265 and not yet measured.
+37.842505866…. Rerun at that value (i265): `HDR_VDP_3` (XYZ) median 1.336e-3 / max 1.28e-2 site-JND
+(vs 1.363e-3 / 1.29e-2), `HDR_VDP_2` (no rounding) 3.90e-3 / 5.17e-2 (vs 3.65e-3 / 5.15e-2):
+within noise of each other, so the rounding of ppd does not explain either residual.
 
 Searched and worse (all in the TSVs): EOTF PQ / sRGB / gamma 2.2 / raw codes; peak
 100–10000 cd/m²; black 0–0.5; reflection on/off and ρ = 0.01; ppd 15–128 (the qaf port
@@ -264,6 +266,7 @@ A-FINE `1b49be7` QuickInference + checkpoints, `Baoliang93/DMM` `DMM_PyTorch`). 
 
 Hosts: compute ran on dev (Ryzen 9 9950X3D, RTX 5070) under `run-heavy`; after the owner
 reclaimed dev, the proposal-Butteraugli and CAMBI runs ran niced on i265 (41.6 s wall,
-159 MiB max RSS, `/usr/bin/time -v`), and the exact-ppd check is queued there. dev was reclaimed by the owner before the WD bilinear variant and
+159 MiB max RSS, `/usr/bin/time -v`) and the exact-ppd check under the i265 lock
+(`scripts/i265_ppd_exact.sh`; 53 s, 0.90 GiB peak RSS). dev was reclaimed by the owner before the WD bilinear variant and
 the last 12 CPU DMM pairs ran. Wrapper receipts (peak RSS): HDR-VDP qaf grids ≤ 0.53 GiB;
 Rust probe ≤ 1.47 GiB; A-FINE CPU batch 1.71 GiB; WD probe 5.49 GiB; DMM CUDA 2.26 GiB.
