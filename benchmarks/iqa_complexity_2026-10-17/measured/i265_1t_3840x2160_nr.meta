@@ -1,0 +1,9 @@
+commit=2fab671a4324 (binary identical to the 1024x1024 run)
+binary=complexity-reps --features zenmetrics-cli/nr sha256=1e8a2d0fe0e7e4d7198854d072e8d9d44fde7d712a72480f4d1e3a53c59c35fa
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+runs=threads 1 pinned cpu 6
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled to 3840x2160; sRGB8; default options
+start_utc=2026-10-17T23:24:18Z load=4.82 6.23 6.12
+end_utc=2026-10-17T23:26:17Z
+run_heavy=run-heavy: done rc=0 4422s | peak-RSS 4.63GiB | min-avail 13066MiB | peak-load 8.58 (one invocation covering all four CPU passes, 2026-10-17T23:24:18Z-2026-10-18T00:38:00Z)
+command=flock ~/tmp/i265-heavy.lock run-heavy --mem 16G --jobs 8 -- ~/tmp/cx-4k/scripts/run-cpu-4k.sh (perf_deltas.py, 3 repeats, adaptive extra reps, --timeout-s 900)

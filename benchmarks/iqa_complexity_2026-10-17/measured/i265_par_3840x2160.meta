@@ -1,0 +1,9 @@
+commit=2fab671a4324 (binary identical to the 1024x1024 run)
+binary=complexity-reps --features metrics-parallel,zenmetrics-cli/nr sha256=67890f926d9b7613933b5743a335f8ca7c46497717aabd7c1bf2f5b9351bae01; metric crates' own threading enabled (differs from the default CLI build)
+host=i265 cpu=Intel(R) Core(TM) Ultra 7 265K
+runs=threads 1 pinned cpu 6; threads 8 pinned cpus 0-7 (P-cores); same binary
+content=zenmetrics-corpus source.png vs q20.jpg, mirror-tiled to 3840x2160; sRGB8; default options; cvvdp display standard_fhd
+start_utc=2026-10-17T23:54:28Z
+end_utc=2026-10-18T00:38:00Z load=1.85 2.94 2.62
+run_heavy=run-heavy: done rc=0 4422s | peak-RSS 4.63GiB | min-avail 13066MiB | peak-load 8.58 (one invocation covering all four CPU passes, 2026-10-17T23:24:18Z-2026-10-18T00:38:00Z)
+command=flock ~/tmp/i265-heavy.lock run-heavy --mem 16G --jobs 8 -- ~/tmp/cx-4k/scripts/run-cpu-4k.sh (perf_deltas.py, 3 repeats, adaptive extra reps, --timeout-s 900)

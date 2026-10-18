@@ -369,10 +369,16 @@ benchmarks/iqa_complexity_2026-10-17/engines/i265_nn_ort-cuda_1024.tsv	ignored	C
 benchmarks/iqa_complexity_2026-10-17/engines/i265_nn_ort-webgpu_1024.tsv	ignored	Complexity-study engine timing table consumed by scripts/complexity/nn_engines.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_1024_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160_nr.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.tsv	ignored	Complexity-study timing table consumed by scripts/complexity/paper.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_par_3840x2160.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_par_3840x2160.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
