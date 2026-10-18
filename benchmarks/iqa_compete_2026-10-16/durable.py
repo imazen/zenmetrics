@@ -281,6 +281,7 @@ def anchor(attempt, address, seconds, supervisor):
     wrapper = intent['wrapper']
     if wrapper:
         command = [wrapper, '--mem', intent['memory'], '--jobs', str(intent['jobs']), '--', *command]
+    atomic(attempt / 'command.json', dict(wrapper_command=command, worker_command=intent['command']))
     with (attempt / 'worker.log').open('xb', buffering=0) as log:
         child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                  env=environment(load(attempt / 'config.json'), Path(intent['scratch'])))
@@ -382,13 +383,14 @@ def watchdog(attempt, parent_fd, lock_fds, seconds):
         except (ValueError, OSError, struct.error) as error:
             record['reason'] = str(error)
     log = attempt / 'worker.log'
+    record['executed_command'] = load(attempt / 'command.json') if (attempt / 'command.json').exists() else None
     record['log_sha256'] = file_hash(log) if log.exists() else None
     save_result(attempt / 'result.json', record)
     return 0
 
 
 @contextlib.contextmanager
-def locked(path, wait=False):
+def locked(path, wait=False, heartbeat=None):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with Path(path).open('a+b') as stream:
         while True:
@@ -398,6 +400,8 @@ def locked(path, wait=False):
             except BlockingIOError:
                 if not wait:
                     raise Refusal('coordinator output is locked')
+                if heartbeat:
+                    heartbeat()
                 if STOP:
                     raise InterruptedError('stopped while waiting for admission lock')
                 time.sleep(.1)
@@ -463,9 +467,11 @@ def attempts(output, config, identity):
     return directory, records
 
 
-def report(output, configs, identity, cap):
+def report(output, configs, identity, cap, heartbeat=None):
     cells = []
     for config in configs:
+        if heartbeat:
+            heartbeat()
         _, records = attempts(output, config, identity)
         final = next((r for r in records if r['status'] in ('ok', 'unsupported')), None)
         status = final['status'] if final else ('failed' if len(records) >= cap else 'pending')
@@ -512,15 +518,23 @@ def run(args):
         identity = digest(encoded(dict(frozen=frozen, policy=policy)))
         scratch = output / 'scratch'
         scratch.mkdir(exist_ok=True)
+        last_beat = [0.]
+        def heartbeat():
+            now = time.monotonic()
+            if now - last_beat[0] >= 1:
+                (output / 'controller-heartbeat').touch()
+                last_beat[0] = now
+        heartbeat()
         # Short Unix-socket address: Darwin sockaddr_un has a small fixed limit.
         socket_root = Path.home() / 'tmp' / ('iqa-' + uuid.uuid4().hex[:12])
         socket_root.mkdir(parents=True)
         try:
-            current = report(output, configs, identity, policy['max_attempts'])
+            current = report(output, configs, identity, policy['max_attempts'], heartbeat)
             if args.action == 'run':
                 while not current['complete'] and not STOP:
                     # One pass visits every pending cell before any retry.
                     for cell in current['cells']:
+                        heartbeat()
                         if cell['status'] != 'pending' or STOP:
                             continue
                         # Re-hash before each attempt; changed inputs cannot consume results.
@@ -530,7 +544,7 @@ def run(args):
                             if file_hash(cell['config'][role]) != cell['config'][role + '_sha256']:
                                 raise Refusal('active input changed during run')
                         config = cell['config']
-                        admission = locked(policy['lock'], wait=True) if policy['lock'] else contextlib.nullcontext(None)
+                        admission = locked(policy['lock'], wait=True, heartbeat=heartbeat) if policy['lock'] else contextlib.nullcontext(None)
                         with admission as heavy_fd:
                             directory, records = attempts(output, config, identity)
                             number = len(records) + 1
@@ -556,6 +570,7 @@ def run(args):
                                 os.close(read_fd)
                                 try:
                                     while child.poll() is None:
+                                        heartbeat()
                                         if STOP:
                                             break
                                         try:
@@ -581,7 +596,7 @@ def run(args):
                         atomic(output / 'progress.json', dict(identity=identity, complete=current['complete'],
                                latest_cell=cell['cell_id'], statuses={s:sum(c['status']==s for c in current['cells'])
                                for s in ('ok','unsupported','failed','pending')}))
-            current = report(output, configs, identity, policy['max_attempts'])
+            current = report(output, configs, identity, policy['max_attempts'], heartbeat)
             print(json.dumps(dict(complete=current['complete'], qualified=current['qualified'],
                                   statuses={s: sum(c['status'] == s for c in current['cells'])
                                             for s in ('ok', 'unsupported', 'failed', 'pending')},

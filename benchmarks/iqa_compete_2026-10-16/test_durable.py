@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """OS-backed crash, deadline, identity and recovery controls; no IQA workload."""
+import fcntl
 import hashlib
 import json
 import os
@@ -260,6 +261,36 @@ class DurableTests(unittest.TestCase):
             (first/name).unlink(missing_ok=True)
         self.finish(self.start())
         report=json.loads((self.output/'report.json').read_text())
+        self.assertEqual(len(report['cells'][0]['attempts']),2)
+
+    def test_heartbeat_continues_while_waiting_admission(self):
+        self.freeze()
+        with (self.root/'heavy.lock').open('a') as guard:
+            fcntl.flock(guard,fcntl.LOCK_EX)
+            child=self.start()
+            beat=self.output/'controller-heartbeat'
+            self.until(beat.exists)
+            initial=beat.stat().st_mtime_ns
+            self.until(lambda:beat.stat().st_mtime_ns>initial)
+            self.assertFalse((self.root/'execution.jsonl').exists())
+            fcntl.flock(guard,fcntl.LOCK_UN)
+        self.finish(child)
+
+    def test_saved_failed_cleanup_blocks_live_group_without_signaling_it(self):
+        self.freeze();self.finish(self.start())
+        result=next(self.output.glob('cells/*/attempt-*/result.json'))
+        record=durable.read_result(result)
+        record.update(status='failed',row=None,cleanup_verified=False)
+        durable.save_result(result,record)
+        unrelated=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'],start_new_session=True)
+        self.children.append(unrelated)
+        durable.atomic(result.parent/'groups.json',dict(anchor=unrelated.pid))
+        child=self.start()
+        self.assertEqual(child.wait(timeout=10),1)
+        self.assertIsNone(unrelated.poll(),'recovery must never signal a remembered/reused group ID')
+        unrelated.terminate();unrelated.wait(timeout=5)
+        report=self.finish(self.start())
+        self.assertEqual(report['cells'][0]['status'],'ok')
         self.assertEqual(len(report['cells'][0]['attempts']),2)
 
     def test_watchdog_sigkill_cleans_nested_groups_then_resume(self):
