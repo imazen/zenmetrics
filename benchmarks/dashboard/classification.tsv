@@ -838,6 +838,7 @@ benchmarks/nn_opt4_2026-10-16/ab_liqe_b_base_t16.tsv	ignored	Historical experime
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/host_stage_share.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_host_opt_2026-10-17/attempts.tsv	ignored	PieAPP/WD host-side optimization attempt log summarized in benchmarks/nn_host_opt_2026-10-17/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab_256_reps12.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab_t1_1024_2048_cap.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.

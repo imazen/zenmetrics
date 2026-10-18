@@ -1,0 +1,16 @@
+# pieapp/wd host-side optimization attempts, i265 (Core Ultra 7 265K, 8 threads)
+# per-call ms = (T(1+K) - T(1)) / K via scripts/complexity/perf_deltas.py, median of 3 repeats
+# engines: rten (RTEN_NUM_THREADS=8, taskset 0-7) / ort-cuda (ORT 1.31.0, TF32 off)
+# baseline binary: complexity-reps-ort built 2026-10-17 from master bf251353 (pieapp/wd/engine/preprocess/par identical)
+attempt	engine	metric	change	before_ms	after_ms	delta_pct	score_identical	parity	gates	status
+# owned-inputs: ImageGraph::score/tensor take Vec<NamedInput>; rten moves Vec into Tensor::from_data (in-place-capable ops reuse the buffer), ort moves into Tensor::from_array. Removes ~2.5GB/call of per-batch Vec clones.
+owned-inputs	ort-cuda	pieapp	engine.rs Vec<NamedInput>	3833.1	3703.1	-3.39	yes	pieapp-ort full 24p worst 2.69e-7JND ok; pieapp-rten <=1024 ok + 2048^2 stems 1415/2207/2406 worst 1.55e-7 ok; wd-ort ok; wd-rten ok (<=1.9e-6JND)	lib89+fmt+clippy	committed; jj change kzsvxwnt (SHA changes on rebase; pushed SHA in cx-nnhost-report.md)
+owned-inputs	rten	pieapp	same	571299	572286	+0.17	yes	ok (see row 1)	.	same-commit
+owned-inputs	ort-cuda	wd	same	4935.0	4888.6	-0.94	yes	ok (see row 1)	.	same-commit
+owned-inputs	rten	wd	same	14399.4	14373.7	-0.18	yes	ok (see row 1)	.	same-commit
+# Candidates evaluated by analysis/profiling but not applied (owner directive 2026-10-17: no new experiments, wrap up). Evidence: perf shows ort-cuda host CPU is ~92-94% ORT tpause spin-wait; rten pieapp is ~85% GEMM-bound.
+borrowed-views	both	pieapp	ort Tensor::from_array_view / rten TensorView	-	-	-	-	rejected-by-analysis: rten leading Mul is in-place-capable; view forces internal copy, regressing rten	.	rejected
+ort-no-spin	ort-cuda	both	SessionBuilder::with_intra_op_spinning(false)+inter_op(false)	-	-	-	-	not-attempted: targets the 92-94% tpause hotspot; wait-mode switch is compute-neutral; unmeasured	.	deferred
+pieapp-batch-128	both	pieapp	BATCH 32->128 (811->203 session calls at 1024^2)	-	-	-	-	not-attempted: batch dim dynamic, all per-sample ops; accumulation order unchanged; unmeasured	.	deferred
+pieapp-par-extract	both	pieapp	par_each_mut over disjoint per-patch output chunks	-	-	-	-	not-attempted: extraction <0.5% of rten profile; benefit only on ort-cuda's extraction-visible time; unmeasured	.	deferred
+wd-lowpass-interior	rten	wd	specialize 9-tap interior + inline (v*v)*k	-	-	-	-	not-attempted: addresses wd::lowpass 17.4% rten hotspot; bit-exact order preserved in draft; unmeasured	.	deferred
