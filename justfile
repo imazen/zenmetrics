@@ -1709,6 +1709,18 @@ iqa-nn-timing-check bundle output *options:
 iqa-cpu-timing-check bundle output *options:
     python3 benchmarks/iqa_compete_2026-10-16/check_cpu_timing.py '{{bundle}}' '{{output}}' {{options}}
 
+iqa-dvifmish-prepare template binary build output results +options:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_dvifmish.py prepare '{{template}}' '{{binary}}' '{{build}}' '{{output}}' '{{results}}' {{options}}
+
+iqa-dvifmish-install plan:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_dvifmish.py install '{{plan}}'
+
+iqa-dvifmish-timing-check bundle output +options:
+    python3 benchmarks/iqa_compete_2026-10-16/check_dvifmish_timing.py '{{bundle}}' '{{output}}' {{options}}
+
+iqa-durable-build-receipt binary output command_file +options:
+    python3 benchmarks/iqa_compete_2026-10-16/record_durable_build.py '{{binary}}' '{{output}}' --command-file '{{command_file}}' {{options}}
+
 iqa-durable-run manifest output wrapper lock *options:
     python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
 

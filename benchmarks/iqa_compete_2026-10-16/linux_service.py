@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import durable
-from mac_service import verify, predecessor_complete, supervise
+from mac_service import verify, predecessor_complete, supervise, wait_for_predecessors
 
 
 def execute(plan, plan_hash):
@@ -20,6 +20,10 @@ def execute(plan, plan_hash):
         verify(bundle)
         if durable.file_hash(bundle / 'manifest.json') != phase['manifest_sha256']:
             raise ValueError('sequence manifest changed')
+        if phase.get('after'):
+            service_dir = output.with_name(output.name + '.service')
+            service_dir.mkdir(parents=True, exist_ok=True)
+            wait_for_predecessors(phase['after'], service_dir)
         if previous and not predecessor_complete(previous):
             raise ValueError('predecessor incomplete or controller still alive')
         gate = dict(output=str(output), manifest_sha256=phase['manifest_sha256'])
@@ -56,8 +60,10 @@ def main():
         value = durable.load(plan)
         for phase in value['phases']:
             output = Path(phase['output'])
+            wait = output.with_name(output.name + '.service') / 'queue-wait.json'
             print(json.dumps(dict(name=phase['name'], progress=durable.load(output / 'progress.json')
-                if (output / 'progress.json').exists() else 'queued')))
+                if (output / 'progress.json').exists() else 'queued',
+                waiting_on=durable.load(wait)['pending'] if wait.exists() else [])))
         return subprocess.call(['systemctl', '--user', 'status', name, '--no-pager'])
     value = durable.load(plan)
     for phase in value['phases']:

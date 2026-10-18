@@ -42,6 +42,22 @@ def make_bundle(bundle):
 
 
 class BundleTests(unittest.TestCase):
+    def test_linux_external_gate_waits_before_starting_a_supplement(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = Path(tmp)
+            bundle = make_bundle(root / 'bundle')
+            gate = dict(output=str(root / 'original-nn-gpu'), manifest_sha256='original-frozen-hash')
+            plan = root / 'sequence.json'
+            plan.write_text(json.dumps(dict(lock=str(root / 'heavy.lock'), phases=[dict(name='supplement',
+                bundle=str(bundle), output=str(root / 'result'), after=[gate],
+                manifest_sha256=prepare_durable.sha(bundle / 'manifest.json'))])))
+            with patch.object(linux_service, 'wait_for_predecessors', side_effect=RuntimeError('still waiting')) as wait, \
+                 patch.object(linux_service, 'supervise') as run:
+                with self.assertRaisesRegex(RuntimeError, 'still waiting'):
+                    linux_service.execute(plan, prepare_durable.sha(plan))
+                wait.assert_called_once_with([gate], root / 'result.service')
+                run.assert_not_called()
+
     def test_linux_sequence_refuses_changed_plan_and_incomplete_predecessor(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             root = Path(tmp)
