@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install a resumable benchmark LaunchAgent; run only while the user is logged in."""
+"""Install a resumable benchmark LaunchAgent; persist attempts across controller restarts."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,14 @@ import sys
 
 
 def verify(bundle):
-    for name, expected in json.loads((bundle / 'SHA256SUMS.json').read_text()).items():
+    hashes = json.loads((bundle / 'SHA256SUMS.json').read_text())
+    required = {'manifest.json', 'durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json'}
+    if not required.issubset(hashes):
+        raise ValueError('bundle hash manifest lacks required files')
+    manifest = json.loads((bundle / 'manifest.json').read_text())
+    if not set(manifest.get('input_sha256', {})).issubset(hashes):
+        raise ValueError('bundle input hashes missing')
+    for name, expected in hashes.items():
         path = (bundle / name).resolve()
         if not path.is_relative_to(bundle.resolve()):
             raise ValueError('bundle hash path escapes bundle')
@@ -25,26 +32,42 @@ def verify(bundle):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['install', 'status', 'stop', 'execute'])
+    p.add_argument('action', choices=['install', 'start', 'status', 'stop', 'execute'])
     p.add_argument('bundle', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--run-heavy', type=Path)
+    p.add_argument('--domain', choices=['user', 'gui'], default='user', help='user supports a Mac accessed only over SSH')
     p.add_argument('--lock', type=Path)
+    p.add_argument('--command-sha256')
     p.add_argument('--jobs', type=int, default=8)
     p.add_argument('--timeout-seconds', type=int, default=1100)
     a = p.parse_args()
     bundle, output = a.bundle.resolve(), a.output.resolve()
+    service_dir = output.with_name(output.name + '.service')
     token = hashlib.sha256(str(output).encode()).hexdigest()[:16]
     label = 'io.imazen.iqa-durable.' + token
-    domain = 'gui/' + str(os.getuid())
+    domain = a.domain + '/' + str(os.getuid())
     service = domain + '/' + label
     plist = Path.home() / 'Library/LaunchAgents' / (label + '.plist')
+    if a.action == 'start':
+        verify(bundle)
+        with plist.open('rb') as stream:
+            installed = plistlib.load(stream)
+        expected = [sys.executable, str(bundle / 'mac_service.py'), 'execute', str(bundle), str(output)]
+        if installed.get('ProgramArguments', [])[:5] != expected:
+            raise ValueError('installed service identifies another bundle/output')
+        return subprocess.call(['launchctl', 'bootstrap', domain, str(plist)])
     if a.action in ('status', 'stop'):
         return subprocess.call(['launchctl', 'print' if a.action == 'status' else 'bootout', service])
     if a.action == 'execute':
         try:
             verify(bundle)
-            command = json.loads((output / 'service-command.json').read_text())
+            raw = (service_dir / 'service-command.json').read_bytes()
+            if hashlib.sha256(raw).hexdigest() != a.command_sha256:
+                raise ValueError('installed service command changed')
+            command = json.loads(raw)
+            if command[:5] != [sys.executable, str(bundle / 'durable.py'), 'run', str(bundle / 'manifest.json'), str(output)]:
+                raise ValueError('service command identifies another experiment')
         except (OSError, ValueError) as e:
             print('Permanent bundle/config failure: ' + str(e), file=sys.stderr)
             return 0  # KeepAlive must not spin on integrity failure; retained stderr is authoritative.
@@ -63,19 +86,25 @@ def main():
     verify(bundle)
     if plist.exists():
         p.error('service already installed; use status/stop, preserve its output, or select a new output directory')
-    output.mkdir(parents=True, exist_ok=True)
+    service_dir.mkdir(parents=True, exist_ok=True)
     command = [sys.executable, str(bundle / 'durable.py'), 'run', str(bundle / 'manifest.json'), str(output),
                '--timeout-seconds', str(a.timeout_seconds), '--max-attempts', '2', '--lock', str(a.lock.resolve()),
                '--run-heavy', str(a.run_heavy.resolve()), '--memory', '12G', '--jobs', str(a.jobs)]
-    (output / 'service-command.json').write_text(json.dumps(command, indent=2) + '\n')
+    raw = (json.dumps(command, indent=2) + '\n').encode()
+    (service_dir / 'service-command.json').write_bytes(raw)
     plist.parent.mkdir(parents=True, exist_ok=True)
-    payload = dict(Label=label, ProgramArguments=[sys.executable, str(bundle / 'mac_service.py'), 'execute', str(bundle), str(output)],
+    payload = dict(Label=label, ProgramArguments=[sys.executable, str(bundle / 'mac_service.py'), 'execute', str(bundle), str(output), '--command-sha256', hashlib.sha256(raw).hexdigest()],
+                   LimitLoadToSessionType='Background' if a.domain == 'user' else 'Aqua',
                    RunAtLoad=True, KeepAlive=dict(SuccessfulExit=False), ThrottleInterval=30,
-                   WorkingDirectory=str(bundle), StandardOutPath=str(output / 'service.stdout.log'),
-                   StandardErrorPath=str(output / 'service.stderr.log'), ProcessType='Background')
+                   WorkingDirectory=str(bundle), StandardOutPath=str(service_dir / 'service.stdout.log'),
+                   StandardErrorPath=str(service_dir / 'service.stderr.log'), ProcessType='Background')
     with plist.open('xb') as stream:
         plistlib.dump(payload, stream)
-    subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], check=True)
+    try:
+        subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], check=True)
+    except subprocess.CalledProcessError:
+        plist.unlink()  # Only the plist created by this failed install. Retain logs/config.
+        raise
     print(json.dumps(dict(service=service, plist=str(plist), output=str(output))))
     return 0
 

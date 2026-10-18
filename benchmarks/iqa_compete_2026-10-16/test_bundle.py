@@ -1,37 +1,82 @@
-"""Bundle controls: refuse changed inputs, preserve relocation and phase identities."""
+"""Bundle identity and service recovery controls; launchctl calls are mocked."""
+import contextlib
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import mac_service
 import prepare_durable
+
+
+def write_hashes(bundle):
+    hashes = {str(path.relative_to(bundle)): prepare_durable.sha(path)
+              for path in bundle.rglob('*') if path.is_file() and path.name != 'SHA256SUMS.json'}
+    (bundle / 'SHA256SUMS.json').write_text(json.dumps(hashes))
+    return hashes
+
+
+def make_bundle(bundle):
+    (bundle / 'bin').mkdir(parents=True)
+    (bundle / 'inputs').mkdir()
+    for name in ('durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json'):
+        (bundle / name).write_bytes(b'fixture ' + name.encode())
+    (bundle / 'inputs/reference.rgb').write_bytes(b'xyz')
+    (bundle / 'inputs/distorted.rgb').write_bytes(b'abc')
+    (bundle / 'manifest.json').write_text(json.dumps(dict(
+        schema=1, binary='bin/iqa-compete', binary_sha256=prepare_durable.sha(bundle / 'bin/iqa-compete'),
+        input_sha256={str(path.relative_to(bundle)): prepare_durable.sha(path)
+                      for path in (bundle / 'inputs').iterdir()}, cells=[])))
+    write_hashes(bundle)
+    return bundle
 
 
 class BundleTests(unittest.TestCase):
     def test_hash_verification_survives_relocation_and_rejects_tampering(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             root = Path(tmp)
-            original = root / 'original'
-            original.mkdir()
-            (original / 'worker').write_bytes(b'worker fixture')
-            (original / 'SHA256SUMS.json').write_text(json.dumps({'worker': prepare_durable.sha(original / 'worker')}))
+            original = make_bundle(root / 'original')
             moved = root / 'moved'
             original.rename(moved)
             mac_service.verify(moved)
-            (moved / 'worker').write_bytes(b'changed worker')
+            (moved / 'bin/iqa-compete').write_bytes(b'changed worker')
             with self.assertRaisesRegex(ValueError, 'bundle changed'):
                 mac_service.verify(moved)
 
     def test_verify_refuses_path_escape(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
-            root = Path(tmp)
-            (root / 'SHA256SUMS.json').write_text(json.dumps({'../outside': '0' * 64}))
+            root = make_bundle(Path(tmp) / 'bundle')
+            hashes = write_hashes(root)
+            hashes['../outside'] = '0' * 64
+            (root / 'SHA256SUMS.json').write_text(json.dumps(hashes))
             with self.assertRaisesRegex(ValueError, 'escapes bundle'):
+                mac_service.verify(root)
+
+    def test_verify_refuses_empty_and_incomplete_checksum_inventory(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = make_bundle(Path(tmp) / 'bundle')
+            complete = write_hashes(root)
+            for missing in (None, 'manifest.json', 'durable.py', 'mac_service.py',
+                            'bin/iqa-compete', 'build.json', 'inputs.meta.json'):
+                with self.subTest(missing=missing):
+                    hashes = {} if missing is None else {k: v for k, v in complete.items() if k != missing}
+                    (root / 'SHA256SUMS.json').write_text(json.dumps(hashes))
+                    with self.assertRaisesRegex(ValueError, 'required files'):
+                        mac_service.verify(root)
+
+    def test_verify_requires_each_manifest_input_in_checksum_inventory(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = make_bundle(Path(tmp) / 'bundle')
+            hashes = write_hashes(root)
+            del hashes['inputs/reference.rgb']
+            (root / 'SHA256SUMS.json').write_text(json.dumps(hashes))
+            with self.assertRaisesRegex(ValueError, 'input hashes missing'):
                 mac_service.verify(root)
 
     def test_prepare_refuses_input_tampering_before_creating_bundle(self):
@@ -44,11 +89,175 @@ class BundleTests(unittest.TestCase):
             known = dict(pair, sha256=dict(reference=hashlib.sha256(b'bad').hexdigest(), distorted=hashlib.sha256(b'abc').hexdigest()))
             (root / 'meta.json').write_text(json.dumps(dict(derivatives=[known])))
             args = ['prepare_durable.py', '--binary', str(root / 'worker'), '--pairs', str(root / 'pairs.json'),
-                    '--inputs-meta', str(root / 'meta.json'), '--output', str(root / 'out'), '--source-commit', 'test', '--sizes', 'fixture']
+                    '--inputs-meta', str(root / 'meta.json'), '--output', str(root / 'out'), '--source-commit', 'test', '--build-receipt', str(root / 'build.json'), '--sizes', 'fixture']
             with patch.object(sys, 'argv', args), patch.object(subprocess, 'check_output', return_value=b'[{"metric_name":"psnr","compiled":true,"gpu":false}]'):
                 with self.assertRaisesRegex(ValueError, 'input bytes'):
                     prepare_durable.main()
             self.assertFalse((root / 'out').exists())
+
+    def test_prepared_bundle_has_worker_compatible_budgets_and_frozen_identity(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = Path(tmp)
+            source = make_bundle(root / 'source')
+            pair = dict(size_name='fixture', width=1, height=1, method='test-only',
+                        reference='inputs/reference.rgb', distorted='inputs/distorted.rgb')
+            (source / 'pairs.json').write_text(json.dumps([pair]))
+            known = dict(pair, sha256={role: prepare_durable.sha(source / pair[role])
+                                     for role in ('reference', 'distorted')})
+            (source / 'inputs.meta.json').write_text(json.dumps(dict(derivatives=[known])))
+            (source / 'build.json').write_text(json.dumps(dict(source_commit='fixture-commit',
+                binary_sha256=prepare_durable.sha(source / 'bin/iqa-compete'),
+                features=['compete', 'metrics-parallel'])))
+            args = ['prepare_durable.py', '--binary', str(source / 'bin/iqa-compete'),
+                    '--pairs', str(source / 'pairs.json'), '--inputs-meta', str(source / 'inputs.meta.json'),
+                    '--output', str(root / 'out'), '--source-commit', 'fixture-commit',
+                    '--build-receipt', str(source / 'build.json'), '--sizes', 'fixture',
+                    '--threads', '1,8', '--cold-repeats', '2']
+            inventory = [dict(metric_name='psnr', compiled=True, gpu=False),
+                         dict(metric_name='gmsd', compiled=True, gpu=False),
+                         dict(metric_name='dists', compiled=True, gpu=False),
+                         dict(metric_name='ssim2-gpu', compiled=True, gpu=True)]
+            with patch.object(prepare_durable, 'HERE', source), patch.object(sys, 'argv', args), \
+                    patch.object(subprocess, 'check_output', return_value=json.dumps(inventory).encode()), \
+                    patch.object(prepare_durable.platform, 'platform', return_value='fixture OS'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                prepare_durable.main()
+            bundle = root / 'out'
+            mac_service.verify(bundle)
+            manifest = json.loads((bundle / 'manifest.json').read_text())
+            self.assertEqual(manifest['metadata']['metrics'], ['psnr', 'gmsd'])
+            self.assertEqual(manifest['binary_sha256'], prepare_durable.sha(bundle / 'bin/iqa-compete'))
+            self.assertEqual(manifest['metadata']['build_receipt_sha256'], prepare_durable.sha(bundle / 'build.json'))
+            self.assertEqual(len(manifest['cells']), 24)
+            for cell in manifest['cells']:
+                # The worker rejects a budget above 850000 ms before zenbench starts.
+                self.assertGreaterEqual(cell['chunk_budget_ms'], 1)
+                self.assertLessEqual(cell['chunk_budget_ms'], 850_000)
+                self.assertEqual(cell['required_samples'], 1 if cell['timing_phase'] == 'cold' else 10)
+                for role in ('reference', 'distorted'):
+                    self.assertFalse(Path(cell[role]).is_absolute())
+                    self.assertEqual(manifest['input_sha256'][cell[role]], prepare_durable.sha(bundle / cell[role]))
+
+
+class ServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(dir=os.environ['TMPDIR'])
+        self.addCleanup(self.scratch.cleanup)
+        self.root = Path(self.scratch.name)
+        self.bundle = make_bundle(self.root / 'bundle')
+        self.output = self.root / 'output'
+        self.service_dir = self.output.with_name(self.output.name + '.service')
+        self.home = self.root / 'home'
+        self.command = [sys.executable, str(self.bundle / 'durable.py'), 'run',
+                        str(self.bundle / 'manifest.json'), str(self.output),
+                        '--run-heavy', str(self.root / 'run-heavy'), '--lock', str(self.root / 'heavy.lock')]
+
+    def execute(self, command=None, expected_sha=None, returncode=0):
+        raw = (json.dumps(command if command is not None else self.command) + '\n').encode()
+        self.service_dir.mkdir(exist_ok=True)
+        (self.service_dir / 'service-command.json').write_bytes(raw)
+        digest = expected_sha if expected_sha is not None else hashlib.sha256(raw).hexdigest()
+        args = ['mac_service.py', 'execute', str(self.bundle), str(self.output), '--command-sha256', digest]
+        stderr = io.StringIO()
+        awake = Mock()
+        with patch.object(sys, 'argv', args), patch.object(subprocess, 'Popen', return_value=awake) as spawn, \
+                patch.object(subprocess, 'call', return_value=returncode) as child, contextlib.redirect_stderr(stderr):
+            result = mac_service.main()
+        return result, child, spawn, awake, stderr.getvalue()
+
+    def test_execute_runs_frozen_command_and_preserves_crash_restart_status(self):
+        for rc, expected in ((0, 0), (2, 0), (137, 137), (-9, -9)):
+            with self.subTest(child_returncode=rc):
+                result, child, spawn, awake, _ = self.execute(returncode=rc)
+                self.assertEqual(result, expected)
+                child.assert_called_once_with(self.command)
+                spawn.assert_called_once_with(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
+                awake.terminate.assert_called_once_with()
+                awake.wait.assert_called_once_with()
+
+    def test_execute_refuses_mutated_command_with_original_frozen_hash(self):
+        original = (json.dumps(self.command) + '\n').encode()
+        changed = self.command + ['--jobs', '123']
+        result, child, spawn, _, stderr = self.execute(changed, hashlib.sha256(original).hexdigest())
+        self.assertEqual(result, 0)
+        self.assertIn('service command changed', stderr)
+        child.assert_not_called()
+        spawn.assert_not_called()
+
+    def test_execute_refuses_other_bundle_manifest_or_output_even_with_matching_hash(self):
+        for index, replacement in ((0, '/different/python'), (1, str(self.root / 'other/durable.py')),
+                                   (3, str(self.root / 'other/manifest.json')), (4, str(self.root / 'other-output'))):
+            with self.subTest(argument=index):
+                changed = self.command.copy()
+                changed[index] = replacement
+                result, child, spawn, _, stderr = self.execute(changed)
+                self.assertEqual(result, 0)
+                self.assertIn('another experiment', stderr)
+                child.assert_not_called()
+                spawn.assert_not_called()
+
+    def install_args(self):
+        return ['mac_service.py', 'install', str(self.bundle), str(self.output),
+                '--run-heavy', str(self.root / 'run-heavy'), '--lock', str(self.root / 'heavy.lock')]
+
+    def test_install_freezes_command_hash_in_plist_and_start_reuses_it(self):
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'platform', 'darwin'), \
+                patch.object(sys, 'argv', self.install_args()), patch.object(subprocess, 'run') as launch, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(mac_service.main(), 0)
+        plists = list((self.home / 'Library/LaunchAgents').glob('*.plist'))
+        self.assertEqual(len(plists), 1)
+        plist = plists[0]
+        payload = plistlib.loads(plist.read_bytes())
+        self.assertFalse(self.output.exists(), 'install must leave controller output uncreated')
+        self.assertEqual(payload['StandardOutPath'], str(self.service_dir / 'service.stdout.log'))
+        self.assertEqual(payload['StandardErrorPath'], str(self.service_dir / 'service.stderr.log'))
+        raw = (self.service_dir / 'service-command.json').read_bytes()
+        self.assertEqual(payload['ProgramArguments'][-2:], ['--command-sha256', hashlib.sha256(raw).hexdigest()])
+        self.assertEqual(payload['KeepAlive'], dict(SuccessfulExit=False))
+        domain = 'user/' + str(os.getuid())
+        launch.assert_called_once_with(['launchctl', 'bootstrap', domain, str(plist)], check=True)
+        before = plist.read_bytes(), raw
+        args = ['mac_service.py', 'start', str(self.bundle), str(self.output)]
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'argv', args), \
+                patch.object(subprocess, 'call', return_value=0) as start:
+            self.assertEqual(mac_service.main(), 0)
+        start.assert_called_once_with(['launchctl', 'bootstrap', domain, str(plist)])
+        self.assertEqual((plist.read_bytes(), (self.service_dir / 'service-command.json').read_bytes()), before)
+
+    def test_failed_bootstrap_removes_new_plist_and_install_can_retry(self):
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'platform', 'darwin'), \
+                patch.object(sys, 'argv', self.install_args()), patch.object(subprocess, 'run', \
+                    side_effect=subprocess.CalledProcessError(5, ['launchctl', 'bootstrap'])) as launch:
+            with self.assertRaises(subprocess.CalledProcessError):
+                mac_service.main()
+        self.assertEqual(list((self.home / 'Library/LaunchAgents').glob('*.plist')), [])
+        self.assertTrue((self.service_dir / 'service-command.json').exists())
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'platform', 'darwin'), \
+                patch.object(sys, 'argv', self.install_args()), patch.object(subprocess, 'run') as retry, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(mac_service.main(), 0)
+        retry.assert_called_once()
+        launch.assert_called_once()
+
+    def test_install_refusal_preserves_existing_plist_and_command(self):
+        directory = self.home / 'Library/LaunchAgents'
+        directory.mkdir(parents=True)
+        token = hashlib.sha256(str(self.output.resolve()).encode()).hexdigest()[:16]
+        plist = directory / ('io.imazen.iqa-durable.' + token + '.plist')
+        plist.write_bytes(b'existing service fixture')
+        self.service_dir.mkdir()
+        command = self.service_dir / 'service-command.json'
+        command.write_bytes(b'existing command fixture')
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'platform', 'darwin'), \
+                patch.object(sys, 'argv', self.install_args()), patch.object(subprocess, 'run') as launch, \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as error:
+                mac_service.main()
+        self.assertEqual(error.exception.code, 2)
+        launch.assert_not_called()
+        self.assertEqual(plist.read_bytes(), b'existing service fixture')
+        self.assertEqual(command.read_bytes(), b'existing command fixture')
 
 
 if __name__ == '__main__':

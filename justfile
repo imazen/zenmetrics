@@ -1691,3 +1691,6 @@ iqa-timing-boundary-check:
     mkdir -p "$HOME/tmp/iqa-timing-tests"
     rustc --edition=2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/tests.rs -o "$HOME/tmp/iqa-timing-tests/boundary"
     "$HOME/tmp/iqa-timing-tests/boundary"
+
+iqa-mac-service-check bundle output wrapper lock:
+    python3 benchmarks/iqa_compete_2026-10-16/check_mac_service.py '{{bundle}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}'

@@ -174,3 +174,8 @@ f64 bits equal the strict-float C++ on every pair, size and thread count
 C++ 24-thread cells are bimodal run to run, so these rows pool the samples of
 two identical runs. C++ has no spatial-map endpoint, so score+map C++ rows are
 `unsupported`.
+
+The [durable Mac CPU runner](IQA_DURABLE_MAC.md) freezes inputs and separates
+fresh-process cold timings from ten-round warm timings, with bounded attempts
+and a macOS restart service. Its recovery controls are distinct from metric
+correctness and performance qualification.
