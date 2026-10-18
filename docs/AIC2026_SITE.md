@@ -30,6 +30,9 @@ citation links permit optional outbound navigation, never resource loading.
 copying the extension and refreshing the viewer's file hashes.
 `verify_live.py --url https://metrics.imazen.org/aic2026/ --source <commit>`
 requires HTTP 200 and that source identity on every generated page.
+The HTTP verifier identifies itself as `zenmetrics-site-verification/1.0`.
+On 2026-10-18 the edge returned 403 to Python's default user agent and 200
+to this explicit agent and curl; source/JSON/content checks remain strict.
 
 ## Data and qualification
 
@@ -83,6 +86,11 @@ The original HTTP observations remain in the private execution receipt.
 The viewer's header links the explorer, AIC results, reproduction evidence,
 benchmarks, pinned source and the AIC download section. Downloaded JSON
 contains public configuration/card records and aggregate scatter diagnostics.
+Its scoped entrance theme uses existing light/dark colours, system/serif
+fonts and CSS geometry; the explorer's controls and assets remain intact.
+The 390-pixel entrance check exposed an existing unwrapped view-button group
+extending the document to 462 pixels. The merged site's phone rule wraps that
+group; canvas panning stays inside its existing scroll container.
 
 ## Known bugs: configuration extraction (fixed 2026-10-18)
 
@@ -107,5 +115,12 @@ configuration metadata.
 VMAF's AIC column mappings select `vmaf-studio601` and
 `vmaf-neg-studio601`. Default `vmaf`/`vmaf-neg` use BT.709. The identified
 Butteraugli proposal uses the 3-norm output and an explicit piecewise map,
-not the default maximum output. CAMBI and HDR native configuration gaps stay
-attached to their nominal method mappings until their AIC routes qualify.
+not the default maximum output. The four explicit AIC routes landed in
+`64391e26`. The 61-crop receipt qualifies HDR3's stated gate and CAMBI's median
+gate. HDR2 retains both its published-column and independent RGB-oracle gaps;
+native proposal-Butteraugli fails its stricter median gate. The separate
+9,618-row published-column map does not establish 9,618 native scores.
+Those explicit routes have separate names/configurations and no cost tally
+yet. Do not transfer an old route's tally to them silently. Screenshot DVIFM,
+luma-only FSIM and Haar work remains pending until committed evidence arrives.
+The owner also requested the landing link to https://gigapixels.imazen.org/.

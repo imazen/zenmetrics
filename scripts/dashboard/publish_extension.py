@@ -18,7 +18,20 @@ def merge(viewer, dashboard, source):
     index=viewer/'index.html';text=index.read_text()
     if '<h1>' not in text:raise ValueError('viewer heading changed')
     navigation='<nav aria-label="Results" style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0;border-bottom:2px solid var(--accent)"><a href="/">Image explorer</a><a href="/aic2026/">AIC2026 results</a><a href="/aic2026/reproduction.html">Reproduction evidence</a><a href="/aic2026/complexity.html">Benchmarks</a><a href="https://github.com/imazen/zenmetrics/tree/'+source+'">Source</a><a href="/aic2026/#downloads">Downloads</a></nav>'
+    navigation=navigation.replace('</nav>','<a href="https://gigapixels.imazen.org/">Gigapixels</a></nav>')
     text=text.replace('<h1>',navigation+'\n<h1>',1)
+    # Keep the interactive explorer intact while giving its entrance a clear identity.
+    text=text.replace('<header>','<header class="evidence-header"><div class="evidence-kicker">IMAGE QUALITY · EXPLORE / MEASURE / VERIFY</div>',1)
+    theme='''<style>
+    .evidence-header{position:relative;isolation:isolate;overflow:hidden;padding:24px 28px 28px;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 12px 40px #00000008;gap:14px 22px}
+    .evidence-header:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--accent) 15%,transparent),transparent 60%),repeating-linear-gradient(135deg,transparent 0 26px,color-mix(in srgb,var(--ink) 3%,transparent) 26px 27px)}
+    .evidence-header .evidence-kicker{flex-basis:100%;color:var(--accent);font:600 10px/1.5 var(--mono);letter-spacing:.2em}
+    .evidence-header nav{order:3;font-size:12px}.evidence-header nav a{text-decoration:none}.evidence-header nav a:hover{text-decoration:underline}
+    .evidence-header h1{font:normal clamp(38px,5vw,62px)/1.05 Georgia,serif;letter-spacing:-.045em}
+    .evidence-header p{font-size:15px;max-width:49ch}.evidence-header> a{font-size:12px}
+    @media(max-width:600px){.evidence-header{padding:20px 18px;border-radius:12px}.evidence-header nav{gap:10px 18px!important}.evidence-header .evidence-kicker{letter-spacing:.12em}.seg{flex-wrap:wrap;max-width:100%}}
+    </style>'''
+    text=text.replace('</head>',theme+'</head>',1)
     index.write_text(text)
     check_origins(viewer/'aic2026')
     provenance['aic2026']={'source_commit':source,'manifest':'aic2026/manifest.json'}
