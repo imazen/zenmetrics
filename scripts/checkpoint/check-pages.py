@@ -58,6 +58,9 @@ def unavailable_reason(name, refusal):
     if name.endswith('-gpu'):
         return (f'GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. '
                 f'Score the CPU metric {name[:-4]} here. Browser refusal: {refusal}')
+    if name in ('hdrvdp-aic2026', 'hdrvdp3-aic2026'):
+        return ('The explicit SDR display route requires cpu-hdrvdp, which is not compiled into this WASM module. '
+                f'Browser refusal: {refusal}')
     if name.startswith('hdrvdp'):
         return ('Scores absolute-luminance HDR input; this page decodes SDR sRGB8 only. '
                 f'Browser refusal: {refusal}')

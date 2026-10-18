@@ -46,6 +46,8 @@ mod cw_fft;
 mod cw_ssim;
 pub mod display;
 mod flip;
+#[cfg(feature = "cpu-hdrvdp")]
+pub(crate) mod hdrvdp_aic;
 mod ssim_pyiqa;
 mod ssimulacra1;
 mod ws_hv;
@@ -520,6 +522,18 @@ pub enum MetricKind {
     /// age=24, surround=none). Emits `hdrvdp3_jod_imazen_v*`. No GPU twin.
     #[value(name = "hdrvdp3")]
     Hdrvdp3,
+    /// AIC2026 two-segment calibration of the libjxl Butteraugli 3-norm.
+    #[value(name = "proposal-butteraugli")]
+    ProposalButteraugli,
+    /// CAMBI with the AIC2026 swscale-compatible integer luma ingress.
+    #[value(name = "cambi-aic2026")]
+    CambiAic2026,
+    /// HDR-VDP 3 res.Q and Q_JOD with 200-nit sRGB to XYZ, OLED, 37.842505866 ppd.
+    #[value(name = "hdrvdp3-aic2026")]
+    Hdrvdp3Aic2026,
+    /// HDR-VDP 2 res.Q with unrounded sRGB at 200 nits and 37.84 ppd.
+    #[value(name = "hdrvdp-aic2026")]
+    HdrvdpAic2026,
     /// PSNR-HVS / PSNR-HVS-M (Egiazarian et al. VPQM-06, Ponomarenko et al.
     /// VPQM-07) — CPU implementation via the in-tree `psnrhvs` crate (a port
     /// of the authors' `psnrhvsm.m`). PSNR-like: dB scale, higher = better,
@@ -869,6 +883,10 @@ impl MetricKind {
             MetricKind::MsGmsdc,
             MetricKind::Hdrvdp,
             MetricKind::Hdrvdp3,
+            MetricKind::ProposalButteraugli,
+            MetricKind::CambiAic2026,
+            MetricKind::Hdrvdp3Aic2026,
+            MetricKind::HdrvdpAic2026,
             MetricKind::Psnrhvs,
             MetricKind::PsnrhvsY,
             MetricKind::Haarpsi,
@@ -997,6 +1015,10 @@ impl MetricKind {
             MetricKind::MsGmsdc => "ms-gmsdc",
             MetricKind::Hdrvdp => "hdrvdp",
             MetricKind::Hdrvdp3 => "hdrvdp3",
+            MetricKind::ProposalButteraugli => "proposal-butteraugli",
+            MetricKind::CambiAic2026 => "cambi-aic2026",
+            MetricKind::Hdrvdp3Aic2026 => "hdrvdp3-aic2026",
+            MetricKind::HdrvdpAic2026 => "hdrvdp-aic2026",
             MetricKind::Psnrhvs => "psnrhvs",
             MetricKind::PsnrhvsY => "psnrhvs-y",
             MetricKind::Haarpsi => "haarpsi",
@@ -1116,7 +1138,9 @@ impl MetricKind {
         );
         !((nn && !cfg!(feature = "nn"))
             || (nr && !cfg!(feature = "nr"))
-            || (pyiqa && !cfg!(feature = "pyiqa-ports")))
+            || (pyiqa && !cfg!(feature = "pyiqa-ports"))
+            || (matches!(self, MetricKind::HdrvdpAic2026 | MetricKind::Hdrvdp3Aic2026)
+                && !cfg!(feature = "cpu-hdrvdp")))
     }
 
     pub fn requires_gpu(self) -> bool {
@@ -1242,6 +1266,10 @@ impl MetricKind {
             MetricKind::MsGmsdc => &["ms_gmsdc_paper_cpu_imazen_v0_1_0"],
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
             MetricKind::Hdrvdp3 => HDRVDP3_CPU_COLUMNS,
+            MetricKind::ProposalButteraugli => &["proposal_butteraugli"],
+            MetricKind::CambiAic2026 => &["cambi_aic2026"],
+            MetricKind::Hdrvdp3Aic2026 => &["hdrvdp3_aic2026_q", "hdrvdp3_aic2026_jod"],
+            MetricKind::HdrvdpAic2026 => &["hdrvdp_aic2026_q"],
             MetricKind::Psnrhvs => PSNRHVS_CPU_COLUMNS,
             MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
             MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
@@ -2747,6 +2775,32 @@ pub fn run_metric(
         }
         #[cfg(not(feature = "cpu-gmsd"))]
         MetricKind::MsGmsd | MetricKind::MsGmsdc => Err(disabled_msg("ms-gmsd", "cpu-gmsd")),
+
+        #[cfg(feature = "cpu-hdrvdp")]
+        MetricKind::HdrvdpAic2026 | MetricKind::Hdrvdp3Aic2026 => {
+            hdrvdp_aic::score(kind, reference, distorted)
+        }
+        #[cfg(not(feature = "cpu-hdrvdp"))]
+        MetricKind::HdrvdpAic2026 | MetricKind::Hdrvdp3Aic2026 => {
+            Err(disabled_msg(kind.name(), "cpu-hdrvdp"))
+        }
+        #[cfg(all(feature = "cpu-metrics", feature = "cpu-vmaf"))]
+        MetricKind::CambiAic2026 => Ok(vec![(
+            "cambi_aic2026",
+            vmaf::cambi_aic2026(reference, distorted)?,
+        )]),
+        #[cfg(not(all(feature = "cpu-metrics", feature = "cpu-vmaf")))]
+        MetricKind::CambiAic2026 => Err(disabled_msg(kind.name(), "cpu-metrics,cpu-vmaf")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::ProposalButteraugli => {
+            let (_, n) = run_cpu_butter_both_via_umbrella(reference, distorted)?;
+            Ok(vec![(
+                "proposal_butteraugli",
+                (0.00459792 * n).max(2.0938201 * n - 1.1033102),
+            )])
+        }
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::ProposalButteraugli => Err(disabled_msg(kind.name(), "cpu-metrics")),
 
         // HDR-VDP: umbrella native-CPU path (same `run_cpu_native_via_umbrella`
         // as the other unsuffixed metrics). The Cpu dispatch's `compute_srgb_u8`

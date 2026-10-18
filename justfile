@@ -1776,3 +1776,9 @@ iqa-chart-export root output host:
 # Install an endpoint guard without changing a frozen measurement plan.
 iqa-window-guard plan:
     python3 benchmarks/iqa_compete_2026-10-16/scalar_priority.py window-guard {{plan}}
+
+# AIC convention checks and private-oracle invocation are documented in the receipt.
+aic-convention-check:
+    just snap-cargo @ test -p hdrvdp
+    just snap-cargo @ test -p zenmetrics-cli --lib
+    python3 scripts/checkpoint/test_browser_coverage.py

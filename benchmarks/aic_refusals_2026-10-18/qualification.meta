@@ -1,0 +1,15 @@
+host=r5900xt
+date=2026-10-18
+base_commit=79e1d384870b14fa9865c973f38b1e53d551e8d6
+qualified_source_snapshot=c3c6398d2cbe
+cli_sha256=59acf588d6186361edbca8bae5cf79967141ff954c14cdc372f5d67cc9475ecb
+command=zenmetrics batch --metric NAME --pairs PAIRS --output OUT --jobs 1
+env=RAYON_NUM_THREADS=8
+routes=hdrvdp3-aic2026,hdrvdp-aic2026,cambi-aic2026,proposal-butteraugli
+inputs=resolved configuration-search 61-pair crop panel; public PNG pixels and site config
+oracle=Octave HDR-VDP-2.2.2, diagnostic-result-only modifications, pure MATLAB pyramid fallback
+oracle_command=octave --quiet benchmarks/aic_refusals_2026-10-18/hdrvdp2_oracle.m ORACLE PAIRS OUT
+columns_resource=run-heavy: done rc=0 68s | peak-RSS 1.16GiB | min-avail 50968MiB | peak-load 4.99
+oracle_resource=run-heavy: done rc=0 264s | peak-RSS 0.51GiB | min-avail 51480MiB | peak-load 3.13
+validation_resource=run-heavy: done rc=0 118s | peak-RSS 2.36GiB | min-avail 50497MiB | peak-load 9.24
+routing_resource=run-heavy: done rc=0 61s | peak-RSS 2.35GiB | min-avail 49188MiB | peak-load 8.19

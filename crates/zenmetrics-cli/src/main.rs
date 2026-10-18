@@ -357,6 +357,9 @@ struct ScoreArgs {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     #[command(flatten)]
     hdrvdp3: hdr::HdrVdp3Args,
+    #[cfg(feature = "cpu-hdrvdp")]
+    #[command(flatten)]
+    hdrvdp_sdr: metrics::hdrvdp_aic::Args,
 }
 
 #[derive(Parser, Debug)]
@@ -435,6 +438,9 @@ struct BatchArgs {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     #[command(flatten)]
     hdrvdp3: hdr::HdrVdp3Args,
+    #[cfg(feature = "cpu-hdrvdp")]
+    #[command(flatten)]
+    hdrvdp_sdr: metrics::hdrvdp_aic::Args,
 }
 
 #[derive(Parser, Debug)]
@@ -690,6 +696,9 @@ struct SweepArgs {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     #[command(flatten)]
     hdrvdp3: hdr::HdrVdp3Args,
+    #[cfg(feature = "cpu-hdrvdp")]
+    #[command(flatten)]
+    hdrvdp_sdr: metrics::hdrvdp_aic::Args,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -844,6 +853,9 @@ struct ScorePairsArgs {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     #[command(flatten)]
     hdrvdp3: hdr::HdrVdp3Args,
+    #[cfg(feature = "cpu-hdrvdp")]
+    #[command(flatten)]
+    hdrvdp_sdr: metrics::hdrvdp_aic::Args,
 }
 
 fn main() -> ExitCode {
@@ -1109,6 +1121,8 @@ fn cmd_sweep(
 ) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+    #[cfg(feature = "cpu-hdrvdp")]
+    metrics::hdrvdp_aic::set_args(args.hdrvdp_sdr.clone());
 
     use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, run_sweep};
 
@@ -1476,7 +1490,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Ssim2 | MetricKind::Ssim2Gpu => Some((-50.0, 100.5, 100.0)),
         // Butteraugli: [0, ~30+]; 0 = identical. Distance metric, no
         // upper bound is hard but real-world rarely exceeds 30.
-        MetricKind::Butteraugli | MetricKind::ButteraugliGpu => Some((-0.001, 100.0, 0.0)),
+        MetricKind::Butteraugli | MetricKind::ButteraugliGpu | MetricKind::ProposalButteraugli => Some((-0.001, 100.0, 0.0)),
         // DSSIM: [0, 1ish]; 0 = identical.
         MetricKind::Dssim | MetricKind::DssimGpu => Some((-0.001, 1.5, 0.0)),
         // IW-SSIM: [0, 1]; 1 = identical. Real distributions hover
@@ -1498,9 +1512,9 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::MsGmsdc => Some((-0.001, 4.0, 0.0)),
         // HDR-VDP: JOD scale [0, 100]; 100 = identical (the crate's
         // scaled Q_JOD output).
-        MetricKind::Hdrvdp => Some((-1.0, 101.0, 100.0)),
+        MetricKind::Hdrvdp | MetricKind::HdrvdpAic2026 => Some((-1.0, 101.0, 100.0)),
         // HDR-VDP-3 emits `Q_JOD` on [0, 10]; 10 = identical.
-        MetricKind::Hdrvdp3 => Some((-0.5, 10.5, 10.0)),
+        MetricKind::Hdrvdp3 | MetricKind::Hdrvdp3Aic2026 => Some((-0.5, 10.5, 10.0)),
         // PSNR-HVS / -M / -Y: dB scale, higher = better; identical lands
         // exactly on 100000 (the reference's "indistinguishable" value).
         // A real sweep mean sits ~10..60 dB.
@@ -1551,7 +1565,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Ssimulacra1 => Some((-0.001, 1.001, 0.0)),
         MetricKind::WsHv => Some((-0.001, 1.001, 1.0)),
         // CAMBI is distorted-only: zero is normal for an unbanded image.
-        MetricKind::Cambi => None,
+        MetricKind::Cambi | MetricKind::CambiAic2026 => None,
         MetricKind::CwSsim => Some((-0.001, 1.001, 1.0)),
         MetricKind::Flip | MetricKind::FlipV17 => Some((-0.001, 1.001, 0.0)),
         MetricKind::Ssim | MetricKind::SsimC | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
@@ -1741,7 +1755,12 @@ fn bogus_check(metric: crate::metrics::MetricKind, scores: &[f64], out_parquet: 
     }
 
     // An unbanded batch legitimately has a constant zero CAMBI column.
-    if finite.len() >= 4 && metric != crate::metrics::MetricKind::Cambi {
+    if finite.len() >= 4
+        && !matches!(
+            metric,
+            crate::metrics::MetricKind::Cambi | crate::metrics::MetricKind::CambiAic2026
+        )
+    {
         let min = finite.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = finite.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let range = max - min;
@@ -1771,6 +1790,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
 
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+    #[cfg(feature = "cpu-hdrvdp")]
+    metrics::hdrvdp_aic::set_args(args.hdrvdp_sdr.clone());
     #[cfg(feature = "hdr")]
     if args.hdr_common_primaries && args.feature_output.is_some() {
         return Err("--hdr-common-primaries does not admit legacy feature sidecars".into());
@@ -2824,6 +2845,8 @@ fn cmd_score(
     // assume sRGB8 inputs.
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+    #[cfg(feature = "cpu-hdrvdp")]
+    metrics::hdrvdp_aic::set_args(args.hdrvdp_sdr.clone());
     #[cfg(feature = "hdr")]
     if args.hdr && args.display_model.is_some() && args.metric.needs_display() {
         return Err(
@@ -3073,6 +3096,8 @@ fn cmd_score_folder(
 ) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+    #[cfg(feature = "cpu-hdrvdp")]
+    metrics::hdrvdp_aic::set_args(args.hdrvdp_sdr.clone());
 
     #[cfg(feature = "hdr")]
     if args.hdr && args.display_model.is_some() && args.metric.needs_display() {
@@ -3217,6 +3242,8 @@ fn cmd_batch(
     }
     #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
     hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+    #[cfg(feature = "cpu-hdrvdp")]
+    metrics::hdrvdp_aic::set_args(args.hdrvdp_sdr.clone());
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b'\t')
         .has_headers(true)
@@ -3525,7 +3552,19 @@ fn cmd_batch(
                 args.gpu_runtime,
             )?;
             for (_, value) in &scores {
-                row.push(format!("{value:.6}"));
+                row.push(
+                    if matches!(
+                        args.metric,
+                        MetricKind::HdrvdpAic2026
+                            | MetricKind::Hdrvdp3Aic2026
+                            | MetricKind::CambiAic2026
+                            | MetricKind::ProposalButteraugli
+                    ) {
+                        value.to_string()
+                    } else {
+                        format!("{value:.6}")
+                    },
+                );
             }
         }
         wtr.write_record(&row)?;

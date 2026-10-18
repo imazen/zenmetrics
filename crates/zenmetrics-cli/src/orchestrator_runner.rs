@@ -494,6 +494,10 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::MsGmsdc
             | CliMetricKind::Hdrvdp
             | CliMetricKind::Hdrvdp3
+            | CliMetricKind::HdrvdpAic2026
+            | CliMetricKind::Hdrvdp3Aic2026
+            | CliMetricKind::CambiAic2026
+            | CliMetricKind::ProposalButteraugli
             | CliMetricKind::Psnrhvs
             | CliMetricKind::PsnrhvsY
             | CliMetricKind::Haarpsi

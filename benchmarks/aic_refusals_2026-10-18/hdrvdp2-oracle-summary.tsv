@@ -1,0 +1,2 @@
+tag	col	n	med_abs	max_abs	med_jnd	max_jnd	pearson	spearman	aff_slope	aff_icpt	aff_med_jnd	aff_max_jnd
+octave	HDR_VDP_2	61	0.0265092	0.219923	0.00395337	0.0492155	0.999969	0.999841	0.99752	0.160282	0.00465689	0.0447423

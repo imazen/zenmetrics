@@ -98,3 +98,23 @@ None: every implemented column has been compared (2026-10-17).
 `IW-SSIM` (piq convention), `mDCT-PSNR`, `proposal-mDCTPSNR`, `FLIP`
 (`flip-v17` exact), `CIEDE2000`, `Butteraugli-original`, `LPIPS-alex`,
 `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC`, `DreamSim`.
+
+## Explicit AIC routes (2026-10-18)
+
+The [native 61-crop qualification](../benchmarks/aic_refusals_2026-10-18/README.md)
+adds `hdrvdp3-aic2026` (Q and Q_JOD), `hdrvdp-aic2026`, `cambi-aic2026` and
+`proposal-butteraugli`. Existing metric names retain their behavior.
+
+HDR-VDP 3 uses 10-bit code quantization, 200-nit sRGB, XYZ/OLED and
+37.842505866 ppd: median/max 0.00133569/0.0128073 site-JND, Spearman 1.
+CAMBI uses integer swscale luma: median 8.17689e-8 site-JND, Spearman 1.
+Both pass the specified crop gates.
+
+HDR-VDP 2 retains median 0.0277768 Q residual. An independent Octave 2.2.2
+RGB panel also has median 0.02651 Q residual against the published column;
+Rust-versus-Octave median is 0.00869019 Q. The older luminance-only golden
+bound does not establish this RGB panel's accuracy or identify the setting gap.
+
+The native proposal-Butteraugli panel has median 3.06732e-7 site-JND, above
+the requested 3.2e-8 gate. The 9,618-row mapping of published columns must
+not be presented as 9,618 independently computed native scores.

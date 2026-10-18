@@ -215,6 +215,30 @@ pub(crate) fn cambi(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Box<dyn std::er
     Ok(vmaf::cambi_from_luma(&y, w, h, w, 8)?)
 }
 
+/// Integer luma conversion observed for swscale's RGB24 to limited BT.601.
+#[cfg(feature = "cpu-vmaf")]
+pub(crate) fn cambi_aic2026(
+    r: &Rgb8Image,
+    d: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    check_dims(r, d)?;
+    let (w, h) = even_size(d);
+    let stride = d.width as usize * 3;
+    let mut y = Vec::with_capacity(w * h);
+    for row in d.pixels.chunks_exact(stride).take(h) {
+        for rgb in row.chunks_exact(3).take(w) {
+            let t = (8414 * u32::from(rgb[0])
+                + 16519 * u32::from(rgb[1])
+                + 3208 * u32::from(rgb[2])
+                + (32 << 14)
+                + (1 << 8))
+                >> 9;
+            y.push(((t + 32) >> 6) as u16);
+        }
+    }
+    Ok(vmaf::cambi_from_luma(&y, w, h, w, 8)?)
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "cpu-vmaf")]
