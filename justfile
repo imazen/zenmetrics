@@ -1754,3 +1754,10 @@ iqa-resource-accounting-run binary output:
 
 iqa-resource-accounting-external diagnostic worker config output:
     bash benchmarks/iqa_compete_2026-10-16/resource-accounting/external.sh '{{diagnostic}}' '{{worker}}' '{{config}}' '{{output}}'
+
+# Read-only strict Mac WebGPU session diagnostics; shared heavy admission is internal.
+iqa-webgpu-node-audit python bundle output:
+    '{{python}}' benchmarks/iqa_compete_2026-10-16/audit_webgpu_nodes.py --bundle '{{bundle}}' --output '{{output}}'
+
+iqa-webgpu-node-classify directory output:
+    python3 benchmarks/iqa_compete_2026-10-16/classify_webgpu_nodes.py '{{directory}}' '{{output}}'

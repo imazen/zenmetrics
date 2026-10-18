@@ -239,3 +239,12 @@ attempt evidence. Old observations retain their original executable identity;
 the new bundles bind the retained report hash and both executable hashes in
 the sequence receipt. Failed attempts remain in their original output tree.
 `just iqa-mac-coverage-check` checks retention and corruption refusal.
+
+### Frozen WebGPU refusal classification (2026-10-18)
+
+The strict 512 NN Metal queue's A-FINE, ARNIQA, CKDN and DeepDC failures are
+reproduced session capability refusals. A read-only matching-runtime diagnostic
+separates registry misses from supported nodes deliberately preferred on CPU;
+A-FINE and DeepDC show both. The [node audit](../benchmarks/mac_validation_2026-10-18/WEBGPU_NODE_AUDIT.md)
+retains exact observations and provenance. No fallback or frozen manifest was
+changed. Original attempts remain unqualified and the queue advances.

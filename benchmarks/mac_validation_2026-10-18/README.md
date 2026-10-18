@@ -168,3 +168,12 @@ Raw log: `ort-dists-retry-one-job.log` in the retained raw-log directory
 on dev described above; SHA256 `edafe22e1a657d767101425a1088ddedfe5026dc2314405f63ed4681e24290a3`.
 The owned Mac target was removed again and confirmed absent. After cleanup,
 `df -k /` reported **10,119,616 KiB available**.
+
+## Frozen competition WebGPU capability refusals
+
+The later strict session audit reproduces A-FINE, ARNIQA, CKDN and DeepDC
+refusals using matching ORT 1.31.0 and the frozen official plugin 0.4.0.
+Registry misses and explicit CPU-preference heuristics are separate observations;
+A-FINE and DeepDC have both. See the [exact node audit](WEBGPU_NODE_AUDIT.md)
+for per-model lists, hashes, resource receipts and limits. These are advancing
+queue capability refusals; they do not establish worker stalls.
