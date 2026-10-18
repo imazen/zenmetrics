@@ -1,0 +1,15 @@
+host=r5900xt
+date=2026-10-18
+haar_private_commit=51b3fae310b34be4c5befcfe5e7c2176cf0c1f3a
+haar_command=python experiments/haar-family/method_search.py
+haar_environment=OPENBLAS_NUM_THREADS=1; Python virtual environment; numpy 2.5.4 pandas 3.0.6 scipy 1.18.1
+haar_resource=run-heavy: done rc=0 63s | peak-RSS 0.22GiB | min-avail 52054MiB | peak-load 1.23
+haar_projection=method_summary.tsv excluding source subset identities; no per-image values
+haar_gate=best mean rank error 9.666666666666666 exceeds 0.5; zero of eleven unknown variants identified
+private_count_commit=bd0b9436174c9403fdc75a6e93b208f82a84c895
+private_adapter_commit=e27b88ab6181
+count_shapes=840x944,1024x1024
+count_conventions=logical primitives per original pixel; one logical transcendental operation; FLOP sum uses existing evaluator
+count_scope=core padded-block schedule only; excludes strip overlap, lane padding, allocation/setup, traffic and span
+count_reproduction=private benchmarks/aic-complexity/*.json through public scripts/complexity/evaluate.py
+public_comparison=python3 scripts/complexity/compare_draft.py

@@ -66,25 +66,33 @@
    "draft_name": "DVIFM_RGB",
    "value": 485.49,
    "implementation": "contributed C++",
-   "zenmetrics": null
+   "zenmetrics": "dvifm-port-rgb",
+   "private_mode": "port-lap-v0.3",
+   "qualification": "algorithm-family correspondence; contributed-release tuning may differ; private benchmark route, not public CLI"
   },
   {
    "draft_name": "DVIFM_Y",
    "value": 149.8314,
    "implementation": "contributed C++",
-   "zenmetrics": null
+   "zenmetrics": "dvifm-port-y",
+   "private_mode": "port-lap-v0.2",
+   "qualification": "algorithm-family correspondence; contributed-release tuning may differ; private benchmark route, not public CLI"
   },
   {
    "draft_name": "DVIFM_2D_Y",
    "value": 115.8828,
    "implementation": "contributed C++",
-   "zenmetrics": null
+   "zenmetrics": "dvifm-port-2d-y",
+   "private_mode": "port-2d-v0.2",
+   "qualification": "algorithm-family correspondence; contributed-release tuning may differ; private benchmark route, not public CLI"
   },
   {
    "draft_name": "DVIFM_MIN_Y",
    "value": 9.8506,
    "implementation": "contributed C++",
-   "zenmetrics": null
+   "zenmetrics": "dvifm-port-min-y",
+   "private_mode": "port-min-v0.2",
+   "qualification": "algorithm-family correspondence; contributed-release tuning may differ; private benchmark route, not public CLI"
   }
  ],
  "caveat": "Transcribed from partial screenshots of a preliminary draft; only part of the draft was seen, and no accuracy is claimed for these values, their weights or how they map to zenmetrics metrics."

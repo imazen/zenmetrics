@@ -1047,3 +1047,6 @@ benchmarks/aic_refusals_2026-10-18/hdrvdp2-octave.tsv	ignored	Independent numeri
 benchmarks/aic_refusals_2026-10-18/hdrvdp2-oracle-summary.tsv	ignored	Independent numerical oracle aggregate, not runtime data
 benchmarks/aic_refusals_2026-10-18/qualification.meta	ignored	AIC convention source and resource receipt, not runtime observations
 benchmarks/dashboard/aic2026/haar-search.json	ignored	Aggregate-only Haar chart method-identification outcome; no private code or per-image data
+benchmarks/aic_refusals_2026-10-18/dvifm-counts.tsv	ignored	Private-port aggregate primitive counts; partial logical core schedule, no runtime observations
+benchmarks/aic_refusals_2026-10-18/haar-method-aggregates.tsv	ignored	Aggregate rank-method search errors; no private per-image data
+benchmarks/aic_refusals_2026-10-18/screenshot-aggregates.meta	ignored	Aggregate search and partial operation-count provenance

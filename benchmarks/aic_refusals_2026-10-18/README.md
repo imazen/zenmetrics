@@ -51,3 +51,27 @@ Oracle receipt: run-heavy done rc=0 264s | peak-RSS 0.51GiB |
 min-avail 51480MiB | peak-load 3.13. The external reference tree differs from
 the official file in diagnostic result fields only; the original score is
 unchanged. The pure-MATLAB pyramid fallback ran under Octave, without MEX.
+
+## Screenshot inventory supplements
+
+The four DVIFM draft families map to private port-lap-v0.3 (RGB),
+port-lap-v0.2 (Y), port-2d-v0.2 and port-min-v0.2. The benchmark adapter is
+private commit e27b88ab6181. The public `dvifm-counts.tsv` contains only
+aggregate operation counts at 840x944 and 1024x1024. It models core logical
+padded-block work; strip overlap, lane padding, allocation/setup, traffic and
+span remain unqualified. It is not a complete machine-instruction tally.
+Draft and contributed-release constants are not asserted identical.
+
+The private Haar search completed all 40 method combinations and 91 pools,
+with 792 five-source subsets per pool. `haar-method-aggregates.tsv` omits
+source identities and all per-image subjective values. Best available-roster
+mean rank error is 9.666666666666666, maximum 43, outside the 0.5-rank chart
+reading uncertainty. Only 12 chart labels match the available competitor
+roster. Zero of eleven unknown Haar variants is identified; the method gate
+fails, and no candidate fitting was attempted.
+
+Pointwise targets are incomplete: 1372 train/678 test rows are finite,
+with 3718 joined rows excluded explicitly. JND_score uses all 3920/1848.
+The original script's empty reduction failed before this admission correction.
+Search resource receipt: run-heavy done rc=0 63s | peak-RSS 0.22GiB |
+min-avail 52054MiB | peak-load 1.23. Private aggregate/search commit: 51b3fae310b3.

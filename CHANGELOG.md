@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Record the complete Haar rank-method search without identifying the eleven unknown variants, and map four DVIFM draft families to qualified partial aggregate operation counts (private source `51b3fae3`, `bd0b9436`).
+
 - Connect the AIC2026 entrance, explorer, evidence, downloads and Gigapixels; show the four explicit routes' crop qualifications and exact SDR defaults without borrowing their predecessors' cost tallies (`64391e26` base).
 
 - Add explicit AIC2026 SDR HDR-VDP, integer-luma CAMBI and mapped Butteraugli CLI routes, with independent crop/oracle receipts and unchanged existing names (`f3df7410` base).
