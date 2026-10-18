@@ -140,3 +140,27 @@ score-only, 20 score+map, 14 nn-webgpu, two nn-local, one nn-cpu-wasm and
 terms, missing graph/runtime routes and input-contract restrictions. PieAPP
 entries are existing catalog records only; no PieAPP scoring, fixes or tally
 work was performed in this lane.
+
+## Complete CLI execution inventory
+
+All 126 declared names have dispositions at 64x64, 1024x1024 and 3840x2160,
+with one and eight workers: 756/756 cells. There are 488 completed scores,
+250 explicit refusals, 12 owner-skipped PieAPP cells and six disabled-Zensim
+panics. No attempt timed out or hit its resource boundary. Each
+`refusals-SHAPE-THREADS.tsv` retains the full cause and per-attempt resource
+receipt. These are execution outcomes, not qualified timings. Metadata and
+model identities are in `refusal-inventory.meta`.
+
+At each budget, 64x64 yields 68 complete / 55 refused / 2 skipped / 1 panic;
+each larger size yields 88 complete / 35 refused / 2 skipped / 1 panic.
+The disabled-Zensim correctness branch is described above. Other refusals
+retain missing model assets, weight consent, build features/backends and
+input contracts; no size restriction or numerical gate was relaxed.
+
+Of 244 successful metric/shape cells available at both budgets, 242 have
+identical score strings. VIF-vector differs at 1024x1024 and 3840x2160;
+two repeats per budget reproduce each value in `vifvec-thread-repeat.tsv`.
+This is a separate numerical finding, not a failed execution. The one/eight
+thread covariance paths sum in different orders; any correction must remain
+on an unmerged correctness branch. Repeat-panel resource: rc0 4s,
+peak-RSS0.58GiB, min-avail51921MiB, peak-load1.24.

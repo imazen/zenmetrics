@@ -1,0 +1,127 @@
+metric	shape	threads	status	exit_code	cause	peak_rss_gib	min_available_mib	peak_load
+vmaf	3840x2160	1	complete	0	vmaf 3840x2160 reps=1 score=89.25773049292118	0.35	52140	1.98
+vmaf-neg	3840x2160	1	complete	0	vmaf-neg 3840x2160 reps=1 score=86.86474225207134	0.35	51927	1.98
+vmaf-4k	3840x2160	1	complete	0	vmaf-4k 3840x2160 reps=1 score=94.01763668760404	0.35	51944	1.82
+vmaf-v1	3840x2160	1	complete	0	vmaf-v1 3840x2160 reps=1 score=86.08095875523867	0.43	51963	1.82
+vmaf-studio601	3840x2160	1	complete	0	vmaf-studio601 3840x2160 reps=1 score=89.1818687537053	0.35	51962	1.82
+vmaf-neg-studio601	3840x2160	1	complete	0	vmaf-neg-studio601 3840x2160 reps=1 score=87.40798840006109	0.35	51998	1.75
+psnr	3840x2160	1	complete	0	psnr 3840x2160 reps=1 score=31.828124891039188	0.05	51988	1.75
+psnr-y	3840x2160	1	complete	0	psnr-y 3840x2160 reps=1 score=34.53159714795217	0.05	52013	1.61
+psnr-y601	3840x2160	1	complete	0	psnr-y601 3840x2160 reps=1 score=34.66194845256513	0.05	52028	1.61
+psnr-y-studio601	3840x2160	1	complete	0	psnr-y-studio601 3840x2160 reps=1 score=35.87824985199913	0.05	52050	1.48
+psnr-y-libvmaf	3840x2160	1	complete	0	psnr-y-libvmaf 3840x2160 reps=1 score=35.84153250008088	0.05	52077	1.48
+psnr-ycbcr611	3840x2160	1	complete	0	psnr-ycbcr611 3840x2160 reps=1 score=36.37840602163159	0.05	52095	1.48
+psnr-cb	3840x2160	1	complete	0	psnr-cb 3840x2160 reps=1 score=43.36536758742626	0.05	52118	1.36
+psnr-cr	3840x2160	1	complete	0	psnr-cr 3840x2160 reps=1 score=36.09464160430353	0.05	52140	1.36
+ciede2000	3840x2160	1	complete	0	ciede2000 3840x2160 reps=1 score=2.156027091870037	0.05	52152	1.25
+ssimc	3840x2160	1	complete	0	ssimc 3840x2160 reps=1 score=0.938913370627279	0.05	52165	1.25
+flip	3840x2160	1	complete	0	flip 3840x2160 reps=1 score=0.0982557694330672	1.04	51482	1.25
+flip-v17	3840x2160	1	complete	0	flip-v17 3840x2160 reps=1 score=0.09822818636894226	1.04	51536	1.23
+cw-ssim	3840x2160	1	complete	0	cw-ssim 3840x2160 reps=1 score=0.9992044057093452	0.45	51798	1.21
+cambi	3840x2160	1	complete	0	cambi 3840x2160 reps=1 score=0.8751804626845249	0.13	52052	1.20
+butteraugli-original	3840x2160	1	complete	0	butteraugli-original 3840x2160 reps=1 score=12.954724311828613	1.38	50800	1.10
+ssimulacra1	3840x2160	1	complete	0	ssimulacra1 3840x2160 reps=1 score=0.07716417641172657	0.58	51423	1.28
+ws-hv	3840x2160	1	complete	0	ws-hv 3840x2160 reps=1 score=0.7804564442413269	0.42	51901	1.26
+ssim	3840x2160	1	complete	0	ssim 3840x2160 reps=1 score=0.9389999225819259	0.05	51881	1.26
+nlpd	3840x2160	1	complete	0	nlpd 3840x2160 reps=1 score=2.4007493366195	0.41	51946	1.16
+nlpd-iqa	3840x2160	1	complete	0	nlpd-iqa 3840x2160 reps=1 score=0.09870699759715688	0.25	51917	1.16
+lpips-alex	3840x2160	1	refused	2	REFUSED lpips-alex: reading MODEL_DIR/lpips_alex.meta: No such file or directory (os error 2)	0.05	51932	1.06
+lpips-vgg	3840x2160	1	refused	2	REFUSED lpips-vgg: reading MODEL_DIR/lpips_vgg.meta: No such file or directory (os error 2)	0.05	51974	1.06
+lpips-squeeze	3840x2160	1	refused	2	REFUSED lpips-squeeze: reading MODEL_DIR/lpips_squeeze.meta: No such file or directory (os error 2)	0.05	52014	1.06
+dists	3840x2160	1	refused	2	REFUSED dists: reading MODEL_DIR/dists.meta: No such file or directory (os error 2)	0.05	52044	0.98
+stlpips-alex	3840x2160	1	refused	2	REFUSED stlpips-alex: reading MODEL_DIR/stlpips_alex.meta: No such file or directory (os error 2)	0.05	52053	0.98
+stlpips-vgg	3840x2160	1	refused	2	REFUSED stlpips-vgg: reading MODEL_DIR/stlpips_vgg.meta: No such file or directory (os error 2)	0.05	52088	0.90
+deepdc	3840x2160	1	refused	2	REFUSED deepdc: reading MODEL_DIR/deepdc.meta: No such file or directory (os error 2)	0.05	52116	0.90
+ckdn	3840x2160	1	refused	2	REFUSED ckdn: ckdn weights are no stated licence (https://github.com/researchmm/CKDN); loading them needs an explicit WeightsConsent	0.05	52135	0.90
+afine	3840x2160	1	refused	2	REFUSED afine: afine weights are noncommercial (https://github.com/ChrisDud0257/AFINE); loading them needs an explicit WeightsConsent	0.05	52163	0.83
+dreamsim	3840x2160	1	refused	2	REFUSED dreamsim: dreamsim weights are no stated licence (https://github.com/ssundaram21/dreamsim); loading them needs an explicit WeightsConsent	0.05	52177	0.83
+arniqa	3840x2160	1	refused	2	REFUSED arniqa: reading MODEL_DIR/arniqa.meta: No such file or directory (os error 2)	0.05	52184	0.76
+maniqa	3840x2160	1	refused	2	REFUSED maniqa: reading MODEL_DIR/maniqa.meta: No such file or directory (os error 2)	0.05	52164	0.76
+liqe	3840x2160	1	refused	2	REFUSED liqe: liqe weights are no stated licence (https://github.com/zwx8981/LIQE#pre-trained-weights); loading them needs an explicit WeightsConsent	0.05	52048	0.94
+musiq	3840x2160	1	refused	2	REFUSED musiq: reading MODEL_DIR/musiq.meta: No such file or directory (os error 2)	0.05	52032	0.86
+hyperiqa	3840x2160	1	refused	2	REFUSED hyperiqa: hyperiqa weights are no stated licence (https://github.com/SSL92/hyperIQA#testing-a-single-image); loading them needs an explicit WeightsConsent	0.05	52056	0.86
+paq2piq	3840x2160	1	refused	2	REFUSED paq2piq: paq2piq weights are noncommercial (https://github.com/baidut/PaQ-2-PiQ/blob/master/CC-BY-NC-4.0.txt); loading them needs an explicit WeightsConsent	0.05	52088	0.86
+pieapp	3840x2160	1	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+wadiqam-fr-live	3840x2160	1	refused	2	REFUSED wadiqam-fr-live: reading MODEL_DIR/wadiqam_fr_live.meta: No such file or directory (os error 2)	0.05	52106	0.79
+wadiqam-fr-tid	3840x2160	1	refused	2	REFUSED wadiqam-fr-tid: reading MODEL_DIR/wadiqam_fr_tid.meta: No such file or directory (os error 2)	0.05	52134	0.79
+wadiqam-nr-live	3840x2160	1	refused	2	REFUSED wadiqam-nr-live: reading MODEL_DIR/wadiqam_nr_live.meta: No such file or directory (os error 2)	0.05	52141	0.73
+wadiqam-nr-tid	3840x2160	1	refused	2	REFUSED wadiqam-nr-tid: reading MODEL_DIR/wadiqam_nr_tid.meta: No such file or directory (os error 2)	0.05	52135	0.73
+wd	3840x2160	1	refused	2	REFUSED wd: reading MODEL_DIR/wd.meta: No such file or directory (os error 2)	0.05	52153	0.73
+ahiq	3840x2160	1	complete	0	ahiq 3840x2160 reps=1 score=0.6424941486782498	0.77	51404	0.76
+dmm	3840x2160	1	refused	2	REFUSED dmm: reading MODEL_DIR/dmm.meta: No such file or directory (os error 2)	0.05	52006	0.70
+topiq-fr	3840x2160	1	refused	2	REFUSED topiq-fr: metric 'topiq-fr' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52025	0.70
+topiq-fr-pipal	3840x2160	1	refused	2	REFUSED topiq-fr-pipal: metric 'topiq-fr-pipal' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52046	0.70
+wadiqam-pyiqa	3840x2160	1	refused	2	REFUSED wadiqam-pyiqa: metric 'wadiqam-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52041	0.65
+ahiq-pyiqa	3840x2160	1	refused	2	REFUSED ahiq-pyiqa: metric 'ahiq-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52085	0.65
+cw-ssim-pyiqa	3840x2160	1	refused	2	REFUSED cw-ssim-pyiqa: metric 'cw-ssim-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52101	0.67
+dmm-pyiqa	3840x2160	1	refused	2	REFUSED dmm-pyiqa: metric 'dmm-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.05	52121	0.67
+pieapp-pyiqa	3840x2160	1	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+ssim2	3840x2160	1	complete	0	ssim2 3840x2160 reps=1 score=49.70911613003304	0.90	52140	0.70
+ssim2-gpu	3840x2160	1	refused	2	REFUSED ssim2-gpu: metric 'ssim2-gpu' is disabled (rebuild with `--features gpu-ssim2`)	0.05	52001	0.70
+butteraugli	3840x2160	1	complete	0	butteraugli 3840x2160 reps=1 score=11.94013500213623	1.19	51988	0.81
+butteraugli-gpu	3840x2160	1	refused	2	REFUSED butteraugli-gpu: metric 'butteraugli-gpu' is disabled (rebuild with `--features gpu-butteraugli`)	0.05	52007	0.81
+dssim	3840x2160	1	complete	0	dssim 3840x2160 reps=1 score=0.003986211481850077	0.36	52026	0.74
+dssim-gpu	3840x2160	1	refused	2	REFUSED dssim-gpu: metric 'dssim-gpu' is disabled (rebuild with `--features gpu-dssim`)	0.05	51992	0.74
+iwssim-gpu	3840x2160	1	refused	2	REFUSED iwssim-gpu: metric 'iwssim-gpu' is disabled (rebuild with `--features gpu-iwssim`)	0.05	52036	0.74
+zensim	3840x2160	1	complete	0	zensim 3840x2160 reps=1 score=44.424726088640384	0.25	52051	0.68
+zensim-gpu	3840x2160	1	panic	101	zensim-gpu is DISABLED: the GPU zensim kernel is off pending v2 GPU-port validation, and zensim is features-only (no score)	0.05	52004	0.68
+cvvdp	3840x2160	1	complete	0	cvvdp 3840x2160 reps=1 score=9.473333358764648	1.14	52015	0.63
+cvvdp-gpu	3840x2160	1	refused	2	REFUSED cvvdp-gpu: metric 'cvvdp-gpu' is disabled (rebuild with `--features gpu-cvvdp`)	0.05	51984	0.63
+iwssim	3840x2160	1	complete	0	iwssim 3840x2160 reps=1 score=0.9931562694093652	0.66	51988	0.63
+iwssim-piq	3840x2160	1	complete	0	iwssim-piq 3840x2160 reps=1 score=0.9932673586161705	0.66	51972	0.74
+gmsd	3840x2160	1	complete	0	gmsd 3840x2160 reps=1 score=0.028765588147047785	0.05	51994	0.74
+mdsi	3840x2160	1	complete	0	mdsi 3840x2160 reps=1 score=0.16052114059966074	0.06	52032	0.68
+ms-gmsd	3840x2160	1	complete	0	ms-gmsd 3840x2160 reps=1 score=0.03371526923118293	0.23	52044	0.68
+ms-gmsdc	3840x2160	1	complete	0	ms-gmsdc 3840x2160 reps=1 score=0.03245756117430666	0.23	51979	0.68
+hdrvdp	3840x2160	1	refused	2	REFUSED hdrvdp: hdrvdp: HDR-VDP consumes absolute luminance (cd/m²), not sRGB8 — feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)	0.05	51998	0.70
+hdrvdp3	3840x2160	1	refused	2	REFUSED hdrvdp3: hdrvdp3 consumes absolute luminance (cd/m²) with explicit viewing conditions — use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding	0.05	52009	0.70
+proposal-butteraugli	3840x2160	1	complete	0	proposal-butteraugli 3840x2160 reps=1 score=6.493857619791329	1.19	51982	0.65
+cambi-aic2026	3840x2160	1	complete	0	cambi-aic2026 3840x2160 reps=1 score=0.672645280284067	0.13	51996	0.59
+hdrvdp3-aic2026	3840x2160	1	complete	0	hdrvdp3-aic2026 3840x2160 reps=1 score=8.713616017010546	3.69	48410	0.79
+hdrvdp-aic2026	3840x2160	1	complete	0	hdrvdp-aic2026 3840x2160 reps=1 score=58.373761996030126	1.52	50776	0.91
+psnrhvs	3840x2160	1	complete	0	psnrhvs 3840x2160 reps=1 score=27.927791295213222	0.24	52041	0.83
+psnrhvs-y	3840x2160	1	complete	0	psnrhvs-y 3840x2160 reps=1 score=32.08086610269608	0.11	52016	0.83
+haarpsi	3840x2160	1	complete	0	haarpsi 3840x2160 reps=1 score=0.9034879817238454	0.18	52023	0.83
+haarpsi-y	3840x2160	1	complete	0	haarpsi-y 3840x2160 reps=1 score=0.8906385496435836	0.13	52045	0.77
+fsim	3840x2160	1	complete	0	fsim 3840x2160 reps=1 score=0.999269791751835	0.08	52059	0.77
+ssim-pyiqa	3840x2160	1	complete	0	ssim-pyiqa 3840x2160 reps=1 score=0.9615163903178732	0.30	52062	0.71
+ssim-pyiqa-f32	3840x2160	1	complete	0	ssim-pyiqa-f32 3840x2160 reps=1 score=0.9621265200084086	0.30	52010	0.71
+ssim-pyiqa-f32-k2	3840x2160	1	complete	0	ssim-pyiqa-f32-k2 3840x2160 reps=1 score=0.9906358584338955	0.21	52013	0.71
+ssim-pyiqa-f32-k3	3840x2160	1	complete	0	ssim-pyiqa-f32-k3 3840x2160 reps=1 score=0.996389551358459	0.19	52026	0.73
+ssim-pyiqa-f32-k4	3840x2160	1	complete	0	ssim-pyiqa-f32-k4 3840x2160 reps=1 score=0.9979466605216251	0.18	52036	0.73
+ssim-pyiqa-f32-k5	3840x2160	1	complete	0	ssim-pyiqa-f32-k5 3840x2160 reps=1 score=0.9986542601192331	0.18	52050	0.67
+ssim-pyiqa-f32-k6	3840x2160	1	complete	0	ssim-pyiqa-f32-k6 3840x2160 reps=1 score=0.9990478681543087	0.18	52062	0.67
+ssimc-pyiqa-f32	3840x2160	1	complete	0	ssimc-pyiqa-f32 3840x2160 reps=1 score=0.9389133706272964	0.30	52084	0.62
+ssimc-pyiqa-f32-k2	3840x2160	1	complete	0	ssimc-pyiqa-f32-k2 3840x2160 reps=1 score=0.9712357893404716	0.21	52008	0.62
+ssimc-pyiqa-f32-k3	3840x2160	1	complete	0	ssimc-pyiqa-f32-k3 3840x2160 reps=1 score=0.9825908564442337	0.19	52026	0.62
+ssimc-pyiqa-f32-k4	3840x2160	1	complete	0	ssimc-pyiqa-f32-k4 3840x2160 reps=1 score=0.9878214299062121	0.18	52014	0.61
+ssimc-pyiqa-f32-k5	3840x2160	1	complete	0	ssimc-pyiqa-f32-k5 3840x2160 reps=1 score=0.9912340488097778	0.18	51880	0.61
+ssimc-pyiqa-f32-k6	3840x2160	1	complete	0	ssimc-pyiqa-f32-k6 3840x2160 reps=1 score=0.993362389729877	0.18	51912	0.72
+ms-ssim-pyiqa	3840x2160	1	complete	0	ms-ssim-pyiqa 3840x2160 reps=1 score=0.9953762272671131	0.32	51942	0.72
+ms-ssim-pyiqa-f32	3840x2160	1	complete	0	ms-ssim-pyiqa-f32 3840x2160 reps=1 score=0.9954759435842604	0.32	51925	0.72
+ms-ssim-pyiqa-f32-k2	3840x2160	1	complete	0	ms-ssim-pyiqa-f32-k2 3840x2160 reps=1 score=0.9988421589021469	0.21	51954	0.74
+ms-ssim-pyiqa-f32-k3	3840x2160	1	complete	0	ms-ssim-pyiqa-f32-k3 3840x2160 reps=1 score=0.999471710450636	0.19	51994	0.74
+ms-ssim-pyiqa-f32-k4	3840x2160	1	complete	0	ms-ssim-pyiqa-f32-k4 3840x2160 reps=1 score=0.9996638673741731	0.18	52020	0.68
+ms-ssim-pyiqa-f32-k5	3840x2160	1	complete	0	ms-ssim-pyiqa-f32-k5 3840x2160 reps=1 score=0.9997801094592953	0.18	52044	0.68
+ms-ssim-pyiqa-f32-k6	3840x2160	1	complete	0	ms-ssim-pyiqa-f32-k6 3840x2160 reps=1 score=0.9998342498076053	0.18	52041	0.71
+fsim-k2	3840x2160	1	complete	0	fsim-k2 3840x2160 reps=1 score=0.9870416822370742	0.57	51625	0.71
+fsim-k3	3840x2160	1	complete	0	fsim-k3 3840x2160 reps=1 score=0.9947261928740976	0.28	52041	0.81
+fsim-k4	3840x2160	1	complete	0	fsim-k4 3840x2160 reps=1 score=0.9970428850054678	0.18	52050	0.77
+fsim-nodownscale	3840x2160	1	complete	0	fsim-nodownscale 3840x2160 reps=1 score=0.9517438901896383	1.63	50680	0.91
+fsim-y	3840x2160	1	complete	0	fsim-y 3840x2160 reps=1 score=0.999269791751835	0.08	52056	0.91
+vsi	3840x2160	1	complete	0	vsi 3840x2160 reps=1 score=0.9992769873073639	0.49	52058	0.84
+vsi-k2	3840x2160	1	complete	0	vsi-k2 3840x2160 reps=1 score=0.9965825141332201	0.59	52019	0.84
+vsi-k3	3840x2160	1	complete	0	vsi-k3 3840x2160 reps=1 score=0.9978892844896939	0.53	52022	0.77
+vsi-k4	3840x2160	1	complete	0	vsi-k4 3840x2160 reps=1 score=0.9984087903514077	0.51	52002	0.77
+vsi-nodownscale	3840x2160	1	complete	0	vsi-nodownscale 3840x2160 reps=1 score=0.9919246965032038	0.86	52013	0.77
+msssim	3840x2160	1	complete	0	msssim 3840x2160 reps=1 score=0.9954738044900658	0.19	52003	0.79
+vif	3840x2160	1	complete	0	vif 3840x2160 reps=1 score=0.6604056152904282	0.45	52025	0.79
+vifvec	3840x2160	1	complete	0	vifvec 3840x2160 reps=1 score=0.6184347550659302	0.54	52021	0.73
+mad	3840x2160	1	complete	0	mad 3840x2160 reps=1 score=19.46609063027946	1.02	51231	0.77
+ssim-libvmaf	3840x2160	1	complete	0	ssim-libvmaf 3840x2160 reps=1 score=0.9993935823440552	0.16	52150	0.71
+msssim-libvmaf	3840x2160	1	complete	0	msssim-libvmaf 3840x2160 reps=1 score=0.9958514754389691	0.46	52100	0.71
+psnrhvs-daala	3840x2160	1	complete	0	psnrhvs-daala 3840x2160 reps=1 score=38.47907422514299	0.10	52000	0.71
+mdctpsnr	3840x2160	1	complete	0	mdctpsnr 3840x2160 reps=1 score=33.08034896850586	0.13	52040	0.91
+piqe	3840x2160	1	complete	0	piqe 3840x2160 reps=1 score=64.93090838838135	0.37	52201	0.91
+niqe	3840x2160	1	complete	0	niqe 3840x2160 reps=1 score=8.655131915872904	0.27	51973	0.84
+brisque	3840x2160	1	complete	0	brisque 3840x2160 reps=1 score=42.27801513671875	0.38	51842	0.86

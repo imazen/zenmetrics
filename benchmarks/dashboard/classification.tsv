@@ -1070,3 +1070,11 @@ benchmarks/aic_refusals_2026-10-18/landing-layout.json	ignored	Landing navigatio
 benchmarks/dashboard/aic2026/columns.tsv	ignored	AIC column-name inventory; current qualifications come from the naming ledger
 benchmarks/dashboard/aic2026/retained-comparisons.tsv	ignored	Retained numeric comparisons; no historical implementation-status labels
 benchmarks/aic_refusals_2026-10-18/browser-refusal-catalog.tsv	ignored	126-name browser capability/restriction catalog snapshot, not runtime observations
+benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-64x64-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-64x64-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusal-inventory.meta	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
+benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations

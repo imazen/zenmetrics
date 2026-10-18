@@ -1,0 +1,127 @@
+metric	shape	threads	status	exit_code	cause	peak_rss_gib	min_available_mib	peak_load
+vmaf	64x64	8	complete	0	vmaf 64x64 reps=1 score=90.7484756647162	0.01	51284	1.86
+vmaf-neg	64x64	8	complete	0	vmaf-neg 64x64 reps=1 score=86.0415516227919	0.01	51875	3.10
+vmaf-4k	64x64	8	complete	0	vmaf-4k 64x64 reps=1 score=95.18776022375326	0.01	51931	3.10
+vmaf-v1	64x64	8	refused	2	REFUSED vmaf-v1: invalid input: both dimensions below CAMBI minimum	0.01	51993	2.85
+vmaf-studio601	64x64	8	complete	0	vmaf-studio601 64x64 reps=1 score=89.8841217052763	0.01	52031	2.85
+vmaf-neg-studio601	64x64	8	complete	0	vmaf-neg-studio601 64x64 reps=1 score=86.96778600589982	0.01	52056	2.62
+psnr	64x64	8	complete	0	psnr 64x64 reps=1 score=30.159670713199034	0.01	52079	2.62
+psnr-y	64x64	8	complete	0	psnr-y 64x64 reps=1 score=33.39782255800374	0.01	52129	2.62
+psnr-y601	64x64	8	complete	0	psnr-y601 64x64 reps=1 score=33.52405214954474	0.01	52144	2.41
+psnr-y-studio601	64x64	8	complete	0	psnr-y-studio601 64x64 reps=1 score=34.75816139092772	0.01	52153	2.41
+psnr-y-libvmaf	64x64	8	complete	0	psnr-y-libvmaf 64x64 reps=1 score=34.698872443604124	0.01	52163	2.22
+psnr-ycbcr611	64x64	8	complete	0	psnr-ycbcr611 64x64 reps=1 score=35.08295986262028	0.01	52178	2.22
+psnr-cb	64x64	8	complete	0	psnr-cb 64x64 reps=1 score=41.65201916625555	0.01	52182	2.04
+psnr-cr	64x64	8	complete	0	psnr-cr 64x64 reps=1 score=33.8979047715395	0.01	52185	2.04
+ciede2000	64x64	8	complete	0	ciede2000 64x64 reps=1 score=2.8322539606902444	0.01	52185	2.04
+ssimc	64x64	8	complete	0	ssimc 64x64 reps=1 score=0.93957398642572	0.01	52178	2.04
+flip	64x64	8	complete	0	flip 64x64 reps=1 score=0.12177542527615515	0.01	52182	1.88
+flip-v17	64x64	8	complete	0	flip-v17 64x64 reps=1 score=0.12177529186010361	0.01	52187	1.88
+cw-ssim	64x64	8	complete	0	cw-ssim 64x64 reps=1 score=0.99952981931993	0.01	52189	1.73
+cambi	64x64	8	refused	2	REFUSED cambi: invalid input: both dimensions below CAMBI minimum	0.01	52162	1.73
+butteraugli-original	64x64	8	complete	0	butteraugli-original 64x64 reps=1 score=4.472986698150635	0.01	52169	1.73
+ssimulacra1	64x64	8	complete	0	ssimulacra1 64x64 reps=1 score=0.08013626464286117	0.01	52172	1.59
+ws-hv	64x64	8	complete	0	ws-hv 64x64 reps=1 score=0.6164012158840899	0.01	52179	1.59
+ssim	64x64	8	complete	0	ssim 64x64 reps=1 score=0.946311784642163	0.01	52189	1.46
+nlpd	64x64	8	refused	2	REFUSED nlpd: NLPD requires width and height >= 96	0.01	52192	1.46
+nlpd-iqa	64x64	8	refused	2	REFUSED nlpd-iqa: NLPD requires width and height >= 96	0.01	52192	1.42
+lpips-alex	64x64	8	refused	2	REFUSED lpips-alex: reading MODEL_DIR/lpips_alex.meta: No such file or directory (os error 2)	0.01	52193	1.42
+lpips-vgg	64x64	8	refused	2	REFUSED lpips-vgg: reading MODEL_DIR/lpips_vgg.meta: No such file or directory (os error 2)	0.01	52189	1.42
+lpips-squeeze	64x64	8	refused	2	REFUSED lpips-squeeze: reading MODEL_DIR/lpips_squeeze.meta: No such file or directory (os error 2)	0.01	52193	1.31
+dists	64x64	8	refused	2	REFUSED dists: reading MODEL_DIR/dists.meta: No such file or directory (os error 2)	0.01	52193	1.31
+stlpips-alex	64x64	8	refused	2	REFUSED stlpips-alex: reading MODEL_DIR/stlpips_alex.meta: No such file or directory (os error 2)	0.01	52191	1.20
+stlpips-vgg	64x64	8	refused	2	REFUSED stlpips-vgg: reading MODEL_DIR/stlpips_vgg.meta: No such file or directory (os error 2)	0.01	52191	1.20
+deepdc	64x64	8	refused	2	REFUSED deepdc: reading MODEL_DIR/deepdc.meta: No such file or directory (os error 2)	0.01	52196	1.20
+ckdn	64x64	8	refused	2	REFUSED ckdn: ckdn weights are no stated licence (https://github.com/researchmm/CKDN); loading them needs an explicit WeightsConsent	0.01	52191	1.11
+afine	64x64	8	refused	2	REFUSED afine: afine weights are noncommercial (https://github.com/ChrisDud0257/AFINE); loading them needs an explicit WeightsConsent	0.01	52194	1.11
+dreamsim	64x64	8	refused	2	REFUSED dreamsim: dreamsim weights are no stated licence (https://github.com/ssundaram21/dreamsim); loading them needs an explicit WeightsConsent	0.01	52192	1.02
+arniqa	64x64	8	refused	2	REFUSED arniqa: reading MODEL_DIR/arniqa.meta: No such file or directory (os error 2)	0.01	52194	1.02
+maniqa	64x64	8	refused	2	REFUSED maniqa: reading MODEL_DIR/maniqa.meta: No such file or directory (os error 2)	0.01	52197	1.02
+liqe	64x64	8	refused	2	REFUSED liqe: liqe weights are no stated licence (https://github.com/zwx8981/LIQE#pre-trained-weights); loading them needs an explicit WeightsConsent	0.01	52208	0.94
+musiq	64x64	8	refused	2	REFUSED musiq: reading MODEL_DIR/musiq.meta: No such file or directory (os error 2)	0.01	52202	0.94
+hyperiqa	64x64	8	refused	2	REFUSED hyperiqa: hyperiqa weights are no stated licence (https://github.com/SSL92/hyperIQA#testing-a-single-image); loading them needs an explicit WeightsConsent	0.01	52200	0.86
+paq2piq	64x64	8	refused	2	REFUSED paq2piq: paq2piq weights are noncommercial (https://github.com/baidut/PaQ-2-PiQ/blob/master/CC-BY-NC-4.0.txt); loading them needs an explicit WeightsConsent	0.01	52200	0.86
+pieapp	64x64	8	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+wadiqam-fr-live	64x64	8	refused	2	REFUSED wadiqam-fr-live: reading MODEL_DIR/wadiqam_fr_live.meta: No such file or directory (os error 2)	0.01	52201	0.86
+wadiqam-fr-tid	64x64	8	refused	2	REFUSED wadiqam-fr-tid: reading MODEL_DIR/wadiqam_fr_tid.meta: No such file or directory (os error 2)	0.01	52196	1.03
+wadiqam-nr-live	64x64	8	refused	2	REFUSED wadiqam-nr-live: reading MODEL_DIR/wadiqam_nr_live.meta: No such file or directory (os error 2)	0.01	52198	1.03
+wadiqam-nr-tid	64x64	8	refused	2	REFUSED wadiqam-nr-tid: reading MODEL_DIR/wadiqam_nr_tid.meta: No such file or directory (os error 2)	0.01	52190	0.95
+wd	64x64	8	refused	2	REFUSED wd: reading MODEL_DIR/wd.meta: No such file or directory (os error 2)	0.01	52198	0.95
+ahiq	64x64	8	refused	2	REFUSED ahiq: ahiq: too_small: image smaller than 224x224	0.30	52198	0.87
+dmm	64x64	8	refused	2	REFUSED dmm: reading MODEL_DIR/dmm.meta: No such file or directory (os error 2)	0.01	51979	0.87
+topiq-fr	64x64	8	refused	2	REFUSED topiq-fr: metric 'topiq-fr' is disabled (rebuild with `--features pyiqa-ports`)	0.01	51994	0.87
+topiq-fr-pipal	64x64	8	refused	2	REFUSED topiq-fr-pipal: metric 'topiq-fr-pipal' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52006	0.88
+wadiqam-pyiqa	64x64	8	refused	2	REFUSED wadiqam-pyiqa: metric 'wadiqam-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52022	0.88
+ahiq-pyiqa	64x64	8	refused	2	REFUSED ahiq-pyiqa: metric 'ahiq-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52046	0.81
+cw-ssim-pyiqa	64x64	8	refused	2	REFUSED cw-ssim-pyiqa: metric 'cw-ssim-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52064	0.81
+dmm-pyiqa	64x64	8	refused	2	REFUSED dmm-pyiqa: metric 'dmm-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52083	0.81
+pieapp-pyiqa	64x64	8	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+ssim2	64x64	8	complete	0	ssim2 64x64 reps=1 score=70.66183155267956	0.01	52108	0.75
+ssim2-gpu	64x64	8	refused	2	REFUSED ssim2-gpu: metric 'ssim2-gpu' is disabled (rebuild with `--features gpu-ssim2`)	0.01	52083	0.75
+butteraugli	64x64	8	complete	0	butteraugli 64x64 reps=1 score=3.6587209701538086	0.01	52070	0.69
+butteraugli-gpu	64x64	8	refused	2	REFUSED butteraugli-gpu: metric 'butteraugli-gpu' is disabled (rebuild with `--features gpu-butteraugli`)	0.01	52113	0.69
+dssim	64x64	8	complete	0	dssim 64x64 reps=1 score=0.003954364934139143	0.01	52134	0.69
+dssim-gpu	64x64	8	refused	2	REFUSED dssim-gpu: metric 'dssim-gpu' is disabled (rebuild with `--features gpu-dssim`)	0.01	52147	0.63
+iwssim-gpu	64x64	8	refused	2	REFUSED iwssim-gpu: metric 'iwssim-gpu' is disabled (rebuild with `--features gpu-iwssim`)	0.01	52172	0.63
+zensim	64x64	8	complete	0	zensim 64x64 reps=1 score=53.22218253473676	0.01	52175	0.58
+zensim-gpu	64x64	8	panic	101	zensim-gpu is DISABLED: the GPU zensim kernel is off pending v2 GPU-port validation, and zensim is features-only (no score)	0.01	52170	0.58
+cvvdp	64x64	8	complete	0	cvvdp 64x64 reps=1 score=9.625994682312012	0.01	52172	0.53
+cvvdp-gpu	64x64	8	refused	2	REFUSED cvvdp-gpu: metric 'cvvdp-gpu' is disabled (rebuild with `--features gpu-cvvdp`)	0.01	52165	0.53
+iwssim	64x64	8	refused	2	REFUSED iwssim: iwssim: iwssim::Iwssim::new: image too small for 5-level IW-SSIM: 64×64 (need min dim >= 176, or enable allow_small)	0.01	52119	0.61
+iwssim-piq	64x64	8	refused	2	REFUSED iwssim-piq: image too small for 5-level IW-SSIM: 64×64 (need min dim >= 176, or enable allow_small)	0.01	52124	0.61
+gmsd	64x64	8	complete	0	gmsd 64x64 reps=1 score=0.03158462628578881	0.01	52129	0.56
+mdsi	64x64	8	complete	0	mdsi 64x64 reps=1 score=0.3193642857844794	0.01	52153	0.56
+ms-gmsd	64x64	8	complete	0	ms-gmsd 64x64 reps=1 score=0.03874092075647336	0.01	52171	0.51
+ms-gmsdc	64x64	8	complete	0	ms-gmsdc 64x64 reps=1 score=0.03738927797678897	0.01	52180	0.51
+hdrvdp	64x64	8	refused	2	REFUSED hdrvdp: hdrvdp: HDR-VDP consumes absolute luminance (cd/m²), not sRGB8 — feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)	0.01	52179	0.51
+hdrvdp3	64x64	8	refused	2	REFUSED hdrvdp3: hdrvdp3 consumes absolute luminance (cd/m²) with explicit viewing conditions — use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding	0.01	52193	0.47
+proposal-butteraugli	64x64	8	complete	0	proposal-butteraugli 64x64 reps=1 score=3.0404419056651406	0.01	52203	0.47
+cambi-aic2026	64x64	8	refused	2	REFUSED cambi-aic2026: invalid input: both dimensions below CAMBI minimum	0.01	52205	0.43
+hdrvdp3-aic2026	64x64	8	complete	0	hdrvdp3-aic2026 64x64 reps=1 score=8.715447553044186	0.01	52204	0.43
+hdrvdp-aic2026	64x64	8	complete	0	hdrvdp-aic2026 64x64 reps=1 score=63.45217445944229	0.01	52205	0.43
+psnrhvs	64x64	8	complete	0	psnrhvs 64x64 reps=1 score=25.981081973502345	0.01	52199	0.40
+psnrhvs-y	64x64	8	complete	0	psnrhvs-y 64x64 reps=1 score=30.734265503284234	0.01	52203	0.40
+haarpsi	64x64	8	complete	0	haarpsi 64x64 reps=1 score=0.9195120075160504	0.01	52205	0.37
+haarpsi-y	64x64	8	complete	0	haarpsi-y 64x64 reps=1 score=0.9030368945005751	0.01	52210	0.37
+fsim	64x64	8	complete	0	fsim 64x64 reps=1 score=0.9520948307777763	0.01	52212	0.42
+ssim-pyiqa	64x64	8	complete	0	ssim-pyiqa 64x64 reps=1 score=0.9519022013940365	0.01	52218	0.42
+ssim-pyiqa-f32	64x64	8	complete	0	ssim-pyiqa-f32 64x64 reps=1 score=0.9526615009770625	0.01	52215	0.42
+ssim-pyiqa-f32-k2	64x64	8	complete	0	ssim-pyiqa-f32-k2 64x64 reps=1 score=0.991443501392388	0.01	52210	0.38
+ssim-pyiqa-f32-k3	64x64	8	complete	0	ssim-pyiqa-f32-k3 64x64 reps=1 score=0.9981446999927726	0.01	52209	0.38
+ssim-pyiqa-f32-k4	64x64	8	complete	0	ssim-pyiqa-f32-k4 64x64 reps=1 score=0.9988435105488587	0.01	52209	0.35
+ssim-pyiqa-f32-k5	64x64	8	complete	0	ssim-pyiqa-f32-k5 64x64 reps=1 score=0.9992825498983675	0.01	52205	0.35
+ssim-pyiqa-f32-k6	64x64	8	refused	2	REFUSED ssim-pyiqa-f32-k6: SSIM-pyiqa: scale 1 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)	0.01	52204	0.35
+ssimc-pyiqa-f32	64x64	8	complete	0	ssimc-pyiqa-f32 64x64 reps=1 score=0.9395739864257319	0.01	52197	0.32
+ssimc-pyiqa-f32-k2	64x64	8	complete	0	ssimc-pyiqa-f32-k2 64x64 reps=1 score=0.9804269855663836	0.01	52163	0.30
+ssimc-pyiqa-f32-k3	64x64	8	complete	0	ssimc-pyiqa-f32-k3 64x64 reps=1 score=0.9916244400183157	0.01	52164	0.30
+ssimc-pyiqa-f32-k4	64x64	8	complete	0	ssimc-pyiqa-f32-k4 64x64 reps=1 score=0.9923880553752878	0.01	52175	0.35
+ssimc-pyiqa-f32-k5	64x64	8	complete	0	ssimc-pyiqa-f32-k5 64x64 reps=1 score=0.9919093266596882	0.01	52182	0.35
+ssimc-pyiqa-f32-k6	64x64	8	refused	2	REFUSED ssimc-pyiqa-f32-k6: SSIM-pyiqa: scale 1 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)	0.01	52197	0.33
+ms-ssim-pyiqa	64x64	8	refused	2	REFUSED ms-ssim-pyiqa: SSIM-pyiqa: scale 4 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 1)	0.01	52199	0.33
+ms-ssim-pyiqa-f32	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32: SSIM-pyiqa: scale 4 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 1)	0.01	52203	0.46
+ms-ssim-pyiqa-f32-k2	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32-k2: SSIM-pyiqa: scale 3 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 2)	0.01	52203	0.46
+ms-ssim-pyiqa-f32-k3	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32-k3: SSIM-pyiqa: scale 3 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 3)	0.01	52194	0.46
+ms-ssim-pyiqa-f32-k4	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32-k4: SSIM-pyiqa: scale 2 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)	0.01	52166	0.39
+ms-ssim-pyiqa-f32-k5	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32-k5: SSIM-pyiqa: scale 2 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)	0.01	52171	0.39
+ms-ssim-pyiqa-f32-k6	64x64	8	refused	2	REFUSED ms-ssim-pyiqa-f32-k6: SSIM-pyiqa: scale 1 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)	0.01	52182	0.39
+fsim-k2	64x64	8	complete	0	fsim-k2 64x64 reps=1 score=0.9918542583827473	0.01	52196	0.36
+fsim-k3	64x64	8	complete	0	fsim-k3 64x64 reps=1 score=0.9982769463966155	0.01	52214	0.36
+fsim-k4	64x64	8	complete	0	fsim-k4 64x64 reps=1 score=0.9981369463032526	0.01	52217	0.33
+fsim-nodownscale	64x64	8	complete	0	fsim-nodownscale 64x64 reps=1 score=0.9520948307777763	0.01	52213	0.33
+fsim-y	64x64	8	complete	0	fsim-y 64x64 reps=1 score=0.9520948307777763	0.01	52209	0.33
+vsi	64x64	8	complete	0	vsi 64x64 reps=1 score=0.9776569726140144	0.01	52183	0.30
+vsi-k2	64x64	8	complete	0	vsi-k2 64x64 reps=1 score=0.9913699437817984	0.01	52190	0.36
+vsi-k3	64x64	8	complete	0	vsi-k3 64x64 reps=1 score=0.9950085673759035	0.01	52199	0.33
+vsi-k4	64x64	8	complete	0	vsi-k4 64x64 reps=1 score=0.9966135964898513	0.01	52211	0.33
+vsi-nodownscale	64x64	8	complete	0	vsi-nodownscale 64x64 reps=1 score=0.9776569726140144	0.01	52216	0.30
+msssim	64x64	8	complete	0	msssim 64x64 reps=1 score=0.9950691433468419	0.01	52218	0.30
+vif	64x64	8	complete	0	vif 64x64 reps=1 score=0.6263057951828283	0.01	52183	0.34
+vifvec	64x64	8	refused	2	REFUSED vifvec: image too small: need min(w,h) >= 72, got 64	0.01	52189	0.39
+mad	64x64	8	complete	0	mad 64x64 reps=1 score=11.524740741555789	0.01	52193	0.39
+ssim-libvmaf	64x64	8	complete	0	ssim-libvmaf 64x64 reps=1 score=0.9590929746627808	0.01	52197	0.39
+msssim-libvmaf	64x64	8	refused	2	REFUSED msssim-libvmaf: image too small: min(w,h) must be ≥ 11	0.01	52206	0.36
+psnrhvs-daala	64x64	8	complete	0	psnrhvs-daala 64x64 reps=1 score=38.51801378525188	0.01	52217	0.33
+mdctpsnr	64x64	8	complete	0	mdctpsnr 64x64 reps=1 score=39.814144134521484	0.01	52217	0.33
+piqe	64x64	8	complete	0	piqe 64x64 reps=1 score=42.827089403813105	0.01	52213	0.33
+niqe	64x64	8	refused	2	REFUSED niqe: niqe: too_small: image too small for NIQE: 64x64 usable after crop_border=0 (needs two 96x96 blocks)	0.01	52215	0.30
+brisque	64x64	8	complete	0	brisque 64x64 reps=1 score=61.20135498046875	0.01	52218	0.30

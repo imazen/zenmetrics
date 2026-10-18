@@ -43,6 +43,8 @@ def main():
                     if row['log']:
                         text = (args.logs/row['log']).read_text()
                     detail = row['detail']
+                    if row['status'] == 'refused':
+                        detail = next(line for line in text.splitlines() if line.startswith('REFUSED '))
                     if row['status'] == 'panic':
                         lines = text.splitlines()
                         index = next(i for i, line in enumerate(lines) if 'panicked at' in line)

@@ -1947,3 +1947,14 @@ hits the unchanged monitored 12-GiB guard on both allowed attempts (exit 137,
 unqualified and exhausted. Smaller retained qualified resolutions are not
 relabeled as 8K coverage. No downsampling, ingress, guard or metric arithmetic
 changed. See [the scalar deadline receipt](docs/IQA_SCALAR_PRIORITY.md#measured-8k-fsim-no-downscale-resource-refusal).
+
+### Known Bugs: VIF-vector thread-budget score identity (2026-10-19)
+
+The AIC execution inventory reproduces different VIF-vector scores at one and
+eight workers. At 1024x1024: 0.6175632083942326 versus 0.6175632083957185;
+at 3840x2160: 0.6184347550659302 versus 0.6184347550346455. Two repeats per
+budget reproduce each value. The parallel covariance uses striped partial
+sums while the one-worker path uses one raster-order accumulation. A correction
+must remain on an unmerged fix bookmark under the owner rule; no metric path
+was changed by the inventory. See
+[the retained repeat panel](benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv).

@@ -1,0 +1,127 @@
+metric	shape	threads	status	exit_code	cause	peak_rss_gib	min_available_mib	peak_load
+vmaf	1024x1024	1	complete	0	vmaf 1024x1024 reps=1 score=89.42498241800983	0.05	52218	0.28
+vmaf-neg	1024x1024	1	complete	0	vmaf-neg 1024x1024 reps=1 score=87.03593319736036	0.05	52183	0.28
+vmaf-4k	1024x1024	1	complete	0	vmaf-4k 1024x1024 reps=1 score=94.15110139604997	0.05	52184	0.28
+vmaf-v1	1024x1024	1	complete	0	vmaf-v1 1024x1024 reps=1 score=85.683683071908	0.06	52184	0.29
+vmaf-studio601	1024x1024	1	complete	0	vmaf-studio601 1024x1024 reps=1 score=89.41808061743397	0.05	52156	0.29
+vmaf-neg-studio601	1024x1024	1	complete	0	vmaf-neg-studio601 1024x1024 reps=1 score=87.60856854719695	0.05	52156	0.27
+psnr	1024x1024	1	complete	0	psnr 1024x1024 reps=1 score=31.87536274198264	0.01	52154	0.27
+psnr-y	1024x1024	1	complete	0	psnr-y 1024x1024 reps=1 score=34.59622794311839	0.01	52164	0.25
+psnr-y601	1024x1024	1	complete	0	psnr-y601 1024x1024 reps=1 score=34.725997726030194	0.01	52180	0.25
+psnr-y-studio601	1024x1024	1	complete	0	psnr-y-studio601 1024x1024 reps=1 score=35.94163777105037	0.01	52190	0.25
+psnr-y-libvmaf	1024x1024	1	complete	0	psnr-y-libvmaf 1024x1024 reps=1 score=35.90567582858822	0.01	52203	0.23
+psnr-ycbcr611	1024x1024	1	complete	0	psnr-ycbcr611 1024x1024 reps=1 score=36.43630818988872	0.01	52206	0.23
+psnr-cb	1024x1024	1	complete	0	psnr-cb 1024x1024 reps=1 score=43.41901857605545	0.01	52198	0.29
+psnr-cr	1024x1024	1	complete	0	psnr-cr 1024x1024 reps=1 score=36.118897586394134	0.01	52204	0.29
+ciede2000	1024x1024	1	complete	0	ciede2000 1024x1024 reps=1 score=2.1407810581928963	0.01	52211	0.29
+ssimc	1024x1024	1	complete	0	ssimc 1024x1024 reps=1 score=0.9380666379837034	0.01	52211	0.26
+flip	1024x1024	1	complete	0	flip 1024x1024 reps=1 score=0.09775641318389938	0.15	52212	0.26
+flip-v17	1024x1024	1	complete	0	flip-v17 1024x1024 reps=1 score=0.0977449044585228	0.15	52083	0.24
+cw-ssim	1024x1024	1	complete	0	cw-ssim 1024x1024 reps=1 score=0.9992094439567976	0.06	52092	0.24
+cambi	1024x1024	1	complete	0	cambi 1024x1024 reps=1 score=1.9434762037409563	0.02	52099	0.24
+butteraugli-original	1024x1024	1	complete	0	butteraugli-original 1024x1024 reps=1 score=12.954724311828613	0.18	52114	0.30
+ssimulacra1	1024x1024	1	complete	0	ssimulacra1 1024x1024 reps=1 score=0.0767708121903663	0.08	52040	0.30
+ws-hv	1024x1024	1	complete	0	ws-hv 1024x1024 reps=1 score=0.7278855052505182	0.06	52085	0.28
+ssim	1024x1024	1	complete	0	ssim 1024x1024 reps=1 score=0.938354715114034	0.01	52109	0.28
+nlpd	1024x1024	1	complete	0	nlpd 1024x1024 reps=1 score=2.394971943723971	0.06	52126	0.26
+nlpd-iqa	1024x1024	1	complete	0	nlpd-iqa 1024x1024 reps=1 score=0.09798879079478053	0.04	52133	0.26
+lpips-alex	1024x1024	1	refused	2	REFUSED lpips-alex: reading MODEL_DIR/lpips_alex.meta: No such file or directory (os error 2)	0.01	52151	0.26
+lpips-vgg	1024x1024	1	refused	2	REFUSED lpips-vgg: reading MODEL_DIR/lpips_vgg.meta: No such file or directory (os error 2)	0.01	52147	0.24
+lpips-squeeze	1024x1024	1	refused	2	REFUSED lpips-squeeze: reading MODEL_DIR/lpips_squeeze.meta: No such file or directory (os error 2)	0.01	52185	0.24
+dists	1024x1024	1	refused	2	REFUSED dists: reading MODEL_DIR/dists.meta: No such file or directory (os error 2)	0.01	52188	0.22
+stlpips-alex	1024x1024	1	refused	2	REFUSED stlpips-alex: reading MODEL_DIR/stlpips_alex.meta: No such file or directory (os error 2)	0.01	52197	0.22
+stlpips-vgg	1024x1024	1	refused	2	REFUSED stlpips-vgg: reading MODEL_DIR/stlpips_vgg.meta: No such file or directory (os error 2)	0.01	52212	0.22
+deepdc	1024x1024	1	refused	2	REFUSED deepdc: reading MODEL_DIR/deepdc.meta: No such file or directory (os error 2)	0.01	52208	0.20
+ckdn	1024x1024	1	refused	2	REFUSED ckdn: ckdn weights are no stated licence (https://github.com/researchmm/CKDN); loading them needs an explicit WeightsConsent	0.01	52216	0.20
+afine	1024x1024	1	refused	2	REFUSED afine: afine weights are noncommercial (https://github.com/ChrisDud0257/AFINE); loading them needs an explicit WeightsConsent	0.01	52219	0.18
+dreamsim	1024x1024	1	refused	2	REFUSED dreamsim: dreamsim weights are no stated licence (https://github.com/ssundaram21/dreamsim); loading them needs an explicit WeightsConsent	0.01	52229	0.18
+arniqa	1024x1024	1	refused	2	REFUSED arniqa: reading MODEL_DIR/arniqa.meta: No such file or directory (os error 2)	0.01	52228	0.18
+maniqa	1024x1024	1	refused	2	REFUSED maniqa: reading MODEL_DIR/maniqa.meta: No such file or directory (os error 2)	0.01	52229	0.17
+liqe	1024x1024	1	refused	2	REFUSED liqe: liqe weights are no stated licence (https://github.com/zwx8981/LIQE#pre-trained-weights); loading them needs an explicit WeightsConsent	0.01	52232	0.17
+musiq	1024x1024	1	refused	2	REFUSED musiq: reading MODEL_DIR/musiq.meta: No such file or directory (os error 2)	0.01	52232	0.15
+hyperiqa	1024x1024	1	refused	2	REFUSED hyperiqa: hyperiqa weights are no stated licence (https://github.com/SSL92/hyperIQA#testing-a-single-image); loading them needs an explicit WeightsConsent	0.01	52231	0.15
+paq2piq	1024x1024	1	refused	2	REFUSED paq2piq: paq2piq weights are noncommercial (https://github.com/baidut/PaQ-2-PiQ/blob/master/CC-BY-NC-4.0.txt); loading them needs an explicit WeightsConsent	0.01	52230	0.15
+pieapp	1024x1024	1	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+wadiqam-fr-live	1024x1024	1	refused	2	REFUSED wadiqam-fr-live: reading MODEL_DIR/wadiqam_fr_live.meta: No such file or directory (os error 2)	0.01	52229	0.14
+wadiqam-fr-tid	1024x1024	1	refused	2	REFUSED wadiqam-fr-tid: reading MODEL_DIR/wadiqam_fr_tid.meta: No such file or directory (os error 2)	0.01	52223	0.14
+wadiqam-nr-live	1024x1024	1	refused	2	REFUSED wadiqam-nr-live: reading MODEL_DIR/wadiqam_nr_live.meta: No such file or directory (os error 2)	0.01	52221	0.21
+wadiqam-nr-tid	1024x1024	1	refused	2	REFUSED wadiqam-nr-tid: reading MODEL_DIR/wadiqam_nr_tid.meta: No such file or directory (os error 2)	0.01	52221	0.21
+wd	1024x1024	1	refused	2	REFUSED wd: reading MODEL_DIR/wd.meta: No such file or directory (os error 2)	0.01	52223	0.19
+ahiq	1024x1024	1	complete	0	ahiq 1024x1024 reps=1 score=0.6478217442830404	0.73	51476	0.50
+dmm	1024x1024	1	refused	2	REFUSED dmm: reading MODEL_DIR/dmm.meta: No such file or directory (os error 2)	0.01	52041	0.46
+topiq-fr	1024x1024	1	refused	2	REFUSED topiq-fr: metric 'topiq-fr' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52050	0.46
+topiq-fr-pipal	1024x1024	1	refused	2	REFUSED topiq-fr-pipal: metric 'topiq-fr-pipal' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52086	0.42
+wadiqam-pyiqa	1024x1024	1	refused	2	REFUSED wadiqam-pyiqa: metric 'wadiqam-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52102	0.42
+ahiq-pyiqa	1024x1024	1	refused	2	REFUSED ahiq-pyiqa: metric 'ahiq-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52104	0.42
+cw-ssim-pyiqa	1024x1024	1	refused	2	REFUSED cw-ssim-pyiqa: metric 'cw-ssim-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52128	0.39
+dmm-pyiqa	1024x1024	1	refused	2	REFUSED dmm-pyiqa: metric 'dmm-pyiqa' is disabled (rebuild with `--features pyiqa-ports`)	0.01	52144	0.39
+pieapp-pyiqa	1024x1024	1	skipped by owner		PieAPP excluded from all timing, fix and tally work			
+ssim2	1024x1024	1	complete	0	ssim2 1024x1024 reps=1 score=51.06956348431442	0.12	52153	0.36
+ssim2-gpu	1024x1024	1	refused	2	REFUSED ssim2-gpu: metric 'ssim2-gpu' is disabled (rebuild with `--features gpu-ssim2`)	0.01	52125	0.36
+butteraugli	1024x1024	1	complete	0	butteraugli 1024x1024 reps=1 score=11.94013500213623	0.16	52141	0.36
+butteraugli-gpu	1024x1024	1	refused	2	REFUSED butteraugli-gpu: metric 'butteraugli-gpu' is disabled (rebuild with `--features gpu-butteraugli`)	0.01	52077	0.41
+dssim	1024x1024	1	complete	0	dssim 1024x1024 reps=1 score=0.004013071224084008	0.05	52106	0.41
+dssim-gpu	1024x1024	1	refused	2	REFUSED dssim-gpu: metric 'dssim-gpu' is disabled (rebuild with `--features gpu-dssim`)	0.01	52116	0.37
+iwssim-gpu	1024x1024	1	refused	2	REFUSED iwssim-gpu: metric 'iwssim-gpu' is disabled (rebuild with `--features gpu-iwssim`)	0.01	52129	0.37
+zensim	1024x1024	1	complete	0	zensim 1024x1024 reps=1 score=44.4167459356094	0.04	52139	0.34
+zensim-gpu	1024x1024	1	panic	101	zensim-gpu is DISABLED: the GPU zensim kernel is off pending v2 GPU-port validation, and zensim is features-only (no score)	0.01	52141	0.34
+cvvdp	1024x1024	1	complete	0	cvvdp 1024x1024 reps=1 score=9.464425086975098	0.15	52149	0.34
+cvvdp-gpu	1024x1024	1	refused	2	REFUSED cvvdp-gpu: metric 'cvvdp-gpu' is disabled (rebuild with `--features gpu-cvvdp`)	0.01	52067	0.40
+iwssim	1024x1024	1	complete	0	iwssim 1024x1024 reps=1 score=0.993140342822614	0.09	52071	0.40
+iwssim-piq	1024x1024	1	complete	0	iwssim-piq 1024x1024 reps=1 score=0.9932556754267942	0.09	52082	0.36
+gmsd	1024x1024	1	complete	0	gmsd 1024x1024 reps=1 score=0.02870674988124706	0.01	52122	0.36
+mdsi	1024x1024	1	complete	0	mdsi 1024x1024 reps=1 score=0.205979480164512	0.02	52092	0.36
+ms-gmsd	1024x1024	1	complete	0	ms-gmsd 1024x1024 reps=1 score=0.0335123719480685	0.04	52146	0.39
+ms-gmsdc	1024x1024	1	complete	0	ms-gmsdc 1024x1024 reps=1 score=0.03229295298164323	0.04	52158	0.39
+hdrvdp	1024x1024	1	refused	2	REFUSED hdrvdp: hdrvdp: HDR-VDP consumes absolute luminance (cd/m²), not sRGB8 — feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)	0.01	52164	0.39
+hdrvdp3	1024x1024	1	refused	2	REFUSED hdrvdp3: hdrvdp3 consumes absolute luminance (cd/m²) with explicit viewing conditions — use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding	0.01	52174	0.36
+proposal-butteraugli	1024x1024	1	complete	0	proposal-butteraugli 1024x1024 reps=1 score=6.539302369086069	0.16	52163	0.36
+cambi-aic2026	1024x1024	1	complete	0	cambi-aic2026 1024x1024 reps=1 score=1.7395540238550993	0.02	52032	0.33
+hdrvdp3-aic2026	1024x1024	1	complete	0	hdrvdp3-aic2026 1024x1024 reps=1 score=8.696766459168964	0.55	52057	0.33
+hdrvdp-aic2026	1024x1024	1	complete	0	hdrvdp-aic2026 1024x1024 reps=1 score=55.51685121973596	0.19	51958	0.33
+psnrhvs	1024x1024	1	complete	0	psnrhvs 1024x1024 reps=1 score=27.976531041918747	0.04	51995	0.38
+psnrhvs-y	1024x1024	1	complete	0	psnrhvs-y 1024x1024 reps=1 score=32.13702083516844	0.02	52016	0.38
+haarpsi	1024x1024	1	complete	0	haarpsi 1024x1024 reps=1 score=0.9055214205272615	0.03	52046	0.35
+haarpsi-y	1024x1024	1	complete	0	haarpsi-y 1024x1024 reps=1 score=0.8928337726089675	0.02	52057	0.35
+fsim	1024x1024	1	complete	0	fsim 1024x1024 reps=1 score=0.9970832749303953	0.03	52072	0.32
+ssim-pyiqa	1024x1024	1	complete	0	ssim-pyiqa 1024x1024 reps=1 score=0.9613637142366782	0.04	52093	0.32
+ssim-pyiqa-f32	1024x1024	1	complete	0	ssim-pyiqa-f32 1024x1024 reps=1 score=0.961984531214558	0.04	52111	0.32
+ssim-pyiqa-f32-k2	1024x1024	1	complete	0	ssim-pyiqa-f32-k2 1024x1024 reps=1 score=0.9905964449005589	0.03	52126	0.30
+ssim-pyiqa-f32-k3	1024x1024	1	complete	0	ssim-pyiqa-f32-k3 1024x1024 reps=1 score=0.9963949588882685	0.03	52137	0.30
+ssim-pyiqa-f32-k4	1024x1024	1	complete	0	ssim-pyiqa-f32-k4 1024x1024 reps=1 score=0.9979284415112941	0.03	52150	0.27
+ssim-pyiqa-f32-k5	1024x1024	1	complete	0	ssim-pyiqa-f32-k5 1024x1024 reps=1 score=0.9985988574163494	0.03	52167	0.27
+ssim-pyiqa-f32-k6	1024x1024	1	complete	0	ssim-pyiqa-f32-k6 1024x1024 reps=1 score=0.9990059617819911	0.03	52183	0.27
+ssimc-pyiqa-f32	1024x1024	1	complete	0	ssimc-pyiqa-f32 1024x1024 reps=1 score=0.9380666379837187	0.04	52186	0.25
+ssimc-pyiqa-f32-k2	1024x1024	1	complete	0	ssimc-pyiqa-f32-k2 1024x1024 reps=1 score=0.9704165361174856	0.03	52182	0.25
+ssimc-pyiqa-f32-k3	1024x1024	1	complete	0	ssimc-pyiqa-f32-k3 1024x1024 reps=1 score=0.9820419411723648	0.03	52197	0.23
+ssimc-pyiqa-f32-k4	1024x1024	1	complete	0	ssimc-pyiqa-f32-k4 1024x1024 reps=1 score=0.9873201661494723	0.03	52194	0.23
+ssimc-pyiqa-f32-k5	1024x1024	1	complete	0	ssimc-pyiqa-f32-k5 1024x1024 reps=1 score=0.990783519386749	0.03	52195	0.23
+ssimc-pyiqa-f32-k6	1024x1024	1	complete	0	ssimc-pyiqa-f32-k6 1024x1024 reps=1 score=0.9930863673227018	0.03	52195	0.29
+ms-ssim-pyiqa	1024x1024	1	complete	0	ms-ssim-pyiqa 1024x1024 reps=1 score=0.9953906553158205	0.05	52194	0.29
+ms-ssim-pyiqa-f32	1024x1024	1	complete	0	ms-ssim-pyiqa-f32 1024x1024 reps=1 score=0.9954913638001068	0.05	52172	0.27
+ms-ssim-pyiqa-f32-k2	1024x1024	1	complete	0	ms-ssim-pyiqa-f32-k2 1024x1024 reps=1 score=0.9988436704952997	0.03	52168	0.27
+ms-ssim-pyiqa-f32-k3	1024x1024	1	complete	0	ms-ssim-pyiqa-f32-k3 1024x1024 reps=1 score=0.9994691970649596	0.03	52181	0.33
+ms-ssim-pyiqa-f32-k4	1024x1024	1	complete	0	ms-ssim-pyiqa-f32-k4 1024x1024 reps=1 score=0.9996676966075746	0.03	52185	0.33
+ms-ssim-pyiqa-f32-k5	1024x1024	1	complete	0	ms-ssim-pyiqa-f32-k5 1024x1024 reps=1 score=0.9997793901449138	0.03	52190	0.33
+ms-ssim-pyiqa-f32-k6	1024x1024	1	complete	0	ms-ssim-pyiqa-f32-k6 1024x1024 reps=1 score=0.9998447513397738	0.03	52188	0.30
+fsim-k2	1024x1024	1	complete	0	fsim-k2 1024x1024 reps=1 score=0.9870358327681076	0.08	52193	0.30
+fsim-k3	1024x1024	1	complete	0	fsim-k3 1024x1024 reps=1 score=0.9946561388855502	0.04	52154	0.28
+fsim-k4	1024x1024	1	complete	0	fsim-k4 1024x1024 reps=1 score=0.9970832749303953	0.03	52165	0.33
+fsim-nodownscale	1024x1024	1	complete	0	fsim-nodownscale 1024x1024 reps=1 score=0.952119609626135	0.27	52176	0.33
+fsim-y	1024x1024	1	complete	0	fsim-y 1024x1024 reps=1 score=0.9970832749303953	0.03	51982	0.31
+vsi	1024x1024	1	complete	0	vsi 1024x1024 reps=1 score=0.9984454191986418	0.07	52000	0.31
+vsi-k2	1024x1024	1	complete	0	vsi-k2 1024x1024 reps=1 score=0.9965771258601551	0.08	52000	0.31
+vsi-k3	1024x1024	1	complete	0	vsi-k3 1024x1024 reps=1 score=0.9979035322987191	0.07	52019	0.28
+vsi-k4	1024x1024	1	complete	0	vsi-k4 1024x1024 reps=1 score=0.9984454191986418	0.07	52037	0.28
+vsi-nodownscale	1024x1024	1	complete	0	vsi-nodownscale 1024x1024 reps=1 score=0.992137774430502	0.12	52051	0.26
+msssim	1024x1024	1	complete	0	msssim 1024x1024 reps=1 score=0.995489349897922	0.03	52071	0.26
+vif	1024x1024	1	complete	0	vif 1024x1024 reps=1 score=0.6608518673508136	0.06	52100	0.26
+vifvec	1024x1024	1	complete	0	vifvec 1024x1024 reps=1 score=0.6175632083942326	0.08	52115	0.32
+mad	1024x1024	1	complete	0	mad 1024x1024 reps=1 score=17.57679833322809	0.13	52131	0.32
+ssim-libvmaf	1024x1024	1	complete	0	ssim-libvmaf 1024x1024 reps=1 score=0.998246967792511	0.03	52115	0.29
+msssim-libvmaf	1024x1024	1	complete	0	msssim-libvmaf 1024x1024 reps=1 score=0.9958671607061101	0.06	52137	0.29
+psnrhvs-daala	1024x1024	1	complete	0	psnrhvs-daala 1024x1024 reps=1 score=38.43614117655237	0.02	52151	0.27
+mdctpsnr	1024x1024	1	complete	0	mdctpsnr 1024x1024 reps=1 score=32.809532165527344	0.03	52169	0.27
+piqe	1024x1024	1	complete	0	piqe 1024x1024 reps=1 score=65.00217424921433	0.05	52180	0.27
+niqe	1024x1024	1	complete	0	niqe 1024x1024 reps=1 score=8.972425249419006	0.04	52192	0.25
+brisque	1024x1024	1	complete	0	brisque 1024x1024 reps=1 score=41.93524169921875	0.05	52201	0.25
