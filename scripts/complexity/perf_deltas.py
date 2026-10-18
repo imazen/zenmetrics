@@ -14,6 +14,7 @@ Run it under run-heavy. On i265 (hybrid Arrow Lake) the events are the P-core
 PMU's (`cpu_core/...`), so --cpu must be a P-core (0-7).
 """
 import argparse, os, signal, statistics, subprocess, sys, time
+from pathlib import Path
 
 EVENTS = ['task-clock', 'cpu_core/cycles/', 'cpu_core/instructions/',
           'cpu_core/fp_arith_inst_retired.vector_128b/', 'cpu_core/fp_arith_inst_retired.vector_256b/',
@@ -21,6 +22,33 @@ EVENTS = ['task-clock', 'cpu_core/cycles/', 'cpu_core/instructions/',
           'cpu_core/arith.fpdiv_active/']
 NAMES = ['task_clock_ms', 'cycles', 'instructions', 'fp_vec128_inst', 'fp_vec256_inst', 'loads', 'stores',
          'fpdiv_active_cycles']
+COLS = ['metric', 'shape', 'threads', 'repeat', 'extra_reps'] + [n + '_per_call' for n in NAMES + ['wall_ms']] + ['score']
+
+
+def prepare_output(path):
+    """Add a missing header, retaining every original byte in a sibling backup."""
+    path = Path(path)
+    original = path.read_bytes() if path.exists() else b''
+    header = '\t'.join(COLS).encode() + b'\n'
+    if any(line == header.rstrip(b'\n') for line in original.splitlines()):
+        return
+    if original:
+        backup = path.with_name(path.name + '.headerless.bak')
+        # Never replace a previous backup; refuse conflicting recovery attempts.
+        with backup.open('xb') as saved:
+            saved.write(original)
+    path.write_bytes(header + original)
+
+
+def append_error(path, metric, threads, extra, reason, shape='3840x2160'):
+    prepare_output(path)
+    with open(path, 'a') as out:
+        out.write('\t'.join([metric, shape, str(threads), '0', str(extra)]
+                            + ['error'] * (len(NAMES) + 1) + [reason]) + '\n')
+
+
+def interrupted(signum, _frame):
+    raise SystemExit(128 + signum)
 
 
 def run(bin_, shape, metric, reps, cpu, threads=1, timeout=None):
@@ -31,10 +59,17 @@ def run(bin_, shape, metric, reps, cpu, threads=1, timeout=None):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
     try:
         out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
+    except BaseException as error:
+        # An outer hold timeout also reaches here via main's signal handler.
+        # Only this Popen's session is ours; never scan other benchmark PIDs.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         proc.communicate()
-        raise RuntimeError(f'{metric} {shape} reps={reps}: timeout after {timeout} s')
+        if isinstance(error, subprocess.TimeoutExpired):
+            raise RuntimeError(f'{metric} {shape} reps={reps}: timeout after {timeout} s') from error
+        raise
     p = subprocess.CompletedProcess(cmd, proc.returncode, out, err)
     wall = time.monotonic() - t0
     if p.returncode:
@@ -65,11 +100,10 @@ def main():
     ap.add_argument('--threads', type=int, default=1)
     ap.add_argument('--timeout-s', type=float, default=None, help='skip a metric (recorded as error) when one probe run exceeds this')
     a = ap.parse_args()
-    cols = ['metric', 'shape', 'threads', 'repeat', 'extra_reps'] + [n + '_per_call' for n in NAMES + ['wall_ms']] + ['score']
-    exists = os.path.exists(a.out)
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    prepare_output(a.out)
     with open(a.out, 'a') as out:
-        if not exists:
-            out.write('# ' + ' '.join(sys.argv) + '\n' + '\t'.join(cols) + '\n')
         for shape in a.shapes.split(','):
             for metric in a.metrics.split(','):
                 extra = a.extra
