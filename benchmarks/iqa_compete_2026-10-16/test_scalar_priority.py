@@ -36,7 +36,7 @@ class ScalarPriorityTests(unittest.TestCase):
         for name in ['psnr', 'dvifmish-talk-faithful-luma-int', 'ssim2', 'slow']:
             for mode in ['score', 'score+map']:
                 cells.append(dict(metric_name=name, only_mode=mode, timing_phase='cold', cold_repeat=0,
-                                  width=10, height=10, threads=1, reference='r', distorted='d'))
+                                  width=10, height=10, size_name='small', threads=1, reference='r', distorted='d'))
         configs = [dict(c, durable_cell_id=str(i)) for i, c in enumerate(cells)]
         evidence = {'0': [dict(record=dict(status='ok', row=dict(timing_phase='cold')), path='old', sha256='hash')]}
         manifest = dict(cells=cells, input_sha256=dict(r='same', d='same'))
@@ -105,6 +105,56 @@ class ScalarPriorityTests(unittest.TestCase):
         self.assertEqual(rows[1]['waiting_on'], ['remaining-scalar'])
         self.assertFalse(all(r['progress'].get('complete') for r in rows))
         self.assertEqual(_check_in_rows(rows), rows)
+
+
+    def test_new_requested_routes_and_slow_tail_precedence(self):
+        for name in ['vmaf-neg', 'vmaf-v1', 'psnrhvs-daala', 'fsim', 'fsim-y', 'fsim-k2', 'fsim-nodownscale']:
+            self.assertTrue(priority.requested_family(name))
+            self.assertEqual(priority.queue_tier(name, []), 2)
+        for name in ['hdrvdp', 'hdrvdp3', 'mdctpsnr']:
+            self.assertEqual(priority.queue_tier(name, [name]), 5)
+        self.assertLess(priority.priority_order('vmaf-neg'), priority.priority_order('fsim-y'))
+
+    def test_successor_one_attempt_budget_is_not_reset(self):
+        self.assertEqual(priority.decision([], cap=1), ('pending', 1))
+        self.assertEqual(priority.decision([record()], cap=1), ('exhausted', 0))
+
+    def test_deadline_selects_smallest_missing_pair_without_repeat(self):
+        entries = []
+        for size in [20, 40]:
+            for phase, repeat in [('cold', 0), ('cold', 1), ('cold', 2), ('warm', 0)]:
+                c = dict(metric_name='fsim-y', width=size, height=size, size_name=str(size), threads=8,
+                         timing_phase=phase, cold_repeat=repeat, only_mode='score', required_samples=10)
+                entries.append(dict(source=0, original_cell_id=f'{size}-{phase}-{repeat}', original_config=c,
+                                    status='pending', queue='requested-first'))
+        qualified = {('fsim-y', 20, 20, '20', 8, p) for p in ['cold', 'warm']}
+        qualified.add(('fsim-y', 40, 40, '40', 8, 'cold'))
+        selected, choices = priority.deadline_selection(entries, qualified)
+        self.assertEqual(selected, {(0, '40-warm-0')})
+        self.assertEqual(choices[0]['geometry'], (40, 40, '40'))
+        self.assertTrue(all(e['original_config']['required_samples'] == 10 for e in entries))
+
+    def test_successor_lineage_preserves_parent_bytes(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
+            root = Path(directory)
+            source = root / 'source'
+            source.mkdir()
+            parent = source / 'scalar-lineage.json'
+            parent.write_text(json.dumps(dict(prior_attempts=1)))
+            parent_hash = priority.sha(parent)
+            cell = dict(metric_name='vmaf-v1', size_name='small')
+            manifest = dict(cells=[cell], metadata={}, input_sha256={'scalar-lineage.json': parent_hash})
+            (source/'manifest.json').write_text(json.dumps(manifest))
+            (source/'SHA256SUMS.json').write_text(json.dumps({'manifest.json': priority.sha(source/'manifest.json'), 'scalar-lineage.json': parent_hash}))
+            target = root / 'successor'
+            priority.freeze(source, target, [cell], dict(source='parent', remaining_attempts=1))
+            self.assertEqual(priority.sha(parent), parent_hash)
+            saved = priority.load(target/'manifest.json')
+            ancestor = 'scalar-parent-lineage-' + parent_hash + '.json'
+            self.assertEqual(saved['input_sha256'][ancestor], parent_hash)
+            self.assertNotEqual(saved['input_sha256']['scalar-lineage.json'], parent_hash)
+            self.assertEqual(priority.load(target/'scalar-lineage.json')['remaining_attempts'], 1)
 
 
 if __name__ == '__main__':

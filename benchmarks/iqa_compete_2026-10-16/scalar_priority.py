@@ -119,11 +119,13 @@ def retained(source):
     bundle, output = Path(source['bundle']), Path(source['output'])
     module = frozen_module(bundle)
     _, configs, frozen = module.manifest(bundle / 'manifest.json')
+    if source.get('manifest_sha256', frozen['manifest_sha256']) != frozen['manifest_sha256']:
+        raise ValueError('parent phase manifest differs')
     if not output.exists():
         return module, frozen, configs, {}
     saved = load(output / 'identity.json')
-    if saved['policy']['max_attempts'] != 2:
-        raise ValueError('unexpected original attempt budget')
+    if source.get('max_attempts', 2) not in (1, 2) or saved['policy']['max_attempts'] != source.get('max_attempts', 2):
+        raise ValueError('unexpected retained attempt budget')
     if saved['frozen'] != frozen:
         raise ValueError('retained identity differs: ' + str(output))
     identity = module.digest(module.encoded(saved))
@@ -183,12 +185,21 @@ def freeze(source, target, cells, lineage):
     from prepare_coverage import freeze as existing_freeze
     phase = existing_freeze(Path(source), target, cells)
     manifest = load(target / 'manifest.json')
+    hashes = load(target / 'SHA256SUMS.json')
+    if (target / 'scalar-lineage.json').exists():
+        parent_hash = sha(target / 'scalar-lineage.json')
+        parent_name = 'scalar-parent-lineage-' + parent_hash + '.json'
+        (target / 'scalar-lineage.json').rename(target / parent_name)
+        manifest['input_sha256'].pop('scalar-lineage.json')
+        manifest['input_sha256'][parent_name] = parent_hash
+        hashes.pop('scalar-lineage.json', None)
+        hashes[parent_name] = parent_hash
+        lineage = dict(lineage, parent_lineage=dict(path=parent_name, sha256=parent_hash))
     write(target / 'scalar-lineage.json', lineage)
     manifest['input_sha256']['scalar-lineage.json'] = sha(target / 'scalar-lineage.json')
     manifest['metadata'].update(scalar_only=True, scalar_priority_source_sha256=sha(Path(__file__)),
                                 scalar_lineage_sha256=sha(target / 'scalar-lineage.json'))
     (target / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    hashes = load(target / 'SHA256SUMS.json')
     hashes.update({'manifest.json': sha(target / 'manifest.json'), 'scalar-lineage.json': sha(target / 'scalar-lineage.json')})
     (target / 'SHA256SUMS.json').write_text(json.dumps(hashes, indent=2) + '\n')
     phase['manifest_sha256'] = hashes['manifest.json']
@@ -248,20 +259,88 @@ def rank(config, replacement):
 
 
 def requested_family(name):
-    return (name in ('haarpsi', 'haarpsi-y', 'ssim2', 'dssim') or
+    return (name in ('haarpsi', 'haarpsi-y', 'ssim2', 'dssim', 'psnrhvs-daala') or name.startswith('fsim') or
             name.startswith(('butteraugli', 'cvvdp')) or name == 'vmaf' or name.startswith('vmaf-'))
 
 
+QUEUE_NAMES = ['fastest', 'dvifmish', 'requested-first', 'requested-family', 'remaining-scalar', 'slow-tail']
+
+
+def queue_tier(name, top):
+    if name in ('hdrvdp', 'hdrvdp3', 'mdctpsnr'):
+        return 5
+    if name.startswith('dvifmish-'):
+        return 1
+    if name in top:
+        return 0
+    if name in ('vmaf-neg', 'vmaf-v1', 'psnrhvs-daala') or name.startswith('fsim'):
+        return 2
+    return 3 if requested_family(name) else 4
+
+
+def priority_order(name):
+    return {'vmaf-neg': 0, 'vmaf-v1': 1, 'psnrhvs-daala': 2}.get(name, 3 if name.startswith('fsim') else 4)
+
+
+def coverage_key(cell):
+    return tuple(cell[k] for k in ('metric_name', 'width', 'height', 'size_name', 'threads', 'timing_phase'))
+
+
+def deadline_selection(entries, qualified=()):
+    """One smallest eligible resolution, one existing cold + warm, eight workers."""
+    qualified = set(qualified)
+    by_method = defaultdict(list)
+    for entry in entries:
+        c = entry['original_config']
+        if entry['status'] == 'pending' and entry.get('queue') not in ('slow-tail', 'remaining-scalar') and c['threads'] == 8 and c['only_mode'] == 'score':
+            by_method[c['metric_name']].append(entry)
+    selected = set()
+    choices = []
+    for method, candidates in sorted(by_method.items()):
+        geometries = sorted({(e['original_config']['width'], e['original_config']['height'], e['original_config']['size_name'])
+                             for e in candidates}, key=lambda g:(g[0]*g[1], g[2]))
+        geometries = [g for g in geometries if any((method, g[0], g[1], g[2], 8, phase) not in qualified for phase in ('cold', 'warm'))]
+        if not geometries:
+            continue
+        geometry = geometries[0]
+        group = [e for e in candidates if (e['original_config']['width'], e['original_config']['height'], e['original_config']['size_name']) == geometry]
+        picked = []
+        for phase in ('cold', 'warm'):
+            if (method, geometry[0], geometry[1], geometry[2], 8, phase) in qualified:
+                continue
+            matching = sorted([e for e in group if e['original_config']['timing_phase'] == phase],
+                              key=lambda e:e['original_config']['cold_repeat'])
+            if matching:
+                chosen = matching[0]
+                selected.add((chosen['source'], chosen['original_cell_id']))
+                picked.append(chosen['original_cell_id'])
+        choices.append(dict(metric=method, geometry=geometry, selected_original_cell_ids=picked))
+    return selected, choices
+
+
 def prepare(config, root, ranking):
+    if config.get('parent_sequence') and sha(config['parent_sequence']) != config['parent_sequence_sha256']:
+        raise ValueError('immutable parent sequence differs')
     top = [row['metric'] for row in ranking[:10]]
     groups = defaultdict(list)
     coverage = []
+    qualified = set()
+    inventory_names = set()
+    for source in config.get('coverage_sources', []):
+        _, old_frozen, old_configs, old_evidence = retained(source)
+        inventory_names.update(c['metric_name'] for c in old_configs)
+        for cell in old_configs:
+            if cell['only_mode'] == 'score' and any(r['record']['status'] == 'ok' and decision([r])[0] == 'retained' for r in old_evidence.get(cell['durable_cell_id'], [])):
+                qualified.add(coverage_key(cell))
     for source_index, source in enumerate(config['sources']):
         _, frozen, configs, evidence = retained(source)
         original = frozen['manifest']
+        inventory_names.update(c['metric_name'] for c in configs)
         for raw, cell in zip(original['cells'], configs):
             records = evidence.get(cell['durable_cell_id'], [])
-            status, remaining = decision(records)
+            status, remaining = decision(records, source.get('max_attempts', 2))
+            if raw['only_mode'] == 'score' and any(r['record']['status'] == 'ok' and decision([r])[0] == 'retained' for r in records):
+                qualified.add(coverage_key(raw))
             entry = dict(source=source_index, original_cell_id=cell['durable_cell_id'], original_config=raw,
                          evidence=[{k: r[k] for k in ('path', 'sha256')} for r in records], status=status,
                          remaining_attempts=remaining)
@@ -269,16 +348,27 @@ def prepare(config, root, ranking):
                 entry['status'] = 'retained-map' if records else 'maps-not-scheduled'
             elif remaining:
                 name = raw['metric_name']
-                tier = 1 if name.startswith('dvifmish-') else 0 if name in top else 2 if requested_family(name) else 3
-                entry['queue'] = ['fastest', 'dvifmish', 'requested-family', 'remaining-scalar'][tier]
+                tier = queue_tier(name, top)
+                entry['queue'] = QUEUE_NAMES[tier]
                 groups[(tier, source_index, remaining)].append(entry)
             coverage.append(entry)
-    phases = []
-    for (tier, index, remaining), entries in sorted(groups.items()):
+    selection, choices = deadline_selection(coverage, qualified) if config.get('deadline_unix') else (set(), [])
+    expanded = defaultdict(list)
+    for (tier, index, remaining), entries in groups.items():
+        for entry in entries:
+            primary = (entry['source'], entry['original_cell_id']) in selection
+            c = entry['original_config']
+            method_tag = (f'{priority_order(c["metric_name"]):02d}-' + c['metric_name'] + '-' + c['timing_phase'] + '-' + str(c['cold_repeat'])) if primary else ''
+            key = (0 if primary else 1, tier, method_tag, index, remaining)
+            expanded[key].append(entry)
+    for entry in coverage:
+        entry['deadline_selected'] = (entry['source'], entry['original_cell_id']) in selection
+    phases, deferred = [], []
+    for (secondary, tier, method, index, remaining), entries in sorted(expanded.items()):
         entries.sort(key=lambda e: (e['original_config']['width'] * e['original_config']['height'],
-                     e['original_config']['metric_name'], e['original_config']['threads'],
+                     priority_order(e['original_config']['metric_name']), e['original_config']['metric_name'], e['original_config']['threads'],
                      e['original_config']['timing_phase'], e['original_config']['cold_repeat']))
-        name = ['fastest', 'dvifmish', 'requested-family', 'remaining-scalar'][tier] + f'-source{index}-attempts{remaining}'
+        name = ('deadline-' + method + '-' if not secondary else '') + QUEUE_NAMES[tier] + f'-source{index}-attempts{remaining}'
         source = config['sources'][index]
         execution_bundle = Path(source.get('execution_bundle', source['bundle']))
         target_manifest = load(execution_bundle / 'manifest.json')
@@ -293,16 +383,15 @@ def prepare(config, root, ranking):
         phase = freeze(execution_bundle, root / name,
                        [e['original_config'] for e in entries], dict(source=config['sources'][index], cells=entries))
         phase.update(name=name, output=str(Path(config['results']) / name), max_attempts=remaining)
-        phases.append(phase)
+        (deferred if config.get('deadline_unix') and secondary else phases).append(phase)
     for original in config.get('nn', []):
         phase = dict(original, manifest_sha256=sha(Path(original['bundle']) / 'manifest.json'), max_attempts=2)
-        phases.append(phase)
-    if not phases:
+        (deferred if config.get('deadline_unix') else phases).append(phase)
+    if not phases and not deferred and not config.get('deadline_unix'):
         raise ValueError('no remaining work')
     write(root / 'retained-coverage.json', coverage)
     write(root / 'ranking-final.json', dict(criterion='clean 512 scalar eight-worker warm median; ten rounds minimum',
-            top10=ranking[:10], ranking=ranking, requested_families=sorted({e['original_config']['metric_name'] for e in coverage
-            if requested_family(e['original_config']['metric_name'])}), quality_claim='requested families; no formal quality Pareto claim'))
+            top10=ranking[:10], ranking=ranking, requested_families=sorted(name for name in inventory_names if requested_family(name)), quality_claim='requested families; no formal quality Pareto claim'))
     plan = dict(schema=1, lock=config['lock'], phases=phases, source_sha256=sha(Path(__file__)),
                 ranking_sha256=sha(root / 'ranking-final.json'), coverage_sha256=sha(root / 'retained-coverage.json'),
                 policy='scalar only; priority fastest ten plus all dvifmish and named families; then remaining scalar; then original NN')
@@ -312,6 +401,15 @@ def prepare(config, root, ranking):
     for name in ['scalar_priority.py', 'mac_service.py', 'durable.py', 'admission_recovery.py']:
         shutil.copy2(HERE / name, coordinator / name)
     plan['scheduler_files'] = {str(p.relative_to(root)): sha(p) for p in coordinator.iterdir()}
+    if config.get('parent_sequence'):
+        plan['parent_sequence'] = dict(path=config['parent_sequence'], sha256=config['parent_sequence_sha256'])
+    if config.get('deadline_unix'):
+        resume = dict(plan, phases=phases + deferred)
+        write(root / 'resume-sequence.json', resume)
+        plan.update(deadline_unix=config['deadline_unix'], requested_start_unix=config['requested_start_unix'],
+                    deadline_choices=choices, deferred_phases=deferred, qualified_retained_keys=sorted(qualified),
+                    priority_methods=sorted(name for name in inventory_names if name in top or name.startswith('dvifmish-') or requested_family(name)),
+                    resume_plan_sha256=sha(root / 'resume-sequence.json'))
     write(root / 'sequence.json', plan)
     return plan
 
@@ -326,6 +424,10 @@ def execute(plan_path, expected):
     if sha(Path(__file__)) != plan['source_sha256']:
         raise ValueError('executed scheduler differs')
     for phase in plan['phases']:
+        if plan.get('deadline_unix') and time.time() >= plan['deadline_unix']:
+            write_path = plan_path.parent / 'deadline-paused.json'
+            write_path.write_text(json.dumps(dict(checked_utc=now(), deadline_unix=plan['deadline_unix'], next_phase=phase['name'], complete=False))+'\n')
+            return 0
         bundle, output = Path(phase['bundle']), Path(phase['output'])
         if sha(bundle / 'manifest.json') != phase['manifest_sha256']:
             raise ValueError('phase manifest changed')
@@ -356,10 +458,11 @@ def install(root):
     token = hashlib.sha256(str(plan.resolve()).encode()).hexdigest()[:16]
     command = [sys.executable, str(root / 'coordinator/scalar_priority.py'), 'execute', str(plan), '--sha256', sha(plan)]
     previous = None
-    for phase in load(plan)['phases']:
+    value = load(plan)
+    for phase in value['phases'] + value.get('deferred_phases', []):
         wait = Path(phase['output']).with_name(Path(phase['output']).name + '.service')
         wait.mkdir(parents=True, exist_ok=True)
-        (wait / 'priority-wait.json').write_text(json.dumps(dict(pending=[previous] if previous else [], phase=phase['name'])) + '\n')
+        (wait / 'priority-wait.json').write_text(json.dumps(dict(pending=([dict(manual_resume_required=True)] if phase in value.get('deferred_phases', []) else []) + ([previous] if previous else []), phase=phase['name'])) + '\n')
         previous = dict(output=phase['output'], manifest_sha256=phase['manifest_sha256'])
     if sys.platform == 'darwin':
         label = 'io.imazen.iqa-scalar.' + token
@@ -390,17 +493,33 @@ def main():
     a = p.parse_args()
     if a.action == 'status':
         plan = load(a.config)
+        qualified = {tuple(key) for key in plan.get('qualified_retained_keys', [])}
+        for phase in plan['phases']:
+            report = Path(phase['output']) / 'report.json'
+            if report.exists():
+                for cell in load(report).get('cells', []):
+                    row = cell.get('row')
+                    if cell['status'] == 'ok' and row and decision([dict(record=dict(status='ok', row=row))])[0] == 'retained':
+                        qualified.add(coverage_key(cell['config']))
+        choices = plan.get('deadline_choices', [])
+        complete_choices = [choice for choice in choices if all((choice['metric'], choice['geometry'][0], choice['geometry'][1], choice['geometry'][2], 8, phase) in qualified for phase in ('cold', 'warm'))]
         service = load(a.config.parent / 'installed-service.json')['service']
         native = subprocess.run(['launchctl', 'print', service] if sys.platform == 'darwin' else
                     ['systemctl', '--user', 'show', service, '--property=ActiveState,MainPID'], capture_output=True, text=True)
         phases = []
-        for phase in plan['phases']:
+        for phase in plan['phases'] + plan.get('deferred_phases', []):
             output = Path(phase['output'])
             wait = output.with_name(output.name + '.service') / 'priority-wait.json'
             phases.append(dict(name=phase['name'], bundle=phase['bundle'], output=str(output),
                 progress=load(output / 'progress.json') if (output / 'progress.json').exists() else 'queued',
                 wait=load(wait) if wait.exists() else None))
-        print(json.dumps(dict(service=service, native_rc=native.returncode, native=native.stdout, phases=phases)))
+        print(json.dumps(dict(service=service, native_rc=native.returncode, native=native.stdout, phases=phases,
+            elapsed_seconds=time.time()-plan['requested_start_unix'] if plan.get('requested_start_unix') else None,
+            remaining_seconds=max(0,plan['deadline_unix']-time.time()) if plan.get('deadline_unix') else None,
+            resume_plan=str(a.config.parent/'resume-sequence.json') if plan.get('deadline_unix') else None,
+            deadline_targets_total=len(choices), deadline_targets_complete=len(complete_choices),
+            deadline_methods_pending=[c['metric'] for c in choices if c not in complete_choices],
+            retained_priority_methods=sorted({key[0] for key in plan.get('qualified_retained_keys', []) if key[0] in plan.get('priority_methods', [])}))))
         return 0
     if a.action == 'execute':
         awake = subprocess.Popen(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())]) if sys.platform == 'darwin' else None
@@ -411,6 +530,8 @@ def main():
                 awake.terminate()
                 awake.wait()
     config = load(a.config)
+    if config.get('parent_sequence') and sha(config['parent_sequence']) != config['parent_sequence_sha256']:
+        raise ValueError('immutable parent sequence differs before boundary')
     root = Path(config['output'])
     root.mkdir(parents=True, exist_ok=False)
     with Path(config['lock']).open('a+b') as lock:
