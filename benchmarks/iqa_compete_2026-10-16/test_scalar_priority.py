@@ -14,6 +14,12 @@ def record(status='failed', warm=False, clean=True):
 
 
 class ScalarPriorityTests(unittest.TestCase):
+    def test_dimension_disable_ignores_labels_and_orientation(self):
+        policy = dict(disabled_geometries=[[7680,4320]])
+        self.assertTrue(priority.disabled_geometry(dict(width=7680,height=4320,size_name="other"),policy))
+        self.assertTrue(priority.disabled_geometry(dict(width=4320,height=7680,size_name="portrait"),policy))
+        self.assertFalse(priority.disabled_geometry(dict(width=3840,height=2160,size_name="8k"),policy))
+
     def test_attempt_budget_never_resets(self):
         self.assertEqual(priority.decision([]), ('pending', 2))
         self.assertEqual(priority.decision([record()]), ('pending', 1))

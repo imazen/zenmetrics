@@ -286,6 +286,11 @@ def coverage_key(cell):
     return tuple(cell[k] for k in ('metric_name', 'width', 'height', 'size_name', 'threads', 'timing_phase'))
 
 
+def disabled_geometry(cell, config):
+    """Match dimensions in either orientation; labels do not control admission."""
+    return bool(config.get("disabled_geometries")) and sorted((cell["width"], cell["height"])) in [sorted(g) for g in config.get("disabled_geometries", [])]
+
+
 def deadline_selection(entries, qualified=()):
     """One smallest eligible resolution, one existing cold + warm, eight workers."""
     qualified = set(qualified)
@@ -346,6 +351,8 @@ def prepare(config, root, ranking):
                          remaining_attempts=remaining)
             if raw['only_mode'] != 'score':
                 entry['status'] = 'retained-map' if records else 'maps-not-scheduled'
+            elif remaining and disabled_geometry(raw, config):
+                entry['status'] = 'disabled-by-user'
             elif remaining:
                 name = raw['metric_name']
                 tier = queue_tier(name, top)
@@ -385,15 +392,38 @@ def prepare(config, root, ranking):
         phase.update(name=name, output=str(Path(config['results']) / name), max_attempts=remaining)
         (deferred if config.get('deadline_unix') and secondary else phases).append(phase)
     for original in config.get('nn', []):
-        phase = dict(original, manifest_sha256=sha(Path(original['bundle']) / 'manifest.json'), max_attempts=2)
-        (deferred if config.get('deadline_unix') else phases).append(phase)
+        if not config.get('disabled_geometries'):
+            phases.append(dict(original, manifest_sha256=sha(Path(original['bundle']) / 'manifest.json'), max_attempts=original.get('max_attempts', 2)))
+            continue
+        _, frozen, configs, evidence = retained(original)
+        pending = defaultdict(list)
+        for raw, cell in zip(frozen['manifest']['cells'], configs):
+            records = evidence.get(cell['durable_cell_id'], [])
+            state, remaining = decision(records, original.get('max_attempts', 2))
+            entry = dict(source=original, original_cell_id=cell['durable_cell_id'], original_config=raw,
+                         status=state, remaining_attempts=remaining,
+                         evidence=[{k:r[k] for k in ('path', 'sha256')} for r in records])
+            if remaining:
+                if raw['only_mode'] != 'score':
+                    entry['status'] = 'maps-not-scheduled'
+                elif disabled_geometry(raw, config):
+                    entry['status'] = 'disabled-by-user'
+                else:
+                    pending[remaining].append(entry)
+            coverage.append(entry)
+        for remaining, entries in sorted(pending.items()):
+            entries.sort(key=lambda e:(e['original_config']['width']*e['original_config']['height'], e['original_config']['metric_name'], e['original_config']['threads'], e['original_config']['timing_phase'], e['original_config']['cold_repeat']))
+            name = original['name'] + '-attempts' + str(remaining)
+            phase = freeze(original['bundle'], root/name, [e['original_config'] for e in entries], dict(source=original, cells=entries))
+            phase.update(name=name, output=str(Path(config['results'])/name), max_attempts=remaining)
+            phases.append(phase)
     if not phases and not deferred and not config.get('deadline_unix'):
         raise ValueError('no remaining work')
     write(root / 'retained-coverage.json', coverage)
     write(root / 'ranking-final.json', dict(criterion='clean 512 scalar eight-worker warm median; ten rounds minimum',
             top10=ranking[:10], ranking=ranking, requested_families=sorted(name for name in inventory_names if requested_family(name)), quality_claim='requested families; no formal quality Pareto claim'))
     plan = dict(schema=1, lock=config['lock'], phases=phases, source_sha256=sha(Path(__file__)),
-                ranking_sha256=sha(root / 'ranking-final.json'), coverage_sha256=sha(root / 'retained-coverage.json'),
+                disabled_geometries=config.get('disabled_geometries', []), window_end_unix=config.get('window_end_unix'), requested_start_unix=config.get('requested_start_unix'), ranking_sha256=sha(root / 'ranking-final.json'), coverage_sha256=sha(root / 'retained-coverage.json'),
                 policy='scalar only; priority fastest ten plus all dvifmish and named families; then remaining scalar; then original NN')
     import shutil
     coordinator = root / 'coordinator'
@@ -424,13 +454,15 @@ def execute(plan_path, expected):
     if sha(Path(__file__)) != plan['source_sha256']:
         raise ValueError('executed scheduler differs')
     for phase in plan['phases']:
-        if plan.get('deadline_unix') and time.time() >= plan['deadline_unix']:
+        if (plan.get('window_end_unix') or plan.get('deadline_unix')) and time.time() >= (plan.get('window_end_unix') or plan['deadline_unix']):
             write_path = plan_path.parent / 'deadline-paused.json'
-            write_path.write_text(json.dumps(dict(checked_utc=now(), deadline_unix=plan['deadline_unix'], next_phase=phase['name'], complete=False))+'\n')
+            write_path.write_text(json.dumps(dict(checked_utc=now(), deadline_unix=plan.get('window_end_unix') or plan['deadline_unix'], next_phase=phase['name'], complete=False))+'\n')
             return 0
         bundle, output = Path(phase['bundle']), Path(phase['output'])
         if sha(bundle / 'manifest.json') != phase['manifest_sha256']:
             raise ValueError('phase manifest changed')
+        if any(disabled_geometry(c, plan) for c in load(bundle / 'manifest.json')['cells']):
+            raise ValueError('disabled geometry in upcoming phase')
         if any(c['only_mode'] != 'score' for c in load(bundle / 'manifest.json')['cells']):
             raise ValueError('upcoming map scopes refused')
         wait = output.with_name(output.name + '.service')

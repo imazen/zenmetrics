@@ -298,3 +298,14 @@ is qualified, no guard is raised, and no downsampling/ingress changes are made.
 The earlier retained qualified smaller-resolution pair is distinct from this
 failed new 8K warm cell. The queue advances after bounded failure.
 Retained audit: `mac/fsim-nodownscale-audit.txt` in the successor artifact root.
+
+### 15-hour successor, 2026-10-18
+
+The user superseded the twenty-minute deadline with a fifteen-hour window and
+explicitly disabled pending 8K work on both hosts. Successors match actual
+width/height pairs in either orientation, preserve retained measurements, and
+classify excluded pending cells as `disabled-by-user`. They clone remaining
+scalar NN cells as well as non-NN cells, preserving each source's remaining
+attempt cap and original frozen evidence. Upcoming maps and disabled geometries
+are refused by the scheduler. The original deadline and full resume graphs remain
+historical artifacts; they must not be restarted as the active queue.
