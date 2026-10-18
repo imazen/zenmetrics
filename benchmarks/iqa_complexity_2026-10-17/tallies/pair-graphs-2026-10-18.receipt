@@ -1,0 +1,224 @@
+{
+  "schema": "iqa-pair-graph-input-audit/1",
+  "date": "2026-10-18",
+  "onnx_version": "1.23.2",
+  "scope": "Pair-input identity and tally multipliers only; no shape inference or model execution.",
+  "limitations": [
+    "Existing 224x224 operation-density extrapolations and pointwise estimates remain provisional.",
+    "MAC totals, dynamic shapes, reductions, traffic, halo, span and runtime parity are not qualified by this audit.",
+    "External weight tensor payloads are not loaded or qualified; hashes identify the ONNX graph files."
+  ],
+  "graphs": [
+    {
+      "metric": "lpips-alex",
+      "file": "lpips_alex_full.onnx",
+      "sha256": "1eb785b387156e34497a76db77a7444f98a49ce674b14d42e006a05d9e33a9c5",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "lpips-vgg",
+      "file": "lpips_vgg_full.onnx",
+      "sha256": "40600b264a7f792a90f3be24b28d87a2e4d94e5053e982e91dfc1cfb98b6246f",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "lpips-squeeze",
+      "file": "lpips_squeeze_full.onnx",
+      "sha256": "d8dee9e64da49220848f7e9e383c464bdb64f009c81fdef7a14211be195f13da",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "stlpips-alex",
+      "file": "stlpips_alex_full.onnx",
+      "sha256": "3473b3f5aae667f54fabf41a72cedbf40aca7cebc69fb36ed856f644eda9fff8",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "stlpips-vgg",
+      "file": "stlpips_vgg_full.onnx",
+      "sha256": "d9fc94cf7774be721eb920fc22c8bda46ddff35e1590417c90ca86a4319c6a19",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "dists",
+      "file": "dists_full.onnx",
+      "sha256": "98cca09325412fae6408931f180e74f6a64a517ee7aea99e3fe34603c94fa63f",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    },
+    {
+      "metric": "deepdc",
+      "file": "deepdc_full.onnx",
+      "sha256": "3a537e819c4a8895d68b777259fb4cab82dc37ac8315bdd5873264f4bf781603",
+      "inputs": [
+        {
+          "name": "r",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        },
+        {
+          "name": "d",
+          "shape": [
+            1,
+            3,
+            "h",
+            "w"
+          ]
+        }
+      ],
+      "graph_stage_images": {
+        "trunk_conv": 1,
+        "trunk_matmul": 1,
+        "trunk_pointwise": 1
+      },
+      "ingress_images": 2
+    }
+  ]
+}
