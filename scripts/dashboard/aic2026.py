@@ -278,15 +278,20 @@ def screenshot_coverage(tallies, measured, comparisons, commit):
     def coverage(name,m):
         counted='yes' if m in tallies else 'pending (aicfix)' if 'DVIFM' in name or name.startswith('FSIM-k') else 'not counted'
         timed='yes' if any(r['metric']==m for r in measured) else 'pending (aicfix)' if 'DVIFM' in name or name.startswith('FSIM-k') else 'not timed'
-        comparison=next((r for r in comparisons if r['column']==name),None)
+        column_alias={'Butteraugli_RGB':'Butteraugli-original','CVVDP_RGB':'CVVDP','FSIMc_RGB':'FSIMc','FSIM_Y':'FSIM','VMAF_Y':'VMAF (dataset)','MS-SSIM_Y':'MS-SSIM','SSIM_Y':'SSIM','PSNR_Y':'PSNR-Y'}
+        column_name=column_alias.get(name,name)
+        comparison=next((r for r in comparisons if r['column']==column_name or r['column'].startswith(column_name+' /')),None)
         reason=''
+        if name=='HaarPSI_Y':reason='Counted grayscale route differs from the colour HaarPSI column; no direct column comparison is qualified.'
+        if name=='PSNR-HVS-Y':reason='Draft mapping uses the Ponomarenko luma route; the AIC column uses Daala. Combined Daala output cost is not a separately measured luma-only cost.'
+        if name=='PSNR_Y':reason='Draft count maps to libvmaf luma; published AIC PSNR-Y uses studio BT.601. Timing coverage does not qualify that ingress match.'
         if name.startswith(('HaarXYB','HaarY-','HaarYCoCg')):
             counted=timed='pending (aicfix)';reason='Method search pending (aicfix); no published per-image values.'
         elif 'DVIFM' in name:reason='Four released-build presets are being counted and timed by aicfix; published-column build differs.'
         elif name.startswith('FSIM-k'):
             counted=timed='pending (aicfix)';reason='Luma-only fixed-factor route pending aicfix; existing fsim-k* rows count the combined output call.'
         elif '-k' in name:reason='Implemented fixed factor; no published per-image values to qualify column comparison.'
-        return [e(name),e(m or 'not established'),counted,timed,e(comparison['status'] if comparison else 'no published column / no comparison'),e(reason)]
+        return [e(name),e(m or 'not established'),counted,timed,e((comparison['column']+': '+comparison['status']) if comparison else 'no unambiguous column comparison'),e(reason)]
     body='<p>Both requested screenshots are covered entry by entry. Visible median ranks are aggregates transcribed from the authors’ figure, not recomputed rankings. Counts and timings refer to our implementations; the draft values refer to different reference implementations. Pending aicfix rows are not counted as complete.</p><h2>Pedzisz complexity draft · 14 entries</h2>'
     body+=table(['Screenshot name','Our route','Counted','Timed','Column comparison','Reason / qualification'],[coverage(r['draft_name'],r['zenmetrics']) for r in draft['values']])
     body+='<p>'+e(draft['caveat'])+'</p><h2>AIC2026 rank-distribution figure · 31 names</h2>'

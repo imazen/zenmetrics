@@ -61,6 +61,9 @@ class AIC2026(unittest.TestCase):
         for r in draft['values']:self.assertIn(r['draft_name'],body)
         self.assertIn('pending (aicfix)',body)
         self.assertIn('skipped by owner',body)
+        self.assertIn('grayscale route differs',body)
+        self.assertIn('Ponomarenko',body)
+        self.assertIn('studio BT.601',body)
 
     def test_full_population_density_and_canonical_fields(self):
         v=json.loads((ROOT/'benchmarks/dashboard/aic2026/scatter-example.json').read_text())
