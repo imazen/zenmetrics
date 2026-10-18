@@ -82,3 +82,14 @@ not complete browser rendering or all network providers. Dynamic probe pages
 must not be confused with the services' illustrative default results. The
 final measured receipt is linked here when captured; hosting and DNS changes
 require separate owner approval.
+
+## Known bugs: configuration extraction (fixed 2026-10-18)
+
+The catalog's original `scoring_compiled_in` parser consumed everything after
+`let nr`, including the newer pyiqa group. The generated recipes therefore
+mislabelled those FR ports as NR and omitted their required `pyiqa-ports`
+feature. Parse each bounded `matches!` assignment instead. Model-card paths
+now resolve to their actual package; CW-SSIM stays classical and has no model
+files. Restricted weight recipes explicitly state the required per-column
+consent without assuming consent. Regression controls require these contracts
+for every pyiqa CLI name. Metric arithmetic and parity limits are unchanged.

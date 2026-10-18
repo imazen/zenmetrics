@@ -39,6 +39,12 @@ def function(source,name):
     return source[a+1:i-1]
 
 
+def compiled_groups(source):
+    body=function(source,'scoring_compiled_in')
+    return {name:set(re.findall(r'MetricKind::(\w+)',expr))
+            for name,expr in re.findall(r'let (\w+) = matches!\((.*?)\);',body,re.S)}
+
+
 def rows():
     source=(ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
     names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',function(source,'name')))
@@ -67,8 +73,9 @@ def rows():
     gpu=set(re.findall(r'MetricKind::(\w+)',function(source,'requires_gpu')))
     display=set(re.findall(r'MetricKind::(\w+)',function(source,'needs_display')))
     luma=set(re.findall(r'MetricKind::(\w+)',function(source,'is_luma_only')))
-    compiled=function(source,'scoring_compiled_in')
-    nn=set(re.findall(r'MetricKind::(\w+)',compiled.split('let nr')[0]));nr=set(re.findall(r'MetricKind::(\w+)',compiled.split('let nr')[1]))
+    groups=compiled_groups(source)
+    nn=groups['nn'] | (groups.get('pyiqa',set()) - {'CwSsimPyiqa'})
+    nr=groups['nr']
     cards=[]
     for p in model_paths():
         card=tomllib.loads(p.read_text());cards.append((p,card))

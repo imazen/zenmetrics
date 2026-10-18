@@ -6,7 +6,7 @@ feature closure (crates/zenmetrics-cli/Cargo.toml) already enables it.
 """
 import re
 import tomllib
-from catalog import ROOT
+from catalog import ROOT, compiled_groups, function
 
 MOD = ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs'
 MANIFEST = ROOT/'crates/zenmetrics-cli/Cargo.toml'
@@ -17,6 +17,11 @@ def _features():
     found = {}
     for metric, features in re.findall(r'disabled_msg\(\s*"([a-z0-9-]+)",\s*"([a-z0-9,-]+)', text):
         found.setdefault(metric, [f for f in features.split(',') if f])
+    names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',function(text,'name')))
+    for group,kinds in compiled_groups(text).items():
+        feature={'nn':'nn','nr':'nr','pyiqa':'pyiqa-ports'}.get(group)
+        if feature:
+            for kind in kinds:found.setdefault(names[kind],[feature])
     return found
 
 
@@ -43,15 +48,20 @@ def commands(metric, row, model):
     build = 'cargo build --release -p zenmetrics-cli' + (' --features ' + ','.join(needed) if needed else '')
     lines = ['git clone https://github.com/imazen/zenmetrics && cd zenmetrics',
              'bash scripts/ci/clone-siblings.sh', build]
-    if row.get('nn') == 'true':
+    card_path=model.get('_card_source','') if model else ''
+    has_files=row.get('nn') == 'true' or bool(card_path and metric!='cw-ssim-pyiqa')
+    if has_files:
         card = model.get('_card_dir') if model else None
-        lines.append('# export the model once (see crates/zenmetrics-nn/models/%s/card.toml for weight terms)' % (card or '<model>'))
+        card_path=card_path or 'crates/zenmetrics-nn/models/%s/card.toml' % (card or '<model>')
+        lines.append('# export the model once (see %s for weight terms and export command)' % card_path)
         lines.append('export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models')
     score = f'target/release/zenmetrics score --metric {metric} --reference ref.png --distorted dist.png'
     if row.get('needs_display') == 'true':
         score += ' --display-model standard_fhd'
     lines.append(score)
     notes = []
+    if model and model.get('_consent'):
+        notes.append('After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS='+model['_consent']+'. Consent is not implied by building the CLI.')
     if row.get('nr') == 'true':
         notes.append('No-reference: the score describes the distorted image; the CLI still takes both paths.')
     if row.get('requires_gpu') == 'true':

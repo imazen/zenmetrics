@@ -22,6 +22,19 @@ class AIC2026(unittest.TestCase):
             self.assertEqual(by_name[name]['parity']['tolerance_jnd'],0.001)
         self.assertIn('0.071',json.dumps(by_name['dmm-pyiqa']['parity']))
 
+    def test_pyiqa_reproduction_features_and_reference_kind(self):
+        inventory={r['metric']:r for r in catalog_rows()}
+        by_name={c['metric']:c for c in cards()}
+        for name in ('topiq-fr','topiq-fr-pipal','wadiqam-pyiqa','ahiq-pyiqa','pieapp-pyiqa','cw-ssim-pyiqa','dmm-pyiqa'):
+            self.assertEqual(inventory[name]['nr'],'false')
+            self.assertIn('pyiqa-ports',by_name[name]['repro']['features'])
+            self.assertFalse(any('No-reference' in note for note in by_name[name]['repro']['notes']))
+        topiq=by_name['topiq-fr']['repro']
+        self.assertTrue(any('zenmetrics-pyiqa-ports/models/topiq/card.toml' in line for line in topiq['lines']))
+        self.assertTrue(any('ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr' in note for note in topiq['notes']))
+        self.assertEqual(by_name['cw-ssim-pyiqa']['family'],'Classical')
+        self.assertFalse(any('MODEL_DIR' in line for line in by_name['cw-ssim-pyiqa']['repro']['lines']))
+
     def test_external_resources_fail_but_citation_navigation_passes(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);p=root/'index.html'

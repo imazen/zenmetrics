@@ -116,7 +116,7 @@ def cards():
             weights={'notice':'Static trained/statistical parameters; consult the linked crate README and licence notices. Exact checkpoint terms are not normalized in this card.'}
         licenses=sorted(p.relative_to(ROOT).as_posix() for directory in ([path.parent,ROOT/'crates/zenmetrics-nn'] if path else [ROOT/'crates'/metric]) for p in directory.glob('LICENSE*') if not model or p.name.lower()=='license-'+model.get('name','').lower())
         yield clean(dict(metric=metric,name=cite.get('full_name',metric) if cite else metric,
-             family='Learned' if row['nn']=='true' or model or metric=='brisque' else 'Classical',
+             family='Classical' if metric=='cw-ssim-pyiqa' else 'Learned' if row['nn']=='true' or model or metric=='brisque' else 'Classical',
              kind='NR' if ('no-reference' in model.get('kind','') and 'full-reference' not in model.get('kind','')) or 'wadiqam-nr-' in metric or metric in ['niqe','piqe','brisque','cambi'] else 'FR',
              backend=row['backend'],backends=['CPU','GPU'] if model else [row['backend']],engines=model.get('execution',{}).get('engines',['rten','ort-cuda'] if model else [row['backend']]),
              citation=cite,citation_status='Verified primary metadata' if cite else 'citation needed',
@@ -132,7 +132,8 @@ def cards():
              evidence=list(dict.fromkeys(evidence+(['crates/zenmetrics-cli/src/metrics/mod.rs'] if not model else []))),
              divergences=related,conventions={k:model[k] for k in ['aic4','oracle_convention','convention'] if k in model},
              source=record_path,readme_evidence=readme_evidence,columns=row['columns'],
-             repro=repro.commands(metric,row,{'_card_dir':path.parent.name} if path else {}),
+             repro=repro.commands(metric,row,{'_card_dir':path.parent.name,'_card_source':record_path,
+                 '_consent':next((value for value in re.findall(r'ZENMETRICS_NN_ACCEPT_WEIGHTS=([a-z0-9_]+)',contracts.get(metric,''))),None)} if path else {}),
              links={'speed':SITE+'#speed?metric='+metric,'quality':SITE+'#quality?metric='+metric,'agreement':SITE+'#agreement?metric='+metric} ))
 
 

@@ -163,7 +163,7 @@ def build(output, cards):
                    'crates/zenmetrics-cli/src/metrics/mod.rs', 'docs/paper/IQA_COMPLEXITY_VS_RUNTIME.md'])
     def page(name, title, body, paths):
         sources.update(paths)
-        footer='<footer>Source commit <code>'+commit+'</code>. Data and contracts:<ul>'+''.join('<li>'+source_link(p,commit)+'</li>' for p in sorted(set(paths)))+'</ul></footer>'
+        footer='<footer>AIC2026 dataset: Jenadeleh et al. (2026), <a href="https://doi.org/10.18419/DARUS-6156">dataset DOI and attribution</a>. Dataset terms: CC BY-SA 4.0 with metadata exceptions; preliminary subjective-score terms remain an author request.<br>Source commit <code>'+commit+'</code>. Data and contracts:<ul>'+''.join('<li>'+source_link(p,commit)+'</li>' for p in sorted(set(paths)))+'</ul></footer>'
         text='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta http-equiv="Content-Security-Policy" content="default-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; img-src &#39;self&#39; data:; base-uri &#39;none&#39;"><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><title>'+e(title)+' · AIC2026</title></head><body><header><a href="../">Zenmetrics</a><p class="eyebrow">JPEG AIC2026 · evidence & open questions</p><nav aria-label="AIC2026">'+''.join('<a '+('aria-current="page" ' if n==name else '')+'href="'+('index.html' if n=='index' else n+'.html')+'">'+e(t)+'</a>' for n,t in NAV)+'</nav></header><main><h1>'+e(title)+'</h1>'+body+'</main>'+footer+'</body></html>'
         (folder/(name+'.html')).write_text(text)
     (folder/'style.css').write_text(STYLE)
