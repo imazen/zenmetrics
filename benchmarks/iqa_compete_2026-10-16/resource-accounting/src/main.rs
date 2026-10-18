@@ -81,7 +81,7 @@ fn main() {
     let mut previous_native = native_time(pid);
     println!(
         "{}",
-        json!({"schema":1,"mode":mode,"workers":workers,"samples":samples,"owner":pid,"os":std::env::consts::OS,"sysinfo":"0.36.1","interval_ms":200,"qualification":false,"native_time":"ps cumulative user+system CPU, centisecond display; independent bounded read adjacent to sysinfo refresh","order":"refresh_cpu_all; refresh_memory; refresh_processes(All,true), matching zenbench ac675d3"})
+        json!({"schema":1,"mode":mode,"workers":if mode == "external" {None} else {Some(workers)},"samples":samples,"owner":pid,"os":std::env::consts::OS,"sysinfo":"0.36.1","interval_ms":200,"qualification":false,"native_time":"ps cumulative user+system CPU, centisecond display; independent bounded read adjacent to sysinfo refresh","order":"refresh_cpu_all; refresh_memory; refresh_processes(All,true), matching zenbench ac675d3"})
     );
     for index in 0..samples {
         thread::sleep(Duration::from_millis(200));

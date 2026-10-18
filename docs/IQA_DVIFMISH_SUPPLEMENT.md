@@ -150,3 +150,11 @@ launches that worker and samples its PID until exit (at most 300 observations).
 Worker output and Mac native `iostat` are retained separately. External
 sampling adds diagnostic activity; none of these rows qualifies benchmark
 performance. The original binary, config and results are untouched.
+
+Local Cargo configuration can inject unrelated sibling patches into this
+standalone build. The Mac `--locked` root invocation refused that inherited
+resolution. An exact source/lock copy outside the checkout built unchanged
+under the shared lock; keep a hash receipt for that copy. The original IQA
+binary and snapshot remain independent. Linux external-worker diagnostics
+also require the established P-core process boundary; an unrestricted
+invocation is expected to refuse rather than qualify any observation.
