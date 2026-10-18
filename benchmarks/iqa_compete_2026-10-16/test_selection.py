@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import runpy
+import subprocess
 
 from selection import select_metrics
 
@@ -56,6 +58,26 @@ class Selection(unittest.TestCase):
                      patch.object(run, 'run_cell', return_value=[]) as cell, contextlib.redirect_stderr(io.StringIO()):
                     run.main()
                 self.assertEqual([call.args[1]['metric_name'] for call in cell.call_args_list], expected)
+
+    def test_coverage_launcher_does_not_add_an_explicit_pieapp_lane(self):
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as temp:
+            root = Path(temp)
+            binary = root / 'worker'
+            binary.write_bytes(b'launcher fixture')
+            pairs = root / 'pairs.json'
+            pairs.write_text('[]')
+            argv = ['coverage_pass.py', str(binary), str(pairs), str(root / 'output'),
+                    str(root / 'models'), str(root / 'model-map.json'),
+                    '--ort-library', 'unused', '--cuda-libraries', 'unused']
+            with patch.object(sys, 'argv', argv), patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0)) as launch, \
+                 contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as result:
+                runpy.run_path(str(Path(__file__).with_name('coverage_pass.py')), run_name='__main__')
+            self.assertEqual(result.exception.code, 0)
+            manifest = json.loads((root / 'output/launch.json').read_text())
+            self.assertEqual(set(manifest['commands']), {'cpu', 'cuda', 'nn-cuda'})
+            self.assertEqual(launch.call_count, 3)
+            for command in manifest['commands'].values():
+                self.assertNotIn('--metrics', command)
 
 
 if __name__ == '__main__':
