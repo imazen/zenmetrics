@@ -123,3 +123,9 @@ and `33d974ce5407120d5fcfd5892406218c18b04f7ec80daefed4e0b3f4e46c1b18` (Mac).
 Raw reports and attempts stay outside git under each host's benchmark-results;
 commands, worker/source hashes, recovery, limitations and live service resolving
 commands belong in [the supplement contract](../../docs/IQA_DVIFMISH_SUPPLEMENT.md).
+
+The later scalar-only owner direction replaces upcoming larger map scopes with
+[the scalar priority sequence](../../docs/IQA_SCALAR_PRIORITY.md). The independent
+i265 ranking and existing classical scalar rows are retained. Active unit:
+`iqa-scalar-421f872f66cfe7cb.service`; source and result manifests remain frozen,
+and original NN CPU/CUDA resume after the new scalar parents.

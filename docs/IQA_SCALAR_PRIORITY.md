@@ -97,3 +97,75 @@ formal quality mapping is asserted for dvifmish, butteraugli-original or the
 remaining VMAF variants. These are requested-family additions, not a formal
 statistical Pareto-dominance claim. The historical i265 Pareto front is not a
 Mac result and is not reused.
+
+## Installed graph and measured progress
+
+Source changes `cd5bea5479141dbd3844dd21296ec9ac06028e8e` and
+`d2d9d44f069bff5b52ac574e6819bc984a77716b` are verified on remote master.
+Eight scheduling controls pass, including changed-scheduler/map refusal,
+attempt-budget preservation, flagged-row exclusion and replacement check-ins.
+A native read-only Mac control validates all 7482 classical and 576 dvifmish
+source cell identities and retained attempt hashes using their frozen validators.
+The protected ranking controls' resource logs record PSNR rc0/3s/0.02 GiB
+peak RSS and SSIM rc0/2s/0.02 GiB, minimum available-page proxies 18741/18749 MiB.
+
+On mac, `user/501/io.imazen.iqa-scalar.db3c4e03eeb6d48b` executes
+`~/benchmark-bundles/iqa-mac-20261018-scalar-priority.noindex/sequence.json`.
+All upcoming manifests are scalar-only. The actual new phase counts are:
+
+| order | phase | cells | attempts remaining per cell |
+| --- | --- | ---: | ---: |
+| 1 | fastest baseline, non-dvifmish | 112 | 2 |
+| 2 | all six dvifmish routes | 260 | 2 |
+| 3 | requested families, prior attempt retained | 1 | 1 |
+| 4 | requested families | 152 | 2 |
+| 5 | remaining scalar, prior attempt retained | 95 | 1 |
+| 6 | remaining scalar | 841 | 2 |
+| 7 | original larger NN CPU | original 1104 | original policy |
+| 8 | original larger NN Metal | original 1104 | original policy |
+
+The first phase was observed at 43 successful / 69 pending / zero failed.
+This is measured progress, not completion of the sequence. All 13 named CPU
+family routes are represented in the requested-family partition. The source
+lineage contains 2573 retained scalar cells, 1461 scheduled scalar cells,
+2654 map cells with preserved attempt evidence and 1370 unstarted map cells
+that are not scheduled. Map evidence labels do not qualify failed map attempts.
+
+The original broad classical, dvifmish-priority and waiting NN CPU/Metal
+LaunchAgents are disabled and booted out. The new NN CPU wait record identifies
+the **new last scalar output**; Metal identifies the resumed NN CPU output.
+The old incomplete broad-output gate is not used. Actual manifests, lineage,
+plan, installation and status receipts are retained at
+`/home/lilith/benchmark-artifacts/iqa-scalar-priority-mac-20261018/`.
+The existing `checkin-plan.json` now invokes the frozen scheduler's `status`
+command and contains these eight phases. Its previous contents remain in
+`checkin-plan.pre-scalar-priority.json`. A real scheduled-check-in command
+succeeded, and `iqa-mac-checkin.timer` remains active.
+
+On i265, the independent clean 512²/eight-worker scalar ranking is GMSD,
+dvifmish port-min, PSNR-HVS-Y, dvifmish port-lap v0.3, port-lap v0.2, PSNR,
+dvifmish talk-int, PSNR-Y601, PSNR-Y, PSNR-HVS. Generic PSNR and SSIM both
+already have ten clean rounds; no Mac timing was substituted. The selected
+classical routes and requested families were already collected at the larger
+sizes and are retained, rather than measured again.
+
+`iqa-scalar-421f872f66cfe7cb.service` executes
+`~/benchmark-bundles/iqa-i265-20261018-scalar-priority-v2/sequence.json`:
+277 remaining dvifmish scalar cells, one remaining classical scalar cell with
+one attempt left, then the original larger NN CPU and CUDA outputs. The
+first phase was observed at 34 successful / 243 pending / zero failed. NN CPU
+retains its 148 successful / 956 pending cells while waiting for the new scalar
+parents. All upcoming manifests contain only scalar cells; P-core policy and
+shared 12G/8-job lock remain unchanged. The original transient services are
+stopped. A first preparation refused a confirmed absent transient unit before
+any worker; its directory/log are preserved. The corrected boundary accepts
+that verified absent state, and installation uses a fresh `-v2` directory.
+Receipts and independent ranking are retained under
+`/home/lilith/benchmark-artifacts/iqa-scalar-priority-i265-20261018/`.
+
+Resolve either host's current state with the installed frozen
+`coordinator/scalar_priority.py status <sequence.json>`. This reports the actual
+native service state, current progress and replacement predecessor records.
+Existing NN data remains available: Mac 512 CPU 184/184 successful and Metal
+144/184 successful; i265 512 CPU and CUDA each 128/184 successful. Failed cells
+remain failed; bounded queue completion is distinct from full qualification.

@@ -334,3 +334,14 @@ until the controller writes its final report. The original larger non-NN
 report is complete: 5354 successful, 2688 unsupported, 118 failed cells.
 A hashed availability snapshot is retained in
 `/home/lilith/benchmark-artifacts/iqa-dvifmish-i265-20261018/priority-nn-availability.json`.
+
+### Scalar-only scheduling supersedes the larger-priority map queue
+
+The subsequent owner direction schedules no new map scopes. Completed scalar
+cells and map attempts stay in their original outputs. The [scalar priority
+contract and installation receipts](IQA_SCALAR_PRIORITY.md) replace the two
+larger-priority services with immutable scalar-only sequences on both hosts:
+fastest-ten baseline, all six dvifmish routes, additional named metric families,
+remaining scalar work, then NN CPU/GPU. Retained failure budgets and the shared
+locks are unchanged. The original bundles and predecessor files are historical
+inputs; the active NN waits follow the new scalar outputs.

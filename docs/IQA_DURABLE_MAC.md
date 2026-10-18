@@ -254,3 +254,12 @@ The subsequent MUSIQ session audit reproduces the fifth strict Metal refusal:
 CPU-preference messages. The [MUSIQ extension](../benchmarks/mac_validation_2026-10-18/WEBGPU_NODE_AUDIT.md#musiq-extension--same-frozen-runtime)
 records exact names, unchanged graph/runtime hashes and separate receipts.
 The four-model audit alone did not cover MUSIQ.
+
+### Scalar-only priority replacement (2026-10-18)
+
+The active graph now follows the [scalar-only priority contract](IQA_SCALAR_PRIORITY.md).
+Its frozen manifests preserve completed cells/old maps and remaining attempt
+budgets, and add no upcoming map scopes. NN CPU and Metal follow the replacement
+scalar outputs; disabled original service configs remain unchanged. The existing
+30-minute check-in plan reads the new frozen scheduler's `status` output and
+retains a backup of the earlier eight-phase plan.
