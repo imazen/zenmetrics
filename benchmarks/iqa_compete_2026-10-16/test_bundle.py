@@ -165,6 +165,19 @@ class ServiceTests(unittest.TestCase):
             result = mac_service.main()
         return result, child, spawn, awake, stderr.getvalue()
 
+    def test_start_refuses_installed_other_bundle(self):
+        directory = self.home / 'Library/LaunchAgents'
+        directory.mkdir(parents=True)
+        token = hashlib.sha256(str(self.output.resolve()).encode()).hexdigest()[:16]
+        plist = directory / ('io.imazen.iqa-durable.' + token + '.plist')
+        with plist.open('wb') as stream:
+            plistlib.dump(dict(ProgramArguments=[sys.executable, '/other/mac_service.py', 'execute', '/other', str(self.output)]), stream)
+        args = ['mac_service.py', 'start', str(self.bundle), str(self.output)]
+        with patch.object(Path, 'home', return_value=self.home), patch.object(sys, 'argv', args), patch.object(subprocess, 'call') as launch:
+            with self.assertRaisesRegex(ValueError, 'another bundle/output'):
+                mac_service.main()
+        launch.assert_not_called()
+
     def test_execute_runs_frozen_command_and_preserves_crash_restart_status(self):
         for rc, expected in ((0, 0), (2, 0), (137, 137), (-9, -9)):
             with self.subTest(child_returncode=rc):
