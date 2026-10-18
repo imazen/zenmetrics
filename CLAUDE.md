@@ -1835,3 +1835,13 @@ CW-SSIM explicitly reports its non-commercial code restriction; DMM retains its
 host-SVD blocker. `just browser-coverage-check` runs exact-order, per-variant
 reason and missing/misclassified negative controls before the website build.
 The catalog fix does not qualify these methods for browser scoring.
+
+### Known Bugs: NN 4K benchmark resume selection (2026-10-18)
+
+The GPU phase of the local NN 4K driver skipped nonempty missing-metric lists,
+so waiting longer could not schedule those cells. The tracked
+`scripts/complexity/drive_nn_4k.sh` tests for an empty list before skipping.
+Probe timeouts now clean up only the process group created by that probe,
+replacing broad process-name cleanup. Header repair retains the original bytes
+in a sibling backup. Failed attempts remain unqualified; scheduler controls
+do not establish metric throughput or complete the missing 4K panel.

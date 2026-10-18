@@ -13,6 +13,9 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Require explicit selection of PieAPP variants in routine benchmark groups; keep metric implementations and correctness gates enabled (`84a66baa`, `45334b0e`).
+- Remove duplicate pair multipliers from seven provisional NN complexity tallies and retain a complete frozen-graph input receipt (`82cf3c17`, `f7172825`).
+
 - Keep browser coverage in exact CLI declaration order after adding seven pyiqa variants; distinguish per-variant weight/code restrictions and DMM host SVD, with cheap catalog regression controls before the website build (`42f9c11d`, `ee72e227`).
 
 - E36 native fit executor supports a separately archive-bound, noninstallable two-epoch memory smoke; registered full-budget variants retain their smoke refusal (`93f98db0`).

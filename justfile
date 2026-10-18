@@ -1656,3 +1656,11 @@ complexity-regenerate:
 # Run one integration-test module per process on the native wgpu backend.
 mac-validation-module package module:
     cargo test --locked -p {{package}} --no-default-features --features wgpu --test it {{module}} -- --nocapture --test-threads=1
+
+# Owned-child timeout and missing-cell scheduler controls, with no model weights.
+complexity-driver-check:
+    python3 -m unittest discover -s scripts/complexity -p test_driver.py
+
+# Host-specific bounded NN 4K measurements; configure CX4K_* inputs explicitly.
+complexity-drive-nn-4k phase="all":
+    bash scripts/complexity/drive_nn_4k.sh "{{phase}}"

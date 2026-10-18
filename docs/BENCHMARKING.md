@@ -86,6 +86,13 @@ CPU-affinity qualification; the smoke does not claim either.
 
 ## Results and opt-ins
 
+Default and group selections (`all`, and `learned` in the advanced runner)
+omit `pieapp` and `pieapp-pyiqa` because of their long runtimes. The command
+prints the omitted names. Explicit comma-separated selections retain both
+methods; this scheduling policy does not change metric code or parity gates.
+Use a small explicit subset such as `ssim2,gmsd` for the first machine smoke.
+
+
 Results are content-addressed under `target/bench-iqa/<key>/`, or `--output DIR`.
 `rows.jsonl`, per-cell logs, input hashes and `run.meta` retain the commit,
 binary SHA-256, OS, explicit host label, thread budgets and toolchain versions.

@@ -335,3 +335,31 @@ name and requires its reason with no score, and requires refusals naming
 | `piqe` | score-only | full | – | – |
 | `niqe` | score-only | full | – | – |
 | `brisque` | score-only | full | – | – |
+
+## Local-file learned routes (2026-10-18)
+
+`nn-local` means conditional CPU WASM scoring with user-supplied weights.
+CKDN and HyperIQA use the exact exported graphs named and SHA-256-pinned in
+`web/metrics/nn-models.json`. Select the graph file and accept that model's
+weight terms explicitly before loading it. A wrong file, wrong hash, or absent
+consent refuses loading. These routes require browser JSPI support.
+
+The selected weights stay in the coordinator worker's memory. The viewer does
+not fetch them from a URL or put them in browser persistent storage. They are
+not bundled in the public website. Reloading the page requires selecting
+and consenting again. The current page retains the selected File and consent
+so it can reload a replacement worker. The route uses the WASM CPU provider, and does not
+establish WebGPU availability. The existing MUSIQ route is unchanged.
+
+The separate qualification command requires the model directory and a native
+RTEN baseline supplied by the caller:
+
+```sh
+just browser-local-weights-check SITE MODEL_DIRECTORY NATIVE_JSON REPORT_JSON
+```
+
+It checks both fixture pairs against the existing 0.001 JND gate, repeated
+score identity, refusal before loading/consent, wrong-file/hash controls,
+absence of ONNX network requests, and the actual local-file UI flow. Public
+CI does not acquire restricted weights for this check. Its ordinary Pages
+regression still checks catalog classification and unloaded-route refusal.
