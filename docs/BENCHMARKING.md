@@ -27,6 +27,16 @@ below for that existing panel. This is a remaining portability gap.
 
 ## Linux
 
+The 2026-10-18 scheduling update was checked on i265 with the pinned debug
+coordinator (`709876fd`, landed source counterpart `edb66726`):
+`bench-iqa smoke psnr,gmsd --host i265 --fixture synthetic-v1 --skip-native`,
+restricted to CPUs 0–7. It wrote eight rows: six successful rows with five
+samples each, and two explicit unsupported PSNR-map rows. Repeating the same
+command returned `rows=8 added=0 skipped=8` with rows and attempt logs
+unchanged. This is an execution/resume control, not release-build timing
+qualification or full metric coverage.
+
+
 Tested on i265 (Linux) 2026-10-17, commit `f95192aaa39986cc5438fda68716a1d95cee706c`: two CPU metrics at 64×64, 1/all threads, both modes; 8 rows, then `added=0 skipped=8`. Existing tools were used; the package-install commands below were not rerun on a clean machine.
 
 ```sh
