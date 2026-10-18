@@ -1825,3 +1825,13 @@ competition schemas omitted that supported field. A generated smoke shard
 therefore failed strict dashboard ingestion. Both reproduction schemas now
 accept `notes`; unknown columns still fail. This preserves per-row workload and
 agreement qualifications in versioned observations.
+
+### Known Bugs: browser catalog drift after CLI additions (2026-10-18)
+
+Website run 39103825394 failed because seven new CLI variants were absent from
+`web/metrics/coverage.json`. The catalog now includes them in declaration order
+and resolves the specific pyiqa model cards before deriving restriction reasons.
+CW-SSIM explicitly reports its non-commercial code restriction; DMM retains its
+host-SVD blocker. `just browser-coverage-check` runs exact-order, per-variant
+reason and missing/misclassified negative controls before the website build.
+The catalog fix does not qualify these methods for browser scoring.

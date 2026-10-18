@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Keep browser coverage in exact CLI declaration order after adding seven pyiqa variants; distinguish per-variant weight/code restrictions and DMM host SVD, with cheap catalog regression controls before the website build (`42f9c11d`, `ee72e227`).
+
 - E36 native fit executor supports a separately archive-bound, noninstallable two-epoch memory smoke; registered full-budget variants retain their smoke refusal (`93f98db0`).
 
 - Browser workbench: the page starts a 4.7 MB core module and loads the full CPU-metric module on demand (first-load bytes 13.6 MB → 4.8 MB), adds PIQE/NIQE/BRISQUE, publishes `coverage.json` with every CLI metric's measured browser status, opens from `?metric=…` links (`docs/BROWSER_WORKBENCH_LINKS.md`), links back to the dashboard and sweeps JPEG XL distances for any metric (`2039016c`, `9fabecd2`, `be033244`).
