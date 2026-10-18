@@ -75,13 +75,14 @@ email draft. The draft is not sent by the site workflow.
 
 ## Mainland reachability
 
-The current hostname already uses Cloudflare Pages, rather than GitHub Pages.
-Mainland probes must be actual HTTP observations for the requested URL, with
-city, provider, status and total time retained. An HTTP result tests delivery,
-not complete browser rendering or all network providers. Dynamic probe pages
-must not be confused with the services' illustrative default results. The
-final measured receipt is linked here when captured; hosting and DNS changes
-require separate owner approval.
+The owner confirmed mainland reachability on 2026-10-18 and directed that
+China testing stop and hosting comparisons be skipped. The existing host
+remains Cloudflare Pages; no DNS or hosting change is part of this extension.
+The original HTTP observations remain in the private execution receipt.
+
+The viewer's header links the explorer, AIC results, reproduction evidence,
+benchmarks, pinned source and the AIC download section. Downloaded JSON
+contains public configuration/card records and aggregate scatter diagnostics.
 
 ## Known bugs: configuration extraction (fixed 2026-10-18)
 

@@ -17,7 +17,8 @@ def merge(viewer, dashboard, source):
     shutil.copytree(dashboard/'aic2026',viewer/'aic2026')
     index=viewer/'index.html';text=index.read_text()
     if '<h1>' not in text:raise ValueError('viewer heading changed')
-    text=text.replace('<h1>','<nav aria-label="Results"><a href="/aic2026/">AIC2026 results, configurations and reproduction status</a></nav>\n<h1>',1)
+    navigation='<nav aria-label="Results" style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0;border-bottom:2px solid var(--accent)"><a href="/">Image explorer</a><a href="/aic2026/">AIC2026 results</a><a href="/aic2026/reproduction.html">Reproduction evidence</a><a href="/aic2026/complexity.html">Benchmarks</a><a href="https://github.com/imazen/zenmetrics/tree/'+source+'">Source</a><a href="/aic2026/#downloads">Downloads</a></nav>'
+    text=text.replace('<h1>',navigation+'\n<h1>',1)
     index.write_text(text)
     check_origins(viewer/'aic2026')
     provenance['aic2026']={'source_commit':source,'manifest':'aic2026/manifest.json'}
