@@ -3,6 +3,8 @@
 //! RGB8 sRGB, linear RGB -> normalized Lab, up to six area-resized scales.
 //! Preserves asymmetric edge, worst row/column and worst 4x4-block pooling.
 #![allow(clippy::excessive_precision)]
+use archmage::attune;
+
 const SCALE: [[f32; 6]; 3] = [
     [0.0448, 0.2856, 0.3001, 0.2363, 0.1333, 0.1],
     [0.015, 0.0448, 0.2856, 0.3001, 0.3363, 0.25],
@@ -74,7 +76,7 @@ fn reflect(mut i: isize, n: usize) -> usize {
     }
     i as usize
 }
-fn blur(a: &[f32], w: usize, h: usize) -> Vec<f32> {
+fn blur_kernel() -> [f32; 11] {
     let mut kernel = [0.0f64; 11];
     let mut sum = 0.0;
     for (i, k) in kernel.iter_mut().enumerate() {
@@ -82,52 +84,144 @@ fn blur(a: &[f32], w: usize, h: usize) -> Vec<f32> {
         *k = (-x * x / (2.0 * 1.5 * 1.5)).exp();
         sum += *k;
     }
-    let k = kernel.map(|v| (v / sum) as f32);
-    let mut tmp = vec![0.0; w * h];
-    let mut out = vec![0.0; w * h];
-    // OpenCV's 11-tap row filter, symmetric column filter, BORDER_REFLECT_101.
-    // Interior pixels touch no reflected border, so their tap indices are
-    // contiguous; only the 5-pixel edge uses `reflect`. Both paths emit the
-    // same ordered `mul_add` chain.
-    for y in 0..h {
-        let row = &a[y * w..y * w + w];
-        let trow = &mut tmp[y * w..y * w + w];
-        for x in 0..w {
-            let mut value;
-            if x >= 5 && x + 5 < w {
-                value = row[x - 5] * k[0];
-                for (j, &weight) in k.iter().enumerate().skip(1) {
-                    value = row[x + j - 5].mul_add(weight, value);
-                }
-            } else {
-                value = a[y * w + reflect(x as isize - 5, w)] * k[0];
-                for (j, &weight) in k.iter().enumerate().skip(1) {
-                    value =
-                        a[y * w + reflect(x as isize + j as isize - 5, w)].mul_add(weight, value);
-                }
-            }
-            trow[x] = value;
-        }
+    kernel.map(|v| (v / sum) as f32)
+}
+
+/// Scalar row-pass tap: `k[0]` product then `k[1..=10]` fused adds, in the
+/// reference order. `reflect` is the identity for in-range taps, so this one
+/// form covers edge and interior pixels bit-identically.
+#[inline(always)]
+fn hrow_px(a: &[f32], w: usize, y: usize, x: usize, k: &[f32; 11]) -> f32 {
+    let mut value = a[y * w + reflect(x as isize - 5, w)] * k[0];
+    for (j, &weight) in k.iter().enumerate().skip(1) {
+        value = a[y * w + reflect(x as isize + j as isize - 5, w)].mul_add(weight, value);
     }
-    for y in 0..h {
-        let ybase = y * w;
-        for x in 0..w {
-            let mut value = tmp[ybase + x] * k[5];
+    value
+}
+
+/// Scalar column-pass tap: `k[5]` product then the five symmetric
+/// `(up + down) · k[5+j]` fused adds, in the reference order.
+#[inline(always)]
+fn vcol_px(a: &[f32], w: usize, h: usize, y: usize, x: usize, k: &[f32; 11]) -> f32 {
+    let mut value = a[y * w + x] * k[5];
+    for j in 1..=5 {
+        value = (a[reflect(y as isize - j as isize, h) * w + x]
+            + a[reflect(y as isize + j as isize, h) * w + x])
+            .mul_add(k[5 + j], value);
+    }
+    value
+}
+
+/// Both blur passes in one feature region. Every vector lane runs the same
+/// ordered fused-multiply-add chain as the scalar reference — one rounding
+/// per `mul_add_portable` on every backend — so all tiers and widths are
+/// bit-identical.
+macro_rules! blur_body {
+    ($token:ident, $FV:ident, $LANES:literal, $a:ident, $w:ident, $h:ident, $k:ident, $tmp:ident, $out:ident) => {{
+        let (w, h) = ($w, $h);
+        let kv: [$FV; 11] = core::array::from_fn(|j| $FV::splat_t($token, $k[j]));
+        macro_rules! ld {
+            ($s:ident, $o:expr) => {
+                $FV::from_array_t($token, core::array::from_fn(|t| $s[$o + t]))
+            };
+        }
+        // Row pass: scalar head/tail (reflect path) around vector interior.
+        for y in 0..h {
+            let trow = &mut $tmp[y * w..y * w + w];
+            let mut x = 0usize;
+            while x < 5.min(w) {
+                trow[x] = hrow_px($a, w, y, x, $k);
+                x += 1;
+            }
+            while x + $LANES + 5 <= w {
+                let mut acc = ld!($a, y * w + x - 5) * kv[0];
+                for j in 1..=10 {
+                    acc = ld!($a, y * w + x + j - 5).mul_add_portable(kv[j], acc);
+                }
+                acc.store((&mut trow[x..x + $LANES]).try_into().unwrap());
+                x += $LANES;
+            }
+            while x < w {
+                trow[x] = hrow_px($a, w, y, x, $k);
+                x += 1;
+            }
+        }
+        // Column pass: edge rows scalar; interior rows vector across x.
+        for y in 0..h {
             if y >= 5 && y + 5 < h {
-                for j in 1..=5 {
-                    value = (tmp[(y - j) * w + x] + tmp[(y + j) * w + x]).mul_add(k[5 + j], value);
+                let mut x = 0usize;
+                while x + $LANES <= w {
+                    let mut acc = ld!($tmp, y * w + x) * kv[5];
+                    for j in 1..=5 {
+                        acc = (ld!($tmp, (y - j) * w + x) + ld!($tmp, (y + j) * w + x))
+                            .mul_add_portable(kv[5 + j], acc);
+                    }
+                    acc.store(
+                        (&mut $out[y * w + x..y * w + x + $LANES])
+                            .try_into()
+                            .unwrap(),
+                    );
+                    x += $LANES;
+                }
+                while x < w {
+                    $out[y * w + x] = vcol_px($tmp, w, h, y, x, $k);
+                    x += 1;
                 }
             } else {
-                for j in 1..=5 {
-                    value = (tmp[reflect(y as isize - j as isize, h) * w + x]
-                        + tmp[reflect(y as isize + j as isize, h) * w + x])
-                        .mul_add(k[5 + j], value);
+                for x in 0..w {
+                    $out[y * w + x] = vcol_px($tmp, w, h, y, x, $k);
                 }
             }
-            out[ybase + x] = value;
         }
-    }
+    }};
+}
+
+/// 8-wide blur for `v3`/`neon`/`wasm128`/`scalar`.
+#[attune(_*_t, define(f32x8))]
+fn blur_passes(
+    token: Token,
+    a: &[f32],
+    w: usize,
+    h: usize,
+    k: &[f32; 11],
+    tmp: &mut [f32],
+    out: &mut [f32],
+) {
+    blur_body!(token, f32x8, 8, a, w, h, k, tmp, out)
+}
+
+/// 16-wide `blur_passes` for the AVX-512 `v4x` tier (crate feature `avx512`).
+/// Emits `blur_passes_v4x_t`, which `attuned!` picks up by name.
+#[attune(_v4x_t(cfg(avx512)), define(f32x16))]
+fn blur_passes(
+    token: Token,
+    a: &[f32],
+    w: usize,
+    h: usize,
+    k: &[f32; 11],
+    tmp: &mut [f32],
+    out: &mut [f32],
+) {
+    blur_body!(token, f32x16, 16, a, w, h, k, tmp, out)
+}
+
+/// Blur one plane into a fresh output Vec, reusing `tmp` as scratch. `tmp`
+/// is fully overwritten by the row pass before any read, so stale contents
+/// are never observed; `resize` only writes on growth.
+fn blur_into(a: &[f32], w: usize, h: usize, k: &[f32; 11], tmp: &mut Vec<f32>) -> Vec<f32> {
+    tmp.resize(w * h, 0.0);
+    let mut out = vec![0.0; w * h];
+    archmage::attuned!(
+        blur_passes(a, w, h, k, tmp, &mut out),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
     out
+}
+
+#[cfg(test)]
+fn blur(a: &[f32], w: usize, h: usize) -> Vec<f32> {
+    let k = blur_kernel();
+    blur_into(a, w, h, &k, &mut Vec::new())
 }
 fn down(a: &[f32], w: usize, h: usize, f: usize) -> (Vec<f32>, usize, usize) {
     let nw = (w as f64 / f as f64).round_ties_even() as usize;
@@ -199,26 +293,28 @@ pub(super) fn score(
 ) -> Result<f64, &'static str> {
     let mut a = ingress(r, w, h, rs)?;
     let mut b = ingress(d, w, h, ds)?;
+    let k = blur_kernel();
     let mut total = 0.0;
     let mut norm = 0.0;
     for scale in 0..6 {
         if w < 8 || h < 8 {
             break;
         }
-        let (mut na, mut nb): (Vec<Vec<f32>>, Vec<Vec<f32>>) = (Vec::new(), Vec::new());
-        let mut nw = 0;
-        let mut nh = 0;
-        for c in 0..3 {
+        // Per-channel work is independent (maps, pyramid inputs); the f64
+        // `total`/`norm` accumulation stays serial in channel order below,
+        // so parallel collection is bit-identical.
+        let channel = |c: usize| {
             let x = &a[c];
             let y = &b[c];
-            let mx = blur(x, w, h);
-            let my = blur(y, w, h);
+            let mut tmp = Vec::new();
+            let mx = blur_into(x, w, h, &k, &mut tmp);
+            let my = blur_into(y, w, h, &k, &mut tmp);
             let xy: Vec<_> = x.iter().zip(y).map(|(&a, &b)| a * b).collect();
             let xx: Vec<_> = x.iter().map(|&a| a * a).collect();
             let yy: Vec<_> = y.iter().map(|&a| a * a).collect();
-            let exy = blur(&xy, w, h);
-            let exx = blur(&xx, w, h);
-            let eyy = blur(&yy, w, h);
+            let exy = blur_into(&xy, w, h, &k, &mut tmp);
+            let exx = blur_into(&xx, w, h, &k, &mut tmp);
+            let eyy = blur_into(&yy, w, h, &k, &mut tmp);
             let mut map = Vec::with_capacity(w * h);
             for i in 0..w * h {
                 let mu2 = 2.0 * mx[i] * my[i];
@@ -228,26 +324,45 @@ pub(super) fn score(
                 let denom = (musq + 0.0001) * (exx[i] + eyy[i] - musq + 0.0004);
                 map.push(numerator / denom);
             }
-            if scale == 0 {
+            let edge = (scale == 0).then(|| {
                 let edge: Vec<_> = (0..w * h)
                     .map(|i| 1.0 - ((y[i] - my[i]).abs() - (x[i] - mx[i]).abs()).max(0.0))
                     .collect();
+                (average(&edge), grid(&edge, w, h), grid(&map, w, h))
+            });
+            let avg_map = average(&map);
+            let (blocks, _, _) = down(&map, w, h, 4);
+            let worst = blocks.into_iter().fold(f32::INFINITY, f32::min);
+            let (pa, xw, xh) = down(x, w, h, 2);
+            let pb = down(y, w, h, 2).0;
+            (edge, avg_map, worst, pa, pb, xw, xh)
+        };
+        // Below ~32 Kpx a channel finishes in under a millisecond — the
+        // rayon dispatch costs more than it saves, so stay serial.
+        let outs: Vec<_> = if w * h >= (1 << 15) {
+            use rayon::prelude::*;
+            (0..3).into_par_iter().map(channel).collect()
+        } else {
+            (0..3).map(channel).collect()
+        };
+        let (mut na, mut nb): (Vec<Vec<f32>>, Vec<Vec<f32>>) = (Vec::new(), Vec::new());
+        let mut nw = 0;
+        let mut nh = 0;
+        for (c, (edge, avg_map, worst, pa, pb, xw, xh)) in outs.into_iter().enumerate() {
+            if let Some((avg_edge, grid_edge, grid_map)) = edge {
                 let ew = if c == 0 { 1.5 } else { 0.1 };
                 let gw = if c == 0 { 1.0 } else { 0.1 };
-                total += ew * average(&edge) + gw * grid(&edge, w, h) + gw * grid(&map, w, h);
+                total += ew * avg_edge + gw * grid_edge + gw * grid_map;
                 norm += ew + 4.0 * gw;
             }
             let weight = if c == 0 { 1.0 } else { 0.2 } * f64::from(SCALE[c][scale]);
-            total += weight * average(&map);
+            total += weight * avg_map;
             norm += weight;
-            let (blocks, _, _) = down(&map, w, h, 4);
-            let worst = blocks.into_iter().fold(f32::INFINITY, f32::min);
             let weight = if c == 0 { 0.1 } else { 0.005 } * f64::from(WORST[c][scale]);
             total += weight * f64::from(worst);
             norm += weight;
-            let (p, xw, xh) = down(x, w, h, 2);
-            na.push(p);
-            nb.push(down(y, w, h, 2).0);
+            na.push(pa);
+            nb.push(pb);
             nw = xw;
             nh = xh;
         }

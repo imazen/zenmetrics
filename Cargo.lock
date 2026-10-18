@@ -7982,6 +7982,7 @@ name = "zenmetrics-cli"
 version = "0.6.0"
 dependencies = [
  "almost-enough",
+ "archmage 0.9.31-beta.1",
  "arrow-array",
  "arrow-schema",
  "brisque",
@@ -8006,6 +8007,7 @@ dependencies = [
  "iwssim",
  "jxl-encoder",
  "mad-iqa",
+ "magetypes 0.9.31-beta.1",
  "mdctpsnr",
  "msssim",
  "niqe",
