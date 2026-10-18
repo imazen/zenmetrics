@@ -82,7 +82,9 @@ jj's, not zensim's, so it applies here identically.
           -> bookmark set -> push -> verify it landed
 
 **Exit 3** = not a fast-forward; it prints every commit the push would drop and
-does not touch the bookmark. **Exit 7** = the second gate, `hygiene:
+does not touch the bookmark. **Exit 9** = the dashboard guard: a push that
+changes `benchmarks/` or `scripts/dashboard/` must still build the dashboard from the
+outgoing tree (register or classify new benchmark files first). **Exit 7** = the second gate, `hygiene:
 address/identifier check`, which scans the lines the push would ADD for the
 classes that must not enter a public repo (private-range addresses, hardware
 addresses, household framing). Neither gate has a bypass flag — the 2026-09-04

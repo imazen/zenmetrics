@@ -58,6 +58,8 @@
 #                                                7 REFUSED: hygiene check on the outgoing diff
 #                                                8 REFUSED: Cargo.lock / ci/sibling-pins.tsv change that
 #                                                  fails scripts/ci/lock.sh --check
+#                                                9 REFUSED: benchmarks/ change that breaks the
+#                                                  dashboard build (e.g. unclassified upload)
 set -uo pipefail
 
 BOOKMARK=master
@@ -208,6 +210,44 @@ lock_guard() {
   return 0
 }
 
+# ---------------------------------------------------------------- dashboard guard
+# A push that adds or changes files under benchmarks/ (or the dashboard registry)
+# must still build the dashboard: unregistered/unclassified uploads fail the Pages
+# deploy otherwise (three such failures on 2026-10-17). Build the OUTGOING tree.
+dashboard_guard() {
+  local from="$1" to="$2"
+  local changed
+  changed=$(jj diff --ignore-working-copy --from "$from" --to "$to" --name-only 2>/dev/null |
+            grep -E '^(benchmarks/|scripts/dashboard/)' || true)
+  if [ -z "$changed" ]; then
+    echo "safe_push: dashboard guard: no benchmarks/ or dashboard changes — not applicable."
+    return 0
+  fi
+  local here; here="$(cd "$(dirname "$0")" && pwd)"
+  local repo; repo="$(cd "$here/.." && pwd)"
+  local scratch; scratch="$(mktemp -d "${HOME}/tmp/safe_push_dash.XXXXXX")" || return 9
+  if ! python3 "$here/ci/export-snapshot.py" "$repo" "$scratch/tree" "$to" >/dev/null 2>"$scratch/export.err"; then
+    echo "safe_push: dashboard guard CANNOT RUN — tree export failed: $(tail -1 "$scratch/export.err")" >&2
+    rm -rf "$scratch"; return 9
+  fi
+  if [ ! -r "$scratch/tree/scripts/dashboard/build.py" ]; then
+    echo "safe_push: dashboard guard: no scripts/dashboard/build.py in the outgoing tree — not applicable."
+    rm -rf "$scratch"; return 0
+  fi
+  echo "safe_push: dashboard guard: building the dashboard from ${to:0:12}..."
+  if ! (cd "$scratch/tree" && python3 scripts/dashboard/build.py --output "$scratch/out") >"$scratch/build.log" 2>&1; then
+    echo "" >&2
+    echo "safe_push: REFUSED — dashboard guard: the outgoing tree does not build the dashboard:" >&2
+    grep -E 'Error|error' "$scratch/build.log" | tail -3 >&2
+    echo "  Register new benchmark files in benchmarks/dashboard/datasets.toml, or classify them in" >&2
+    echo "  benchmarks/dashboard/classification.tsv (path, ignored, reason). See docs/BENCHMARK_DASHBOARD.md." >&2
+    echo "  Check locally: python3 scripts/dashboard/build.py --output ~/tmp/dash-check" >&2
+    rm -rf "$scratch"; return 9
+  fi
+  echo "safe_push: dashboard guard: dashboard builds."
+  rm -rf "$scratch"; return 0
+}
+
 # ---------------------------------------------------------------- core
 
 jjq() { jj log --no-graph --ignore-working-copy -r "$1" -T "${2:-commit_id}"; }
@@ -281,6 +321,7 @@ do_push() {
   local hygiene_from="${remote_tip:-$(jjq 'root()')}"
   hygiene_check "$hygiene_from" "$target" || return 7
   lock_guard "$hygiene_from" "$target" || return 8
+  dashboard_guard "$hygiene_from" "$target" || return 9
 
   if [ "$dry" = 1 ]; then
     echo "safe_push: --dry-run, stopping before 'bookmark set'."
