@@ -71,8 +71,9 @@ class StudyTests(unittest.TestCase):
         # 104: +arniqa, maniqa, liqe; 106: +musiq, hyperiqa; 107: +paq2piq;
         # 108: +wd (five scalar columns in one metric family);
         # 112: +wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid).
-        # 115: +pieapp, ahiq, dmm.
-        self.assertEqual(len(inv['metrics']), 115)
+        # 115: +pieapp, ahiq, dmm; 117: +topiq-fr, topiq-fr-pipal;
+        # 122: +wadiqam-pyiqa, ahiq-pyiqa, cw-ssim-pyiqa, dmm-pyiqa, pieapp-pyiqa.
+        self.assertEqual(len(inv['metrics']), 122)
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
