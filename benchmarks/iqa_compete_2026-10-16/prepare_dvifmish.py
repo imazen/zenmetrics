@@ -96,7 +96,7 @@ def install(plan_path):
     for phase in plan['phases']:
         bundle = Path(phase['bundle'])
         command = [sys.executable, str(bundle / 'mac_service.py'), 'install', str(bundle), phase['output'],
-            '--run-heavy', str(bundle / 'tools/run-heavy'), '--lock', plan['lock'], '--memory', '12G', '--jobs', '8']
+            '--run-heavy', str(bundle / 'tools/run-heavy'), '--lock', plan['lock'], '--jobs', '8']
         for after in phase['after']:
             command += ['--after', after['bundle'], after['output']]
         subprocess.run(command, check=True)

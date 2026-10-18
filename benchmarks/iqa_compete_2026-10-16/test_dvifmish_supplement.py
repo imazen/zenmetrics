@@ -1,5 +1,9 @@
 """Supplement selection and deployment controls; no benchmark acceptance changes."""
 import json
+import contextlib
+import io
+import mac_service
+from test_bundle import make_bundle
 from pathlib import Path
 import tempfile
 import unittest
@@ -38,11 +42,29 @@ class SupplementTests(unittest.TestCase):
                 commands = [c.args[0] for c in run.call_args_list]
             for command in commands:
                 self.assertEqual(command[command.index('--lock') + 1], str(root / 'shared-heavy.lock'))
-                self.assertEqual(command[command.index('--memory') + 1], '12G')
+                self.assertNotIn('--memory', command)
                 self.assertEqual(command[command.index('--jobs') + 1], '8')
                 self.assertIn(prior['bundle'], command)
             self.assertEqual(commands[1].count('--after'), 2)
             self.assertIn(own['output'], commands[1])
+            # Exercise the actual CLI parser and generated durable command,
+            # rather than trusting a mocked subprocess's accepted arguments.
+            for name in ('original-nn512-gpu', '512-dvifmish', 'larger-dvifmish'):
+                make_bundle(root / name)
+            for command in commands:
+                with patch.object(Path, 'home', return_value=root/'home'), \
+                     patch.object(mac_service.sys, 'platform', 'darwin'), \
+                     patch.object(mac_service.sys, 'argv', command[1:]), \
+                     patch.object(mac_service.subprocess, 'run') as bootstrap, \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(mac_service.main(), 0)
+                    self.assertEqual(bootstrap.call_count, 1)
+                output=Path(command[4])
+                installed=json.loads((output.with_name(output.name+'.service')/'service-command.json').read_bytes())
+                self.assertEqual(installed[installed.index('--memory')+1], '12G')
+                self.assertEqual(installed[installed.index('--jobs')+1], '8')
+                self.assertEqual(installed[installed.index('--lock')+1], str(root/'shared-heavy.lock'))
+
 
     def test_wrong_platform_refuses_before_service_launch(self):
         with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
