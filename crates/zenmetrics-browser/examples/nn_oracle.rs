@@ -6,8 +6,8 @@
 use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
-    Arniqa, DeepDc, Dists, Engine, Lpips, LpipsNet, Maniqa, Musiq, WadiqamFr, WadiqamKind,
-    WadiqamNr, WassersteinDistortion,
+    Arniqa, Ckdn, DeepDc, Dists, Engine, Hyperiqa, Lpips, LpipsNet, Maniqa, Musiq, WadiqamFr,
+    WadiqamKind, WadiqamNr, WassersteinDistortion, WeightsConsent,
 };
 
 /// The fixed pairs, as packed RGB8: the 256×256 scalar fixture and the
@@ -53,10 +53,33 @@ fn main() {
     let dir = std::env::var("ZENMETRICS_NN_MODEL_DIR").expect("ZENMETRICS_NN_MODEL_DIR");
     let wadiqam = std::env::var("ZENMETRICS_NN_WADIQAM_DIR").expect("ZENMETRICS_NN_WADIQAM_DIR");
     let wd = std::env::var("ZENMETRICS_NN_WD_DIR").expect("ZENMETRICS_NN_WD_DIR");
+    let mut consent = WeightsConsent::new();
+    for model in std::env::var("ZENMETRICS_NN_ACCEPT_WEIGHTS")
+        .unwrap_or_default()
+        .split(',')
+    {
+        consent = match model {
+            "ckdn" => consent.accept(Ckdn::WEIGHTS),
+            "hyperiqa" => consent.accept(Hyperiqa::WEIGHTS),
+            _ => consent,
+        };
+    }
     let engine = Engine::Rten;
     let lpips = |net| -> Box<dyn Metric> { Box::new(Lpips::from_dir(&dir, net, engine).unwrap()) };
     let only: Vec<String> = std::env::args().skip(1).collect();
     let models: Vec<(&str, Box<dyn Fn() -> Box<dyn Metric>>)> = vec![
+        (
+            "ckdn",
+            Box::new(|| Box::new(Ckdn::from_dir(&dir, engine, &consent).unwrap())),
+        ),
+        (
+            "hyperiqa",
+            Box::new(|| {
+                Box::new(PairedNoReference::new(
+                    Hyperiqa::from_dir(&dir, engine, &consent).unwrap(),
+                ))
+            }),
+        ),
         ("lpips-alex", Box::new(|| lpips(LpipsNet::Alex))),
         ("lpips-vgg", Box::new(|| lpips(LpipsNet::Vgg))),
         ("lpips-squeeze", Box::new(|| lpips(LpipsNet::Squeeze))),
@@ -136,7 +159,9 @@ fn main() {
     let pairs = pairs();
     let mut out = serde_json::Map::new();
     for (name, make) in &models {
-        if !only.is_empty() && !only.iter().any(|o| o == name) {
+        if (only.is_empty() && matches!(*name, "ckdn" | "hyperiqa"))
+            || (!only.is_empty() && !only.iter().any(|o| o == name))
+        {
             continue;
         }
         let mut metric = make();

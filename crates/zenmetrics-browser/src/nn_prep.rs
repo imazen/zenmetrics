@@ -286,6 +286,60 @@ pub fn prepare(
         .map(|t| t.into_iter().flat_map(|t| t.data).collect())
 }
 
+/// CKDN's asymmetric eval transform (`ckdn.rs::prep`): resize short side
+/// to 329, then centre-crop 288; reference nearest, distorted bicubic AA.
+fn ckdn(img: &za::Rgb8In<'_>, nearest: bool) -> Result<Vec<Tensor>, String> {
+    use crate::preprocess::rgb8_to_planar_255;
+    use crate::resize::{center_crop, resize_bicubic_aa, resize_nearest};
+    let (h, w) = (img.height, img.width);
+    let (nh, nw) = if w <= h {
+        ((329 * h as u64 / w as u64) as usize, 329)
+    } else {
+        (329, (329 * w as u64 / h as u64) as usize)
+    };
+    if nh.max(nw) > 32_768 {
+        return Err("image is too large for CKDN: resized long side exceeds 32768".into());
+    }
+    let planar = rgb8_to_planar_255(img);
+    let resized = if nearest {
+        resize_nearest(&planar, 3, h, w, nh, nw)
+    } else {
+        resize_bicubic_aa(&planar, 3, h, w, nh, nw)
+    };
+    Ok(vec![Tensor {
+        name: "x",
+        shape: vec![1, 3, 288, 288],
+        data: center_crop(&resized, 3, nh, nw, 288),
+    }])
+}
+
+/// HyperIQA's documented deterministic 25-crop protocol (`hyperiqa.rs::prep`).
+/// The graph has fixed batch 25; this does not emulate random crop sampling.
+fn hyperiqa(img: &za::Rgb8In<'_>) -> Vec<Tensor> {
+    let planar = rgb8_to_planar_u8(img);
+    let r = resize_bilinear_pil_u8(&planar, 3, img.height, img.width, 512, 384);
+    let mut data = Vec::with_capacity(25 * 3 * 224 * 224);
+    for y in [0, 72, 144, 216, 288] {
+        for x in [0, 40, 80, 120, 160] {
+            for c in 0..3 {
+                for yy in 0..224 {
+                    for &v in &r[c * 512 * 384 + (y + yy) * 384 + x..][..224] {
+                        data.push(
+                            (v as f32 / 255.0 - [0.485, 0.456, 0.406][c])
+                                / [0.229, 0.224, 0.225][c],
+                        );
+                    }
+                }
+            }
+        }
+    }
+    vec![Tensor {
+        name: "x",
+        shape: vec![25, 3, 224, 224],
+        data,
+    }]
+}
+
 fn prepare_tensors(
     model: &str,
     rgba: &[u8],
@@ -329,6 +383,9 @@ fn prepare_tensors(
             }
             Ok(planar(rgb8_to_planar_01(&img)))
         }
+        "ckdn-reference" => ckdn(&img, true),
+        "ckdn-distorted" => ckdn(&img, false),
+        "hyperiqa" => Ok(hyperiqa(&img)),
         "maniqa" => Ok(maniqa(&img)),
         "arniqa" => arniqa(&img),
         "musiq" => musiq(&img),
