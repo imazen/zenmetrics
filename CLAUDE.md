@@ -1845,3 +1845,15 @@ Probe timeouts now clean up only the process group created by that probe,
 replacing broad process-name cleanup. Header repair retains the original bytes
 in a sibling backup. Failed attempts remain unqualified; scheduler controls
 do not establish metric throughput or complete the missing 4K panel.
+
+### Browser local-weight qualification (2026-10-18)
+
+CKDN and HyperIQA now have conditional `nn-local` CPU-WASM routes. Both
+fixtures pass the original 0.001 JND gate against native RTEN, along with
+wrong-file/hash refusal, per-model consent isolation, repeat identity and
+replacement-worker recovery. The full existing Pages regression passes.
+Selected exports stay in memory and are not hosted or persisted by the viewer.
+The [qualification receipt](web/metrics/local-weights-validation.json) binds
+graph/source hashes and observed controls; it does not qualify WebGPU or all
+input sizes. Run `just browser-local-weights-check` with caller-supplied
+site, model directory, native baseline and report paths.

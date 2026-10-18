@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add conditional CPU-WASM CKDN and HyperIQA scoring from hash-pinned local exports with per-model consent; retain native parity, worker-recovery and no-download controls (`0ed6c528`, `9ff6bb5d`, `ee9eb5dd`).
+
 - Require explicit selection of PieAPP variants in routine benchmark groups; keep metric implementations and correctness gates enabled (`84a66baa`, `45334b0e`).
 - Remove duplicate pair multipliers from seven provisional NN complexity tallies and retain a complete frozen-graph input receipt (`82cf3c17`, `f7172825`).
 
