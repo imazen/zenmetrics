@@ -1184,7 +1184,6 @@ dependencies = [
  "cudarc",
  "cvvdp",
  "dssim-core",
- "dvifmish",
  "fast-ssim2 0.8.2",
  "fast-ssim2 0.9.0",
  "fsim",
@@ -1740,18 +1739,6 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
-
-[[package]]
-name = "dvifmish"
-version = "0.1.0"
-source = "git+https://github.com/imazen/dvifmish?rev=74ec5eeae118ead266c7b66b56e56cb5f3bef372#74ec5eeae118ead266c7b66b56e56cb5f3bef372"
-dependencies = [
- "archmage 0.9.30",
- "libm",
- "magetypes 0.9.30",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "either"

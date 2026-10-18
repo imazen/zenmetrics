@@ -1,5 +1,5 @@
 //! IQA benchmark: resident-input cold construction/call or warmed zenbench rounds.
-#[cfg(feature = "compete-dvifmish")]
+#[cfg(iqa_compete_dvifmish)]
 mod iqa_compete_dvifmish;
 #[allow(unexpected_cfgs)]
 #[path = "../iqa_compete_maps.rs"]
@@ -134,7 +134,7 @@ fn make_call(
     d: &'static Rgb8Image,
     map: bool,
 ) -> Result<Option<maps::Call>, String> {
-    #[cfg(feature = "compete-dvifmish")]
+    #[cfg(iqa_compete_dvifmish)]
     if iqa_compete_dvifmish::supported(name) {
         let threads = config["threads"]
             .as_u64()
@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if a.get(1).is_some_and(|s| s == "inventory") {
         #[allow(unused_mut)]
         let mut inventory = MetricKind::all().iter().map(|k|json!({"metric_name":k.name(),"gpu":k.requires_gpu(),"compiled":k.scoring_compiled_in(),"columns":k.column_names()})).collect::<Vec<_>>();
-        #[cfg(feature = "compete-dvifmish")]
+        #[cfg(iqa_compete_dvifmish)]
         inventory.extend(iqa_compete_dvifmish::inventory());
         println!("{}", serde_json::to_string(&inventory)?);
         return Ok(());
@@ -270,7 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kind = MetricKind::all().iter().find(|k| k.name() == name).copied();
     #[allow(unused_mut)]
     let mut known = kind.is_some();
-    #[cfg(feature = "compete-dvifmish")]
+    #[cfg(iqa_compete_dvifmish)]
     {
         known |= iqa_compete_dvifmish::supported(name);
     }
@@ -318,7 +318,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| vec![name]);
     row["declared_columns"] = json!(columns);
     row["headline_declared_column"] = json!(columns[0]);
-    #[cfg(feature = "compete-dvifmish")]
+    #[cfg(iqa_compete_dvifmish)]
     if iqa_compete_dvifmish::supported(name) {
         row["benchmark_route"] = iqa_compete_dvifmish::inventory()
             .into_iter()

@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(iqa_compete_cached)");
     println!("cargo::rustc-check-cfg=cfg(iqa_compete_ingress)");
+    println!("cargo::rustc-check-cfg=cfg(iqa_compete_dvifmish)");
     if std::env::var_os("CARGO_FEATURE_COMPETE").is_some() {
         // Reuse the exact private CLI ingress in this benchmark without adding
         // a shipped public API or maintaining a second conversion formula.

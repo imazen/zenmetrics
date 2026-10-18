@@ -13,6 +13,10 @@ if [ "$mode" != durable ]; then
   python3 benchmarks/iqa_compete_2026-10-16/patch_model_load.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/model-preload.meta.json" "${args[@]}"
 fi
 python3 benchmarks/iqa_compete_2026-10-16/patch_ort_threads.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/ort-threads.meta.json"
+if [ "${IQA_DVIFMISH:-0}" = 1 ]; then
+  python3 benchmarks/iqa_compete_2026-10-16/patch_dvifmish.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/dvifmish-patch.meta.json"
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg iqa_compete_dvifmish"
+fi
 if [ "$mode" != durable ]; then
   python3 benchmarks/iqa_compete_2026-10-16/patch_luma_maps.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/luma-maps.meta.json"
 fi
