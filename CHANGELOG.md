@@ -63,7 +63,7 @@ Workspace conventions per the global rules:
 ### Added
 
 - New unpublished crate for ports whose only reference code is pyiqa (pyiqa 0.1.16 defaults, the convention behind several AIC2026 columns), under pyiqa's non-commercial terms; skeleton only, models in progress.
-- `WadiqamPyiqa`, `AhiqPyiqa`, `CwSsimPyiqa`, `DmmPyiqa`, `PieAppPyiqa`: pyiqa-convention WaDIQaM (KADID), AHIQ, CW-SSIM, DMM and PieAPP, with cards, export scripts, ladder goldens and JNDs; parity within 1e-3 JND on rten, ort-cpu and ort-cuda for all but DMM (SVD-solver residual, 0.071 JND worst, documented in its card); CLI metrics `wadiqam-pyiqa`, `ahiq-pyiqa`, `cw-ssim-pyiqa`, `dmm-pyiqa`, `pieapp-pyiqa` behind `pyiqa-ports` (commit hash: next entry).
+- `WadiqamPyiqa`, `AhiqPyiqa`, `CwSsimPyiqa`, `DmmPyiqa`, `PieAppPyiqa`: pyiqa-convention WaDIQaM (KADID), AHIQ, CW-SSIM, DMM and PieAPP, with cards, export scripts, ladder goldens and JNDs; parity within 1e-3 JND on rten, ort-cpu and ort-cuda for all but DMM (SVD-solver residual, 0.071 JND worst, documented in its card); CLI metrics `wadiqam-pyiqa`, `ahiq-pyiqa`, `cw-ssim-pyiqa`, `dmm-pyiqa`, `pieapp-pyiqa` behind `pyiqa-ports` (`da723cac`).
 
 ### QUEUED BREAKING CHANGES
 
