@@ -207,3 +207,33 @@ preserves the original NN controller and dependency graph, while preventing
 its repeated pre-lock hashes from interleaving between control cells. The
 original gate still rejects any foreign activity that remains during rounds.
 Use a new output directory and retain every earlier flagged control.
+
+## Captured Mac owner undercount and private correction
+
+A later protected internal-only diagnostic reproduces a distinct accounting
+fault without an external observer. Owner PID 35262 advances cumulative CPU
+1490→2353 ms over 202.086 ms (427.045911%), but sysinfo 0.36.1 reports
+10.355022%. Global 0.4857978185 then leaves false residual 0.4771686331,
+matching flagged warm rounds exactly. The next interval advances 889 CPU ms
+across 208.526 ms while reporting 10.665134%, again matching the false residual
+0.4883450445. These observations do not erase the separately measured genuine
+Spotlight and controller contention.
+
+Zenbench's private correction is committed at `3b1d0f71`. It computes Mac
+process percentages from cumulative CPU milliseconds over monotonic intervals,
+binds history to PID/start time, subtracts zero for missing/reset/reused owner
+history and retains unknown foreign percentages plus global load. Counter
+rates also preserve foreign heavy-process detection. Gates, Linux arithmetic
+and public API are unchanged. All 34 platform controls, strict clippy and ARM
+macOS cross-check pass; corrected native IQA qualification is still separate.
+
+`IQA_MAC_CPU_COUNTERS=1 IQA_DVIFMISH=1` enables this correction only in the
+owned benchmark snapshot. `patch_mac_cpu_counters.py` requires the exact frozen
+`ac675d3` platform hash and copies the private counter module from zenbench
+`3b1d0f71`; it does not import unrelated later zenbench changes. The source
+module here is an exact copy from that commit. The overlay retains original /
+adapted platform, module, snapshot manifest and lock hashes. Build receipts
+validate the full committed-source → private dvifmish dependency → counter
+correction hash chain. New binary hashes require new build receipts, frozen
+bundles, controls and supplemental service plans. Old failures and original
+manifests cannot be relabeled or overwritten.

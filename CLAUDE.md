@@ -1912,3 +1912,16 @@ measurement clocks. The OS-backed control fails on the historical controller.
 Existing frozen controllers/results remain unchanged; startup manifest checks
 are separate. Matched raw observations also identify genuine Spotlight work
 in a diagnostic run. See [the supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).
+
+### Known Bugs: Mac IQA owner CPU percentage undercount (2026-10-18)
+
+Protected internal-only observations capture sysinfo 0.36.1 reporting 10.355%
+while the same owner's cumulative CPU advances 863 ms across 202.086 ms.
+The false residual exactly matches warm-round flags. Zenbench `3b1d0f71`
+provides a private cumulative-counter correction with PID/start-time identity,
+conservative missing owner history and retained foreign-work controls. The
+benchmark snapshot overlay applies only that correction to the frozen
+`ac675d3` source. It changes no resource gates, public API or metric arithmetic.
+Corrected worker hashes and new frozen controls must qualify separately;
+old failures remain preserved. Details belong in the
+[dvifmish supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).

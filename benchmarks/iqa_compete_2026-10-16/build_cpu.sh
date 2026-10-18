@@ -20,6 +20,9 @@ fi
 if [ "$mode" != durable ]; then
   python3 benchmarks/iqa_compete_2026-10-16/patch_luma_maps.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/luma-maps.meta.json"
 fi
+if [ "${IQA_MAC_CPU_COUNTERS:-0}" = 1 ]; then
+  python3 benchmarks/iqa_compete_2026-10-16/patch_mac_cpu_counters.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/mac-cpu-counters.meta.json"
+fi
 cd "$LOCK_SNAP_DIR/work/zenmetrics"
 if [ "$mode" != durable ]; then export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg iqa_compete_ingress"; fi
 if [ "$mode" = cached ]; then RUSTFLAGS+=" --cfg iqa_compete_cached"; fi

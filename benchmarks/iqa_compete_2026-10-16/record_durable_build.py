@@ -8,6 +8,19 @@ import subprocess
 from prepare_durable import sha
 
 
+
+def verify_source_file(name, committed, path, patches):
+    expected_digest = __import__('hashlib').sha256(committed).hexdigest()
+    for patch in patches:
+        entry = (patch or {}).get('files', {}).get(name)
+        if entry:
+            if entry.get('original_sha256') != expected_digest:
+                raise ValueError('broken benchmark patch provenance chain: ' + name)
+            expected_digest = entry['adapted_sha256']
+    if expected_digest != sha(path):
+        raise ValueError('compiled source receipt differs from committed source: ' + name)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('binary', type=Path)
@@ -23,21 +36,19 @@ def main():
     binary = a.binary.resolve()
     source_commit = subprocess.check_output(['git', 'rev-parse', a.source_commit], text=True).strip()
     inventory = subprocess.check_output([str(binary), 'inventory'])
-    sources = ['Cargo.lock', 'benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml',
+    sources = ['Cargo.toml', 'Cargo.lock', 'benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml',
         'benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs',
         'benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_dvifmish/mod.rs']
     tree = a.snapshot / 'work/zenmetrics'
     dependency_patch = a.snapshot / 'dvifmish-patch.meta.json'
     overlay = json.loads(dependency_patch.read_bytes()) if dependency_patch.exists() else None
+    counters_path = a.snapshot / 'mac-cpu-counters.meta.json'
+    counters = json.loads(counters_path.read_bytes()) if counters_path.exists() else None
     # The snapshot may have been exported again for tests. Source must still
     # agree with the recorded commit; benchmark-only engine patches have receipts.
     for name in sources:
         committed = subprocess.check_output(['git', 'show', source_commit + ':' + name])
-        if committed != (tree / name).read_bytes():
-            expected = (overlay or {}).get('files', {}).get(name, {})
-            digest = __import__('hashlib').sha256(committed).hexdigest()
-            if expected.get('original_sha256') != digest or expected.get('adapted_sha256') != sha(tree / name):
-                raise ValueError('compiled source receipt differs from committed source: ' + name)
+        verify_source_file(name, committed, tree / name, (overlay, counters))
     dependency_command = ['otool', '-L', str(binary)] if platform.system() == 'Darwin' else ['ldd', str(binary)]
     value = dict(source_commit=source_commit, binary_sha256=sha(binary),
         inventory_sha256=__import__('hashlib').sha256(inventory).hexdigest(), features=a.features,
@@ -52,6 +63,8 @@ def main():
         value['benchmark_patch'] = json.loads(patch.read_bytes())
     if overlay:
         value['benchmark_dependency_patch'] = overlay
+    if counters:
+        value['zenbench_private_correction'] = counters
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(value, indent=2) + '\n')
     a.output.with_name(a.output.stem + '.inventory.json').write_bytes(inventory)
