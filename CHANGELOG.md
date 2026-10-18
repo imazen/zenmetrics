@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## fsim
+
+- Propose strided luma-only `Fsim::score_luma8` with the existing fixed-factor policy; automatic scores retain the existing luma route (API review based on `0aea44d1`).
+
 ### Added
 
 - Connect the AIC2026 entrance, explorer, evidence, downloads and Gigapixels; show the four explicit routes' crop qualifications and exact SDR defaults without borrowing their predecessors' cost tallies (`64391e26` base).

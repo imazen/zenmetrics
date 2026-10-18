@@ -15,7 +15,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::fft::{Complex, Plan, fft2_planned, ifft2_planned};
-use crate::{I_COEF, Q_COEF, Y_COEF, plane_from_rgb8};
+use crate::{Downscale, I_COEF, Q_COEF, Y_COEF, plane_from_rgb8};
 
 // ------------------------------------------------------------------
 // Constants (verbatim from FR_FSIMc.m / phasecong2).
@@ -1311,7 +1311,19 @@ pub(crate) fn fsim_luma8_planes(
     stride: usize,
     map: Option<&mut [f32]>,
 ) -> (f64, usize, usize) {
-    let f = downsample_factor(w, h);
+    fsim_luma8_planes_with_downscale(r, d, w, h, stride, map, Downscale::Auto)
+}
+
+pub(crate) fn fsim_luma8_planes_with_downscale(
+    r: &[u8],
+    d: &[u8],
+    w: usize,
+    h: usize,
+    stride: usize,
+    map: Option<&mut [f32]>,
+    downscale: Downscale,
+) -> (f64, usize, usize) {
+    let f = downscale.factor(w, h);
     let (w2, h2, [yr]) = decimate_rgb8(r, w, h, stride, f, [Y_COEF]);
     let (_, _, [yd]) = decimate_rgb8(d, w, h, stride, f, [Y_COEF]);
     debug_assert!(map.as_deref().is_none_or(|m| m.len() == w2 * h2));
