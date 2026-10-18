@@ -141,3 +141,12 @@ and 40 exhausted cells, covering 18/23 successful models. The five refused
 models each account for eight cells with two attempts. The MUSIQ diagnostic
 independently reproduces its error, rather than treating the earlier four-model
 audit as evidence for a fifth model. Original attempt metadata remains intact.
+
+An independent fetch of the final production
+`~/benchmark-results/iqa-coverage-512-nn-metal/report.json` on mac confirms
+`complete=true`, `qualified=false`, 144 `ok` and 40 `failed` cells. Each of
+the five named models has exactly eight failed cells and two recorded attempts
+per cell. Coordinator copy: `metal-final-report.json` in the audit artifact
+root, SHA256 `ae22f07daaa34ff10627cca129770661fa82121c85056a77e81f82a1eba677a9`.
+Completion here means the bounded queue finished; it does not qualify the
+forty failed cells or the whole Metal panel.
