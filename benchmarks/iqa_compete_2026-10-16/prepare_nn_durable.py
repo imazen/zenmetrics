@@ -11,6 +11,7 @@ import shutil
 from mac_service import verify
 from prepare_durable import HERE, sha
 from run import LEARNED
+from selection import select_metrics
 
 NEURAL = LEARNED | {'ahiq', 'dmm'}
 
@@ -58,7 +59,7 @@ def main():
         raise ValueError('build receipt differs from binary/inventory')
     inventory = json.loads(a.inventory.read_bytes())
     eligible = {r['metric_name'] for r in inventory if r['compiled'] and r['metric_name'] in NEURAL}
-    metrics = sorted(eligible) if a.metrics == 'all' else a.metrics.split(',')
+    metrics = sorted(select_metrics(a.metrics, eligible))
     if not metrics or set(metrics) - eligible:
         raise ValueError('requested NN routes are not compiled')
     sources = json.loads(a.models.read_bytes())
@@ -118,6 +119,7 @@ def main():
                               worker_environment=worker_env, asset_paths=per_model[metric] + runtime_assets))
     manifest.update(binary_sha256=sha(a.binary), input_sha256=inputs, cells=cells)
     manifest['metadata'].update(metrics=metrics, engine=a.engine, features=build['features'],
+                                omitted_slow_metrics=sorted(eligible - set(metrics)) if a.metrics == 'all' else [],
                                 runner_sha256={name: sha(a.output / name) for name in ('durable.py', 'mac_service.py', 'admission_recovery.py')},
                                 source_commit=build['source_commit'], build_receipt_sha256=sha(a.build),
                                 maps='NN routes have no qualified native-map adapter; scalar-only schedule',
