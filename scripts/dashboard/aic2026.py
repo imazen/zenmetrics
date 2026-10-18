@@ -118,6 +118,10 @@ def reproduction_rows(cards, commit):
             if name in ('TOPIQ', 'TOPIQ-PIPAL', 'AHIQ', 'PieAPP', 'WaDIQaM', 'CW-SSIM'):
                 impl = mapping[name]; status = 'implemented; native gate passes'; note += ' Public non-commercial pyiqa convention; see model card and current reproduction status.'
             if name.startswith('proposal-IDFIQA') or name == 'MSSWD': status = 'private; aggregate match'
+            if status=='missing': status='MISSING: implementation or comparison'
+            if where=='neither' and status=='unverified': status='MISSING: published values'
+            if name.startswith('HDR_VDP_2'): impl, status, note = 'hdrvdp', 'unreproduced', 'Identified res.Q, BT.709, 200*sRGB_EOTF nits, 37.84 ppd; median residual 0.028 Q. Explicit ingress/output still needs native qualification; see configuration-search receipt.'
+            if name.startswith('HDR_VDP_3'): impl, status, note = 'hdrvdp3', 'configuration identified', 'res.Q (not Q_JOD), XYZ oled, 200*sRGB_EOTF nits, 37.84 ppd; median 0.00136/max 0.0129 site-JND in reference search; native route qualification remains separate.'
             if name == 'proposal-Butteraugli':
                 impl = 'butteraugli_pnorm3 + identified map'; status = 'configuration identified'
                 med, mx, jnd = '', '', '5.1e-5';note = 'max(0.00459792*N, 2.0938201*N - 1.1033102); median 3.2e-8 site-JND over all 9618 rows; constants provenance unknown.'
@@ -196,7 +200,12 @@ def build(output, cards):
     cx_body+='<h2>Counted operations</h2>'+table(['Metric','flops / original pixel at 1024²','Halo pixels','Counter','Counted source commit'],[[e(m),fmt(r['flops_per_px']),fmt(r['halo_px']),e(t['counter']),e(t['source_commit'])] for m,(t,r) in sorted(tallies.items())])
     missing_tallies=sorted(set(by_name)-set(tallies))
     cx_body+='<p>Not counted: '+e(', '.join(missing_tallies) or 'none')+'. The count is an operation inventory, not elapsed runtime.</p><h2>Measured runtime</h2>'
-    cx_body+=table(['Metric','Shape','Threads','CPU ms/call','Wall ms/call','Repeats','Source'],[[e(r['metric']),e(r['shape']),r['threads'],fmt(r['cpu_ms']),fmt(r['wall_ms']),r['n'],source_link(r['source'],commit,Path(r['source']).name)] for r in measured])
+    timing_rows=[[e(r['metric']),e(r['shape']),r['threads'],fmt(r['cpu_ms']),fmt(r['wall_ms']),r['n'],source_link(r['source'],commit,Path(r['source']).name)] for r in measured]
+    for name in ('pieapp','pieapp-pyiqa'):
+        for shape in ('1024x1024','3840x2160'):
+            if not any(r['metric']==name and r['shape']==shape and r['threads']==1 for r in measured):
+                timing_rows.append([name,shape,1,'skipped by owner','skipped by owner','not measured','Owner direction, 2026-10-18'])
+    cx_body+=table(['Metric','Shape','Threads','CPU ms/call','Wall ms/call','Repeats','Source'],timing_rows)
     for shape in ['1024x1024','3840x2160']:
         for threads in [1,8]:
             present={r['metric'] for r in measured if r['shape']==shape and r['threads']==threads};missing=sorted(set(by_name)-present)

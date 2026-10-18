@@ -1,5 +1,4 @@
 document	table	row	column	value
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	note	the residual vs the site column is not ingress: the same probe matches the older dataset VMAF to med 0.0066 / max 0.076
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	name	VMAF-neg v0 / VMAF-v0.6.1neg
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	in CSV?	site
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	zenmetrics metric	vmaf-neg (differs); crate + studio-601 Y close
@@ -110,13 +109,13 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	13	status	unverified
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	13	note	excluded; placeholder map, no values; presumably a fitted combination of the 4 scales
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	name	CAMBI
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	in CSV?	site+dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	zenmetrics metric	vmaf::cambi_v1_from_luma in the crate; not a CLI metric
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	note	CSV has values; not measured here (no CLI or example emits it)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	zenmetrics metric	cambi
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	median |Δ|	0.000131816381678
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	max |Δ|	0.17806128161
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	max |Δ| in JND	0.0648476588305
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	status	implemented; ingress unmatched
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	14	note	aic_more_2026-10-15/README.md; configuration search identifies swscale luma, not default CLI ingress
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	0	name	LPIPS-alex
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	0	in CSV?	site+dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	0	zenmetrics metric	lpips-alex (nn)
@@ -173,13 +172,13 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	5	status	reproduced
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	5	note	rten, one process per pair. The earlier ort-cuda full-res rows in [local path] were scored with the pre-normalisation export and are off by up to 0.10: discard them
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	name	CKDN (excluded)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	in CSV?	dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	zenmetrics metric	missing on master (ckdn in the zenmetrics--nnport lane, unlanded)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	note	dataset-only column; not measured here
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	zenmetrics metric	ckdn
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	median |Δ|	4.0e-5
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	max |Δ|	1.4e-4
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	max |Δ| in JND	0.026
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	status	reproduced with residual
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	6	note	AIC2026_REPRODUCTION_STATUS.md; pyiqa has the same resize residual
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	7	name	WD_s1
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	7	in CSV?	site+dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	7	zenmetrics metric	missing
@@ -290,13 +289,13 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	18	status	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	18	note	queued in PYIQA_PORT_PLAN.md
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	name	DreamSim
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	in CSV?	site+dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	zenmetrics metric	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	zenmetrics metric	dreamsim
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	n	61
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	max |Δ|	6.1e-7
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	note	queued in PYIQA_PORT_PLAN.md
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	19	note	AIC2026_METRICS_AND_FITTING.md; Pillow bicubic 224 square
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	20	name	MSSWD
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	20	in CSV?	site+dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	20	zenmetrics metric	private port
@@ -400,3 +399,4 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	name	proposal-DVIFM-2d-v0.2 (exclu
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	zenmetrics metric	missing in zenmetrics; dvifmish port-2d-v0.2 has the same name
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	n	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	median |Δ|	

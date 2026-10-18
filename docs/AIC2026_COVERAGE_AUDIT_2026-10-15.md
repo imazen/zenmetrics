@@ -42,20 +42,18 @@ Differs: CLI `vmaf`, `vmaf-neg`, `vmaf-v1` (BT.709 luma ingress, `--luma-ingress
 8.7 points), proposal-Butteraugli (affine of our pnorm-3 only), HDR_VDP_2 / HDR_VDP_3 (docs; not
 re-measured: CLI needs HDR sources).
 
-### Missing, ranked by how many site/screenshot entries one piece of work would cover
+### Historical work queue (2026-10-15; current rows updated 2026-10-18)
 
-1. **Fixed downscale factor + unrounded-input options** (25 variant-needed rows: 22 site names + 9 screenshot-only names; plus the missing SSIM-pyiqa base):
+1. **Fixed downscale factor + unrounded-input options** (implemented; comparison values still missing):
    FSIM/FSIMc/VSI `-k2/-k3/-k4/-nodownscale` (12), SSIM-pyiqa-f32-k2…k6 and SSIMc-pyiqa-f32-k2…k6 (10),
    pyiqa-VSI-f32, pyiqa-SSIM-f32, pyiqa-SSIMc-f32, pyiqa-MS-SSIM-f32(-k2…k6). Implemented as fixed-factor CLI variants; published values unavailable. Historical design required an override in
    `fsim`/`vsi` (both compute `max(1, round(min/256))` internally) and a luma SSIM without downscale
-   (SSIM-pyiqa, also missing as a base metric).
+   (SSIM-pyiqa is now implemented as a base metric).
 2. **DVIFM** (13 entries: 9 site names + 4 screenshot aliases): proposal-DVIFM, -0.2, -0.2-use_chroma,
    -2d, -min, -min-v0.2, -2d-v0.2, -lap-v0.2, -lap-v0.3. dvifmish (dev `~/work/dvifmish`, publish=false)
-   already ports the author's v0.2/v0.3 builds under exactly these preset names; not wired into
-   zenmetrics and not compared to these columns here.
+   already ports the author's v0.2/v0.3 builds; the later 61-pair comparison finds no published-column match. See AIC2026_REPRODUCTION_STATUS.md.
 3. **HaarXYB / HaarY / HaarYCoCg -deltaL1248** (11, all excluded, no values): unidentified.
-4. **Learned models** (10, one each): TOPIQ, TOPIQ-PIPAL, AHIQ, PieAPP, WaDIQaM, DMM, A-FINE, DreamSim,
-   MSSWD, CKDN (CKDN is now implemented).
+4. **Learned models** are implemented: TOPIQ/TOPIQ-PIPAL and the pyiqa-convention ports are public under non-commercial terms; MSSWD and IDFIQA are private aggregate-only ports. DMM still fails its native 0.001 JND gate.
 5. **WD_s1…s5** (5): Wasserstein Distortion on VGG-16 features (another lane is probing it).
 6. **Classic lane, unlanded** (5): PSNR-YCbCr611, CIEDE2000, SSIMc exact (commits 94574b8b, ac757d73,
    0a7fa500 exist in the object store, on no branch) plus PSNR-Cb/PSNR-Cr. My numpy probes reproduce
@@ -107,16 +105,16 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 |---|---|---|---|---|---|---|---|---|
 | PSNR | site+dataset | `psnr` | 61 | 9.09e-05 | 0.00128 | 5.48e-05 | reproduced | RGB mean-MSE PSNR |
 | PSNR-Y / pyiqa-PSNR-Y | site+dataset | `psnr-y-studio601` | 61 | 0.000313 | 0.00328 | 0.000576 | reproduced | studio-swing BT.601 Y, u8-rounded; `psnr-y` (BT.709) and `psnr-y601` (full-range) are 1.3 dB off |
-| PSNR-YCbCr611 | site+dataset | missing on master (lane commit 94574b8b `psnr-ycbcr611`, unlanded) | 61 | 0.000311 | 0.0035 | 0.000532 | missing | numpy probe reproduces: (6·MSE_Y+MSE_Cb+MSE_Cr)/8 on rounded studio-601 YCbCr, then dB (PSNR-average form is 0.65 dB off) |
-| PSNR-Cb (excluded) | dataset | missing (no CLI chroma PSNR) | 61 | 0.00192 | 0.0169 | 0.00197 | missing | numpy probe: rounded studio-601 Cb at full resolution reproduces |
-| PSNR-Cr (excluded) | dataset | missing (no CLI chroma PSNR) | 61 | 0.00211 | 0.0573 | 0.00882 | missing | as PSNR-Cb; one pair 0.057 dB off |
+| PSNR-YCbCr611 | site+dataset | psnr-ycbcr611 | 61 | 3.1e-4 | 3.5e-3 |  | close; residual | AIC2026_METRICS_AND_FITTING.md; 6:1:1 composite |
+| PSNR-Cb (excluded) | dataset | psnr-cb | 61 | 1.9e-3 | 1.7e-2 | 2.0e-3 | close; chroma residual | AIC2026_METRICS_AND_FITTING.md; full-resolution studio-601 chroma |
+| PSNR-Cr (excluded) | dataset | psnr-cr | 61 | 2.1e-3 | 5.7e-2 | 8.8e-3 | close; chroma residual | AIC2026_METRICS_AND_FITTING.md; full-resolution studio-601 chroma |
 | PSNR-HVS-vmaf (= dataset PSNR-HVS) | site | `psnrhvs-daala` (`psnrhvs_daala`) | 61 | 0.000871 | 0.0154 | 0.00449 | reproduced | dataset `PSNR-HVS` is the same column (identical values) |
 | PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y) | site | `psnrhvs-daala` (`psnrhvs_daala_y`) | 61 | 0.00121 | 0.0261 | 0.00659 | reproduced |  |
 | PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb) | dataset | `psnrhvs-daala` (`psnrhvs_daala_cb`) | 61 | 0.00264 | 0.0382 |  | reproduced | max 0.038 dB of a 27 dB range |
 | PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr) | dataset | `psnrhvs-daala` (`psnrhvs_daala_cr`) | 61 | 0.00306 | 0.0691 |  | reproduced | max 0.069 dB of a 24 dB range |
 | SSIM | site+dataset | `ssim-libvmaf` | 61 | 1e-06 | 3.2e-05 | 0.00618 | reproduced | libvmaf float_ssim on studio-601 Y |
 | MS-SSIM | site+dataset | `msssim-libvmaf` | 61 | 1e-06 | 0.000141 | 0.0119 | reproduced | libvmaf float_ms_ssim; worst pair 0.012 JND |
-| SSIM-pyiqa / pyiqa-SSIM | site+dataset | missing (`ssim` is a different variant: max 0.074) | 61 | 3.31e-07 | 3.86e-06 | 5.63e-05 | missing | numpy probe reproduces (3.9e-6 max): SSIM on round(0.299R+0.587G+0.114B), 11×11 σ1.5 Gaussian, valid region, cs≥0, no downscale |
+| SSIM-pyiqa / pyiqa-SSIM | site+dataset | ssim-pyiqa | 61 |  | 3.8e-6 |  | reproduced | AIC2026_METRICS_AND_FITTING.md; rounded BT.601 luma, factor one |
 | SSIMc / pyiqa-SSIMc | site+dataset | `ssim` (close); exact form not in CLI (lane commit 0a7fa500 `ssimc`, unlanded) | 61 | 0.0002 | 0.00542 | 0.0681 | close | `ssim` med 2e-4, max 5.4e-3 (0.07 JND). numpy probe (per-RGB SSIM, valid region, cs≥0) reproduces to 4.4e-7 |
 | MS-SSIM-pyiqa / pyiqa-MS-SSIM | site+dataset | `msssim` (house luma) | 61 | 0.000116 | 0.00497 | 0.398 | close | med 1.2e-4; worst S53_JAIB_07 (odd-size source) 5e-3 = 0.40 JND: odd-dimension pooling differs. `--luma-ingress yuv601-studio` is worse (med 1.7e-3) |
 | IW-SSIM / IW-SSIM-piq | site+dataset | `iwssim-piq` | 61 | 6.92e-06 | 0.000666 | 0.132 | close | med 6.9e-6; one near-lossless pair (S70_VVC_03) 6.7e-4 = 0.13 JND; next worst 2.7e-4 |
@@ -129,16 +127,16 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | FSIMc / pyiqa-FSIMc | site+dataset | `fsim` (`fsimc_*`) | 61 | 2.96e-05 | 0.00645 | 0.925 | close | same two JPG_07 pairs (0.92 JND) |
 | VSI / pyiqa-VSI | site+dataset | `vsi` | 61 | 1.81e-05 | 0.00185 | 0.654 | close | med 1.8e-5; S15_PNG_15 1.9e-3 = 0.65 JND; next worst 1.4e-4 |
 | DSSIM | site+dataset | `dssim` | 61 | 2.3e-07 | 2.33e-06 | 0.000691 | reproduced |  |
-| CIEDE2000 | site+dataset | missing on master (lane commit ac757d73 `ciede2000`, unlanded) | 61 | 3.02e-05 | 0.000296 | 0.000157 | missing | numpy probe reproduces (max 3e-4): sRGB→linear→XYZ D65→Lab, mean ΔE00, kL=kC=kH=1 |
+| CIEDE2000 | site+dataset | ciede2000 | 61 | 3.0e-5 | 3.0e-4 |  | reproduced | AIC2026_METRICS_AND_FITTING.md; sRGB to Lab D65, mean deltaE00 |
 | mDCT-PSNR / mDCTpsnr | site+dataset | `mdctpsnr` | 61 | 1.9e-06 | 1.17e-05 | 5.86e-07 | reproduced |  |
 | CVVDP | site+dataset | `cvvdp --display-model standard_fhd` | 61 | 0.000108 | 0.000887 | 0.00229 | reproduced | max 8.9e-4 JOD = 0.002 JND |
 | Butteraugli-max | site | `butteraugli` (`butteraugli_max`) | 61 | 4e-06 | 5.1e-05 | 9.96e-06 | reproduced | libjxl butteraugli, max-norm |
 | Butteraugli-3norm | site | `butteraugli` (`butteraugli_pnorm3`) | 61 | 2e-06 | 9.6e-05 | 7.41e-05 | reproduced |  |
 | Butteraugli-original | site | missing | 61 | 1.09 | 11.7 | 2.03 | missing | vs our libjxl max: med |Δ| 1.09, Pearson 0.87: a different implementation (presumably the pre-libjxl google/butteraugli tool); not identified further |
-| SSIMULACRA1 | site | missing |  |  |  |  | missing | site values only (0.004–0.12, lower better); no implementation anywhere in the workspace |
-| WS-HV | site | missing |  |  |  |  | missing | unidentified (0.45–0.98, higher better) |
+| SSIMULACRA1 | site | ssimulacra1 | 61 | 2.284971353e-7 | 1.86120462599e-5 | 0.000537036728972 | close; residual | aic_more_2026-10-15/README.md and aic_review_2026-10-15/README.md; printed upstream precision retained |
+| WS-HV | site | ws-hv | 61 | 0.000894208359779 | 0.0207583157283 | 0.139318362305 | close; residual | aic_more_2026-10-15/README.md; RGB Haar similarity, exact convention unresolved |
 | CW-SSIM | site+dataset | missing |  |  |  |  | missing | complex steerable pyramid; conventions not pinned (see AIC2026_COLUMN_IDENTIFICATION) |
-| FLIP | site+dataset | missing |  |  |  |  | missing | NVIDIA FLIP (BSD-3 reference exists) |
+| FLIP | site+dataset | flip-v17 | 61 | 0 | 0 | 0 | reproduced | AIC2026_METRICS_AND_FITTING.md; exact flip-evaluator 1.7 f32 sum |
 | MAD (excluded) | neither | `mad` |  |  |  |  | unverified | excluded on the site; no published values to compare. Site map has only a, b |
 | HDR_VDP_2 / HDR-VDP-2 Q | site+dataset | `hdrvdp` (HDR-nits input only) |  |  |  |  | differs | not re-measured here (CLI needs `--hdr` sources). Docs: published column misses our v2.2.2 at ppd 30 and 64 by up to 5.7 → unknown display config |
 | HDR_VDP_3 / HDR-VDP-3 Q | site+dataset | `hdrvdp3` (HDR-nits input only) |  |  |  |  | differs | not re-measured here. Docs: ours = MATLAB 3.0.7 bit-for-bit, but published reads 0.36–0.92 JOD lower → different run config |
@@ -174,7 +172,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | VIF-vmaf-scale3 | site | vmaf crate feature, not a CLI column | 61 | 0.000154 | 0.00309 | 0.0677 | close | aic_probe; site scale columns come from the same recomputation as `VMAF v0` (their sum ≠ dataset VIF_vmaf by up to 0.013) |
 | VIF_vmaf (dataset) | dataset | vmaf crate feature (Σ of 4 scales) | 61 | 7.2e-05 | 0.00386 | 0.0182 | reproduced | dataset VIF_vmaf = sum of the 4 site scale columns (max diff 0.013) |
 | VIF-vmaf-fitted (excluded) | neither | missing |  |  |  |  | unverified | excluded; placeholder map, no values; presumably a fitted combination of the 4 scales |
-| CAMBI | site+dataset | `vmaf::cambi_v1_from_luma` in the crate; not a CLI metric |  |  |  |  | missing | CSV has values; not measured here (no CLI or example emits it) |
+| CAMBI | site+dataset | cambi | 61 | 0.000131816381678 | 0.17806128161 | 0.0648476588305 | implemented; ingress unmatched | aic_more_2026-10-15/README.md; configuration search identifies swscale luma, not default CLI ingress |
 
 ## Learned (deep)
 
@@ -186,7 +184,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | DISTS | site+dataset | `dists` (nn) | 61 | 2.55e-06 | 1.65e-05 | 0.00033 | reproduced | rten CPU, full res |
 | STLPIPS-VGG | site+dataset | `stlpips-vgg` (nn) | 61 | 3.4e-06 | 8.18e-05 | 0.000457 | reproduced | 10 pairs ort-cuda + 51 pairs rten, one process per pair (a single 61-pair rten batch hit the 16 GB cap) |
 | DeepDC | site+dataset | `deepdc` (nn) | 61 | 1.86e-06 | 3.02e-05 | 0.000366 | reproduced | rten, one process per pair. The earlier ort-cuda full-res rows in ~/tmp/nn-phase0/aic were scored with the pre-normalisation export and are off by up to 0.10: discard them |
-| CKDN (excluded) | dataset | missing on master (`ckdn` in the zenmetrics--nnport lane, unlanded) |  |  |  |  | missing | dataset-only column; not measured here |
+| CKDN (excluded) | dataset | ckdn | 61 | 4.0e-5 | 1.4e-4 | 0.026 | reproduced with residual | AIC2026_REPRODUCTION_STATUS.md; pyiqa has the same resize residual |
 | WD_s1 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). |
 | WD_s2 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). |
 | WD_s3 | site+dataset | missing |  |  |  |  | missing | Wasserstein Distortion on VGG-16 features (another lane is probing it). |
@@ -199,7 +197,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | WaDIQaM | site+dataset | wadiqam-pyiqa | 61 | 1.7e-6 | 1.2e-5 |  | implemented | native 1e-3 JND pass; see AIC2026_REPRODUCTION_STATUS.md |
 | DMM | site+dataset | dmm-pyiqa | 61 |  |  |  | implemented | native gate FAILS: worst 0.071 JND, SVD; see AIC2026_REPRODUCTION_STATUS.md |
 | A-FINE | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
-| DreamSim | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
+| DreamSim | site+dataset | dreamsim | 61 |  | 6.1e-7 |  | reproduced | AIC2026_METRICS_AND_FITTING.md; Pillow bicubic 224 square |
 | MSSWD | site+dataset | private port | 61 | 4.1e-6 | 2.4e-4 |  | implemented | aggregates only; Spearman 0.9999; see AIC2026_REPRODUCTION_STATUS.md |
 | AIMOS | site+dataset | missing |  |  |  |  | missing | unidentified |
 
