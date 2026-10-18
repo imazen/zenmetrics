@@ -293,3 +293,44 @@ on mac, with coordinator copy
 `/home/lilith/benchmark-artifacts/iqa-dvifmish-mac-20261018/corrected-production-512-report.json`.
 SHA256: `06c5f1635c5834eb91b65fcb4b97ccc4b33d61556a5d22afa2bbc1dd1c242725`.
 The larger supplement retains its original dependencies; no service changed.
+
+### Operational priority update — 2026-10-18
+
+Owner direction now makes all dvifmish supplements eligible alongside the
+non-NN work. This supersedes the earlier larger-supplement final-NN wait;
+it does not change the original NN sequence, frozen workloads or shared locks.
+
+On i265, the original supplemental service `iqa-durable-4018449423e7.service`
+was verified waiting only for larger NN CUDA, with no child and no larger
+measurement output. It was stopped cleanly (inactive, MainPID 0). The original
+plan and frozen 576-cell manifest remain byte-identical. Fresh plan
+`~/benchmark-bundles/iqa-i265-20261018-dvifmish/larger-priority-sequence.json`
+installs `iqa-durable-05438c23f86b.service`, writing fresh
+`~/benchmark-results/iqa-i265-20261018-dvifmish/larger-dvifmish-priority`.
+Its sole predecessor is its completed, qualified own 512 stage. Actual
+`queue-wait.json` records no pending predecessors and the service launches the
+larger controller with the same shared `i265-heavy.lock`, 12G, 8 jobs,
+1100-second attempts and two-attempt limit. Frozen P-core placement is unchanged.
+Resolve current status with `systemctl --user status iqa-durable-05438c23f86b.service`
+and the fresh output's `progress.json`; service activity alone is not a score.
+Installation receipt:
+`/home/lilith/benchmark-artifacts/iqa-dvifmish-i265-20261018/larger-priority-install.json`.
+
+The Mac coordinator likewise replaced the never-started old larger service
+`io.imazen.iqa-durable.d214eb85bb2ce49e` with
+`io.imazen.iqa-durable.4160e2ff4d8706e3`, same frozen corrected 576-cell bundle,
+fresh `larger-dvifmish-priority` output, sole completed-own-512 predecessor,
+and the same shared Mac lock and 12G/8-job policy. Its supplied installation
+receipt is `/home/lilith/benchmark-artifacts/iqa-dvifmish-mac-20261018/larger-priority-install.json`;
+Mac measurement progress is verified separately by that coordinator.
+
+NN data already exists on i265: both completed 512 CPU and CUDA reports have
+128 successful and 56 failed cells, with 96 cold rows and 32 warm rows each.
+Failed cells cover A-FINE, AHIQ, CKDN, DreamSim, HyperIQA, LIQE and PaQ-2-PiQ;
+they remain failed. At priority installation the live larger NN CPU progress
+had 138 successful cells and 966 pending. Its initial `report.json` still said
+1104 pending, so live progress must come from `progress.json` and cell outputs
+until the controller writes its final report. The original larger non-NN
+report is complete: 5354 successful, 2688 unsupported, 118 failed cells.
+A hashed availability snapshot is retained in
+`/home/lilith/benchmark-artifacts/iqa-dvifmish-i265-20261018/priority-nn-availability.json`.
