@@ -8,9 +8,11 @@
  "source_commit": "37574e193d879b16b0357b7053b4a986412ef113",
  "kind": "nn-fr",
  "assumptions": [
-  "trunk fma = 1311618048 MACs / 50176 px pair at 224x224, from onnx_macs.py over lpips_squeeze_full.onnx (Conv+Gemm); element ops 5931497 split ~add/mul",
+  "Frozen lpips_squeeze_full.onnx has 526913088 convolution MACs per pair at 224x224 (57 Conv nodes), already reflected in trunk_conv. The former 1311618048 text was copied from AlexNet; the MAC coefficient itself needed no change. Existing pointwise approximation is retained pending a complete reduction-aware recount.",
   "conv MAC/px is resolution-invariant for the stride-1 stack; edge padding ignored",
-  "oracle gate: lpips_vgg_trunk.onnx at 224^2 = 15,346,630,656 MACs vs published ~15.3 GMAC"
+  "oracle gate: lpips_vgg_trunk.onnx at 224^2 = 15,346,630,656 MACs vs published ~15.3 GMAC",
+  "The exported *_full.onnx graph takes both r and d and its counted operations already cover the pair. Graph stages use images=1; RGB ingress still uses images=2. Audited against frozen exported graphs on 2026-10-18; no runtime timing or counter equality is assumed.",
+  "Graph operation densities retain the original 224x224 reference-shape extrapolation. This correction removes the extra pair multiplier; it does not establish exact dynamic-shape, reduction, halo or traffic counts."
  ],
  "stages": [
   {
@@ -43,7 +45,7 @@
     "crates/zenmetrics-nn/src/lpips.rs:201-297",
     "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
    ],
-   "images": 2,
+   "images": 1,
    "elements": "W*H",
    "precision": "f32",
    "ops": {
@@ -63,7 +65,7 @@
     "crates/zenmetrics-nn/src/lpips.rs:201-297",
     "crates/zenmetrics-nn/models/lpips/card.toml:1-40"
    ],
-   "images": 2,
+   "images": 1,
    "elements": "W*H",
    "precision": "f32",
    "ops": {
