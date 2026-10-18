@@ -1643,6 +1643,7 @@ bench-iqa-optional-check:
 # IQA method-complexity tallies: evaluator tests and schema validation (docs/IQA_COMPLEXITY.md).
 complexity-check:
     python3 scripts/complexity/test_nn_tallies.py
+    python3 scripts/complexity/test_nn_schedules.py
     cd scripts/complexity && python3 -m unittest test_evaluate
     python3 scripts/complexity/evaluate.py --check benchmarks/iqa_complexity_2026-10-17/tallies/*.json
     python3 scripts/complexity/coverage.py --check
@@ -1664,3 +1665,10 @@ complexity-driver-check:
 # Host-specific bounded NN 4K measurements; configure CX4K_* inputs explicitly.
 complexity-drive-nn-4k phase="all":
     bash scripts/complexity/drive_nn_4k.sh "{{phase}}"
+
+# Frozen ONNX graph audits; model files are explicit and never silently skipped.
+complexity-pair-graph-audit models receipt:
+    python3 scripts/complexity/test_nn_tallies.py --pair-graphs "{{models}}" --receipt "{{receipt}}"
+
+complexity-nn-schedule-audit models receipt:
+    python3 scripts/complexity/test_nn_schedules.py --graphs "{{models}}" --receipt "{{receipt}}"

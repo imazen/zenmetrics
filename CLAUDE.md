@@ -1857,3 +1857,14 @@ The [qualification receipt](web/metrics/local-weights-validation.json) binds
 graph/source hashes and observed controls; it does not qualify WebGPU or all
 input sizes. Run `just browser-local-weights-check` with caller-supplied
 site, model directory, native baseline and report paths.
+
+### Known Bugs: NN complexity tally multiplicity and dynamic shapes (2026-10-18)
+
+Seven pair-graph tallies multiplied operations already covering both inputs
+by two. LIQE CPU runs its trunk once but visits 15 repeated embeddings in
+its f64 host head. MUSIQ counts now include the pooled stem and L+1
+transformer tokens. Frozen graph receipts and schedule controls qualify
+these count corrections. Pair-density pointwise estimates, MUSIQ resampling
+and hashing, traffic, halo and span remain partial. The standard 3840x2160
+MUSIQ evaluator point exceeds the scorer patch limit and is diagnostic only.
+Metric arithmetic and numerical gates are unchanged.
