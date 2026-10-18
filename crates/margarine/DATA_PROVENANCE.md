@@ -33,8 +33,17 @@ All compact tables and artifact pointers live under
 to the original [Butteraugli repository](https://github.com/imazen/butteraugli)
 unless explicitly marked as zenmetrics commits.
 
-- Mac artifact root: `/Users/lilith/work/codec-artifacts/margarine/`.
-- Linux artifact root: `/home/lilith/work/codec-artifacts/margarine/`.
+- Mac artifact root: moved on 2026-10-18 to host `i265` at
+  `/home/lilith/data/margarine-mac-artifacts/`, same relative layout, so
+  `/Users/lilith/work/codec-artifacts/margarine/<path>` in older records is now
+  `i265:/home/lilith/data/margarine-mac-artifacts/<path>`. Every file's SHA-256
+  matched on both hosts before the Mac copy was removed (110,222 files,
+  9,283,620,382 bytes); the manifest is
+  `i265:/home/lilith/data/margarine-mac-artifacts.sha256`. That includes the
+  roughly 5 GiB of experiment folders (KADID, CSIQ, LIVE1 runs) that had no NAS
+  mirror at the time of the move.
+- Linux artifact root: `/home/lilith/work/codec-artifacts/margarine/` (evaluation
+  host; not `i265`).
 - NAS canonical root: `/mnt/user/coefficient/output/margarine/`.
 - Migration archive: Mac artifact root `repo-migration-2026-09-27/originals/`.
 - Complete migration inventory: `repo-migration-2026-09-27/inventory.json`.
