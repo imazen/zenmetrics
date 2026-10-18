@@ -363,3 +363,8 @@ score identity, refusal before loading/consent, wrong-file/hash controls,
 absence of ONNX network requests, and the actual local-file UI flow. Public
 CI does not acquire restricted weights for this check. Its ordinary Pages
 regression still checks catalog classification and unloaded-route refusal.
+
+The updated catalog has 122 entries: 20 `score+map`, 63 `score-only`,
+14 `nn-webgpu`, 1 `nn-cpu-wasm`, 2 conditional `nn-local`, and 22
+`unavailable`. These categories describe available routes and their gates,
+not a claim that every metric has been benchmarked at every image size.
