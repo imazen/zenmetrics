@@ -49,3 +49,28 @@ No remote mirror has been made by this launch.
 ```sh
 just bench-iqa-linux /home/lilith/benchmark-bundles/iqa-i265-20261018-coverage/sequence.json status
 ```
+
+## Input-contract coverage
+
+After the launch snapshot, i265 reached `hdrvdp` and `hdrvdp3`: their 16
+first scalar attempts refused the frozen sRGB8 input. These routes require
+absolute luminance and explicit viewing conditions; the benchmark does not
+invent them. The failed attempts remain pending bounded retry, independently
+of the compact report's exhausted-cell count. These are contract refusals,
+not stalled workers.
+
+The same 512 schedule also contains `ms-ssim-pyiqa-f32-k4/k5/k6`. The
+fixed-factor and five-level geometry checks in
+[`ssim_pyiqa.rs`](../../crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs)
+reject their final levels below the valid 11×11 window. Their i265 attempts
+had not yet executed at the 11:01:35 UTC observation; no success is claimed.
+The existing kernel, factors, downsampling and limits remain unchanged.
+Each of these three methods retains all 96 larger-size cells, including
+scalar and map eligibility observations, in the frozen larger-family bundle.
+Larger cells remain scheduled; eligibility is decided at the actual size.
+
+At 11:01:35 UTC the first stage had 335 successful and 76 unsupported cells,
+16 failed first attempts, zero exhausted cells and 949 pending cells. The
+pending total includes the failed attempts awaiting retry. The external
+`/home/lilith/tmp/iqa-i265-20261018/input-contract-status.json` on i265
+retains that observation and the exact returned HDR errors.
