@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "provider": "wasm",
+  "tolerance_jnd": 0.001,
+  "site_source_commit": "4d773acefa4125e74e3ec08a5483c8a29368faec",
+  "implementation_sha256": {
+    "crates/zenmetrics-browser/src/nn_prep.rs": "2c22f51cb86f9d7d3a24690efff1e0e7ec58e1e4a58d858d637bc89788b7e1b8",
+    "web/metrics/nn.js": "cf248295364ae657cdd201698bb035a009d1bf234bf6a0e9a2525b5a210e939b",
+    "web/metrics/nn-models.json": "f6876ded96e7ec65892215cc15ce6f0caf8e149814b925f6b002d34974911c8d",
+    "web/metrics/worker.js": "1b9fb0218924959455a153f4760923a264c24e9bad68a11ccc29fa4c24ffb156",
+    "web/metrics/app.js": "3bfa65c565479ab6bfa7af0a4d5e59dd8bb898cd2f3dd65dda77b03c756ac4cb",
+    "web/metrics/index.html": "c2c081538b0a27ca65fe2798b6465a1014347a477e27b53ca7497139ca26ea12",
+    "scripts/checkpoint/check-local-weights.py": "072ef50e9d01fa98e6afd0306bfe967db4b6c9c588d35b0466090b578e8f5049",
+    "crates/zenmetrics-browser/examples/nn_oracle.rs": "71b8632dcdc54fe67c92f2680ea2dfbfcc10698e66e76c73b81b62db822546c0"
+  },
+  "qualified_graphs": {
+    "ckdn": {
+      "file": "ckdn_full.onnx",
+      "sha256": "d6d6b6e8c41b365ea26811613317ef1b5b31b090a03773cf00e4af955193b875",
+      "bytes": 53550724
+    },
+    "hyperiqa": {
+      "file": "hyperiqa.onnx",
+      "sha256": "32dd643a8ba2c9e8550a576c62b0170a4386566d7c2ff1dbf9c0f90ff008c6ae",
+      "bytes": 109448294
+    }
+  },
+  "native_engine": "rten",
+  "native_scores": {
+    "ckdn": {
+      "fixture256": {
+        "ckdn": 0.4531280994415283
+      },
+      "unified480x352": {
+        "ckdn": 0.6859556436538696
+      }
+    },
+    "hyperiqa": {
+      "fixture256": {
+        "hyperiqa": 56.35951232910156,
+        "hyperiqa_ref": 56.063690185546875
+      },
+      "unified480x352": {
+        "hyperiqa": 65.74453735351562,
+        "hyperiqa_ref": 65.13967895507812
+      }
+    }
+  },
+  "models": {
+    "ckdn": {
+      "errors_jnd": {
+        "fixture256/ckdn": 5.648658526856579e-06,
+        "unified480x352/ckdn": 0.0
+      },
+      "runs": {
+        "fixture256": {
+          "metric": "ckdn",
+          "backend": "onnxruntime-web",
+          "runtime": "onnxruntime-web 1.30.0",
+          "ep": "wasm",
+          "adapter": null,
+          "placement": {
+            "graph": {
+              "CPUExecutionProvider": 159
+            }
+          },
+          "values": [
+            {
+              "column": "ckdn",
+              "value": 0.4531281292438507
+            }
+          ],
+          "module": "nn"
+        },
+        "unified480x352": {
+          "metric": "ckdn",
+          "backend": "onnxruntime-web",
+          "runtime": "onnxruntime-web 1.30.0",
+          "ep": "wasm",
+          "adapter": null,
+          "placement": {
+            "graph": {
+              "CPUExecutionProvider": 159
+            }
+          },
+          "values": [
+            {
+              "column": "ckdn",
+              "value": 0.6859556436538696
+            }
+          ],
+          "module": "nn"
+        }
+      },
+      "repeat": {
+        "metric": "ckdn",
+        "backend": "onnxruntime-web",
+        "runtime": "onnxruntime-web 1.30.0",
+        "ep": "wasm",
+        "adapter": null,
+        "placement": {
+          "graph": {
+            "CPUExecutionProvider": 159
+          }
+        },
+        "values": [
+          {
+            "column": "ckdn",
+            "value": 0.4531281292438507
+          }
+        ],
+        "module": "nn"
+      },
+      "notLoaded": "Error: Select local weights and accept their terms before scoring ckdn_full.onnx",
+      "noConsent": "Error: Accept the weight terms for ckdn before loading: https://github.com/researchmm/CKDN",
+      "wrongFile": "Error: Select ckdn_full.onnx (53550724 bytes) for ckdn",
+      "wrongHash": "Error: Local ckdn weights do not match the qualified sha256",
+      "noConsentAfterLoad": "Error: Accept the weight terms for ckdn before loading: https://github.com/researchmm/CKDN",
+      "otherConsent": "Error: Accept the weight terms for hyperiqa before loading: https://github.com/SSL92/hyperIQA"
+    },
+    "hyperiqa": {
+      "errors_jnd": {
+        "fixture256/hyperiqa": 1.7099456654144e-06,
+        "fixture256/hyperiqa_ref": 0.0,
+        "unified480x352/hyperiqa": 1.7099456654144e-06,
+        "unified480x352/hyperiqa_ref": 0.0
+      },
+      "runs": {
+        "fixture256": {
+          "metric": "hyperiqa",
+          "backend": "onnxruntime-web",
+          "runtime": "onnxruntime-web 1.30.0",
+          "ep": "wasm",
+          "adapter": null,
+          "placement": {
+            "graph": {
+              "CPUExecutionProvider": 129
+            }
+          },
+          "values": [
+            {
+              "column": "hyperiqa",
+              "value": 56.359519958496094
+            },
+            {
+              "column": "hyperiqa_ref",
+              "value": 56.063690185546875
+            }
+          ],
+          "module": "nn"
+        },
+        "unified480x352": {
+          "metric": "hyperiqa",
+          "backend": "onnxruntime-web",
+          "runtime": "onnxruntime-web 1.30.0",
+          "ep": "wasm",
+          "adapter": null,
+          "placement": {
+            "graph": {
+              "CPUExecutionProvider": 129
+            }
+          },
+          "values": [
+            {
+              "column": "hyperiqa",
+              "value": 65.7445297241211
+            },
+            {
+              "column": "hyperiqa_ref",
+              "value": 65.13967895507812
+            }
+          ],
+          "module": "nn"
+        }
+      },
+      "repeat": {
+        "metric": "hyperiqa",
+        "backend": "onnxruntime-web",
+        "runtime": "onnxruntime-web 1.30.0",
+        "ep": "wasm",
+        "adapter": null,
+        "placement": {
+          "graph": {
+            "CPUExecutionProvider": 129
+          }
+        },
+        "values": [
+          {
+            "column": "hyperiqa",
+            "value": 56.359519958496094
+          },
+          {
+            "column": "hyperiqa_ref",
+            "value": 56.063690185546875
+          }
+        ],
+        "module": "nn"
+      },
+      "notLoaded": "Error: Select local weights and accept their terms before scoring hyperiqa.onnx",
+      "noConsent": "Error: Accept the weight terms for hyperiqa before loading: https://github.com/SSL92/hyperIQA",
+      "wrongFile": "Error: Select hyperiqa.onnx (109448294 bytes) for hyperiqa",
+      "wrongHash": "Error: Local hyperiqa weights do not match the qualified sha256",
+      "noConsentAfterLoad": "Error: Accept the weight terms for hyperiqa before loading: https://github.com/SSL92/hyperIQA",
+      "otherConsent": "Error: Accept the weight terms for ckdn before loading: https://github.com/researchmm/CKDN"
+    }
+  },
+  "chromium_version": "153.0.8010.12",
+  "onnx_network_requests": [],
+  "ui_local_consent_and_score": true,
+  "worker_replacement_reloads_current_page_file": true,
+  "ui_other_model_does_not_inherit_consent": true,
+  "no_jspi": "Error: Learned metrics require WebAssembly JSPI (Suspending and promising). Use a JSPI-capable browser; CPU image metrics remain available.",
+  "qualification_date": "2026-10-18",
+  "implementation_commits": [
+    "e5b1d0d07bfe233de708cfa597d643b8a6545c89",
+    "669064d79054720a6b234fb12c18bf5026175870"
+  ],
+  "scope": "Local assembled site, identified by source snapshot and implementation SHA-256. User-supplied CPU WASM routes; restricted weights are not redistributed.",
+  "existing_pages_regression": {
+    "result": "pass",
+    "learned_subset": [
+      "lpips-alex",
+      "lpips-squeeze",
+      "stlpips-alex",
+      "musiq",
+      "wadiqam-fr-live",
+      "wadiqam-nr-live",
+      "wd"
+    ],
+    "exact_assertions": "unchanged",
+    "coverage_names": 122
+  },
+  "resource_receipts": {
+    "local": "run-heavy: done rc=0 21s | peak-RSS 0.21GiB | min-avail 22755MiB | peak-load 9.57",
+    "pages": "run-heavy: done rc=0 260s | peak-RSS 0.74GiB | min-avail 20851MiB | peak-load 11.82"
+  }
+}
