@@ -129,3 +129,14 @@ are retained here. Both layouts pass with no horizontal overflow.
 Layout resource receipt on r5900xt: rc0 2s, peak-RSS0.18GiB,
 min-avail51707MiB, peak-load1.04. Deployment resource receipt on dev:
 rc0 5s, peak-RSS0.31GiB, min-avail37016MiB, peak-load1.56.
+
+## Browser restrictions
+
+`browser-refusal-catalog.tsv` snapshots all 126 entries of
+`web/metrics/coverage.json` at eea05c82ac2c. Catalog dispositions are 65
+score-only, 20 score+map, 14 nn-webgpu, two nn-local, one nn-cpu-wasm and
+24 unavailable. This is a declared capability/restriction inventory, not
+126 independently executed browser tests. Exact reasons retain weight/code
+terms, missing graph/runtime routes and input-contract restrictions. PieAPP
+entries are existing catalog records only; no PieAPP scoring, fixes or tally
+work was performed in this lane.

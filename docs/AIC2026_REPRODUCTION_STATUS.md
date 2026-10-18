@@ -114,6 +114,11 @@ HDR-VDP 2 retains median 0.0277768 Q residual. An independent Octave 2.2.2
 RGB panel also has median 0.02651 Q residual against the published column;
 Rust-versus-Octave median is 0.00869019 Q. The older luminance-only golden
 bound does not establish this RGB panel's accuracy or identify the setting gap.
+The strict-arithmetic control also retains the gap: native strict versus
+Octave median 0.008689808892256679 Q, maximum 0.014212052720857571 Q.
+Strict versus relaxed native differs by median 1.6615683477994025e-6 Q;
+this control does not identify the missing setting. Full rows are in the
+[retained strict panel](../benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-comparison.tsv).
 
 The native proposal-Butteraugli panel has median 3.06732e-7 site-JND, above
 the requested 3.2e-8 gate. The 9,618-row mapping of published columns must

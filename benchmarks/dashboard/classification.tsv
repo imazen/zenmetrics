@@ -1069,3 +1069,4 @@ benchmarks/aic_refusals_2026-10-18/landing-live-verification.json	ignored	Landin
 benchmarks/aic_refusals_2026-10-18/landing-layout.json	ignored	Landing navigation and asset-preservation verification, not metric observations
 benchmarks/dashboard/aic2026/columns.tsv	ignored	AIC column-name inventory; current qualifications come from the naming ledger
 benchmarks/dashboard/aic2026/retained-comparisons.tsv	ignored	Retained numeric comparisons; no historical implementation-status labels
+benchmarks/aic_refusals_2026-10-18/browser-refusal-catalog.tsv	ignored	126-name browser capability/restriction catalog snapshot, not runtime observations

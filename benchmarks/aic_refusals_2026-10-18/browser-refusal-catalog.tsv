@@ -1,0 +1,127 @@
+metric	status	module	reason
+vmaf	score-only	full	
+vmaf-neg	score-only	full	
+vmaf-4k	score-only	full	
+vmaf-v1	score+map	full	
+vmaf-studio601	score-only	full	
+vmaf-neg-studio601	score-only	full	
+psnr	score+map	full	
+psnr-y	score-only	full	
+psnr-y601	score-only	full	
+psnr-y-studio601	score-only	full	
+psnr-y-libvmaf	score-only	full	
+psnr-ycbcr611	score-only	full	
+psnr-cb	score-only	full	
+psnr-cr	score-only	full	
+ciede2000	score-only	full	
+ssimc	score-only	full	
+flip	score-only	full	
+flip-v17	score-only	full	
+cw-ssim	score-only	full	
+cambi	score-only	full	
+butteraugli-original	score-only	full	
+ssimulacra1	score-only	full	
+ws-hv	score-only	full	
+ssim	score-only	full	
+nlpd	score+map	full	
+nlpd-iqa	score-only	full	
+lpips-alex	nn-webgpu	nn	
+lpips-vgg	nn-webgpu	nn	
+lpips-squeeze	nn-webgpu	nn	
+dists	nn-webgpu	nn	
+stlpips-alex	nn-webgpu	nn	
+stlpips-vgg	nn-webgpu	nn	
+deepdc	nn-webgpu	nn	
+ckdn	nn-local	nn	Select the qualified local ONNX export and accept its weight terms. CPU WebAssembly only; weights stay in worker memory.
+afine	unavailable		"Weights licence class ""noncommercial"" ([weights] in crates/zenmetrics-nn/models/afine/card.toml): the browser does not redistribute these weights."
+dreamsim	unavailable		"Weights licence class ""unknown"" ([weights] in crates/zenmetrics-nn/models/dreamsim/card.toml): the browser does not redistribute these weights."
+arniqa	nn-webgpu	nn	
+maniqa	nn-webgpu	nn	
+liqe	unavailable		"Weights licence class ""unknown"" ([weights] in crates/zenmetrics-nn/models/liqe/card.toml): the browser does not redistribute these weights."
+musiq	nn-cpu-wasm	nn	The WebGPU provider differs from the native rten score by 0.00122 JND at unified480x352/musiq (rerun 0.00122), over the card gate of 0.001 JND; the WASM provider is within 1.74e-05 JND, so the page runs this metric on the CPU unless WebGPU is chosen.
+hyperiqa	nn-local	nn	Select the qualified local ONNX export and accept its weight terms. CPU WebAssembly only; weights stay in worker memory.
+paq2piq	unavailable		"Weights licence class ""noncommercial"" ([weights] in crates/zenmetrics-nn/models/paq2piq/card.toml): the browser does not redistribute these weights."
+pieapp	unavailable		"Weights licence class ""noncommercial"" ([weights] in crates/zenmetrics-nn/models/pieapp/card.toml): the browser does not redistribute these weights."
+wadiqam-fr-live	nn-webgpu	nn	
+wadiqam-fr-tid	nn-webgpu	nn	
+wadiqam-nr-live	nn-webgpu	nn	
+wadiqam-nr-tid	nn-webgpu	nn	
+wd	nn-webgpu	nn	
+ahiq	unavailable		"Weights licence class ""unknown"" ([weights] in crates/zenmetrics-nn/models/ahiq/card.toml): the browser does not redistribute these weights."
+dmm	unavailable		Permissive weights ([weights] in crates/zenmetrics-nn/models/dmm/card.toml), but the score needs a 16×16 SVD per patch over two VGG16 taps (crates/zenmetrics-nn/src/dmm.rs, a LAPACK port whose residual floors are owner-gated); the browser has no graph or route for it and does not restate the solver.
+topiq-fr	unavailable		"Weights licence class ""nc"" ([weights] in crates/zenmetrics-pyiqa-ports/models/topiq/card.toml): the browser does not redistribute these weights."
+topiq-fr-pipal	unavailable		"Weights licence class ""nc"" ([weights] in crates/zenmetrics-pyiqa-ports/models/topiq/card.toml): the browser does not redistribute these weights."
+wadiqam-pyiqa	unavailable		"Weights licence class ""nc"" ([weights] in crates/zenmetrics-pyiqa-ports/models/wadiqam-pyiqa/card.toml): the browser does not redistribute these weights."
+ahiq-pyiqa	unavailable		"Weights licence class ""nc"" ([weights] in crates/zenmetrics-pyiqa-ports/models/ahiq-pyiqa/card.toml): the browser does not redistribute these weights."
+cw-ssim-pyiqa	unavailable		No weights are needed, but its implementation in zenmetrics-pyiqa-ports carries PolyForm Noncommercial 1.0.0 and S-Lab 1.0 terms. That code is excluded from the default public WASM module. Browser refusal: Error: cw-ssim-pyiqa is disabled (enable feature pyiqa-ports)
+dmm-pyiqa	unavailable		Permissive weights ([weights] in crates/zenmetrics-pyiqa-ports/models/dmm-pyiqa/card.toml), but the score needs a 16×16 SVD per patch over two VGG16 taps (crates/zenmetrics-pyiqa-ports/src/dmm.rs, a LAPACK port whose residual floors are owner-gated); the browser has no graph or route for it and does not restate the solver.
+pieapp-pyiqa	unavailable		"Weights licence class ""nc"" ([weights] in crates/zenmetrics-pyiqa-ports/models/pieapp-pyiqa/card.toml): the browser does not redistribute these weights."
+ssim2	score+map	full	
+ssim2-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric ssim2 here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+butteraugli	score+map	full	
+butteraugli-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric butteraugli here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+dssim	score+map	full	
+dssim-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric dssim here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+iwssim-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric iwssim here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+zensim	score+map	core	
+zensim-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric zensim here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+cvvdp	score+map	full	
+cvvdp-gpu	unavailable		GPU implementation (CubeCL on CUDA or native wgpu); this page has no CubeCL runtime. Score the CPU metric cvvdp here. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+iwssim	score+map	full	
+iwssim-piq	score+map	full	
+gmsd	score+map	full	
+mdsi	score-only	full	
+ms-gmsd	score-only	full	
+ms-gmsdc	score-only	full	
+hdrvdp	unavailable		Scores absolute-luminance HDR input; this page decodes SDR sRGB8 only. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+hdrvdp3	unavailable		Scores absolute-luminance HDR input; this page decodes SDR sRGB8 only. Browser refusal: Error: Browser image pairs use SDR CPU metrics; GPU and absolute-nits HDR requests are unavailable
+proposal-butteraugli	score-only	full	
+cambi-aic2026	score-only	full	
+hdrvdp3-aic2026	unavailable		The explicit SDR display route requires cpu-hdrvdp, which is not compiled into this WASM module. Browser refusal: Error: metric 'hdrvdp3-aic2026' is disabled (rebuild with `--features cpu-hdrvdp`)
+hdrvdp-aic2026	unavailable		The explicit SDR display route requires cpu-hdrvdp, which is not compiled into this WASM module. Browser refusal: Error: metric 'hdrvdp-aic2026' is disabled (rebuild with `--features cpu-hdrvdp`)
+psnrhvs	score+map	full	
+psnrhvs-y	score-only	full	
+haarpsi	score+map	full	
+haarpsi-y	score-only	full	
+fsim	score+map	full	
+ssim-pyiqa	score-only	full	
+ssim-pyiqa-f32	score-only	full	
+ssim-pyiqa-f32-k2	score-only	full	
+ssim-pyiqa-f32-k3	score-only	full	
+ssim-pyiqa-f32-k4	score-only	full	
+ssim-pyiqa-f32-k5	score-only	full	
+ssim-pyiqa-f32-k6	score-only	full	
+ssimc-pyiqa-f32	score-only	full	
+ssimc-pyiqa-f32-k2	score-only	full	
+ssimc-pyiqa-f32-k3	score-only	full	
+ssimc-pyiqa-f32-k4	score-only	full	
+ssimc-pyiqa-f32-k5	score-only	full	
+ssimc-pyiqa-f32-k6	score-only	full	
+ms-ssim-pyiqa	score-only	full	
+ms-ssim-pyiqa-f32	score-only	full	
+ms-ssim-pyiqa-f32-k2	score-only	full	
+ms-ssim-pyiqa-f32-k3	score-only	full	
+ms-ssim-pyiqa-f32-k4	score-only	full	
+ms-ssim-pyiqa-f32-k5	score-only	full	
+ms-ssim-pyiqa-f32-k6	score-only	full	
+fsim-k2	score-only	full	
+fsim-k3	score-only	full	
+fsim-k4	score-only	full	
+fsim-nodownscale	score-only	full	
+fsim-y	score-only	full	
+vsi	score+map	full	
+vsi-k2	score-only	full	
+vsi-k3	score-only	full	
+vsi-k4	score-only	full	
+vsi-nodownscale	score-only	full	
+msssim	score+map	full	
+vif	score+map	full	
+vifvec	score+map	full	
+mad	score+map	full	
+ssim-libvmaf	score-only	full	
+msssim-libvmaf	score-only	full	
+psnrhvs-daala	score-only	full	
+mdctpsnr	score+map	full	
+piqe	score-only	full	
+niqe	score-only	full	
+brisque	score-only	full	
