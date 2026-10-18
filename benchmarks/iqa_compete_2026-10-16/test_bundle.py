@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import Mock, patch
 import mac_service
 import prepare_durable
+import select_durable
 
 
 def write_hashes(bundle):
@@ -25,7 +26,7 @@ def write_hashes(bundle):
 def make_bundle(bundle):
     (bundle / 'bin').mkdir(parents=True)
     (bundle / 'inputs').mkdir()
-    for name in ('durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json'):
+    for name in ('durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json', 'select_durable.py'):
         (bundle / name).write_bytes(b'fixture ' + name.encode())
     (bundle / 'inputs/reference.rgb').write_bytes(b'xyz')
     (bundle / 'inputs/distorted.rgb').write_bytes(b'abc')
@@ -38,6 +39,15 @@ def make_bundle(bundle):
 
 
 class BundleTests(unittest.TestCase):
+    def test_subset_preserves_all_phases_and_refuses_unknown_selection(self):
+        cells = [dict(metric_name=m, size_name='small', threads=t, timing_phase=p)
+                 for m in ('psnr', 'gmsd') for t in (1, 8) for p in ('cold', 'warm')]
+        selected = select_durable.select(cells, ['gmsd'], threads=[1])
+        self.assertEqual([c['timing_phase'] for c in selected], ['cold', 'warm'])
+        self.assertEqual(len(cells), 8)
+        with self.assertRaisesRegex(ValueError, 'unknown metric_name'):
+            select_durable.select(cells, ['missing'])
+
     def test_hash_verification_survives_relocation_and_rejects_tampering(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             root = Path(tmp)
@@ -63,7 +73,7 @@ class BundleTests(unittest.TestCase):
             root = make_bundle(Path(tmp) / 'bundle')
             complete = write_hashes(root)
             for missing in (None, 'manifest.json', 'durable.py', 'mac_service.py',
-                            'bin/iqa-compete', 'build.json', 'inputs.meta.json'):
+                            'bin/iqa-compete', 'build.json', 'inputs.meta.json', 'select_durable.py'):
                 with self.subTest(missing=missing):
                     hashes = {} if missing is None else {k: v for k, v in complete.items() if k != missing}
                     (root / 'SHA256SUMS.json').write_text(json.dumps(hashes))

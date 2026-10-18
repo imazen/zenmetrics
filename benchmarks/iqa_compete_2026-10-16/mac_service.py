@@ -13,7 +13,7 @@ import time
 
 def verify(bundle):
     hashes = json.loads((bundle / 'SHA256SUMS.json').read_text())
-    required = {'manifest.json', 'durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json'}
+    required = {'manifest.json', 'durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json', 'select_durable.py'}
     if not required.issubset(hashes):
         raise ValueError('bundle hash manifest lacks required files')
     manifest = json.loads((bundle / 'manifest.json').read_text())

@@ -582,7 +582,8 @@ bench-iqa-selection-check:
 
 # All cheap competition-controller controls.
 bench-iqa-python-check:
-    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p 'test_*.py'
+    mkdir -p "$HOME/tmp"
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p 'test_*.py'
 
 checkpoint-browser-check package report oracle:
     python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}
@@ -1675,6 +1676,7 @@ complexity-nn-schedule-audit models receipt:
 
 # Crash containment and immutable portable-bundle controls (real child processes).
 iqa-durable-check:
+    mkdir -p "$HOME/tmp"
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_durable.py
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_bundle.py
 

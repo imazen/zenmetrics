@@ -22,6 +22,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  iqa-recovery-controls:
+    name: IQA recovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Verify real child containment and frozen bundle controls
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp"
+          python3 benchmarks/iqa_compete_2026-10-16/test_durable.py
+          python3 benchmarks/iqa_compete_2026-10-16/test_bundle.py
+
   # Machine-enforced "ONE ghcr package per artifact, variants are TAGS" rule — FAILS if any scripts/*.sh
   # hard-codes a non-canonical ghcr.io/imazen image name. This is the rule that doc-alone failed to hold
   # (5 worker renames + 4 sweep renames); see scripts/jobsys/fleet.env for the single source of truth.

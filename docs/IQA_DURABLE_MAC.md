@@ -56,6 +56,15 @@ scaling study of one reference/distortion pair. It does not measure perceptual
 ranking accuracy or provide a diverse-content meeting benchmark. A future
 corpus needs its own frozen provenance and unchanged correctness gates.
 
+For a different subset after copying a bundle, no build tools are needed:
+
+```
+python3 BUNDLE/select_durable.py BUNDLE SUBSET --metrics psnr,gmsd --sizes cid22,aic-small --threads 1
+```
+
+This makes a separate hash-verified bundle and retains both timing phases. It
+refuses unknown names and leaves the source bundle and existing results intact.
+
 Copy the bundle as a directory. It requires a compatible ARM64 Mac, Python 3,
 and the explicit native `run-heavy` resource wrapper. It does not require Cargo,
 model downloads or a repository checkout. Keep all outputs outside the immutable
