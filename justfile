@@ -1806,3 +1806,7 @@ complexity-process-rss bin metric shape threads cpus report:
 # Requires all six inventory panels; refuses incomplete or duplicate cells.
 aic-refusal-publish logs out *inputs:
     python3 scripts/complexity/publish_refusals.py --logs "{{logs}}" --out "{{out}}" {{inputs}}
+
+# Verify only landing navigation/layout; metric numerical checks stay separate.
+dashboard-landing-check python site chromium report:
+    "{{python}}" scripts/dashboard/check_landing.py "{{site}}" --chromium "{{chromium}}" --report "{{report}}"
