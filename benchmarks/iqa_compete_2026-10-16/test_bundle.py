@@ -109,6 +109,8 @@ class BundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             root = Path(tmp)
             source = make_bundle(root / 'source')
+            recipe = (prepare_durable.HERE / 'bundle.just').read_bytes()
+            (source / 'bundle.just').write_bytes(recipe)
             pair = dict(size_name='fixture', width=1, height=1, method='test-only',
                         reference='inputs/reference.rgb', distorted='inputs/distorted.rgb')
             (source / 'pairs.json').write_text(json.dumps([pair]))
@@ -134,6 +136,8 @@ class BundleTests(unittest.TestCase):
                 prepare_durable.main()
             bundle = root / 'out'
             mac_service.verify(bundle)
+            self.assertEqual((bundle / 'justfile').read_bytes(), recipe)
+            self.assertIn('justfile', json.loads((bundle / 'SHA256SUMS.json').read_text()))
             manifest = json.loads((bundle / 'manifest.json').read_text())
             self.assertEqual(manifest['metadata']['metrics'], ['psnr', 'gmsd'])
             self.assertEqual(manifest['binary_sha256'], prepare_durable.sha(bundle / 'bin/iqa-compete'))

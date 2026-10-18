@@ -5,6 +5,56 @@ failed, interrupted, timed-out or incomplete attempt remains in the record and
 cannot become a timing sample. Completed cells survive controller restart;
 remaining cells run before failed cells receive their bounded retry.
 
+## Start on a fresh Mac
+
+Copy a prepared ARM64 bundle (including its `tools/` directory) onto the Mac.
+With this repository available, start it with:
+
+```
+just bench-iqa-mac "$HOME/benchmark-bundles/iqa-mac-20261018-core" "$HOME/benchmark-results/iqa-core"
+```
+
+Newly prepared bundles also contain their own justfile, so a repository checkout
+is unnecessary:
+
+```
+just --justfile "$HOME/benchmark-bundles/BUNDLE/justfile" run "$HOME/benchmark-results/iqa-core"
+```
+
+Use an absolute output path. Installation starts the launchd service immediately;
+it continues after the terminal disconnects. In the repository command, append
+`status`, `stop`, or `start` to inspect, stop, or resume an installed service.
+With the bundle justfile, use `status`, `stop`, or `resume` instead of `run`.
+Reuse the same bundle and output for resume. `run` installs a new service and
+deliberately refuses an already installed one.
+
+### Dependencies and reproducibility
+
+| Path | Requirements |
+| --- | --- |
+| Run a prepared bundle | Compatible macOS ARM64; Python 3.10+ standard library; `just`; macOS `launchctl`, `caffeinate`, shell and system resource utilities; a logged-in user session; writable results and scratch directories. |
+| Resource protection | The bundle must include the explicitly supplied `tools/run-heavy` and its macOS companion. This wrapper is separately maintained and is not downloaded by this command. Its process-tree RSS guard is not a kernel hard memory cap. |
+| Prepare from source | Repository checkout, `jj`, Git, Rust/Cargo and a working native linker/toolchain, plus access to fetch the Cargo.lock dependencies and pinned sibling repositories. Supply the built worker, exact RGB pairs, input provenance and build receipt to `iqa-durable-prepare`. |
+
+No pip packages, neural model weights, Cargo, or network access are needed to
+execute the copied bundle. The runtime was exercised on macOS ARM64 with Python
+3.14.7; the syntax floor is not a claim that every older macOS/Python combination
+has been tested. The executable's macOS deployment compatibility still applies.
+
+The manifest freezes input bytes, worker binary, metric selection, dimensions,
+thread counts and cold/warm policy. Bundle checksums cover the scripts and copied
+resource wrapper; attempts record the actual machine and execution command.
+Resume refuses changed identities. Preserve `build.json`, `SHA256SUMS.json`, the
+manifest and all result attempts together. Checksums detect changes against the
+supplied inventory; authenticate the bundle's origin separately when copying it.
+
+This reproduces the workload and executable, not identical timings across Macs.
+OS version, CPU, power/thermal state and background load remain experimental
+variables. A source rebuild is pinned through Cargo.lock and sibling revisions,
+but is not certified bit-for-bit reproducible across compiler/linker versions.
+Cold means fresh scorer construction, not flushed OS caches. The frozen S67
+panel measures scaling on one pair, not perceptual ranking accuracy.
+
 ## Timing contract
 
 Each cell fixes metric, input hashes, dimensions, thread budget, mode and phase.

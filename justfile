@@ -1683,6 +1683,10 @@ iqa-durable-check:
 iqa-durable-prepare binary pairs output revision *options:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' {{options}}
 
+# Start a copied, frozen ARM64 bundle; no compiler or model download needed.
+bench-iqa-mac bundle output action="install":
+    python3 '{{bundle}}/mac_service.py' '{{action}}' '{{bundle}}' '{{output}}' --run-heavy '{{bundle}}/tools/run-heavy' --lock "$HOME/tmp/mac-heavy.lock"
+
 iqa-durable-run manifest output wrapper lock *options:
     python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
 

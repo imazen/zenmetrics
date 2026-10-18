@@ -74,6 +74,7 @@ def main():
             shutil.copy2(companion, a.output / 'tools/run-heavy-macos.py')
     for name in ('durable.py', 'mac_service.py', 'select_durable.py'):
         shutil.copy2(HERE / name, a.output / name)
+    shutil.copy2(HERE / 'bundle.just', a.output / 'justfile')
     shutil.copy2(a.inputs_meta, a.output / 'inputs.meta.json')
     shutil.copy2(a.build_receipt, a.output / 'build.json')
     cells = []
