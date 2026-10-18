@@ -48,7 +48,13 @@ def main():
         except (OSError, ValueError) as e:
             print('Permanent bundle/config failure: ' + str(e), file=sys.stderr)
             return 0  # KeepAlive must not spin on integrity failure; retained stderr is authoritative.
-        rc = subprocess.call(command)
+        # Hold an idle-sleep assertion only for this service process lifetime.
+        awake = subprocess.Popen(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
+        try:
+            rc = subprocess.call(command)
+        finally:
+            awake.terminate()
+            awake.wait()
         return 0 if rc in (0, 2) else rc
     if sys.platform != 'darwin':
         p.error('LaunchAgent installation requires macOS')
