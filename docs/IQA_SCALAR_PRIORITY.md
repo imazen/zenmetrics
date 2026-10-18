@@ -314,3 +314,30 @@ A fixed attempt-level chart projection for both hosts is committed at
 [the chart snapshot](../benchmarks/iqa_chart_snapshot_2026-10-18/README.md).
 It preserves source-report hashes and explicit warm qualification rather than
 silently combining controls, historical binaries or retries into headline rows.
+
+The installed fifteen-hour window starts at `2026-10-18T21:56:43Z` and ends at
+`2026-10-19T12:56:43Z`. Mac service `io.imazen.iqa-scalar.4ff7434603d4464c`
+has 467 non-NN scalar cells, then 920 NN CPU and 920 NN Metal cells. i265
+service `iqa-scalar-bc3ef70f5147758c.service` has no remaining eligible non-NN
+scalar cells; NN CPU has 80 cells with one remaining attempt and 680 with two,
+then CUDA has 920 with two. These are pending cells, not promises of usable
+measurements. Observed i265 retries still include explicit weight-consent
+refusals; copying the queue does not qualify them.
+
+Coverage receipts classify 969 Mac and 368 i265 pending cells as
+`disabled-by-user`. Geometry is exactly 7680×4320 in either orientation, the
+8K geometry present in these frozen inventories. Existing 8K observations remain
+intact. Native endpoint guards acquire the same shared lock before stopping the
+coordinator, so an in-flight worker may finish after the endpoint. The old
+20-minute guard was disabled before replacement. The Mac check-in plan now
+points to this graph and its actual predecessor wait records.
+
+Resolve current state with the frozen coordinator's `status sequence.json`.
+The immutable roots are `~/benchmark-bundles/iqa-mac-20261018-no8k-15h.noindex`
+on Mac and `~/benchmark-bundles/iqa-i265-20261018-no8k-15h` on i265.
+Checked operational copies, plan/coverage SHA256s, service commands, statuses and
+verification receipts are retained on i265 under
+`~/benchmark-artifacts/iqa-no8k-15h-20261018/{mac,i265}/`.
+
+[The route/profile audit](IQA_VARIANT_COVERAGE_2026-10-18.md) distinguishes
+missing variants from scheduled refusals, including unpublished research routes.

@@ -1772,3 +1772,7 @@ iqa-scalar-priority-tests:
 # Project recorded durable attempts into a fixed chart snapshot (new output only).
 iqa-chart-export root output host:
     python3 benchmarks/iqa_compete_2026-10-16/export_chart_snapshot.py {{root}} {{output}} --host {{host}}
+
+# Install an endpoint guard without changing a frozen measurement plan.
+iqa-window-guard plan:
+    python3 benchmarks/iqa_compete_2026-10-16/scalar_priority.py window-guard {{plan}}

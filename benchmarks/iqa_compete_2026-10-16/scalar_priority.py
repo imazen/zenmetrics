@@ -517,12 +517,46 @@ def install(root):
     return service
 
 
+def install_window_guard(plan_path):
+    """Stop the coordinator at the first shared worker boundary after the endpoint."""
+    root = plan_path.parent
+    plan = load(plan_path)
+    service = load(root / 'installed-service.json')['service']
+    config = dict(lock=plan['lock'], sources=plan['phases'], stop_services=[service],
+                  output=str(root / 'window-boundary'), deadline_unix=plan['window_end_unix'],
+                  parent_sequence=str(plan_path), parent_sequence_sha256=sha(plan_path))
+    path = root / 'window-guard.json'
+    write(path, config)
+    command = [sys.executable, str(Path(__file__).resolve()), 'deadline-boundary', str(path), '--sha256', sha(path)]
+    token = hashlib.sha256(str(path).encode()).hexdigest()[:16]
+    if sys.platform == 'darwin':
+        label = 'io.imazen.iqa-window.' + token
+        native = f'user/{os.getuid()}/' + label
+        plist = Path.home() / 'Library/LaunchAgents' / (label + '.plist')
+        with plist.open('xb') as stream:
+            plistlib.dump(dict(Label=label, ProgramArguments=command, RunAtLoad=True,
+                ProcessType='Background', LimitLoadToSessionType='Background',
+                StandardOutPath=str(root/'window-guard.log'), StandardErrorPath=str(root/'window-guard.stderr.log'),
+                EnvironmentVariables=dict(TMPDIR=str(Path.home()/'tmp'))), stream)
+        subprocess.run(['launchctl', 'bootstrap', f'user/{os.getuid()}', str(plist)], check=True)
+    else:
+        native = 'iqa-window-' + token + '.service'
+        subprocess.run(['systemd-run', '--user', '--unit='+native,
+            '--property=StandardOutput=append:'+str(root/'window-guard.log'),
+            '--property=StandardError=append:'+str(root/'window-guard.stderr.log'),
+            '--setenv=TMPDIR='+str(Path.home()/'tmp'), *command], check=True)
+    write(root/'window-guard-install.json', dict(service=native, command=command, window_end_unix=plan['window_end_unix']))
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['boundary', 'deadline-boundary', 'ranking', 'rollout', 'execute', 'status'])
+    p.add_argument('action', choices=['boundary', 'deadline-boundary', 'ranking', 'rollout', 'execute', 'status', 'window-guard'])
     p.add_argument('config', type=Path)
     p.add_argument('--sha256')
     a = p.parse_args()
+    if a.action == 'window-guard':
+        install_window_guard(a.config)
+        return 0
     if a.action == 'status':
         plan = load(a.config)
         qualified = {tuple(key) for key in plan.get('qualified_retained_keys', [])}
