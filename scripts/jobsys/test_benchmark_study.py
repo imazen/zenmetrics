@@ -73,7 +73,10 @@ class StudyTests(unittest.TestCase):
         # 112: +wadiqam-fr-live, wadiqam-fr-tid, wadiqam-nr-live, wadiqam-nr-tid).
         # 115: +pieapp, ahiq, dmm; 117: +topiq-fr, topiq-fr-pipal;
         # 122: +wadiqam-pyiqa, ahiq-pyiqa, cw-ssim-pyiqa, dmm-pyiqa, pieapp-pyiqa.
-        self.assertEqual(len(inv['metrics']), 122)
+        # 126: +hdrvdp-aic2026, hdrvdp3-aic2026, cambi-aic2026, proposal-butteraugli.
+        self.assertEqual(len(inv['metrics']), 126)
+        self.assertTrue({'hdrvdp-aic2026', 'hdrvdp3-aic2026', 'cambi-aic2026',
+                         'proposal-butteraugli'} <= {r['metric'] for r in inv['metrics']})
         self.assertEqual(summary['declared_cells'], 48)
         self.assertEqual(summary['statuses'], {'ready': 0, 'unsupported': 24, 'unqualified': 24})
         self.assertEqual(len({r['cell_sha'] for r in rows}), 48)
