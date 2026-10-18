@@ -1,4 +1,6 @@
 //! IQA benchmark: resident-input cold construction/call or warmed zenbench rounds.
+#[cfg(feature = "compete-dvifmish")]
+mod iqa_compete_dvifmish;
 #[allow(unexpected_cfgs)]
 #[path = "../iqa_compete_maps.rs"]
 mod maps;
@@ -126,12 +128,27 @@ use timing::cold_call;
 
 fn make_call(
     config: &Value,
-    kind: MetricKind,
+    name: &str,
+    kind: Option<MetricKind>,
     r: &'static Rgb8Image,
     d: &'static Rgb8Image,
     map: bool,
 ) -> Result<Option<maps::Call>, String> {
-    let name = kind.name();
+    #[cfg(feature = "compete-dvifmish")]
+    if iqa_compete_dvifmish::supported(name) {
+        let threads = config["threads"]
+            .as_u64()
+            .ok_or("explicit dvifmish thread budget required")?;
+        return iqa_compete_dvifmish::make_call(
+            name,
+            r,
+            d,
+            map,
+            usize::try_from(threads).map_err(|e| e.to_string())?,
+        )
+        .map(Some);
+    }
+    let kind = kind.ok_or("unknown metric")?;
     if name.ends_with("-gpu") {
         #[cfg(any(feature = "study-gpu-cuda", feature = "study-gpu-wgpu"))]
         return maps::gpu_score(
@@ -169,7 +186,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return prepare(&a);
     }
     if a.get(1).is_some_and(|s| s == "inventory") {
-        println!("{}",serde_json::to_string(&MetricKind::all().iter().map(|k|json!({"metric_name":k.name(),"gpu":k.requires_gpu(),"compiled":k.scoring_compiled_in(),"columns":k.column_names()})).collect::<Vec<_>>())?);
+        #[allow(unused_mut)]
+        let mut inventory = MetricKind::all().iter().map(|k|json!({"metric_name":k.name(),"gpu":k.requires_gpu(),"compiled":k.scoring_compiled_in(),"columns":k.column_names()})).collect::<Vec<_>>();
+        #[cfg(feature = "compete-dvifmish")]
+        inventory.extend(iqa_compete_dvifmish::inventory());
+        println!("{}", serde_json::to_string(&inventory)?);
         return Ok(());
     }
     #[cfg(iqa_compete_ingress)]
@@ -246,10 +267,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let only_map = only_mode == Some("score+map");
     let primary_mode = if only_map { "score+map" } else { "score" };
     let primary_arm = usize::from(only_map);
-    let kind = *MetricKind::all()
-        .iter()
-        .find(|k| k.name() == name)
-        .ok_or("unknown metric")?;
+    let kind = MetricKind::all().iter().find(|k| k.name() == name).copied();
+    #[allow(unused_mut)]
+    let mut known = kind.is_some();
+    #[cfg(feature = "compete-dvifmish")]
+    {
+        known |= iqa_compete_dvifmish::supported(name);
+    }
+    if !known {
+        return Err("unknown metric".into());
+    }
     let admitted_unix_ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
@@ -286,8 +313,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     row["load_before"] = json!(before);
     row["admitted_unix_ns"] = json!(admitted_unix_ns);
     row["model_preload_adapter"] = json!(MODEL_PRELOAD_ADAPTER);
-    row["declared_columns"] = json!(kind.column_names());
-    row["headline_declared_column"] = json!(kind.column_names()[0]);
+    let columns = kind
+        .map(|k| k.column_names().to_vec())
+        .unwrap_or_else(|| vec![name]);
+    row["declared_columns"] = json!(columns);
+    row["headline_declared_column"] = json!(columns[0]);
+    #[cfg(feature = "compete-dvifmish")]
+    if iqa_compete_dvifmish::supported(name) {
+        row["benchmark_route"] = iqa_compete_dvifmish::inventory()
+            .into_iter()
+            .find(|route| route["metric_name"] == name)
+            .expect("known route");
+    }
     // Config fields carry input identity, but cannot supply observed results.
     for field in [
         "median_ns",
@@ -304,7 +341,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if timing_phase == "cold" {
         let mut unsupported = false;
         let (result, elapsed_ns) = cold_call(|| {
-            make_call(&config, kind, r, d, only_map)?.ok_or_else(|| {
+            make_call(&config, name, kind, r, d, only_map)?.ok_or_else(|| {
                 unsupported = true;
                 "No qualified native-map adapter for this metric".to_owned()
             })
@@ -336,7 +373,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("IQA_ROW {}", serde_json::to_string(&row)?);
         return Ok(());
     }
-    let mut score = match make_call(&config, kind, r, d, only_map) {
+    let mut score = match make_call(&config, name, kind, r, d, only_map) {
         Ok(Some(call)) => call,
         Ok(None) => {
             row["status"] = json!("unsupported");
@@ -349,6 +386,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let display = parse_display("standard_fhd")?;
     if config["probe_only"].as_bool().unwrap_or(false) {
+        let kind = kind.ok_or("CLI probe is unavailable for benchmark-only routes")?;
         let warmup = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(&display))?;
         let values = run_metric_display(kind, r, d, GpuRuntime::Cpu, Some(&display))?;
         assert_eq!(

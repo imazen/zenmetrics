@@ -22,6 +22,7 @@ path = "src/bin/cpu_wall.rs"
 # reaches the CLI's copies, so `new-metrics-wall` then measures the same
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
+compete-dvifmish = ["compete", "dep:dvifmish"]
 compete-nn = ["compete", "zenmetrics-cli/nn-ort", "zenmetrics-cli/nr"]
 compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
 heap-phases = ["zenbench/heap-profiling"]
@@ -37,6 +38,8 @@ metrics-parallel = [
 ]
 
 [dependencies]
+# Benchmark-only, unpublished crate. Keep its constants and API in their owner.
+dvifmish = { git = "https://github.com/imazen/dvifmish", rev = "74ec5eeae118ead266c7b66b56e56cb5f3bef372", optional = true, default-features = false }
 sha2 = "0.11.0"
 nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel"] }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
