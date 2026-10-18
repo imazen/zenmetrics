@@ -36,18 +36,29 @@ def progress(output, domain):
                 unsupported_maps=dict(unsupported), service_state=state, waiting_on=waiting)
 
 
+
+def _check_in_rows(value):
+    if isinstance(value, list):
+        return value
+    return [dict(output=p['output'], progress=p['progress'] if isinstance(p['progress'], dict) else {},
+                 attempt_statuses={}, service_state=value['service'], waiting_on=(p.get('wait') or {}).get('pending', []))
+            for p in value['phases']]
+
+
 def check_in(plan_path, directory, pane=None):
     """Read-only remote observations survive a blocked or unavailable agent prompt."""
     import datetime
     import shlex
     plan = json.loads(plan_path.read_bytes())
-    command = ['python3', plan['script'], 'progress', plan['phases'][0]['bundle'], plan['phases'][0]['output']]
-    for phase in plan['phases'][1:]:
-        command += ['--other-output', phase['output']]
+    command = plan.get('status_command')
+    if not command:
+        command = ['python3', plan['script'], 'progress', plan['phases'][0]['bundle'], plan['phases'][0]['output']]
+        for phase in plan['phases'][1:]:
+            command += ['--other-output', phase['output']]
     ssh_command = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', plan['machine'], shlex.join(command)]
     try:
         result = subprocess.run(ssh_command, text=True, capture_output=True, timeout=60)
-        rows = json.loads(result.stdout) if result.returncode == 0 else []
+        rows = _check_in_rows(json.loads(result.stdout)) if result.returncode == 0 else []
     except subprocess.TimeoutExpired:
         result = subprocess.CompletedProcess(ssh_command, 124, '', 'Mac status SSH request timed out after 60 seconds')
     except (OSError, ValueError) as error:
@@ -59,7 +70,7 @@ def check_in(plan_path, directory, pane=None):
     if result.returncode:
         message = 'Mac benchmark status check failed; inspect ' + str(directory / (stamp + '.json'))
     else:
-        rows = json.loads(result.stdout)
+        rows = _check_in_rows(json.loads(result.stdout))
         message = '; '.join(Path(r['output']).name + ': ' +
             (str(r['progress'].get('statuses', {})) + ', attempts=' + str(r['attempt_statuses'])
              if r['progress'] else 'queued') for r in rows)

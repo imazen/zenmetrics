@@ -59,5 +59,53 @@ class ScalarPriorityTests(unittest.TestCase):
             self.assertEqual(len(json.loads((root/'retained-coverage.json').read_text())), 8)
 
 
+    def test_execute_refuses_any_upcoming_map(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
+            root = Path(directory)
+            bundle = root / 'bundle'
+            bundle.mkdir()
+            (bundle / 'manifest.json').write_text(json.dumps(dict(cells=[dict(only_mode='score+map')])))
+            plan = dict(scheduler_files={}, source_sha256=priority.sha(Path(priority.__file__)),
+                        phases=[dict(bundle=str(bundle), output=str(root/'output'), name='map',
+                                     manifest_sha256=priority.sha(bundle/'manifest.json'))])
+            path = root / 'sequence.json'
+            path.write_text(json.dumps(plan))
+            with self.assertRaisesRegex(ValueError, 'upcoming map'):
+                priority.execute(path, priority.sha(path))
+            self.assertFalse((root/'output').exists())
+
+    def test_execute_refuses_changed_scheduler(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
+            root = Path(directory)
+            helper = root / 'helper.py'
+            helper.write_text('changed')
+            path = root / 'sequence.json'
+            path.write_text(json.dumps(dict(scheduler_files={'helper.py': 'wrong'}, phases=[])))
+            with self.assertRaisesRegex(ValueError, 'frozen scheduler changed'):
+                priority.execute(path, priority.sha(path))
+
+
+    def test_boundary_accepts_confirmed_absent_transient_unit(self):
+        import subprocess
+        with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
+            receipt = Path(directory) / 'boundary.json'
+            result = subprocess.CompletedProcess([], 0, 'LoadState=not-found\nActiveState=inactive\n', '')
+            with patch.object(priority, 'processes', return_value=[]), patch.object(priority.sys, 'platform', 'linux'), patch.object(priority.subprocess, 'run', return_value=result) as run:
+                priority.boundary(dict(sources=[], nn=[], lock='shared', stop_services=['gone.service']), receipt)
+            self.assertEqual(run.call_count, 1)
+            self.assertTrue(receipt.exists())
+
+    def test_checkin_tracks_replacement_waits_without_false_completion(self):
+        from mac_service import _check_in_rows
+        value = dict(service='scalar-service', phases=[dict(output='fast', progress=dict(complete=True), wait={}),
+                   dict(output='nn', progress='queued', wait=dict(pending=['remaining-scalar']))])
+        rows = _check_in_rows(value)
+        self.assertEqual(rows[1]['waiting_on'], ['remaining-scalar'])
+        self.assertFalse(all(r['progress'].get('complete') for r in rows))
+        self.assertEqual(_check_in_rows(rows), rows)
+
+
 if __name__ == '__main__':
     unittest.main()

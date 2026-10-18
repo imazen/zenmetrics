@@ -85,7 +85,10 @@ def boundary(config, receipt):
                 subprocess.run(['launchctl', 'bootout', service], check=True)
         else:
             before = subprocess.run(['systemctl', '--user', 'show', service], text=True, capture_output=True)
-            subprocess.run(['systemctl', '--user', 'stop', service], check=True)
+            if 'LoadState=not-found' not in before.stdout:
+                if before.returncode:
+                    raise ValueError('cannot resolve service state: ' + service)
+                subprocess.run(['systemctl', '--user', 'stop', service], check=True)
         stopped.append(dict(service=service, before=before.stdout, before_rc=before.returncode))
     # LaunchAgent removal can leave an already-created durable child. Terminate
     # only exact output-bound controllers, after proving no watchdog can be live.
