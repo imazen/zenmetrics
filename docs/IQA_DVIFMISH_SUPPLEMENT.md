@@ -158,3 +158,16 @@ under the shared lock; keep a hash receipt for that copy. The original IQA
 binary and snapshot remain independent. Linux external-worker diagnostics
 also require the established P-core process boundary; an unrestricted
 invocation is expected to refuse rather than qualify any observation.
+
+An internal raw-counter diagnostic can copy pinned zenbench with
+`patch_resource_trace.py PINNED_ZENBENCH NEW_COPY --snapshot OWNED_SNAPSHOT
+--original SOURCE_CHECKOUT`. First build that dedicated snapshot with the
+normal explicit dvifmish builder; then apply this override and rebuild its
+worker with the same feature set and `--cfg iqa_compete_dvifmish`. The patch
+records original/adapted source, manifest and lock hashes. Setting
+`ZENBENCH_RAW_CPU_TRACE` to a new output path records each internal refresh
+before foreign-load subtraction, including process identity, name, raw CPU,
+cumulative CPU and owner classification. No threshold or gate logic changes.
+Trace I/O adds diagnostic activity; this binary cannot qualify timings or
+replace any frozen worker. The normal checkout and pinned zenbench source
+are read-only inputs, with changes confined to the new copies.
