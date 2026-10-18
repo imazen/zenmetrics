@@ -18,6 +18,8 @@ from urllib.parse import quote
 
 from catalog import ROOT, md_tables, plain
 from model_cards import ledger, base_name, clean
+from aic_reproduction import rows as reproduction_rows, INVENTORY as COLUMN_INVENTORY
+from aic_runtime import snapshot, supplements
 
 B = 'benchmarks/iqa_complexity_2026-10-17'
 NAV = [('index', 'Overview'), ('reproduction', 'Reproduction'), ('configurations', 'Configurations'),
@@ -114,57 +116,6 @@ def ssim_dispatch_inputs():
     if not result:raise ValueError('SSIM dispatch flags were not parsed')
     return result
 
-def reproduction_rows(cards, commit):
-    """Every published column, plus unavailable site experiments, from the versioned audit."""
-    mapping = json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())['map']
-    rows = []
-    for tab in md_tables(ROOT/'docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md'):
-        if len(tab[0]) != 9 or tab[0][0] != 'name': continue
-        for fields in tab[1:]:
-            name, where, impl, n, med, mx, jnd, status, note = fields
-            if name.startswith('JND_'): continue
-            if where == 'neither' and status not in ('unverifiable', 'missing', 'unverified'): continue
-            exact = mapping.get(name)
-            if exact: impl = exact
-            if name == 'AIMOS': status, note = 'MISSING: unidentified', '16 of 34 NR candidates scored; no match; best hyperiqa ratio Spearman 0.82.'
-            if name.startswith('WD_s'): impl, status, note = 'wd (multi-output)', 'unreproduced', 'Published sigma mapping unresolved; best median 0.13–0.20 site-JND in bounded search.'
-            if name == 'A-FINE': impl, status, note = 'afine', 'unreproduced', 'Entry point and multiple-of-32 size handling unresolved; best median 0.11 site-JND.'
-            if name.startswith('proposal-DVIFM'): status, note = 'unreproduced', 'Released-build port presets exist outside the CLI; no published column matches. Ask which build/constants/JND map.'
-            if 'HaarXYB' in name or 'HaarY-' in name or 'HaarYCoCg' in name or '-vqmt' in name: status = 'MISSING: published values'
-            if name == 'DMM':
-                status = 'fails native gate'; n, jnd = '61', '0.0024'
-                note = 'Published-column comparison is pyiqa 0.1.16 CUDA fp32 reference: median 2.6e-4/max 2.4e-3 site-JND. This is separate from the Rust dmm-pyiqa native-oracle failure: worst 0.071 JND, above 0.001 gate (SVD).'
-            if name in ('TOPIQ', 'TOPIQ-PIPAL', 'AHIQ', 'PieAPP', 'WaDIQaM', 'CW-SSIM'):
-                impl = mapping[name]; status = 'implemented; native gate passes'; note += ' Public non-commercial pyiqa convention; see model card and current reproduction status.'
-            if name == 'CW-SSIM':
-                n, med, mx = '61', '0', '2.2e-16'
-                note = 'pyiqa 0.1.16 reference versus published column: 61 pairs, median 0/max 2.2e-16 raw. Native cw-ssim-pyiqa oracle gate passes, worst 5.4e-13 JND; upstream-convention cw-ssim remains distinct.'
-            if name.startswith('proposal-IDFIQA') or name == 'MSSWD': status = 'private; aggregate match'
-            if status=='missing': status='MISSING: implementation or comparison'
-            if where=='neither' and status=='unverified': status='MISSING: published values'
-            if name.startswith('HDR_VDP_2'): impl, status, note = 'hdrvdp', 'unreproduced', 'Identified res.Q, BT.709, 200*sRGB_EOTF nits, 37.84 ppd; median residual 0.028 Q. Explicit ingress/output still needs native qualification; see configuration-search receipt.'
-            if name.startswith('HDR_VDP_3'): impl, status, note = 'hdrvdp3', 'configuration identified', 'res.Q (not Q_JOD), XYZ oled, 200*sRGB_EOTF nits, 37.84 ppd; median 0.00136/max 0.0129 site-JND in reference search; native route qualification remains separate.'
-            if name == 'proposal-Butteraugli':
-                impl = 'butteraugli_pnorm3 + identified map'; status = 'configuration identified'
-                med, mx, jnd = '', '', '5.1e-5';note = 'max(0.00459792*N, 2.0938201*N - 1.1033102); median 3.2e-8 site-JND over all 9618 rows; constants provenance unknown.'
-            rows.append(dict(column=plain(name), availability=where, implementation=plain(impl), n=n, median=med, maximum=mx, max_jnd=jnd, status=status, note=plain(note)))
-    native_path=ROOT/'benchmarks/aic_refusals_2026-10-18/summary.tsv'
-    native={r['col']:r for r in csv.DictReader(native_path.read_text().splitlines(),delimiter='\t')}
-    for row in rows:
-        column=row['column'].split(' / ',1)[0]
-        measured=native.get(column)
-        if not measured:continue
-        row.update(implementation=mapping[column],n=measured['n'],median=measured['med_abs'],maximum=measured['max_abs'],max_jnd=measured['max_jnd'])
-        qualification={
-            'HDR_VDP_3':('passes stated crop gate','Q output; 10-bit code quantization before 200-nit sRGB EOTF, D65 XYZ/OLED, 37.842505866 ppd.'),
-            'HDR_VDP_2':('unreproduced','Q output; unrounded 200-nit sRGB, BT.709, 37.84 ppd. Native median 0.0277768 Q vs published; independent Octave median 0.02651 Q vs published, native-vs-Octave median 0.00869019 Q. RGB accuracy and setting residual remain separate open questions.'),
-            'CAMBI':('passes stated crop median gate','Integer swscale-compatible luma; max raw 4.80485e-7. Near-zero nonlinear mapping amplifies max site-JND to 0.00212503; no maximum gate was specified.'),
-            'proposal-Butteraugli':('fails crop median gate','Native 61-pair pnorm3 plus identified map: median 3.06732e-7 exceeds requested 3.2e-8 site-JND gate. The separate 9618-row published-column mapping is not 9618 native scores. Constants provenance unknown.')}
-        row['status'],row['note']=qualification[column]
-        row['note']+=' Median site-JND '+measured['med_jnd']+'; Spearman '+measured['spearman']+'. Native receipt: benchmarks/aic_refusals_2026-10-18/README.md.'
-    rows.sort(key=lambda r: (0 if r['status'].startswith('MISSING') else 1 if r['status'] in ('unverifiable', 'unreproduced', 'fails native gate','fails crop median gate') else 2, r['column']))
-    return rows
-
 
 def plot(points, title, xlabel, ylabel, *, logx=True, front=False):
     """Dependency-free SVG with exact data in accessible titles and a companion table."""
@@ -191,10 +142,23 @@ def plot(points, title, xlabel, ylabel, *, logx=True, front=False):
     return ''.join(parts)
 
 
+def snapshot_section(data, commit):
+    body='<h2>Qualified two-host benchmark snapshot · 2026-10-18</h2><p>This fixed snapshot includes retained controls, production attempts and retries. Attempt counts and distinct names are not counts of independently reproduced algorithms. Only <code>qualified_timing=true</code> observations enter timing tables. Warm rows require at least ten clean rounds; failed, unsupported and flagged attempts stay excluded.</p>'
+    body+=table(['Host','Captured UTC','Retained attempts','Qualified timing attempts','Names with qualified timing'],
+                [[e(r[k]) for k in ('host','captured_utc','attempt_rows','qualified_attempt_rows','metric_names')] for r in data['hosts']])
+    body+='<p><a href="runtime-snapshot.json">Download all qualified timing groups and their provenance (JSON)</a>. Groups preserve host, report, binary and input hashes, geometry, workers, phase and output mode; reused lineage is not additional coverage. Cold values include construction and first scoring, excluding input loading. Warm round means are not individual-call percentiles.</p><h3>Requested 4K warm scalar observations</h3>'
+    requested=[r for r in data['observations'] if r['timing_phase']=='warm' and r['only_mode']=='score' and (r['width'],r['height']) in ((1024,1024),(3840,2160)) and r['threads'] in (1,8)]
+    body+=table(['Metric','Host / device','Shape','Workers','Warm median ms','Attempts','Report / binary / inputs'],
+                [[e(r['metric_name']),e(r['host']+' / '+r['device']),str(r['width'])+'×'+str(r['height']),r['threads'],fmt(r['median_ms']),r['attempts'],
+                  '<details><summary>'+e(r['source'][:12])+'</summary><pre>'+json_text({k:r[k] for k in ('source_report','source','impl_binary_sha','reference_sha256','distorted_sha256')})+'</pre></details>'] for r in requested])
+    body+='<p>Unlisted 1024²/4K cells have no qualified warm scalar observation in this fixed snapshot; other sizes, cold calls and native-map modes are in the download. This does not assert that a method is unimplemented or has never been measured. Newer live worker progress is not silently added to a frozen capture.</p>'
+    return body
+
+
 def build(output, cards):
     commit = source_commit()
     folder = output/'aic2026'; folder.mkdir(parents=True, exist_ok=True)
-    sources = set(['docs/AIC2026_REPRODUCTION_STATUS.md', 'docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md',
+    sources = set(['docs/AIC2026_REPRODUCTION_STATUS.md', COLUMN_INVENTORY,
                    'docs/AIC2026_METRICS_AND_FITTING.md', 'scripts/complexity/aic2026_columns.json',
                    'crates/zenmetrics-cli/src/metrics/mod.rs', 'docs/paper/IQA_COMPLEXITY_VS_RUNTIME.md'])
     def page(name, title, body, paths):
@@ -205,12 +169,16 @@ def build(output, cards):
     (folder/'style.css').write_text(STYLE)
     private=json.loads((ROOT/'benchmarks/dashboard/aic2026/private-aggregates.json').read_text())
     rows=reproduction_rows(cards,commit)
-    status_paths=['docs/AIC2026_REPRODUCTION_STATUS.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','benchmarks/dashboard/aic2026/private-aggregates.json','benchmarks/aic_refusals_2026-10-18/README.md','benchmarks/aic_refusals_2026-10-18/summary.tsv']
-    page('reproduction','Reproduction status', '<p class="notice">Missing evidence comes first. Native-oracle parity and matching a dataset column are separate checks. A matching method name alone qualifies neither. Current questions and detailed receipts: '+source_link(status_paths[0],commit)+'.</p>'+table(['Published column / site experiment','Availability','Implementation','n','Median |Δ|','Max |Δ|','Max site-JND Δ','Status','Configuration / qualification','Evidence'],[[e(r[k]) for k in ['column','availability','implementation','n','median','maximum','max_jnd','status','note']]+[source_link(status_paths[0],commit,'Current receipt ledger')] for r in rows]),status_paths)
+    sources.update(r['evidence'] for r in rows)
+    sources.add('benchmarks/dashboard/aic2026/retained-comparisons.tsv')
+    status_paths=['docs/AIC2026_REPRODUCTION_STATUS.md',COLUMN_INVENTORY,'benchmarks/dashboard/aic2026/private-aggregates.json','benchmarks/aic_refusals_2026-10-18/README.md','benchmarks/aic_refusals_2026-10-18/summary.tsv']
+    status_paths+=sorted({r['evidence'] for r in rows})+['benchmarks/dashboard/aic2026/retained-comparisons.tsv']
+    page('reproduction','Reproduction status', '<p class="notice">Missing evidence comes first. Native-oracle parity and matching a dataset column are separate checks. A matching method name alone qualifies neither. Current questions and detailed receipts: '+source_link(status_paths[0],commit)+'.</p>'+table(['Published column / site experiment','Availability','Current implementation','Column / native qualification','Measured gap and configuration','Measurement scope','Evidence'],[[e(r[k]) for k in ['column','availability','implementation','status']]+[e(r['note'])+(' Raw median '+e(r['median'])+', maximum '+e(r['maximum'])+'.' if r['median'] or r['maximum'] else ''),e(r['comparison_scope']),source_link(r['evidence'],commit,'Qualification receipt')] for r in rows]),status_paths)
     column_contract=json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())
     mapping=column_contract['map']
     ssim_inputs=ssim_dispatch_inputs()
     p=load_paper(); tallies=p.tallies(); measured=timings()
+    supplement_rows=supplements(); snapshot_data=snapshot()
     by_name={c['metric']:c for c in cards}
     entries=ledger()
     configs=[]
@@ -236,7 +204,17 @@ def build(output, cards):
     model_body+='<h2>Private models · aggregates only</h2>'+table(['Model','Published-column match','Native qualification'],[[e(r['metric']),e(r['published_match']),e(r['native_gate'])] for r in private['models']])
     page('models','Model cards',model_body,config_paths+['scripts/dashboard/citations.json','crates/zenmetrics-nn/models/jnd_scale.tsv','benchmarks/dashboard/aic2026/private-aggregates.json'])
     cx_paths=[str(x.relative_to(ROOT)) for sub,glob in [('tallies','*.json'),('measured','*.tsv'),('measured','*.meta')] for x in sorted((ROOT/B/sub).glob(glob))]
-    cx_body='<p class="notice">Provisional counts and historical one-pair timings on i265. CPU task time and elapsed wall time differ. Samples retain their source and repeat count. The 3840×2160 panel is incomplete. Unmeasured cells are not extrapolated. Neural counts, memory traffic and halo/span annotations remain partial.</p>'
+    cx_body='<p class="notice">Qualified observations from i265 and ARM64 Mac, plus separately labelled r5900xt supplements. Captures retain their timestamps, binaries, inputs, modes, worker budgets and source lineage. Timing success does not establish native-oracle or published-column parity. Cold construction and warm scoring are separate; missing cells are never extrapolated.</p>'
+    cx_body+=snapshot_section(snapshot_data,commit)
+    (folder/'runtime-snapshot.json').write_text(json.dumps(snapshot_data,allow_nan=False,separators=(',',':')))
+    cx_body+='<h2>Latest route supplements · r5900xt</h2><p>These qualified repeated-delta measurements use a different host and workload from i265/Mac and are not mixed into historical weight fits. Fixed-luma FSIM measures unmerged PR 92; DVIFM uses private released-build adapters, with aggregate observations only.</p>'
+    cx_body+=table(['Metric','Host','Shape','Workers','CPU ms/call','Wall ms/call','Repeats','Qualification','Evidence'],[[e(r['metric']),r['host'],e(r['shape']),r['threads'],fmt(r['cpu_ms']),fmt(r['wall_ms']),r['n'],e(r['qualification']),source_link(r['source'],commit)] for r in supplement_rows])
+    supplement_paths=['benchmarks/aic_refusals_2026-10-18/'+n for n in ('hdr-ahiq-qualified-perf.tsv','fast-routes-qualified-perf.tsv','fsim-luma-qualified-perf.tsv','dvifm-qualified-perf.tsv','hdr-ahiq-qualified-perf.meta','fast-routes-qualified-perf.meta','screenshot-timings.meta','dvifm-counts.tsv')]
+    cx_paths+=snapshot_data['paths']+supplement_paths
+    cx_body+='<h2>Partial DVIFM source counts</h2><p>Logical padded-block core operations per original pixel. Strip overlap, SIMD lane padding, allocation/setup, traffic and span are not qualified. These partial inventories are not equivalent to complete machine-instruction counts.</p>'
+    dvifm_counts=list(csv.DictReader((ROOT/'benchmarks/aic_refusals_2026-10-18/dvifm-counts.tsv').read_text().splitlines(),delimiter='\t'))
+    cx_body+=table(['Metric','Shape','Core FLOPs/pixel','Scope'],[[e(r['metric']),e(r['shape']),e(r['flops_per_pixel']),e(r['scope'])] for r in dvifm_counts])
+    cx_body+='<h2>Historical cost model and CPU task-clock panel · i265</h2><p>The following operation inventories and one-pair task-clock data retain their original measurement scope. They do not replace the qualified two-host observations above. Neural operation counts, memory traffic and halo/span annotations remain partial.</p>'
     cx_body+='<h2>Counted operations</h2>'+table(['Metric','flops / original pixel at 1024²','Halo pixels','Counter','Counted source commit'],[[e(m),fmt(r['flops_per_px']),fmt(r['halo_px']),e(t['counter']),e(t['source_commit'])] for m,(t,r) in sorted(tallies.items())])
     missing_tallies=sorted(set(by_name)-set(tallies))
     cx_body+='<p>Not counted: '+e(', '.join(missing_tallies) or 'none')+'. The count is an operation inventory, not elapsed runtime.</p><h2>Measured runtime</h2>'
@@ -249,7 +227,7 @@ def build(output, cards):
     for shape in ['1024x1024','3840x2160']:
         for threads in [1,8]:
             present={r['metric'] for r in measured if r['shape']==shape and r['threads']==threads};missing=sorted(set(by_name)-present)
-            cx_body+='<details><summary>Not measured: '+e(shape)+', '+str(threads)+' threads ('+str(len(missing))+')</summary><p>'+e(', '.join(missing) or 'none')+'</p><p>PieAPP missing one-thread timing: skipped by owner (2026-10-18). Other absent cells: no successful committed timing at this shape and thread budget. These files do not establish whether a missing cell was unattempted, refused, or unsupported; consult retained run metadata. HDR batch timings include additional-row PNG decode. MUSIQ at 4K exceeds its documented patch limit.</p></details>'
+            cx_body+='<details><summary>Absent from historical task-clock panel: '+e(shape)+', '+str(threads)+' threads ('+str(len(missing))+')</summary><p>'+e(', '.join(missing) or 'none')+'</p><p>PieAPP missing one-thread timing: skipped by owner (2026-10-18). Other absent cells have no row in this historical table. Qualified observations may exist in the newer snapshot and supplements above; these historical omissions do not establish missing implementation or missing current measurements. HDR batch timings include additional-row PNG decode. MUSIQ at 4K exceeds its documented patch limit.</p></details>'
     wt_rows=[]
     for stem,label in p.TABLES:
         path='scripts/complexity/weights_'+stem+'.json';wt=json.loads((ROOT/path).read_text());sources.add(path)
@@ -270,7 +248,8 @@ def build(output, cards):
     pareto_body+=plot([(r['cost'],r['agreement'],r['metric']) for r in pareto],'Preliminary cost versus within-source agreement','Weighted counted cost / original pixel (log)','Mean within-source Spearman',front=True)
     pareto_body+=table(['Metric','Published column','Counted cost','Within-source Spearman','95% source interval'],[[e(r['metric']),e(r['column']),fmt(r['cost']),fmt(r['agreement']),fmt(r['lo'])+' – '+fmt(r['hi'])] for r in pareto])
     pareto_body+='<p>Missing: columns without an established implementation mapping or tally. An omitted point does not mean a method is dominated. A point on this front does not establish performance on other datasets.</p>'
-    coverage_body, coverage_paths = screenshot_coverage(tallies, measured, rows, commit)
+    snapshot_coverage=[dict(metric=r['metric_name']) for r in snapshot_data['observations']]
+    coverage_body, coverage_paths = screenshot_coverage(tallies, measured+supplement_rows+snapshot_coverage, rows, commit)
     page('coverage','Screenshot coverage',coverage_body,coverage_paths)
     page('pareto','Preliminary Pareto frontier',pareto_body,[B+'/analysis/aic2026_agreement.json','scripts/complexity/aic2026_columns.json','scripts/complexity/weights_i265_P_rthroughput.json']+cx_paths)
     stat_path='benchmarks/dashboard/aic2026/scatter-example.json';example=json.loads((ROOT/stat_path).read_text())
@@ -329,21 +308,25 @@ def screenshot_coverage(tallies, measured, comparisons, commit):
         if name=='PSNR_Y':reason='Draft count maps to libvmaf luma; published AIC PSNR-Y uses studio BT.601. Timing coverage does not qualify that ingress match.'
         if name.startswith(('HaarXYB','HaarY-','HaarYCoCg')):
             counted=timed='not measured; unidentified';reason='Method search completed: 0 of 11 Haar variants identified; method gate fails. No scoring configuration or candidate fit is qualified; published per-image values remain unavailable.'
-        elif 'DVIFM' in name:reason='Four released-build presets are being counted and timed by aicfix; published-column build differs.'
+        elif 'DVIFM' in name:
+            counted='partial core tally';reason='Released-build presets have partial logical core counts and qualified r5900xt timings. Strip overlap, lane padding, setup, traffic and span remain unqualified; published-column builds differ.'
         elif name.startswith('FSIM-k'):
-            counted=timed='pending (aicfix)';reason='Luma-only fixed-factor route pending aicfix; existing fsim-k* rows count the combined output call.'
+            counted='yes; unmerged PR 92' if m in tallies else 'pending (aicfix)'
+            timed='yes; unmerged PR 92' if any(r['metric']==m for r in measured) else 'pending (aicfix)'
+            reason='Genuine luma-only fixed-factor tallies and 36 qualified timing observations describe unmerged PR 92, not a master CLI route. Existing fsim-k* calls return both FSIM outputs.'
         elif '-k' in name:reason='Implemented fixed factor; no published per-image values to qualify column comparison.'
         return [e(name),e(m or 'not established'),counted,timed,e((comparison['column']+': '+comparison['status']) if comparison else 'no unambiguous column comparison'),e(reason)]
-    body='<p>Both requested screenshots are covered entry by entry. Visible center-marker ranks are transcribed from the authors’ figure, not recomputed rankings. They are provisionally called medians following the brief; the figure does not label that statistic. Counts and timings refer to our implementations; the draft values refer to different reference implementations. Pending aicfix rows are not counted as complete.</p><h2>Pedzisz complexity draft · 14 entries</h2>'
+    body='<p>Both requested screenshots are covered entry by entry. Visible center-marker ranks are transcribed from the authors’ figure, not recomputed rankings. They are provisionally called medians following the brief; the figure does not label that statistic. Counts and timings refer to our implementations; the draft values refer to different reference implementations. Completed supplements retain their partial-count and unmerged-branch qualifications.</p><h2>Pedzisz complexity draft · 14 entries</h2>'
     body+=table(['Screenshot name','Our route','Counted','Timed','Column comparison','Reason / qualification'],[coverage(r['draft_name'],r['zenmetrics']) for r in draft['values']])
     body+='<p>'+e(draft['caveat'])+'</p><h2>AIC2026 rank-distribution figure · 31 names</h2>'
     result=[]
     for r in ranks:
         name=r['metric'];m=aliases.get(name)
         if name.startswith('FSIMc-k'):m='fsim-'+name.split('-')[-1]
+        elif name.startswith('FSIM-k'):m='fsim-y-'+name.split('-')[-1]
         if name.startswith('VSI-k'):m='vsi-'+name.split('-')[-1]
         row=coverage(name,m);row.insert(1,e(r['visible_median_rank']));result.append(row)
     body+=table(['Screenshot name','Visible center rank (provisional median)','Our route','Counted','Timed','Column comparison','Reason / qualification'],result)
     body+='<h2>Haar method search · completed, no identification</h2><p>'+e(str(haar['method_count']))+' methods across '+e(str(haar['twelve_source_pools']))+' twelve-source pools, with '+e(str(haar['five_source_subsets_per_pool']))+' five-source subsets per pool. Best available-roster mean absolute rank error '+fmt(haar['mean_abs_rank_error'])+', maximum '+fmt(haar['max_abs_rank_error'])+' ranks, beyond the '+fmt(haar['chart_reading_uncertainty'])+'-rank reading uncertainty. Only '+str(haar['matched_chart_labels'])+' of 31 chart labels match the '+str(haar['available_competitors'])+' available competitors; this does not establish an exact roster comparison. Zero of 11 Haar variants identified; no candidate fitting. Pointwise targets admit '+str(haar['pointwise_train_finite'])+' train and '+str(haar['pointwise_test_finite'])+' test finite rows, with '+str(haar['pointwise_rows_excluded'])+' excluded. Only aggregate outcomes are public.</p>'
-    body+='<p>Missing one-thread PieAPP timing is skipped by owner; its existing pyiqa reproduction result is retained. DVIFM public count/timing records and luma-only FSIM fixed-factor coverage remain pending aicfix until committed evidence arrives.</p>'
-    return body,[draft_path,ranks_path,haar_path,'docs/AIC2026_REPRODUCTION_STATUS.md']
+    body+='<p>Missing one-thread PieAPP timing is skipped by owner; its existing pyiqa reproduction result is retained. DVIFM partial core counts and qualified timing records are committed. Fixed-luma FSIM has branch-specific tallies and timings; PR 92 remains unmerged. Timing evidence does not identify the authors’ unavailable per-image columns.</p>'
+    return body,[draft_path,ranks_path,haar_path,'docs/AIC2026_REPRODUCTION_STATUS.md','benchmarks/aic_refusals_2026-10-18/README.md','benchmarks/aic_refusals_2026-10-18/dvifm-counts.tsv','benchmarks/aic_refusals_2026-10-18/screenshot-timings.meta']

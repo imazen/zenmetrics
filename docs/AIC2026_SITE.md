@@ -139,3 +139,30 @@ reproduction. No candidate fitting is qualified. Public `haar-search.json`
 contains aggregates only; private inputs and implementation stay private.
 The chart does not label its center marker's statistic: “median” is a
 provisional transcription convention from the brief, not a verified label.
+
+### Current qualification and benchmark sources (2026-10-18)
+
+The first AIC generator incorrectly reused implementation/status labels from the
+explicitly superseded October 15 coverage audit. Butteraugli-original consequently
+retained the old libjxl mismatch despite its distinct original-reference port.
+Current reproduction now uses the naming/qualification ledger and reproduction
+status, the pyiqa native receipts, private aggregate cards, and explicit native
+AIC route receipts. `columns.tsv` is only a name/availability inventory.
+`retained-comparisons.tsv` retains numeric observations for unchanged qualified
+panels; it contains no historical implementation-status labels. Newer native
+receipts override those values. Every row identifies its comparison scope and
+evidence; reference-versus-column and native-oracle errors remain distinct.
+
+The i265 benchmark sessions confirmed the public chart snapshot at
+`benchmarks/iqa_chart_snapshot_2026-10-18/`. It contains qualified timing attempts
+from i265 and ARM64 Mac, including cold/warm and scalar/native-map modes. The AIC
+page verifies snapshot hashes and admits only qualified timings; grouping retains
+host, report lineage, binary/input identities, shape, workers and phase. Counts
+of attempts or names are not counts of reproduced algorithms. A frozen executable's
+uncompiled aliases do not mean current source lacks those implementations.
+
+New `aic_refusals_2026-10-18/*-qualified-perf.tsv` panels are separate r5900xt
+measurements. DVIFM core counts remain partial and its aggregate timings do not
+identify the historical published columns. Fixed-luma FSIM's three tallies and
+36 timing observations describe unmerged PR 92, not master CLI routes. These
+measurements are shown separately from historical i265 weight-table fits.

@@ -46,7 +46,12 @@
     "HDR_VDP_3": "hdrvdp3-aic2026",
     "TOPIQ": "topiq-fr",
     "TOPIQ-PIPAL": "topiq-fr-pipal",
-    "WaDIQaM": "wadiqam-pyiqa"
+    "WaDIQaM": "wadiqam-pyiqa",
+    "Butteraugli-original": "butteraugli-original",
+    "Butteraugli-max": "butteraugli",
+    "Butteraugli-3norm": "butteraugli",
+    "SSIMULACRA1": "ssimulacra1",
+    "WS-HV": "ws-hv"
   },
   "notes": {
     "proposal-Butteraugli": "Explicit native pnorm3 two-segment map. Published-column mapping covers 9618 rows, but independent native scoring covers 61 and fails the stricter median gate (3.06732e-7 versus 3.2e-8 site-JND). Constants provenance unknown.",
@@ -57,6 +62,6 @@
     "VMAF-neg": "Explicit studio BT.601 ingress; default vmaf-neg uses BT.709.",
     "CAMBI": "Explicit integer swscale-compatible luma. Native 61-crop median gate passes; maximum site-JND residual 0.00212503 is disclosed.",
     "HDR_VDP_2": "Explicit Q output, unrounded 200-nit sRGB, BT.709, 37.84 ppd. Native and independent Octave RGB panels retain distinct residuals; no exact column qualification.",
-    "HDR_VDP_3": "Explicit Q output (not Q_JOD), 10-bit code quantization before 200-nit sRGB EOTF, XYZ/OLED, 37.842505866 ppd. Native 61-crop stated gate passes; no tally/time yet."
+    "HDR_VDP_3": "Explicit Q output (not Q_JOD), 10-bit code quantization before 200-nit sRGB EOTF, XYZ/OLED, 37.842505866 ppd. Native 61-crop stated gate passes; tallies and qualified r5900xt timings are committed."
   }
 }

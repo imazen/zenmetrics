@@ -1,0 +1,125 @@
+column	availability
+A-FINE	site+dataset
+ADM2	site+dataset
+AHIQ	site+dataset
+AIMOS	site+dataset
+Butteraugli-3norm	site
+Butteraugli-max	site
+Butteraugli-original	site
+CAMBI	site+dataset
+CIEDE2000	site+dataset
+CKDN (excluded)	dataset
+CVVDP	site+dataset
+CW-SSIM	site+dataset
+DISTS	site+dataset
+DMM	site+dataset
+DSSIM	site+dataset
+DeepDC	site+dataset
+DreamSim	site+dataset
+FLIP	site+dataset
+FSIM / pyiqa-FSIM	site+dataset
+FSIM-k2 (pyiqa-FSIM-k2)	neither
+FSIM-k3 (pyiqa-FSIM-k3)	neither
+FSIM-k4 (pyiqa-FSIM-k4)	neither
+FSIM-nodownscale (pyiqa-FSIM-nodownscale)	neither
+FSIMc / pyiqa-FSIMc	site+dataset
+FSIMc-k2 (pyiqa-FSIMc-k2)	neither
+FSIMc-k3 (pyiqa-FSIMc-k3)	neither
+FSIMc-k4 (pyiqa-FSIMc-k4)	neither
+FSIMc-nodownscale (pyiqa-FSIMc-nodownscale)	neither
+GMSD / pyiqa-GMSD	site+dataset
+HDR_VDP_2 / HDR-VDP-2 Q	site+dataset
+HDR_VDP_3 / HDR-VDP-3 Q	site+dataset
+HaarPSI / pyiqa-HaarPSI	site+dataset
+HaarXYB-SSIM-deltaL1248 (excluded)	neither
+HaarXYB-SSIM-hmask-deltaL1248 (excluded)	neither
+HaarXYB-SSIM-mask-deltaL1248 (excluded)	neither
+HaarXYB-SSIM-mask-edge-deltaL1248 (excluded)	neither
+HaarXYB-deltaL1248 (excluded)	neither
+HaarXYB-hmask-deltaL1248 (excluded)	neither
+HaarXYB-mask-deltaL1248 (excluded)	neither
+HaarY-deltaL1248 (excluded)	neither
+HaarY-hmask-deltaL1248 (excluded)	neither
+HaarYCoCg-deltaL1248 (excluded)	neither
+HaarYCoCg-hmask-deltaL1248 (excluded)	neither
+IW-SSIM / IW-SSIM-piq	site+dataset
+LPIPS-VGG	site+dataset
+LPIPS-alex	site+dataset
+MAD (excluded)	neither
+MS-SSIM	site+dataset
+MS-SSIM-pyiqa / pyiqa-MS-SSIM	site+dataset
+MSSWD	site+dataset
+NLPD / pyiqa-NLPD	site+dataset
+PSNR	site+dataset
+PSNR-Cb (excluded)	dataset
+PSNR-Cr (excluded)	dataset
+PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb)	dataset
+PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr)	dataset
+PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y)	site
+PSNR-HVS-ref, PSNR-HVS-M-ref	neither
+PSNR-HVS-vmaf (= dataset PSNR-HVS)	site
+PSNR-HVS-vqmt, PSNR-HVS-M-vqmt	neither
+PSNR-Y / pyiqa-PSNR-Y	site+dataset
+PSNR-YCbCr611	site+dataset
+PieAPP	site+dataset
+SSIM	site+dataset
+SSIM-pyiqa / pyiqa-SSIM	site+dataset
+SSIM-pyiqa-f32-k2 (pyiqa-SSIM-f32-k2)	neither
+SSIM-pyiqa-f32-k3 (pyiqa-SSIM-f32-k3)	neither
+SSIM-pyiqa-f32-k4 (pyiqa-SSIM-f32-k4)	neither
+SSIM-pyiqa-f32-k5 (pyiqa-SSIM-f32-k5)	neither
+SSIM-pyiqa-f32-k6 (pyiqa-SSIM-f32-k6)	neither
+SSIMULACRA1	site
+SSIMULACRA2	site+dataset
+SSIMc / pyiqa-SSIMc	site+dataset
+SSIMc-pyiqa-f32-k2 (pyiqa-SSIMc-f32-k2)	neither
+SSIMc-pyiqa-f32-k3 (pyiqa-SSIMc-f32-k3)	neither
+SSIMc-pyiqa-f32-k4 (pyiqa-SSIMc-f32-k4)	neither
+SSIMc-pyiqa-f32-k5 (pyiqa-SSIMc-f32-k5)	neither
+SSIMc-pyiqa-f32-k6 (pyiqa-SSIMc-f32-k6)	neither
+STLPIPS	site+dataset
+STLPIPS-VGG	site+dataset
+TOPIQ	site+dataset
+TOPIQ-PIPAL	site+dataset
+VIF / pyiqa-VIF	site+dataset
+VIF-vmaf-fitted (excluded)	neither
+VIF-vmaf-scale0	site
+VIF-vmaf-scale1	site
+VIF-vmaf-scale2	site
+VIF-vmaf-scale3	site
+VIF_vmaf (dataset)	dataset
+VMAF (dataset)	dataset
+VMAF v0 / VMAF-v0.6.1	site
+VMAF v0 via vmaf crate + studio-601 Y	site
+VMAF v1 / VMAF-v1	site
+VMAF-neg (dataset) / JND_VMAF-neg	dataset
+VMAF-neg v0 / VMAF-v0.6.1neg	site
+VMAF_420	neither
+VSI / pyiqa-VSI	site+dataset
+VSI-k2 (pyiqa-VSI-k2)	neither
+VSI-k3 (pyiqa-VSI-k3)	neither
+VSI-k4 (pyiqa-VSI-k4)	neither
+VSI-nodownscale (pyiqa-VSI-nodownscale)	neither
+WD_s1	site+dataset
+WD_s2	site+dataset
+WD_s3	site+dataset
+WD_s4	site+dataset
+WD_s5	site+dataset
+WS-HV	site
+WaDIQaM	site+dataset
+mDCT-PSNR / mDCTpsnr	site+dataset
+proposal-Butteraugli	site+dataset
+proposal-DVIFM (dataset)	dataset
+proposal-DVIFM-0.2 / DVIFM-0.2.0	site+dataset
+proposal-DVIFM-0.2-use_chroma / DVIFM-0.2.0-use_chroma	dataset
+proposal-DVIFM-2d / DVIFM-2d	site
+proposal-DVIFM-2d-v0.2 (excluded)	neither
+proposal-DVIFM-lap-v0.2 (excluded)	neither
+proposal-DVIFM-lap-v0.3 (excluded)	neither
+proposal-DVIFM-min / DVIFM-min	site
+proposal-DVIFM-min-v0.2 (excluded)	neither
+proposal-IDFIQA / IDFIQA	site+dataset
+proposal-mDCTPSNR / mDCTpsnr-JND	site+dataset
+pyiqa-GMSD-materialized-y	neither
+pyiqa-MS-SSIM-f32, -f32-k2…k6	neither
+pyiqa-SSIM-f32, pyiqa-SSIMc-f32	neither
