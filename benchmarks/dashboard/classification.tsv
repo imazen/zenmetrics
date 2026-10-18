@@ -13,6 +13,13 @@ benchmarks/aic2026_repro_2026-10-17/wadiqam-fr-tid.tsv	ignored	AIC2026 column-re
 benchmarks/aic2026_repro_2026-10-17/wadiqam-nr-live.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
 benchmarks/aic2026_repro_2026-10-17/wadiqam-nr-tid.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
 benchmarks/aic2026_repro_2026-10-17/wd.tsv	ignored	AIC2026 column-reproduction scores on the 61 crop pairs; summarized in the directory README, not a dashboard panel.
+benchmarks/aic_confsearch_2026-10-17/afine_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/butteraugli_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/cambi_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/dmm_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/hdrvdp2_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/hdrvdp3_configs.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
+benchmarks/aic_confsearch_2026-10-17/wd_conventions_top.tsv	ignored	AIC2026 canonical-config search tables (investigation); awaiting a reviewed dashboard adapter.
 benchmarks/aic_flip_2026-10-15/cw_grid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/cw_pyramid_search_summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_flip_2026-10-15/input_hashes.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
