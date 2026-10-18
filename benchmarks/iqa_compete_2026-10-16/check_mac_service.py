@@ -17,6 +17,7 @@ def main():
     p.add_argument('output', type=Path)
     p.add_argument('--run-heavy', type=Path, required=True)
     p.add_argument('--lock', type=Path, required=True)
+    p.add_argument('--signal', choices=['kill', 'stop'], default='kill')
     a = p.parse_args()
     if sys.platform != 'darwin':
         p.error('this control requires macOS')
@@ -27,7 +28,7 @@ def main():
     result = subprocess.run([*helper, 'install', str(bundle), str(output), '--run-heavy', str(a.run_heavy.resolve()),
                              '--lock', str(a.lock.resolve()), '--timeout-seconds', '120'], text=True, capture_output=True, check=True)
     info = json.loads(result.stdout)
-    receipt = dict(service=info, started=time.time(), controller_killed=None, restarted_service_pid=None)
+    receipt = dict(service=info, started=time.time(), controller_killed=None, injected_signal=a.signal, restarted_service_pid=None)
     evidence = output.with_name(output.name + '.control.json')
     def save():
         evidence.write_text(json.dumps(receipt, indent=2) + '\n')
@@ -47,7 +48,7 @@ def main():
                     fields = line.strip().split(None, 2)
                     if len(fields) == 3 and int(fields[1]) == service_pid and str(bundle / 'durable.py') + ' run ' in fields[2]:
                         pid = int(fields[0])
-                        os.kill(pid, signal.SIGKILL)
+                        os.kill(pid, signal.SIGKILL if a.signal == 'kill' else signal.SIGSTOP)
                         receipt.update(controller_killed=pid, initial_service_pid=service_pid, killed_at=time.time())
                         save()
                         break

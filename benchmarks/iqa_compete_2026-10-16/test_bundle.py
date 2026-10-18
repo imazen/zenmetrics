@@ -161,9 +161,18 @@ class ServiceTests(unittest.TestCase):
         stderr = io.StringIO()
         awake = Mock()
         with patch.object(sys, 'argv', args), patch.object(subprocess, 'Popen', return_value=awake) as spawn, \
-                patch.object(subprocess, 'call', return_value=returncode) as child, contextlib.redirect_stderr(stderr):
+                patch.object(mac_service, 'supervise', return_value=returncode) as child, contextlib.redirect_stderr(stderr):
             result = mac_service.main()
         return result, child, spawn, awake, stderr.getvalue()
+
+    def test_stalled_controller_is_killed_without_manual_resume(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            rc = mac_service.supervise([sys.executable, '-c', 'import time; time.sleep(30)'], self.output, startup=.3)
+        self.assertLess(rc, 0)
+
+    def test_healthy_controller_completion_is_preserved(self):
+        rc = mac_service.supervise([sys.executable, '-c', 'pass'], self.output, startup=2)
+        self.assertEqual(rc, 0)
 
     def test_start_refuses_installed_other_bundle(self):
         directory = self.home / 'Library/LaunchAgents'
@@ -183,7 +192,7 @@ class ServiceTests(unittest.TestCase):
             with self.subTest(child_returncode=rc):
                 result, child, spawn, awake, _ = self.execute(returncode=rc)
                 self.assertEqual(result, expected)
-                child.assert_called_once_with(self.command)
+                child.assert_called_once_with(self.command, self.output)
                 spawn.assert_called_once_with(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
                 awake.terminate.assert_called_once_with()
                 awake.wait.assert_called_once_with()

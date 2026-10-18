@@ -8,6 +8,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 import sys
+import time
 
 
 def verify(bundle):
@@ -28,6 +29,27 @@ def verify(bundle):
                 h.update(block)
         if h.hexdigest() != expected:
             raise ValueError('bundle changed: ' + name)
+
+
+def supervise(command, output, silence=15.0, startup=60.0):
+    """A Popen child remains our identity until reaped; never kill a saved PID."""
+    child = subprocess.Popen(command)
+    seen = None
+    deadline = time.monotonic() + startup
+    while child.poll() is None:
+        try:
+            stamp = (output / 'controller-heartbeat').stat().st_mtime_ns
+        except FileNotFoundError:
+            stamp = None
+        if stamp is not None and stamp != seen:
+            seen = stamp
+            deadline = time.monotonic() + silence
+        if time.monotonic() >= deadline:
+            print('Controller heartbeat stalled; killing owned controller for restart', file=sys.stderr, flush=True)
+            child.kill()
+            return child.wait()
+        time.sleep(.1)
+    return child.returncode
 
 
 def main():
@@ -74,7 +96,7 @@ def main():
         # Hold an idle-sleep assertion only for this service process lifetime.
         awake = subprocess.Popen(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
         try:
-            rc = subprocess.call(command)
+            rc = supervise(command, output)
         finally:
             awake.terminate()
             awake.wait()
