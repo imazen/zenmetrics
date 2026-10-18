@@ -192,3 +192,96 @@ Together with retained original scalar cells, this completes its remaining
 six-route dvifmish scalar workload. The following single classical retry is
 MAD at aic-medium, one worker, warm; its prior attempt remains bound in lineage
 and only one additional attempt is allowed before the original NN phases resume.
+
+## Breadth-first deadline successor — 2026-10-18
+
+The next owner directive promotes `psnrhvs-daala` and all six frozen FSIM
+routes (`fsim`, `fsim-y`, `fsim-k2`, `fsim-k3`, `fsim-k4`,
+`fsim-nodownscale`). Within requested families, `vmaf-neg` and `vmaf-v1`
+(the requested “VMAF 1”) have first admission alongside these additions.
+All earlier requested families and all six dvifmish routes remain included.
+The actual HDRVDP route names are `hdrvdp` and `hdrvdp3`, not `hdrvdp2`.
+They and `mdctpsnr` form the last non-NN tier in the preserved full queue.
+Absolute-luminance/viewing-condition refusals, ingress and limits are unchanged.
+
+The owner then requested breadth within a 20-minute window. The observed window
+is **21:34:43Z–21:54:43Z**, including preparation. Successor selection uses one
+smallest eligible missing resolution per priority method, one existing cold
+repeat and the original ten-round warm cell, with eight requested workers.
+This selects existing immutable cells; it changes neither a cell's worker
+budget nor its sample/gate settings. One-worker cells, other cold repeats and
+unselected sizes remain pending, not complete. A retained qualified cold or
+warm observation at that geometry counts toward the pair and is not repeated.
+No new maps are admitted.
+
+All 26 common requested methods (20 family routes and six dvifmish routes)
+already have a gate-clean eight-worker cold/warm pair at at least one larger
+resolution on both hosts, independently validated from retained attempt logs.
+Including the host-specific fastest baseline, the retained paired coverage is
+34 methods on Mac and 32 on i265. This is retained multi-binary evidence, not a
+new single-binary panel. The Mac deadline subset adds **20 next-missing
+resolution pairs / 40 single-cell phases**. Most selected methods have only
+8K left; Daala and six VMAF variants select aic-large (3355×2516), their smallest
+missing geometry. No time-to-completion extrapolation is asserted.
+
+i265 has no eligible missing non-NN scalar cells left: its deadline subset is
+empty and it runs no duplicates. Its original NN CPU state (160 successful,
+944 pending at the boundary) and CUDA queue are held for explicit full resume.
+Mac NN CPU/Metal likewise follow the preserved full scalar resume graph rather
+than a stale original broad-output gate.
+
+### Immutable inheritance and pending work
+
+A successor may consume an earlier phase capped at one or two attempts. The
+saved policy must match that exact inherited cap; another successor never
+resets it to two. Parent `scalar-lineage.json` bytes are retained under a
+content-hashed parent filename, with their hash still in the input inventory.
+The new lineage binds its parent and any additional consumed attempts. The
+parent sequence hash is checked before stopping services or preparing outputs.
+Twelve controls cover new route ordering, slow-tail precedence, one-attempt
+inheritance, parent-lineage preservation and deadline selection without repeated
+qualified cells; earlier map/scheduler/integrity controls remain unchanged.
+
+Mac's active deadline service is
+`user/501/io.imazen.iqa-scalar.36b8b2c5a5379619`; root:
+`~/benchmark-bundles/iqa-mac-20261018-scalar-priority-v2.noindex`.
+i265's deadline service is `iqa-scalar-6d2813ccf5c6bd51.service`; root:
+`~/benchmark-bundles/iqa-i265-20261018-scalar-priority-v3`.
+Both old scalar coordinators were stopped under their shared locks, after
+current workers finished; new source is `8a1b8674bd61`.
+
+Each root's `sequence.json` is the deadline subset. Its
+`resume-sequence.json` preserves the selected outputs followed by every omitted
+scalar cell and then original NN outputs, with the original remaining budgets.
+The selected cells are excluded from the omitted partition. Re-executing that
+resume plan with its frozen hash retains already-completed selected outputs;
+it does not measure them again. It is not automatically launched. On Mac,
+1049 non-NN cells are deferred, including 113 slow-tail cells. Their wait
+records explicitly require manual resume. The full queue is not reported done.
+
+The existing 30-minute check-in plan now invokes the successor's frozen status
+command, includes deadline and deferred phases, and retains
+`checkin-plan.pre-deadline-successor.json`. A real check-in passed. Status reports
+measured elapsed/remaining seconds and qualified target-pair counts, alongside
+native service and actual predecessor records. Before a single-cell phase has
+its first result, its `priority-wait.json` `active=true` is authoritative;
+a missing progress file alone does not mean a stall.
+
+### Deadline boundary guard and receipts
+
+`deadline-boundary` uses a hashed configuration and waits until the deadline,
+then acquires the same shared host lock. It allows the current worker to finish,
+verifies no owned watchdog is active, and stops only the named coordinator.
+This controls scheduling; it does not truncate a warm round, change samples or
+relax gates. The one-shot native Mac guard is
+`user/501/io.imazen.iqa-deadline.6293c6190932ea8e`, source `ff1e71bfd29f`.
+Its eventual safe-boundary time may be later than the nominal deadline if a
+worker is still active. Omitted or unfinished cells remain pending for resume.
+
+Configs, manifests, inherited lineage, native installation, deadline guard and
+check-in receipts are retained under
+`/home/lilith/benchmark-artifacts/iqa-scalar-successor-20261018/{mac,i265}/`.
+Early measured Mac results have complete cold/warm pairs for VMAF-neg,
+VMAF-v1 and PSNR-HVS-Daala, with all ten warm rounds clean for each. Existing
+quality-evidence restrictions still apply: admission priority is not a new
+human-agreement or Pareto qualification for Daala/FSIM variants.

@@ -345,3 +345,9 @@ fastest-ten baseline, all six dvifmish routes, additional named metric families,
 remaining scalar work, then NN CPU/GPU. Retained failure budgets and the shared
 locks are unchanged. The original bundles and predecessor files are historical
 inputs; the active NN waits follow the new scalar outputs.
+
+The subsequent [deadline successor](IQA_SCALAR_PRIORITY.md#breadth-first-deadline-successor--2026-10-18)
+counts retained qualified dvifmish pairs toward breadth rather than repeating
+them. Both hosts already cover all six routes at larger resolutions. One-worker
+cells and extra repeats remain pending where omitted from the urgent subset;
+no full-resume completion is implied.
