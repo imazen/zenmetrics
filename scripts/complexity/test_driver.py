@@ -101,6 +101,36 @@ with open(a.out, 'a') as out:
                 self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
                 self.assertEqual(calls.read_text(), 'wd\n')
 
+    def test_hold_errors_are_terminal_unqualified_and_explicit_pieapp_is_announced(self):
+        wrapper = self.root / 'wrapper'
+        wrapper.write_text('#!/bin/sh\nshift 5\nexec "$@"\n')
+        wrapper.chmod(0o755)
+        fake = self.root / 'fake_perf.py'
+        fake.write_text(f'''import argparse, sys
+sys.path.insert(0, {str(HERE)!r})
+from perf_deltas import append_error
+p=argparse.ArgumentParser(); p.add_argument('--out'); p.add_argument('--metrics')
+a, _=p.parse_known_args()
+append_error(a.out, a.metrics, 8, 0, 'controlled probe failure')
+''')
+        for phase, filename in [('rten', 'i265_nn_3840x2160.tsv'),
+                                ('cuda', 'i265_nn_ort-cuda_3840x2160.tsv')]:
+            output = self.root / phase
+            env = dict(os.environ, CX4K_OUTPUT=str(output), CX4K_LOGS=str(output / 'logs'),
+                       CX4K_LOCK=str(output / 'heavy.lock'), CX4K_RUN_HEAVY=str(wrapper),
+                       CX4K_PERF_DRIVER=str(fake), CX4K_METRICS_ENG='pieapp', CX4K_METRICS_RTEN='pieapp')
+            result = subprocess.run(['bash', str(HERE / 'drive_nn_4k.sh'), phase],
+                                    env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('BENCHMARK EXPLICITLY SELECTED (slow): pieapp\n', result.stderr)
+            self.assertNotIn('required): pieapp\n', result.stderr)
+            self.assertEqual(len(list((output / 'logs').glob('*.log'))), 1)
+            with (output / filename).open() as source:
+                rows = list(csv.DictReader(source, delimiter='\t'))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]['wall_ms_per_call'], 'error')
+            self.assertEqual(rows[0]['score'], 'controlled probe failure')
+
     def test_outer_term_and_probe_timeout_kill_owned_child_only(self):
         # Fake perf runs a real sleeping child in the session owned by run().
         # Another identically named process must survive both controls.
@@ -145,6 +175,32 @@ child.wait()
         finally:
             unrelated.terminate()
             unrelated.wait(timeout=5)
+
+    def test_interrupted_holds_without_rows_retry_once_and_keep_both_logs(self):
+        wrapper = self.root / 'wrapper'
+        wrapper.write_text('#!/bin/sh\nshift 5\nexec "$@"\n')
+        wrapper.chmod(0o755)
+        fake = self.root / 'interrupted.py'
+        fake.write_text(f'''import sys
+sys.path.insert(0, {str(HERE)!r})
+from perf_deltas import append_error
+if __name__ == '__main__': raise SystemExit(124)
+''')
+        output = self.root / 'out'
+        env = dict(os.environ, CX4K_OUTPUT=str(output), CX4K_LOGS=str(output / 'logs'),
+                   CX4K_LOCK=str(output / 'heavy.lock'), CX4K_RUN_HEAVY=str(wrapper),
+                   CX4K_PERF_DRIVER=str(fake), CX4K_METRICS_RTEN='wd')
+        result = subprocess.run(['bash', str(HERE / 'drive_nn_4k.sh'), 'rten'],
+                                env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        logs = list((output / 'logs').glob('*.log'))
+        self.assertEqual(len(logs), 2)
+        self.assertTrue(all('rc=124' in log.read_text() for log in logs))
+        with (output / 'i265_nn_3840x2160.tsv').open() as source:
+            rows = list(csv.DictReader(source, delimiter='\t'))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['wall_ms_per_call'], 'error')
+        self.assertIn('last exit=124', rows[0]['score'])
 
 
 if __name__ == '__main__':

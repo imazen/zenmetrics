@@ -2,7 +2,8 @@
 # Per-metric 3840x2160 NN holds on i265 — ONE flock+run-heavy+perf_deltas per metric.
 # Lead directive 2026-10-18: each lock hold <20 min; metrics whose measurement exceeds
 # that run --repeats 1 (noted in meta); per-call timeout stays 900 s.
-# Idempotent: missing_metrics.py gates every hold; safe to relaunch after a kill.
+# Resume policy: enough samples OR an error row settles an attempt. Error rows
+# remain unqualified. Retry only interrupted holds without a terminal row.
 # Usage: bash scripts/complexity/drive_nn_4k.sh rten|cuda|webgpu|all
 # Each attempt gets a unique log; existing result rows are retained.
 set -euo pipefail
@@ -68,11 +69,22 @@ perf.append_error(*sys.argv[2:])
 PYERR
 }
 
-done_check() {  # out metric expected -> empty if done
+done_check() {  # out metric expected -> empty if enough samples OR terminal failure
   python3 "$MM" --out "$1" --metrics "$2" --threads 8 --repeats "$3"
 }
 
+announce_selection() {  # Actual phase list, including explicit overrides.
+  local list=$1 metric
+  for metric in pieapp pieapp-pyiqa; do
+    case ",$list," in
+      *,"$metric",*) echo "BENCHMARK EXPLICITLY SELECTED (slow): $metric" >&2 ;;
+      *) echo "BENCHMARK OMITTED (slow; explicit CX4K_METRICS_RTEN/CX4K_METRICS_ENG selection required): $metric" >&2 ;;
+    esac
+  done
+}
+
 phase_rten() {
+  announce_selection "$M_RTEN"
   local out=$O/i265_nn_3840x2160.tsv
   local pending
   for m in ${M_RTEN//,/ }; do
@@ -81,7 +93,9 @@ phase_rten() {
     hold "$BIN_NN" "$out" "$m" 3 0 "" "" ""
     pending=$(done_check "$out" "$m" 3)
     if [ -n "$pending" ]; then
-      hold "$BIN_NN" "$out" "$m" 1 1 "" "" ""   # rep3 overran the hold: minimal 3-call delta
+      # An interrupted hold produced no terminal row; try a minimal 3-call delta.
+      # A recorded error is terminal and never reaches this branch.
+      hold "$BIN_NN" "$out" "$m" 1 1 "" "" ""
       pending=$(done_check "$out" "$m" 1)
       if [ -n "$pending" ]; then
         error_row "$out" "$m" 8 1 "incomplete bounded attempts; last exit=$HOLD_RC; log=$LAST_HOLD_LOG"
@@ -91,6 +105,7 @@ phase_rten() {
 }
 
 phase_engine() {  # $1 = ort-cuda|ort-webgpu
+  announce_selection "$M_ENG"
   local e=$1
   local out=$O/i265_nn_${e}_3840x2160.tsv dout=$O/i265_nn_${e}-dreamsim_3840x2160.tsv
   local pending
@@ -111,7 +126,6 @@ phase_engine() {  # $1 = ort-cuda|ort-webgpu
   done
 }
 
-echo "BENCHMARK OMITTED by default (slow; explicit CX4K_METRICS_RTEN/CX4K_METRICS_ENG selection required): pieapp,pieapp-pyiqa" >&2
 case "${1:-all}" in
   rten)   phase_rten ;;
   cuda)   phase_engine ort-cuda ;;
