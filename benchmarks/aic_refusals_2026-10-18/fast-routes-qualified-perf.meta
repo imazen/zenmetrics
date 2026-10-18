@@ -1,0 +1,18 @@
+host=r5900xt
+comparison_host=i265 is a different host; do not treat ratios as code changes
+date=2026-10-18
+metric_source_commit=64391e266cbb13d007487e8c88a4425876640199
+frozen_source_snapshot=3e93a6c58ab9
+source_reconstruction=64391e26 plus frozen-driver.patch; crates, root Cargo.toml, Cargo.lock and sibling pins are identical between base and frozen snapshot
+binary_sha256=b04b48fe6db4907563cf71daeeee0a4f526c392b413cb94802f7d8b874d37443
+build=just snap-cargo SOURCE build --release -p cpu-profile --features zenmetrics-cli/nr,zenmetrics-cli/nn,metrics-parallel --bin complexity-reps
+compiler_observation=rustc 1.99.1 (58cf8f9c3 2026-10-13), LLVM 23.1.1, x86_64-unknown-linux-gnu
+fixture=zenmetrics-corpus source.png and jpeg_at_quality(20), mirror-tiled; decoding and preparation excluded by repetition deltas
+command=python3 scripts/complexity/perf_deltas.py --bin BINARY --out OUTPUT --shapes 1024x1024,3840x2160 --metrics brisque,niqe,piqe,cambi-aic2026,proposal-butteraugli --threads THREADS --cpu CPUS --event-profile portable --repeats 3 --timeout-s 900
+budgets=THREADS=1 CPUS=2; THREADS=8 CPUS=2-9
+runtime_environment=RAYON_NUM_THREADS,OMP_NUM_THREADS,RTEN_NUM_THREADS set to requested budget; ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq; caller-supplied AHIQ model directory
+resource=run-heavy: done rc=0 483s | peak-RSS 1.73GiB | min-avail 50185MiB | peak-load 5.27
+coverage=60 observations, 20 cells, three repetitions each; no error rows; exact repeated score strings within every cell
+qualification=standard adaptive extra-call policy, target 300ms of task-clock, minimum two extra calls
+counters=task-clock,cycles,instructions; unsupported specialized counters are NaN, never zero
+memory_scope=whole combined process tree; not per-metric RSS or VRAM

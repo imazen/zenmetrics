@@ -1,0 +1,270 @@
+{
+  "schema": "iqa-complexity-tally/1",
+  "metric": "cambi-aic2026",
+  "cli_names": [
+    "cambi-aic2026"
+  ],
+  "counter": "aicfix",
+  "source_commit": "0aea44d1cd0237c147d1a642430ca5e8b894dc31",
+  "kind": "classic-nr",
+  "derived": {
+    "S": 5
+  },
+  "assumptions": [
+    "Inherited core tally qualifications remain. This tally updates the explicit AIC2026 adapter; source_commit pins the inherited core analysis, and the adapter source is in the accompanying AIC refusal receipt.",
+    "Explicit AIC route computes only integer Y on the even crop; no unused chroma planes. Three integer multiplies, four adds and two shifts per pixel; float FLOPs are zero for ingress.",
+    "bit_depth 8 -> samples shifted <<2 to 10-bit (cambi.rs:5871-5887) AND anti_dithering_filter runs (bit_depth<10, cambi.rs:5888-5890): in-place 2x2 u16 mean per px (cambi.rs:4422+,4597 comment).",
+    "Pipeline (cambi.rs:5900-5980): get_spatial_mask (derivative rows + rolling DP column sums over 7x7, MASK_FILTER_SIZE=7, cambi.rs:5116-5279) -> per scale of NUM_SCALES=5: decimate(img)+decimate(mask) 2x2 box -> filter_mode 3x3 mode via 3-row buffer (mode3 horizontal into buffer then mode3 vertical into data, cambi.rs:4802+,4597-4660) -> calculate_c_values -> spatial_pooling top-60% -> weighted by SCALE_WEIGHTS [16,8,4,2,1] / win^2.",
+    "calculate_c_values (cambi.rs:5409-5620): per output row, one image row ENTERS and one LEAVES the sliding window; each entering px range-updates `window` output columns in histograms_acc[band x W] (u16 += delta, cambi_range_update). Per out px ~= 2*window int updates. Then per px: mask check, band clamp, and num_diffs=4 (MAX_LOG_CONTRAST=2) gather+cmp+weight loop over the local histogram (cambi.rs:5279-5400).",
+    "window_size = adjust_window_size(65, w,h,speedup): ((65*(w+h))/375)>>4, halved when speedup (w*h>=1920*1080 AND v1_preset... note: v1_preset=false for standalone cambi_from_luma so speedup=false always here; window ~23 at 1024^2, ~67 at 4K). Model uses the non-speedup formula; window stays FIXED across scales (in scaled px) so halo doubles per level.",
+    "speedup path (scale0 at half res) requires v1_preset=true; standalone CAMBI never takes it - all 5 scales evaluated at ceil(W/2^l) x ceil(H/2**l).",
+    "Ops dominated by u16/i32 histogram maintenance: counted as int+cmp (tracked separately from flops like VMAF's fixed-point path).",
+    "CAMBI_MIN_WIDTH_HEIGHT=216: both dims >=216 required (well, not both <216)."
+  ],
+  "stages": [
+    {
+      "id": "luma601",
+      "name": "swscale integer Y only",
+      "source": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs:215"
+      ],
+      "images": 1,
+      "elements": "W*H",
+      "precision": "u32",
+      "ops": {
+        "load": 3,
+        "int": 9,
+        "cvt": 3,
+        "store": 1
+      },
+      "bytes_read": 3,
+      "bytes_written": 1,
+      "access": "pointwise",
+      "radius": 0,
+      "axis": "none",
+      "materialize": "full",
+      "notes": "y = round(16 + 219*(0.299r+0.587g+0.114b)/255) clamped [16,235]. cb/cr also computed at W*H/4 each but unused by cambi (ingress shares the VMAF routine) - counted in cbcr601 as implementation waste.",
+      "depends_on": []
+    },
+    {
+      "id": "to_u16_10bit",
+      "name": "u8 -> u16 <<2 image copy",
+      "source": [
+        "crates/vmaf/src/cambi.rs:5871-5887"
+      ],
+      "images": 1,
+      "elements": "W*H",
+      "precision": "u16",
+      "ops": {
+        "load": 1,
+        "int": 1,
+        "store": 1
+      },
+      "bytes_read": 1,
+      "bytes_written": 2,
+      "access": "pointwise",
+      "radius": 0,
+      "axis": "none",
+      "materialize": "full",
+      "depends_on": []
+    },
+    {
+      "id": "anti_dither",
+      "name": "in-place 2x2 u16 mean (bit_depth<10)",
+      "source": [
+        "crates/vmaf/src/cambi.rs:4422-4480",
+        "crates/vmaf/src/cambi.rs:5888-5890"
+      ],
+      "images": 1,
+      "elements": "W*H",
+      "precision": "u16",
+      "ops": {
+        "load": 4,
+        "int": 4,
+        "store": 1
+      },
+      "bytes_read": 2,
+      "bytes_written": 2,
+      "access": "stencil2d",
+      "radius": 1,
+      "axis": "xy",
+      "depends_on": [
+        "to_u16_10bit"
+      ],
+      "materialize": "full",
+      "notes": "In-place overlapping 2x2: (a+b+c+d+2)>>2-ish wrapping adds; reads ahead of write per row."
+    },
+    {
+      "id": "spatial_mask",
+      "name": "derivative rows + rolling DP col sums + 7x7 mask threshold",
+      "source": [
+        "crates/vmaf/src/cambi.rs:5116-5279",
+        "crates/vmaf/src/cambi.rs:4856-5100"
+      ],
+      "images": 1,
+      "elements": "W*H",
+      "precision": "u16",
+      "ops": {
+        "load": 5,
+        "int": 8,
+        "cmp": 2,
+        "store": 1
+      },
+      "bytes_read": 4,
+      "bytes_written": 2,
+      "access": "stencil2d",
+      "radius": 4,
+      "axis": "xy",
+      "depends_on": [
+        "anti_dither"
+      ],
+      "materialize": "strip",
+      "notes": "derivative_row (|v[x]-v[x-1]| per row) into rolling dp ring of 2*pad+2 rows; each output px = DP row add + clamp + threshold -> mask u16. Bounded dp buffer (dp_height=2*pad+2 rows) -> strip."
+    },
+    {
+      "id": "decimate",
+      "name": "2x2 u16 box decimate image+mask (in-place)",
+      "source": [
+        "crates/vmaf/src/cambi.rs:4493-4516",
+        "crates/vmaf/src/cambi.rs:5924-5930"
+      ],
+      "levels": "S-1",
+      "chain": true,
+      "images": 1,
+      "elements": "2*ceil(W/2**(l+1))*ceil(H/2**(l+1))",
+      "precision": "u16",
+      "ops": {
+        "load": 4,
+        "int": 4,
+        "store": 1
+      },
+      "bytes_read": 2,
+      "bytes_written": 2,
+      "access": "downsample",
+      "radius": 1,
+      "scale": "2**l",
+      "axis": "xy",
+      "depends_on": [
+        "spatial_mask"
+      ],
+      "materialize": "full",
+      "notes": "Runs at scale>0 (scale0 is full res for non-speedup path). Both image and mask decimated - 2x elements."
+    },
+    {
+      "id": "filter_mode",
+      "name": "3x3 mode filter (mode3 h into 3-row buffer, mode3 v into image)",
+      "source": [
+        "crates/vmaf/src/cambi.rs:4597-4660",
+        "crates/vmaf/src/cambi.rs:4802-4860"
+      ],
+      "levels": "S",
+      "images": 1,
+      "elements": "ceil(W/2**l)*ceil(H/2**l)",
+      "precision": "u16",
+      "ops": {
+        "load": 6,
+        "cmp": 4,
+        "int": 8,
+        "store": 2
+      },
+      "bytes_read": 4,
+      "bytes_written": 4,
+      "access": "stencil2d",
+      "radius": 1,
+      "scale": "2**l",
+      "axis": "xy",
+      "depends_on": [
+        "decimate"
+      ],
+      "materialize": "strip",
+      "notes": "Row-horizontal mode3 buffered (3 rows), vertical mode3 writes image in place: 2x mode3 per px. Mode of 3 u16 = compare/select network."
+    },
+    {
+      "id": "c_values",
+      "name": "sliding-window histogram update + 4-bin diff gathers",
+      "source": [
+        "crates/vmaf/src/cambi.rs:5409-5620",
+        "crates/vmaf/src/cambi.rs:5279-5400",
+        "crates/vmaf/src/cambi.rs:4784-4800"
+      ],
+      "levels": "S",
+      "images": 1,
+      "elements": "ceil(W/2**l)*ceil(H/2**l)",
+      "precision": "u16",
+      "ops": {
+        "load": 10,
+        "int": "2*(((65*(W+H))//375)//16)+18",
+        "cmp": 10,
+        "mul": 4,
+        "fma": 4,
+        "store": 1
+      },
+      "bytes_read": 4,
+      "bytes_written": 4,
+      "access": "histogram",
+      "radius": "(((65*(W+H))//375)//16)/2+1",
+      "scale": "2**l",
+      "axis": "xy",
+      "depends_on": [
+        "filter_mode"
+      ],
+      "materialize": "full",
+      "notes": "int term = 2*window (enter+leave range updates over window cols per px) + ~14 per-px band/clamp/gather-address int ops; window=((65*(w+h))/375)>>4|1 ~23@1024. Per-px c_value: mask check + band clamp + p0 gather + 4x(2 gathers+cmp+weighted fma). histograms_acc = band_size x W u16 planes (full)."
+    },
+    {
+      "id": "spatial_pool",
+      "name": "top-60% partition + mean of c_values",
+      "source": [
+        "crates/vmaf/src/cambi.rs:5729-5755"
+      ],
+      "levels": "S",
+      "images": 1,
+      "elements": "ceil(W/2**l)*ceil(H/2**l)",
+      "precision": "f32",
+      "ops": {
+        "load": 3,
+        "cmp": 3,
+        "int": 3,
+        "add": 1,
+        "cvt": 1
+      },
+      "bytes_read": 4,
+      "bytes_written": 4,
+      "access": "sort",
+      "radius": 0,
+      "scale": "2**l",
+      "axis": "none",
+      "span": "log2(ceil(W/2**l)*ceil(H/2**l))+8",
+      "barrier": true,
+      "depends_on": [
+        "c_values"
+      ],
+      "materialize": "full",
+      "notes": "nth-element-style partition to 60% + f64 mean of survivors; c_values mutated in place."
+    },
+    {
+      "id": "aggregate",
+      "name": "weighted scale sum / win^2",
+      "source": [
+        "crates/vmaf/src/cambi.rs:5962-5972"
+      ],
+      "images": 1,
+      "elements": "S",
+      "precision": "f64",
+      "ops": {
+        "mul": 1,
+        "add": 1,
+        "div": 1
+      },
+      "bytes_read": 0,
+      "bytes_written": 0,
+      "access": "pointwise",
+      "radius": 0,
+      "axis": "none",
+      "depends_on": [
+        "spatial_pool"
+      ],
+      "materialize": "fused"
+    }
+  ]
+}

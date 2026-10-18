@@ -1,0 +1,84 @@
+diff --git a/benchmarks/heaptrack/drivers/cpu_profile/src/bin/complexity_reps.rs b/benchmarks/heaptrack/drivers/cpu_profile/src/bin/complexity_reps.rs
+index 17f7436ebd..5e94906b47 100644
+--- a/benchmarks/heaptrack/drivers/cpu_profile/src/bin/complexity_reps.rs
++++ b/benchmarks/heaptrack/drivers/cpu_profile/src/bin/complexity_reps.rs
+@@ -64,6 +64,13 @@
+     let dist =
+         decode_image_to_rgb8(&zenmetrics_corpus::jpeg_at_quality(20)).expect("decode q20.jpg");
+     let (r, d) = (tile(&src, w, h), tile(&dist, w, h));
++    if let Ok(dir) = std::env::var("COMPLEXITY_PAIR_OUT") {
++        let dir = std::path::Path::new(&dir);
++        std::fs::create_dir_all(dir).expect("fixture directory");
++        std::fs::write(dir.join("reference.rgb"), &r.pixels).expect("reference fixture");
++        std::fs::write(dir.join("distorted.rgb"), &d.pixels).expect("distorted fixture");
++        return;
++    }
+     let mut last = f64::NAN;
+     for _ in 0..reps {
+         let cols = run_metric_display(
+@@ -73,7 +80,10 @@
+             GpuRuntime::Cpu,
+             Some(display()),
+         )
+-        .unwrap_or_else(|e| panic!("{}: {e}", args[2]));
++        .unwrap_or_else(|e| {
++            eprintln!("REFUSED {}: {e}", args[2]);
++            std::process::exit(2);
++        });
+         last = black_box(cols[0].1);
+     }
+     eprintln!("{} {}x{} reps={} score={}", args[2], w, h, reps, last);
+diff --git a/scripts/complexity/perf_deltas.py b/scripts/complexity/perf_deltas.py
+index 4c2468d999..f1a2b8e1e0 100644
+--- a/scripts/complexity/perf_deltas.py
++++ b/scripts/complexity/perf_deltas.py
+@@ -22,6 +22,9 @@
+           'cpu_core/arith.fpdiv_active/']
+ NAMES = ['task_clock_ms', 'cycles', 'instructions', 'fp_vec128_inst', 'fp_vec256_inst', 'loads', 'stores',
+          'fpdiv_active_cycles']
++ACTIVE_EVENTS = EVENTS
++ACTIVE_NAMES = NAMES
++
+ COLS = ['metric', 'shape', 'threads', 'repeat', 'extra_reps'] + [n + '_per_call' for n in NAMES + ['wall_ms']] + ['score']
+ 
+ 
+@@ -53,7 +56,7 @@
+ 
+ def run(bin_, shape, metric, reps, cpu, threads=1, timeout=None):
+     env = dict(os.environ, RAYON_NUM_THREADS=str(threads), OMP_NUM_THREADS=str(threads), RTEN_NUM_THREADS=str(threads))
+-    cmd = ['perf', 'stat', '-x', ',', '-e', ','.join(EVENTS), 'taskset', '-c', str(cpu), bin_, shape, metric, str(reps)]
++    cmd = ['perf', 'stat', '-x', ',', '-e', ','.join(ACTIVE_EVENTS), 'taskset', '-c', str(cpu), bin_, shape, metric, str(reps)]
+     t0 = time.monotonic()
+     # Own process group, so a timeout kills perf and the metric process under it.
+     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+@@ -74,13 +77,13 @@
+     wall = time.monotonic() - t0
+     if p.returncode:
+         raise RuntimeError(f'{metric} {shape} reps={reps}: rc={p.returncode}\n{p.stderr[-800:]}')
+-    values, score = {}, None
++    values, score = {name: float("nan") for name in NAMES if name not in ACTIVE_NAMES}, None
+     for line in p.stderr.splitlines():
+         parts = line.split(',')
+-        if len(parts) > 3 and parts[2] in EVENTS:
++        if len(parts) > 3 and parts[2] in ACTIVE_EVENTS:
+             if parts[0] in ('<not counted>', '<not supported>', ''):
+                 raise RuntimeError(f'{metric}: event {parts[2]} {parts[0]}')
+-            values[NAMES[EVENTS.index(parts[2])]] = float(parts[0])
++            values[ACTIVE_NAMES[ACTIVE_EVENTS.index(parts[2])]] = float(parts[0])
+         elif line.startswith(metric + ' '):
+             score = line.split('score=')[-1]
+     values['wall_ms'] = wall * 1e3
+@@ -99,7 +102,13 @@
+     ap.add_argument('--cpu', default='2', help='taskset CPU list, P-cores only on i265 (0-7)')
+     ap.add_argument('--threads', type=int, default=1)
+     ap.add_argument('--timeout-s', type=float, default=None, help='skip a metric (recorded as error) when one probe run exceeds this')
++    ap.add_argument('--event-profile', choices=['i265', 'portable'], default='i265',
++                    help='portable measures task-clock/cycles/instructions only; other counters are explicitly NaN')
+     a = ap.parse_args()
++    global ACTIVE_EVENTS, ACTIVE_NAMES
++    if a.event_profile == 'portable':
++        ACTIVE_EVENTS = ['task-clock', 'cycles', 'instructions']
++        ACTIVE_NAMES = NAMES[:3]
+     signal.signal(signal.SIGTERM, interrupted)
+     signal.signal(signal.SIGINT, interrupted)
+     prepare_output(a.out)

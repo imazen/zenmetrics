@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- AIC benchmark driver preserves explicit refusals and supports portable hardware counters (`fbad263a`); retain strict HDR2 controls, qualified r5900xt runtime supplements and unmerged FSIM branch comparisons.
+
 ### Added
 
 - Record the complete Haar rank-method search without identifying the eleven unknown variants, and map four DVIFM draft families to qualified partial aggregate operation counts (private source `51b3fae3`, `bd0b9436`).

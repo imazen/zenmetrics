@@ -1,0 +1,10 @@
+host=r5900xt
+date=2026-10-18
+source_snapshot=d7a596b3b24b
+compiled_crate_source=08a7be724327bf6e945e0e5b11818e12f27d0bf0
+source_qualification=crate sources, root manifest, lock and sibling pins match the unmerged fix/zensim-gpu-refusal branch; its only metric-code difference from master is the unrelated disabled-Zensim error outcome
+command=zenmetrics batch --metric hdrvdp-aic2026 --hdrvdp-sdr-strict --pairs PAIRS --output OUTPUT --jobs 1
+comparison_command=python3 benchmarks/aic_confsearch_2026-10-17/scripts/evalcol.py PUBLISHED CONFIG HDR_VDP_2 SUMMARY strict=OUTPUT:hdrvdp_aic2026_q
+controls=61 pairs; same unrounded 200-nit sRGB BT.709, 37.84ppd; strict arithmetic is the only changed metric parameter
+resource=run-heavy: done rc=0 59s | peak-RSS 0.84GiB | min-avail 50806MiB | peak-load 5.22
+resource_scope=combined build, scoring, clippy and refusal regression; not per-call memory

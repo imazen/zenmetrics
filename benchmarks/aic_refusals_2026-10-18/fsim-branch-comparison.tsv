@@ -1,0 +1,5 @@
+shape	threads	score_before	score_after	median_ms_before	median_ms_after	speed_ratio_before_over_after	rss_before_kib	rss_after_kib	qualification
+1024x1024	1	0.9970832749303953	0.9970832749303953	21.2468	20.6375	1.0295239248940038	29812	28772	unmerged branch; three repeats; eight-thread deltas short/noisy; no speedup claim
+1024x1024	8	0.9970832749303953	0.9970832749303953	10.3431	9.82166	1.0530908217144557	63756	63216	unmerged branch; three repeats; eight-thread deltas short/noisy; no speedup claim
+3840x2160	1	0.999269791751835	0.999269791751835	120.037	121.349	0.9891882092147443	87968	87312	unmerged branch; three repeats; eight-thread deltas short/noisy; no speedup claim
+3840x2160	8	0.999269791751835	0.999269791751835	30.0101	29.6566	1.0119197750247837	155100	154320	unmerged branch; three repeats; eight-thread deltas short/noisy; no speedup claim

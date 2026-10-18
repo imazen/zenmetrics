@@ -1,0 +1,22 @@
+host=r5900xt
+comparison_host=i265 is a different host
+fsim_source=c9f98a987cd2f0fae8f7f2033770a41bb057f3ea; unmerged fix/fsim-fixed-luma; https://github.com/imazen/zenmetrics/pull/92
+dvifm_adapter_source=e27b88ab6181; private imazen/dvifmish; only aggregate observations exported
+fixture=exact prepared RGB8 source/JPEG-q20 pair from complexity-reps, mirror-tiled; file reads excluded by repetition deltas
+command=python3 scripts/complexity/perf_deltas.py --bin BINARY --out OUTPUT --shapes 840x944,1024x1024 --metrics METRICS --threads THREADS --cpu CPUS --event-profile portable --repeats 3 --timeout-s 900
+budgets=THREADS=1 CPUS=2; THREADS=8 CPUS=2-9
+fsim_metrics=fsim-y-k2,fsim-y-k3,fsim-y-k4; COMPLEXITY_PAIR_ROOT points to prepared pairs
+dvifm_metrics=DVIFM_RGB,DVIFM_Y,DVIFM_2D_Y,DVIFM_MIN_Y; DVIFMISH_PAIR_ROOT points to prepared pairs
+public_name_mapping=DVIFM_RGB:dvifm-port-rgb,DVIFM_Y:dvifm-port-y,DVIFM_2D_Y:dvifm-port-2d-y,DVIFM_MIN_Y:dvifm-port-min-y
+coverage=36 FSIM and 48 DVIFM observations, zero errors, score strings identical across repeats and budgets
+qualification=adaptive extra-call policy targeting 300ms task-clock, minimum two extra calls; specialized unavailable counters NaN
+resource=run-heavy: done rc=0 110s | peak-RSS 0.62GiB | min-avail 51436MiB | peak-load 3.92
+memory_scope=combined tests/builds/timing process tree, not per-metric memory
+existing_fsim_ab_resource=run-heavy: done rc=0 47s | peak-RSS 1.31GiB | min-avail 50854MiB | peak-load 4.33
+rss_command=just complexity-process-rss BINARY METRIC SHAPE THREADS CPUS OUTPUT; OS /usr/bin/time -v maximum resident set size
+rss_resource=run-heavy: done rc=0 2s | peak-RSS 0.15GiB | min-avail 51848MiB | peak-load 3.10
+zensim_refusal_control=64x64 one thread; master binary exits101 panic, fix/zensim-gpu-refusal exits2 explicit refusal; RSS7516KiB before/5956KiB after; no score or meaningful scoring speed ratio
+binary_sha256=fixed_luma_reps:34793144f2230d3a4b0ace02471353742a6157ce50bb311eb8ced6e05674936f
+binary_sha256=complexity-reps-fsim-review:600cd9d560d9054dbefa1f674e4175dba108bb34a07941f9bcee3f30524efe0d
+binary_sha256=complexity-reps-refusals:19418608c523e7ea8f84181034f977d8449ab5dae4aa0f77e3ac2e98aa6be90b
+binary_sha256=complexity_reps:9ae458c493dfae51bd6d3ec5d93e5b33f547f0de0dae1c03f5a8131ec8ea986b

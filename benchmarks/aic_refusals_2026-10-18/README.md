@@ -75,3 +75,44 @@ with 3718 joined rows excluded explicitly. JND_score uses all 3920/1848.
 The original script's empty reduction failed before this admission correction.
 Search resource receipt: run-heavy done rc=0 63s | peak-RSS 0.22GiB |
 min-avail 52054MiB | peak-load 1.23. Private aggregate/search commit: 51b3fae310b3.
+
+## HDR-VDP 2 strict arithmetic control
+
+The same 61 crops with `--hdrvdp-sdr-strict` give median 0.00365021 and
+maximum 0.0514859 site-JND against the published column. Native strict versus
+relaxed differs by median 1.6615683477994025e-6 Q, maximum
+6.280069452202497e-5 Q. Strict versus independent Octave remains median
+0.008689808892256679 Q, maximum 0.014212052720857571 Q. Strict arithmetic
+therefore does not explain either residual. No default or reference setting
+was changed. Full rows and the published-column summary are retained beside
+this document. Combined build, strict-panel, clippy and refusal-control receipt:
+run-heavy done rc=0 59s | peak-RSS 0.84GiB | min-avail 50806MiB | peak-load 5.22.
+
+## Runtime supplements and unmerged fixes
+
+The qualified HDR/AHIQ and fast-route tables cover 1024x1024 and 3840x2160,
+one/eight worker budgets and three repeats per cell on r5900xt. All eight
+routes complete. The original HDR names require absolute luminance and
+correctly refuse this RGB8 fixture; their explicit AIC routes supply that
+contract. NR routes require the NR build feature. AHIQ uses explicit weight
+consent. These build/input refusals do not establish a metric-kernel panic.
+See each `*-perf.meta` for source, commands, resource receipts and timing
+qualifications. The original short-delta panel is retained as diagnostic data.
+
+The fixed-luma FSIM panel has 36 observations and the private DVIFM aggregate
+panel has 48; all complete with identical repeated score strings. FSIM uses
+[unmerged PR 92](https://github.com/imazen/zenmetrics/pull/92), not a master CLI
+route. Its three tally files retain the inherited analytical FFT/count-model
+qualifications. DVIFM exports only aggregate observations and partial counts.
+Neither panel identifies an unavailable authors' per-image score column.
+
+`fsim-branch-comparison.tsv` retains before/after timing and OS peak RSS for
+the existing luma route. Scores match exactly at both sizes and budgets.
+Eight-thread deltas are short and noisy; no speedup is claimed. The branch
+changes the luma call path and remains unmerged for owner review.
+
+`fix/zensim-gpu-refusal` (08a7be724327) changes the disabled route's panic to
+an explicit error, without enabling scoring. The real 64x64 process control
+changes exit 101 to exit 2. Its regression passes; the branch remains unmerged.
+The master inventory truthfully retains the panic. Exact resource receipts,
+RSS observations and private-adapter mappings are in `screenshot-timings.meta`.
