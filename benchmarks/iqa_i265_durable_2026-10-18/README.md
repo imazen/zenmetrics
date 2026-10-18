@@ -74,3 +74,15 @@ At 11:01:35 UTC the first stage had 335 successful and 76 unsupported cells,
 pending total includes the failed attempts awaiting retry. The external
 `/home/lilith/tmp/iqa-i265-20261018/input-contract-status.json` on i265
 retains that observation and the exact returned HDR errors.
+
+The subsequent i265 pass reached all three fixed-factor MS-SSIM methods and
+reproduced eight failed first attempts each. Thus all 40 first-attempt
+refusals match the five input-contract cohorts above. No frozen attempt,
+input, limit or larger-size schedule was changed.
+
+An audit of the first 94 successful warm protocol rows found 14 rounds in
+seven rows flagged by zenbench as `HeavyProcesses(2)`. Preserve those flags:
+these rows do not establish uncontended performance. All 70 warm rounds in
+the separate prelaunch controls were clean. The external
+`/home/lilith/tmp/iqa-i265-20261018/contention-observations.json` on i265
+retains every affected attempt and original gate observation.
