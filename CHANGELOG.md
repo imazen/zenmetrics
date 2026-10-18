@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Qualify separate six-route dvifmish supplements with exact scalar/map/thread/phase controls; bind the private Mac CPU-counter correction and fix supported service installer arguments (`3ca65f64`, `d4ee0853`; zenbench `3b1d0f71`).
+
 - Add six pinned dvifmish benchmark routes, native map metadata, private snapshot dependency isolation and separate frozen Linux/Mac supplements (`121ecf3f`, `1e147d80`, `f2e400bc`).
 
 - Freeze durable Linux P-core placement proofs, configure benchmark ORT session budgets explicitly, and run six 512-first CPU/NN CPU/NN CUDA families in a restarting user service (`9954fadd`, `aafa96b8`, `0b2af341`).

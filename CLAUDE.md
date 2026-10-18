@@ -1925,3 +1925,15 @@ benchmark snapshot overlay applies only that correction to the frozen
 Corrected worker hashes and new frozen controls must qualify separately;
 old failures remain preserved. Details belong in the
 [dvifmish supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).
+
+### dvifmish native supplement qualification (2026-10-18)
+
+The corrected Mac worker and clean i265 worker each pass 96/96 control cells
+and 240/240 clean warm rounds; all six fixture score bits agree exactly.
+i265 production 512 also completes 96/96 with 240 clean rounds. Mac's two
+corrected LaunchAgents are installed and waiting on original NN Metal stages;
+both hosts retain separate 576-cell larger supplements. Original manifests,
+failed attempts and input-contract refusals remain unchanged. No crate/weights
+publication or public API addition occurred. Source/build hashes, private Mac
+counter correction, true native-map units, dependency waits and resolving
+commands are in [the owning contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).

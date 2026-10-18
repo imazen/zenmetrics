@@ -86,3 +86,40 @@ these rows do not establish uncontended performance. All 70 warm rounds in
 the separate prelaunch controls were clean. The external
 `/home/lilith/tmp/iqa-i265-20261018/contention-observations.json` on i265
 retains every affected attempt and original gate observation.
+
+## dvifmish supplement qualification
+
+Separate frozen supplements add six routes: four port presets and the default
+talk-inspired float/integer paths. Other fitted presets and streaming remain
+outside this coverage. Native maps are per-plane/per-level raw contribution
+fields, not full-resolution JND maps. Cold calls include constructors; warm
+calls retain ten 100-ms rounds, explicit one/eight-worker budgets and exact
+scalar/map/phase bits. The crate remains unpublished.
+
+| host | qualified control cells | clean warm rounds | production 512 | larger supplement |
+|---|---:|---:|---|---|
+| i265 | 96/96 | 240/240 | 96/96, 240 clean rounds | 576 queued after original final NN CUDA |
+| mac | 96/96 | 240/240 | 96 queued after original NN512 Metal | 576 queued after original final NN Metal and own 512 |
+
+The i265 control retains 96 enforced P-core cpuset proofs on CPUs 0–7, with
+12-GiB memory maximum and swap maximum zero. Mac uses its existing explicitly
+recorded placement policy, not an enforced P-core claim. Its corrected private
+owner-counter adapter resolves a captured sysinfo percentage undercount;
+thresholds and metric arithmetic are unchanged. Earlier flagged controls remain
+preserved. The six control fixture scores agree bit-for-bit across hosts.
+
+| route | scalar bits |
+|---|---|
+| port-min-v0.2 | `3f84c93a00000000` |
+| port-2d-v0.2 | `3f6dcc8e60000000` |
+| port-lap-v0.2 | `3f930af0c0000000` |
+| port-lap-v0.3 | `3f982156c0000000` |
+| talk-faithful-luma-float | `3fa9a36c9df47f2a` |
+| talk-faithful-luma-int | `3fa9b7d965ffbc86` |
+
+The clean control reports have SHA-256
+`e37d2efac512fb7429caeb82b47a998cce182a5229ccd28324ed1ac39797f729` (i265)
+and `33d974ce5407120d5fcfd5892406218c18b04f7ec80daefed4e0b3f4e46c1b18` (Mac).
+Raw reports and attempts stay outside git under each host's benchmark-results;
+commands, worker/source hashes, recovery, limitations and live service resolving
+commands belong in [the supplement contract](../../docs/IQA_DVIFMISH_SUPPLEMENT.md).

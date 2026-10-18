@@ -237,3 +237,46 @@ validate the full committed-source → private dvifmish dependency → counter
 correction hash chain. New binary hashes require new build receipts, frozen
 bundles, controls and supplemental service plans. Old failures and original
 manifests cannot be relabeled or overwritten.
+
+## Qualified supplements and observed queues
+
+The corrected native Mac worker is SHA-256
+`c4d49bd53dbdef9d88dc664b547af49221c18e0e6b337d5a84d0bacf71a3bd19`,
+source `3ca65f64d42cea44a30f4468092004f44bfa91fb`, snapshot export
+`ffe384996876d2cd988ea3bd124f0c5b3100a337`. Its build receipt verifies the
+committed-source / dvifmish / private-counter overlay chain. Native build
+rc=0, 102 s, peak RSS 1.33 GiB, minimum available proxy 15922 MiB, peak load
+8.85. The Mac guard is monitored RSS, not a cgroup memory-cap claim.
+
+Its protected 512 control passes 96/96 cells and 240/240 clean warm rounds.
+Report SHA-256 is
+`33d974ce5407120d5fcfd5892406218c18b04f7ec80daefed4e0b3f4e46c1b18`.
+All six score-bit patterns exactly match the clean i265 control; that fixture
+agreement does not establish general cross-host perceptual parity. The i265
+control also retains 96/96 `enforced_uniform` P-core cpuset proofs, CPUs 0–7,
+12-GiB memory maximum and swap maximum zero. Its production 512 supplement
+passes 96/96 with 240/240 clean warm rounds. A later separate i265 protected
+control completed 96 cells but flagged one `HeavyProcesses(2)` round; that
+attempt remains unqualified and does not replace the clean control.
+
+Both hosts have separate frozen 96-cell 512 and 576-cell larger supplements.
+On i265, resolve `iqa-durable-4018449423e7.service`; 512 is complete and larger
+currently waits for the original final larger NN CUDA stage. On Mac the
+corrected bundle root is `~/benchmark-bundles/iqa-mac-20261018-dvifmish-counters.noindex`.
+LaunchAgents `io.imazen.iqa-durable.0ebeb356ba7cc6fb` and
+`io.imazen.iqa-durable.d214eb85bb2ce49e` are installed and observed running.
+The former records a wait for original NN512 Metal; the latter records waits
+for original final larger NN Metal and corrected own 512. Both actual durable
+commands retain 12G, eight jobs, 1100-second attempts, two attempts and the
+same `~/tmp/mac-heavy.lock`. Original NN dependencies remain unchanged.
+
+Resolve Mac state with `launchctl print user/$(id -u)/LABEL` and each output's
+adjacent `.service/queue-wait.json`. These are dated observations, not promises
+that counts remain unchanged. Retained Mac qualification/service receipts live
+under `~/tmp/iqa-dvifmish-mac/`, and the control under
+`~/benchmark-results/iqa-mac-20261018-dvifmish-counter-control.noindex`.
+
+The maintained installer omits unsupported install-time `--memory`; the frozen
+Mac service already supplies `--memory 12G` to durable execution. The regression
+now exercises the actual service CLI and generated commands for both phases,
+including memory, jobs, lock and dependencies. No frozen bundle edit is needed.
