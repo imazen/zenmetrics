@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import time
 import uuid
+import subprocess
+import sys
 
 
 def exited(pid, pgid):
@@ -16,6 +18,10 @@ def exited(pid, pgid):
         return False
     else:
         return False
+    if sys.platform == 'darwin':
+        text = subprocess.check_output(['ps', '-axo', 'pid=,pgid=,stat='], text=True)
+        return not any(int(group) == pgid and not state.startswith('Z')
+                       for _, group, state in (line.split()[:3] for line in text.splitlines()))
     for proc in Path('/proc').glob('[0-9]*'):
         try:
             fields = (proc / 'stat').read_text().rsplit(')', 1)[1].split()

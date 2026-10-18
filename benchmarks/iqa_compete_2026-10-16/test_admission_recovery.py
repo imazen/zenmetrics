@@ -1,5 +1,7 @@
 """Real OS guards protect live/other reservations while preserving our dead one."""
 import fcntl,json,os,pathlib,shutil,tempfile,time,unittest
+from unittest.mock import patch
+import admission_recovery
 from admission_recovery import recover
 P=pathlib.Path
 class Recovery(unittest.TestCase):
@@ -38,4 +40,10 @@ class Recovery(unittest.TestCase):
   self.proof['pid']=True
   with self.assertRaisesRegex(ValueError,'proof'):self.run_recovery()
   self.assertTrue(self.ticket.exists())
+class DarwinRecovery(Recovery):
+ def setUp(self):
+  super().setUp()
+  platform_patch=patch.object(admission_recovery.sys,'platform','darwin')
+  platform_patch.start();self.addCleanup(platform_patch.stop)
+
 if __name__=='__main__':unittest.main()

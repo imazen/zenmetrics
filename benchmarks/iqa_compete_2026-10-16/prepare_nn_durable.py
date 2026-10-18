@@ -75,7 +75,7 @@ def main():
     shutil.copy2(a.binary, a.output / 'bin/iqa-compete')
     shutil.copy2(a.build, a.output / 'build.json')
     shutil.copy2(a.inventory, a.output / 'inventory.json')
-    for name in ('durable.py', 'mac_service.py', 'select_durable.py'):
+    for name in ('durable.py', 'mac_service.py', 'select_durable.py', 'admission_recovery.py'):
         shutil.copy2(HERE / name, a.output / name)
     shutil.copy2(HERE / 'bundle.just', a.output / 'justfile')
     manifest = json.loads((a.template / 'manifest.json').read_bytes())

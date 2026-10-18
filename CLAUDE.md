@@ -561,6 +561,15 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-18 — Mac warm IQA admission after interruption.** An interrupted
+  NLPD warm attempt left a running zenbench reservation whose owner had exited.
+  Later cold cells continued, while warm attempts refused admission and remained
+  pending retry, so the exhausted-cell failure count alone concealed the blockage.
+  The durable worker now records its PID/group before exec and archives only its
+  matching dead reservation after group cleanup and ticket-guard acquisition.
+  Live-owner/group and changed-owner controls remain fail-closed on both Unix
+  process-inventory paths. See [the recovery contract](docs/IQA_DURABLE_MAC.md).
+
 - **2026-10-18 ORT WebGPU on mac/Metal:** official plugin 0.4.0 and ORT
   core 1.31.0 load. LPIPS-Alex passes 18/18 golden pairs plus warm/cold parity.
   DISTS reaches 2/18 pairs, then the resource wrapper kills both combined and

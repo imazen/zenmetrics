@@ -28,7 +28,7 @@ def write_hashes(bundle):
 def make_bundle(bundle):
     (bundle / 'bin').mkdir(parents=True)
     (bundle / 'inputs').mkdir()
-    for name in ('durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json', 'select_durable.py'):
+    for name in ('durable.py', 'mac_service.py', 'bin/iqa-compete', 'build.json', 'inputs.meta.json', 'select_durable.py', 'admission_recovery.py'):
         (bundle / name).write_bytes(b'fixture ' + name.encode())
     (bundle / 'inputs/reference.rgb').write_bytes(b'xyz')
     (bundle / 'inputs/distorted.rgb').write_bytes(b'abc')

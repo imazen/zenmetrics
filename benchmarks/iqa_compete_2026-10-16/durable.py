@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import uuid
+from admission_recovery import recover
 
 SELF = str(Path(__file__).resolve())
 HEARTBEAT = 2.0
@@ -268,6 +269,13 @@ def group_members(pgid):
             if int(group) == pgid and not state.startswith('Z')]
 
 
+def worker_exec(attempt):
+    """Persist the worker PID/group before exec can create an admission ticket."""
+    intent = load(attempt / 'intent.json')
+    atomic(attempt / 'worker-process.json', dict(pid=os.getpid(), pgid=os.getpgrp(), unix_s=int(time.time())))
+    os.execv(intent['binary'], [intent['binary'], str(attempt / 'config.json')])
+
+
 def payload(attempt, address, seconds):
     """Inner guard survives resource wrappers that establish their own session."""
     if os.getpgrp() != os.getpid():
@@ -281,7 +289,7 @@ def payload(attempt, address, seconds):
         connection.setblocking(False)
         config = load(attempt / 'config.json')
         intent = load(attempt / 'intent.json')
-        worker = subprocess.Popen([intent['binary'], str(attempt / 'config.json')],
+        worker = subprocess.Popen([sys.executable, SELF, '_worker', str(attempt)],
                                   env=environment(config, Path(intent['scratch'])))
         deadline = time.monotonic() + seconds
         last = time.monotonic()
@@ -419,6 +427,8 @@ def watchdog(attempt, parent_fd, lock_fds, seconds):
             record.update(row=row, status=row['status'], reason=None)
         except (ValueError, OSError, struct.error) as error:
             record['reason'] = str(error)
+    if clean and (attempt / 'worker-process.json').exists():
+        record['admission_recovery'] = recover(load(attempt / 'worker-process.json'), attempt / 'admission-recovery')
     log = attempt / 'worker.log'
     record['executed_command'] = load(attempt / 'command.json') if (attempt / 'command.json').exists() else None
     record['log_sha256'] = file_hash(log) if log.exists() else None
@@ -651,6 +661,8 @@ def main():
     global STOP
     if len(sys.argv) > 1 and sys.argv[1].startswith('_'):
         action, attempt = sys.argv[1], Path(sys.argv[2])
+        if action == '_worker':
+            return worker_exec(attempt)
         if action == '_payload':
             return payload(attempt, sys.argv[3], float(sys.argv[4]))
         if action == '_anchor':

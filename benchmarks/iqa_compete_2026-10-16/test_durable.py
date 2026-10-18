@@ -51,6 +51,16 @@ if behavior=='duplicate':print('IQA_ROW '+json.dumps(r),flush=True)
 
 
 class DurableTests(unittest.TestCase):
+    def test_worker_identity_is_retained_across_exec(self):
+        self.freeze('ok', phase='cold')
+        self.finish(self.start())
+        attempt = self.running_attempt()
+        proof = json.loads((attempt / 'worker-process.json').read_text())
+        self.assertEqual(proof['pid'], int((attempt / 'worker.pid').read_text()))
+        self.assertEqual(proof['pgid'], json.loads((attempt / 'groups.json').read_text())['payload'])
+        self.assertTrue(self.no_live(proof['pid']))
+        self.assertGreater(proof['unix_s'], 0)
+
     def test_model_environment_is_frozen_contained_and_rehashed(self):
         value = self.freeze('ok', phase='cold')
         models = self.root / 'models'
