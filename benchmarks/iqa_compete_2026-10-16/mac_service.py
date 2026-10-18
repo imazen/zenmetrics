@@ -10,6 +10,72 @@ import subprocess
 import sys
 import time
 import fcntl
+import shutil
+from collections import Counter
+
+
+def progress(output, domain):
+    service_dir = output.with_name(output.name + '.service')
+    compact = json.loads((output / 'progress.json').read_bytes()) if (output / 'progress.json').exists() else {}
+    counts, phases, unsupported = Counter(), Counter(), Counter()
+    from durable import read_result
+    for path in output.glob('cells/*/attempt-*/result.json'):
+        record = read_result(path)
+        counts[record['status']] += 1
+        row = record.get('row') or {}
+        if record['status'] == 'ok':
+            phases[row['timing_phase']] += 1
+        if record['status'] == 'unsupported':
+            unsupported[row['metric_name']] += 1
+    label = 'io.imazen.iqa-durable.' + hashlib.sha256(str(output).encode()).hexdigest()[:16]
+    status = subprocess.run(['launchctl', 'print', domain + '/' + label], capture_output=True, text=True)
+    state = next((line.strip().split(' = ', 1)[1] for line in status.stdout.splitlines() if line.strip().startswith('state = ')), 'unloaded')
+    after = service_dir / 'queue-wait.json'
+    waiting = json.loads(after.read_bytes()).get('pending', []) if after.exists() else []
+    return dict(output=str(output), progress=compact, attempt_statuses=dict(counts), successful_phases=dict(phases),
+                unsupported_maps=dict(unsupported), service_state=state, waiting_on=waiting)
+
+
+def check_in(plan_path, directory, pane=None):
+    """Read-only remote observations survive a blocked or unavailable agent prompt."""
+    import datetime
+    import shlex
+    plan = json.loads(plan_path.read_bytes())
+    command = ['python3', plan['script'], 'progress', plan['phases'][0]['bundle'], plan['phases'][0]['output']]
+    for phase in plan['phases'][1:]:
+        command += ['--other-output', phase['output']]
+    ssh_command = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', plan['machine'], shlex.join(command)]
+    try:
+        result = subprocess.run(ssh_command, text=True, capture_output=True, timeout=60)
+        rows = json.loads(result.stdout) if result.returncode == 0 else []
+    except subprocess.TimeoutExpired:
+        result = subprocess.CompletedProcess(ssh_command, 124, '', 'Mac status SSH request timed out after 60 seconds')
+    except (OSError, ValueError) as error:
+        result = subprocess.CompletedProcess(ssh_command, 1, '', str(error))
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    receipt = dict(checked_utc=stamp, command=command, returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+    (directory / (stamp + '.json')).write_text(json.dumps(receipt, indent=2) + '\n')
+    if result.returncode:
+        message = 'Mac benchmark status check failed; inspect ' + str(directory / (stamp + '.json'))
+    else:
+        rows = json.loads(result.stdout)
+        message = '; '.join(Path(r['output']).name + ': ' +
+            (str(r['progress'].get('statuses', {})) + ', attempts=' + str(r['attempt_statuses'])
+             if r['progress'] else 'queued') for r in rows)
+    print(message, flush=True)
+    herdr = shutil.which('herdr')
+    if herdr:
+        subprocess.run([herdr, 'notification', 'show', 'Mac IQA benchmark check-in', '--body', message, '--sound', 'none'],
+                       timeout=15, check=False)
+        if pane:
+            prompt = subprocess.run([herdr, 'agent', 'prompt', pane,
+                'Scheduled Mac benchmark check-in: ' + message + '. Inspect retained attempts and repair blockers; report progress to the user.'],
+                capture_output=True, text=True, timeout=15)
+            (directory / (stamp + '.agent.json')).write_text(json.dumps(dict(returncode=prompt.returncode, stdout=prompt.stdout, stderr=prompt.stderr)) + '\n')
+    if result.returncode == 0 and all(r['progress'].get('complete') for r in rows):
+        subprocess.run(['systemctl', '--user', 'stop', 'iqa-mac-checkin.timer'], check=True)
+    return result.returncode
 
 
 def predecessor_complete(gate):
@@ -95,18 +161,25 @@ def supervise(command, output, silence=15.0, startup=60.0):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['install', 'start', 'status', 'stop', 'execute'])
+    p.add_argument('action', choices=['install', 'start', 'status', 'stop', 'execute', 'progress', 'check-in'])
     p.add_argument('bundle', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--run-heavy', type=Path)
     p.add_argument('--domain', choices=['user', 'gui'], default='user', help='user supports a Mac accessed only over SSH')
     p.add_argument('--lock', type=Path)
     p.add_argument('--command-sha256')
+    p.add_argument('--other-output', type=Path, action='append', default=[])
+    p.add_argument('--agent-pane')
     p.add_argument('--after', nargs=2, action='append', default=[], metavar=('BUNDLE', 'OUTPUT'), help='Wait for this frozen predecessor to finish before starting')
     p.add_argument('--after-sha256')
     p.add_argument('--jobs', type=int, default=8)
     p.add_argument('--timeout-seconds', type=int, default=1100)
     a = p.parse_args()
+    if a.action == 'check-in':
+        return check_in(a.bundle, a.output, a.agent_pane)
+    if a.action == 'progress':
+        print(json.dumps([progress(o.resolve(), a.domain + '/' + str(os.getuid())) for o in [a.output, *a.other_output]]))
+        return 0
     bundle, output = a.bundle.resolve(), a.output.resolve()
     service_dir = output.with_name(output.name + '.service')
     token = hashlib.sha256(str(output).encode()).hexdigest()[:16]

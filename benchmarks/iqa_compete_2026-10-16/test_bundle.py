@@ -41,6 +41,35 @@ def make_bundle(bundle):
 
 
 class BundleTests(unittest.TestCase):
+    def test_progress_distinguishes_pending_failed_attempts_from_exhausted_cells(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            output = Path(tmp)
+            durable.atomic(output / 'progress.json', dict(complete=False, statuses=dict(ok=1, failed=0, pending=1)))
+            attempt = output / 'cells/a/attempt-0001'
+            attempt.mkdir(parents=True)
+            durable.save_result(attempt / 'result.json', dict(status='failed', row=None))
+            second = output / 'cells/b/attempt-0001'
+            second.mkdir(parents=True)
+            durable.save_result(second / 'result.json', dict(status='ok', row=dict(timing_phase='warm')))
+            with patch.object(subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, ' state = running\n', '')):
+                row = mac_service.progress(output, 'user/fixture')
+            self.assertEqual(row['attempt_statuses'], dict(failed=1, ok=1))
+            self.assertEqual(row['successful_phases'], dict(warm=1))
+            self.assertEqual(row['progress']['statuses']['failed'], 0)
+
+    def test_check_in_saves_remote_failure_without_an_available_agent(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = Path(tmp)
+            plan = root / 'plan.json'
+            plan.write_text(json.dumps(dict(machine='mac', script='benchmark/mac_service.py',
+                phases=[dict(bundle='bundle', output='output')])) )
+            with patch.object(subprocess, 'run', side_effect=subprocess.TimeoutExpired('ssh', 60)), \
+                 patch.object(mac_service.shutil, 'which', return_value=None), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(mac_service.check_in(plan, root / 'checks'), 124)
+            receipt = json.loads(next((root / 'checks').glob('*.json')).read_text())
+            self.assertEqual(receipt['returncode'], 124)
+            self.assertIn('timed out', receipt['stderr'])
+
     def test_predecessor_requires_exact_terminal_inventory_and_controller_exit(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             output = Path(tmp)

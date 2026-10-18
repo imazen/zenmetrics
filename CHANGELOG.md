@@ -14,6 +14,7 @@ Workspace conventions per the global rules:
 ## [Unreleased]
 
 - Queue frozen Mac benchmark families and retain NN engine, model and runtime hashes, including external tensors (`4c8ea3f6`, `4a6de1c9`).
+- Recover matching dead Mac admission tickets after verified group cleanup and bind execution to frozen runner hashes (`dcf93f35`, `82161fc3`).
 
 - Recount CPU LIQE trunk/head work and MUSIQ pooled-stem/class-token work from frozen graph schedules; retain explicit partial-count limits and regenerate derived projections (`cf630fe3`).
 

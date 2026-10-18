@@ -1688,6 +1688,12 @@ iqa-durable-prepare binary pairs output revision *options:
 bench-iqa-mac bundle output action="install" *options:
     python3 '{{bundle}}/mac_service.py' '{{action}}' '{{bundle}}' '{{output}}' --run-heavy '{{bundle}}/tools/run-heavy' --lock "$HOME/tmp/mac-heavy.lock" {{options}}
 
+bench-iqa-mac-progress bundle output *options:
+    python3 benchmarks/iqa_compete_2026-10-16/mac_service.py progress '{{bundle}}' '{{output}}' {{options}}
+
+bench-iqa-mac-check-in plan logs *options:
+    python3 benchmarks/iqa_compete_2026-10-16/mac_service.py check-in '{{plan}}' '{{logs}}' {{options}}
+
 iqa-durable-nn-prepare template binary build inventory models output engine *options:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_nn_durable.py '{{template}}' '{{binary}}' '{{build}}' '{{inventory}}' '{{models}}' '{{output}}' --engine '{{engine}}' {{options}}
 

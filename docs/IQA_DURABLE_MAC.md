@@ -205,3 +205,17 @@ ONNX, `just iqa-durable-nn-check /absolute/path/to/python`.
 `just iqa-nn-timing-check BUNDLE NEW_OUTPUT` runs a real LPIPS-Alex cold/warm
 control at 512x512 through the same supervisor and requires identical score bits
 within the selected engine. It retains both rows and all attempt diagnostics.
+
+`just bench-iqa-mac-progress BUNDLE OUTPUT --other-output NEXT_OUTPUT` reads
+compact progress, separately counts failed attempts and exhausted cells, lists
+successful cold/warm rows and reports queued predecessors. It does not start a
+measurement. This avoids mistaking zero exhausted cells for zero failed attempts.
+
+For an operator check-in, `just bench-iqa-mac-check-in PLAN LOG_DIRECTORY
+--agent-pane PANE_ID` reads a local JSON plan with `machine` (an SSH alias),
+`script` (the remote `mac_service.py`) and `phases` (objects containing absolute
+`bundle` and `output` paths). It saves each SSH observation, including timeouts,
+and shows a Herdr notification before attempting to prompt the existing agent.
+A blocked agent prompt therefore does not suppress the machine status record or
+notification. A half-hour user timer can invoke this command; once every phase
+is terminal the check-in stops `iqa-mac-checkin.timer`.
