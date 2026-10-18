@@ -1672,3 +1672,22 @@ complexity-pair-graph-audit models receipt:
 
 complexity-nn-schedule-audit models receipt:
     python3 scripts/complexity/test_nn_schedules.py --graphs "{{models}}" --receipt "{{receipt}}"
+
+# Crash containment and immutable portable-bundle controls (real child processes).
+iqa-durable-check:
+    TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_durable.py
+    TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_bundle.py
+
+iqa-durable-prepare binary pairs output revision *options:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' {{options}}
+
+iqa-durable-run manifest output wrapper lock *options:
+    python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
+
+iqa-timing-worker-check binary:
+    TMPDIR="$HOME/tmp" IQA_TIMING_BINARY='{{binary}}' python3 benchmarks/heaptrack/drivers/cpu_profile/src/bin/test_iqa_compete_timing.py
+
+iqa-timing-boundary-check:
+    mkdir -p "$HOME/tmp/iqa-timing-tests"
+    rustc --edition=2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/tests.rs -o "$HOME/tmp/iqa-timing-tests/boundary"
+    "$HOME/tmp/iqa-timing-tests/boundary"
