@@ -10,7 +10,7 @@ Can a source-grounded count of operations per pixel, weighted by per-operation c
 
 Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of Full-Reference Image Quality Metrics*, a JPEG AIC-4 contribution circulated as a preliminary draft dated 2026-10-07; only part of that draft was seen (screenshots), and no accuracy is claimed for the values transcribed from it. Conventions, halo and parallel-structure extensions: [IQA_COMPLEXITY.md](../IQA_COMPLEXITY.md).
 
-- Tallies: 115 of 115 CLI metric names, counted from zenmetrics source; measured on 107 metrics.
+- Tallies: 120 of 115 CLI metric names, counted from zenmetrics source; measured on 112 metrics.
 - Measurements: i265 (Intel Core Ultra 7 265K), per-call deltas under `perf stat`, decode and setup excluded, 1024×1024, one content pair, three repeats; 1 thread pinned to a P-core, and 8 threads on P-cores 0-7 from a build with each metric crate's threading enabled. Exception: HDR-VDP 2 and 3 have no route in the timing driver; they are timed through `zenmetrics batch --hdr` as (T(4 rows) − T(1 row))/3, which includes the extra rows' 16-bit PNG decode (`measured/i265_hdr_1024.meta`).
 - Weight tables: flop count; the draft's declared weights; measured scalar throughput and latency on the i265 P-core; LLVM 22 cost model (`print<cost-model>`) for arrowlake and, as a different-CPU control, znver5; llvm-mca per-instruction throughput (`-mcpu=arrowlake` uses the Alder Lake model).
 - Halo variants: none; padded domain (W+2h_x)(H+2h_y)/(WH); strip recomputation 1+2h_y/64.
@@ -20,54 +20,54 @@ Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of F
 
 | weights | halo | threads | n | Spearman CPU (95 %) | Pearson log CPU | typical error CPU | spread CPU | Spearman wall |
 |---|---|---:|---:|---|---:|---:|---:|---:|
-| flop count | none | 1 | 107 | 0.88 (0.80–0.92) | 0.91 | 2.15× | 6188.1× | 0.88 |
-| flop count | none | 8 | 108 | 0.89 (0.82–0.93) | 0.92 | 2.16× | 14672.1× | 0.79 |
-| flop count | pad | 1 | 107 | 0.87 (0.78–0.92) | 0.91 | 2.49× | 6188.1× | 0.87 |
-| flop count | pad | 8 | 108 | 0.88 (0.80–0.93) | 0.93 | 2.44× | 14672.1× | 0.79 |
-| flop count | strip64 | 1 | 107 | 0.85 (0.75–0.91) | 0.89 | 2.61× | 6188.1× | 0.85 |
-| flop count | strip64 | 8 | 108 | 0.86 (0.78–0.92) | 0.91 | 2.94× | 14672.1× | 0.78 |
-| Pedzisz draft weights | none | 1 | 107 | 0.90 (0.83–0.95) | 0.92 | 1.85× | 6180.2× | 0.90 |
-| Pedzisz draft weights | none | 8 | 108 | 0.91 (0.84–0.95) | 0.93 | 1.81× | 14584.3× | 0.85 |
-| Pedzisz draft weights | pad | 1 | 107 | 0.88 (0.80–0.94) | 0.92 | 2.00× | 6180.2× | 0.88 |
-| Pedzisz draft weights | pad | 8 | 108 | 0.89 (0.81–0.94) | 0.93 | 2.07× | 14584.3× | 0.83 |
-| Pedzisz draft weights | strip64 | 1 | 107 | 0.85 (0.76–0.92) | 0.90 | 2.27× | 7641.7× | 0.85 |
-| Pedzisz draft weights | strip64 | 8 | 108 | 0.87 (0.78–0.93) | 0.91 | 2.45× | 14584.3× | 0.81 |
-| measured i265 P-core throughput | none | 1 | 107 | 0.89 (0.80–0.94) | 0.92 | 1.67× | 6151.6× | 0.89 |
-| measured i265 P-core throughput | none | 8 | 108 | 0.89 (0.81–0.95) | 0.92 | 1.76× | 14420.0× | 0.82 |
-| measured i265 P-core throughput | pad | 1 | 107 | 0.88 (0.78–0.94) | 0.91 | 1.69× | 6151.6× | 0.88 |
-| measured i265 P-core throughput | pad | 8 | 108 | 0.88 (0.80–0.95) | 0.92 | 1.68× | 14420.0× | 0.82 |
-| measured i265 P-core throughput | strip64 | 1 | 107 | 0.85 (0.75–0.92) | 0.88 | 1.81× | 12321.6× | 0.85 |
-| measured i265 P-core throughput | strip64 | 8 | 108 | 0.86 (0.77–0.93) | 0.90 | 2.03× | 14420.0× | 0.80 |
-| measured i265 P-core latency | none | 1 | 107 | 0.89 (0.81–0.94) | 0.92 | 1.71× | 6181.0× | 0.89 |
-| measured i265 P-core latency | none | 8 | 108 | 0.89 (0.82–0.95) | 0.93 | 1.74× | 14581.4× | 0.83 |
-| measured i265 P-core latency | pad | 1 | 107 | 0.88 (0.79–0.93) | 0.92 | 1.83× | 6181.0× | 0.88 |
-| measured i265 P-core latency | pad | 8 | 108 | 0.88 (0.80–0.94) | 0.93 | 1.75× | 14581.4× | 0.82 |
-| measured i265 P-core latency | strip64 | 1 | 107 | 0.85 (0.74–0.92) | 0.89 | 2.01× | 6181.0× | 0.85 |
-| measured i265 P-core latency | strip64 | 8 | 108 | 0.86 (0.76–0.93) | 0.91 | 2.21× | 14581.4× | 0.80 |
-| LLVM cost model arrowlake throughput | none | 1 | 107 | 0.88 (0.79–0.94) | 0.91 | 1.62× | 5882.4× | 0.88 |
-| LLVM cost model arrowlake throughput | none | 8 | 108 | 0.89 (0.80–0.95) | 0.92 | 1.67× | 13826.8× | 0.83 |
-| LLVM cost model arrowlake throughput | pad | 1 | 107 | 0.87 (0.77–0.93) | 0.91 | 1.71× | 5882.4× | 0.87 |
-| LLVM cost model arrowlake throughput | pad | 8 | 108 | 0.88 (0.79–0.94) | 0.92 | 1.69× | 13826.8× | 0.82 |
-| LLVM cost model arrowlake throughput | strip64 | 1 | 107 | 0.84 (0.73–0.91) | 0.87 | 2.07× | 11643.8× | 0.84 |
-| LLVM cost model arrowlake throughput | strip64 | 8 | 108 | 0.85 (0.75–0.93) | 0.89 | 2.05× | 13826.8× | 0.80 |
-| LLVM cost model arrowlake latency | none | 1 | 107 | 0.86 (0.76–0.94) | 0.89 | 1.77× | 5417.0× | 0.86 |
-| LLVM cost model arrowlake latency | none | 8 | 108 | 0.87 (0.77–0.94) | 0.91 | 1.80× | 12387.1× | 0.80 |
-| LLVM cost model arrowlake latency | pad | 1 | 107 | 0.85 (0.74–0.92) | 0.88 | 1.75× | 9108.3× | 0.85 |
-| LLVM cost model arrowlake latency | pad | 8 | 108 | 0.86 (0.76–0.93) | 0.90 | 1.75× | 12387.1× | 0.80 |
-| LLVM cost model arrowlake latency | strip64 | 1 | 107 | 0.82 (0.70–0.90) | 0.83 | 1.94× | 31928.8× | 0.82 |
-| LLVM cost model arrowlake latency | strip64 | 8 | 108 | 0.83 (0.72–0.92) | 0.86 | 2.21× | 34150.7× | 0.78 |
-| llvm-mca arrowlake (ADLP) throughput | none | 1 | 107 | 0.87 (0.78–0.93) | 0.91 | 1.55× | 6163.4× | 0.87 |
-| llvm-mca arrowlake (ADLP) throughput | none | 8 | 108 | 0.88 (0.79–0.94) | 0.92 | 1.73× | 14559.2× | 0.81 |
-| llvm-mca arrowlake (ADLP) throughput | pad | 1 | 107 | 0.86 (0.76–0.93) | 0.91 | 1.67× | 6163.4× | 0.86 |
-| llvm-mca arrowlake (ADLP) throughput | pad | 8 | 108 | 0.87 (0.77–0.94) | 0.92 | 1.69× | 14559.2× | 0.81 |
-| llvm-mca arrowlake (ADLP) throughput | strip64 | 1 | 107 | 0.83 (0.71–0.91) | 0.88 | 1.81× | 6163.4× | 0.83 |
-| llvm-mca arrowlake (ADLP) throughput | strip64 | 8 | 108 | 0.84 (0.74–0.92) | 0.90 | 2.07× | 14559.2× | 0.79 |
-| LLVM cost model znver5 throughput (other CPU) | none | 1 | 107 | 0.88 (0.79–0.94) | 0.92 | 1.66× | 5881.6× | 0.88 |
-| LLVM cost model znver5 throughput (other CPU) | none | 8 | 108 | 0.89 (0.81–0.95) | 0.92 | 1.68× | 13826.8× | 0.83 |
-| LLVM cost model znver5 throughput (other CPU) | pad | 1 | 107 | 0.87 (0.77–0.93) | 0.91 | 1.67× | 5881.6× | 0.87 |
-| LLVM cost model znver5 throughput (other CPU) | pad | 8 | 108 | 0.88 (0.79–0.94) | 0.92 | 1.70× | 13826.8× | 0.82 |
-| LLVM cost model znver5 throughput (other CPU) | strip64 | 1 | 107 | 0.84 (0.73–0.91) | 0.88 | 2.14× | 10758.4× | 0.84 |
-| LLVM cost model znver5 throughput (other CPU) | strip64 | 8 | 108 | 0.85 (0.75–0.93) | 0.90 | 2.09× | 13826.8× | 0.80 |
+| flop count | none | 1 | 112 | 0.89 (0.82–0.93) | 0.93 | 2.10× | 6188.1× | 0.89 |
+| flop count | none | 8 | 113 | 0.90 (0.83–0.94) | 0.94 | 2.22× | 14672.1× | 0.81 |
+| flop count | pad | 1 | 112 | 0.88 (0.80–0.93) | 0.92 | 2.51× | 6188.1× | 0.88 |
+| flop count | pad | 8 | 113 | 0.89 (0.82–0.93) | 0.94 | 2.37× | 14672.1× | 0.80 |
+| flop count | strip64 | 1 | 112 | 0.86 (0.78–0.92) | 0.90 | 2.58× | 12157.0× | 0.86 |
+| flop count | strip64 | 8 | 113 | 0.87 (0.79–0.92) | 0.92 | 2.96× | 15759.0× | 0.80 |
+| Pedzisz draft weights | none | 1 | 112 | 0.91 (0.84–0.95) | 0.94 | 1.84× | 6180.2× | 0.91 |
+| Pedzisz draft weights | none | 8 | 113 | 0.92 (0.86–0.95) | 0.94 | 1.82× | 14584.3× | 0.86 |
+| Pedzisz draft weights | pad | 1 | 112 | 0.89 (0.81–0.94) | 0.93 | 2.01× | 6180.2× | 0.89 |
+| Pedzisz draft weights | pad | 8 | 113 | 0.90 (0.83–0.95) | 0.94 | 2.11× | 14584.3× | 0.85 |
+| Pedzisz draft weights | strip64 | 1 | 112 | 0.86 (0.78–0.92) | 0.91 | 2.26× | 12091.2× | 0.87 |
+| Pedzisz draft weights | strip64 | 8 | 113 | 0.88 (0.79–0.93) | 0.92 | 2.39× | 15673.6× | 0.82 |
+| measured i265 P-core throughput | none | 1 | 112 | 0.90 (0.82–0.95) | 0.93 | 1.68× | 6151.6× | 0.90 |
+| measured i265 P-core throughput | none | 8 | 113 | 0.90 (0.82–0.95) | 0.94 | 1.78× | 14420.0× | 0.84 |
+| measured i265 P-core throughput | pad | 1 | 112 | 0.89 (0.81–0.94) | 0.92 | 1.73× | 6151.6× | 0.89 |
+| measured i265 P-core throughput | pad | 8 | 113 | 0.89 (0.81–0.95) | 0.93 | 1.71× | 14420.0× | 0.83 |
+| measured i265 P-core throughput | strip64 | 1 | 112 | 0.86 (0.77–0.93) | 0.90 | 1.87× | 12541.5× | 0.86 |
+| measured i265 P-core throughput | strip64 | 8 | 113 | 0.88 (0.79–0.93) | 0.91 | 2.06× | 16257.4× | 0.81 |
+| measured i265 P-core latency | none | 1 | 112 | 0.90 (0.83–0.95) | 0.93 | 1.69× | 6181.0× | 0.90 |
+| measured i265 P-core latency | none | 8 | 113 | 0.90 (0.84–0.95) | 0.94 | 1.76× | 14581.4× | 0.85 |
+| measured i265 P-core latency | pad | 1 | 112 | 0.89 (0.81–0.94) | 0.93 | 1.84× | 6181.0× | 0.89 |
+| measured i265 P-core latency | pad | 8 | 113 | 0.89 (0.82–0.94) | 0.94 | 1.75× | 14581.4× | 0.84 |
+| measured i265 P-core latency | strip64 | 1 | 112 | 0.86 (0.76–0.92) | 0.90 | 2.02× | 12091.1× | 0.86 |
+| measured i265 P-core latency | strip64 | 8 | 113 | 0.87 (0.78–0.93) | 0.92 | 2.18× | 15673.5× | 0.81 |
+| LLVM cost model arrowlake throughput | none | 1 | 112 | 0.89 (0.81–0.94) | 0.93 | 1.64× | 5882.4× | 0.89 |
+| LLVM cost model arrowlake throughput | none | 8 | 113 | 0.90 (0.82–0.95) | 0.93 | 1.71× | 13826.8× | 0.84 |
+| LLVM cost model arrowlake throughput | pad | 1 | 112 | 0.88 (0.79–0.94) | 0.92 | 1.76× | 5882.4× | 0.88 |
+| LLVM cost model arrowlake throughput | pad | 8 | 113 | 0.89 (0.80–0.94) | 0.93 | 1.71× | 13826.8× | 0.84 |
+| LLVM cost model arrowlake throughput | strip64 | 1 | 112 | 0.85 (0.75–0.92) | 0.89 | 2.06× | 12077.9× | 0.85 |
+| LLVM cost model arrowlake throughput | strip64 | 8 | 113 | 0.86 (0.77–0.93) | 0.90 | 2.07× | 15656.5× | 0.81 |
+| LLVM cost model arrowlake latency | none | 1 | 112 | 0.88 (0.78–0.94) | 0.91 | 1.73× | 5417.0× | 0.88 |
+| LLVM cost model arrowlake latency | none | 8 | 113 | 0.88 (0.79–0.94) | 0.92 | 1.66× | 12387.1× | 0.82 |
+| LLVM cost model arrowlake latency | pad | 1 | 112 | 0.86 (0.76–0.93) | 0.89 | 1.70× | 9108.3× | 0.86 |
+| LLVM cost model arrowlake latency | pad | 8 | 113 | 0.87 (0.77–0.93) | 0.91 | 1.74× | 12387.1× | 0.81 |
+| LLVM cost model arrowlake latency | strip64 | 1 | 112 | 0.83 (0.72–0.91) | 0.84 | 1.90× | 31928.8× | 0.83 |
+| LLVM cost model arrowlake latency | strip64 | 8 | 113 | 0.85 (0.75–0.91) | 0.87 | 2.12× | 34150.7× | 0.79 |
+| llvm-mca arrowlake (ADLP) throughput | none | 1 | 112 | 0.88 (0.80–0.94) | 0.93 | 1.60× | 6163.4× | 0.88 |
+| llvm-mca arrowlake (ADLP) throughput | none | 8 | 113 | 0.89 (0.80–0.94) | 0.93 | 1.73× | 14559.2× | 0.83 |
+| llvm-mca arrowlake (ADLP) throughput | pad | 1 | 112 | 0.87 (0.78–0.93) | 0.92 | 1.70× | 6163.4× | 0.87 |
+| llvm-mca arrowlake (ADLP) throughput | pad | 8 | 113 | 0.88 (0.79–0.93) | 0.93 | 1.69× | 14559.2× | 0.83 |
+| llvm-mca arrowlake (ADLP) throughput | strip64 | 1 | 112 | 0.84 (0.74–0.91) | 0.89 | 1.93× | 12687.9× | 0.84 |
+| llvm-mca arrowlake (ADLP) throughput | strip64 | 8 | 113 | 0.85 (0.76–0.92) | 0.91 | 2.09× | 16447.2× | 0.81 |
+| LLVM cost model znver5 throughput (other CPU) | none | 1 | 112 | 0.89 (0.81–0.95) | 0.93 | 1.71× | 5881.6× | 0.89 |
+| LLVM cost model znver5 throughput (other CPU) | none | 8 | 113 | 0.90 (0.82–0.95) | 0.94 | 1.71× | 13826.8× | 0.85 |
+| LLVM cost model znver5 throughput (other CPU) | pad | 1 | 112 | 0.88 (0.79–0.94) | 0.92 | 1.70× | 5881.6× | 0.88 |
+| LLVM cost model znver5 throughput (other CPU) | pad | 8 | 113 | 0.89 (0.80–0.94) | 0.93 | 1.77× | 13826.8× | 0.84 |
+| LLVM cost model znver5 throughput (other CPU) | strip64 | 1 | 112 | 0.85 (0.75–0.92) | 0.89 | 2.12× | 12072.5× | 0.85 |
+| LLVM cost model znver5 throughput (other CPU) | strip64 | 8 | 113 | 0.86 (0.77–0.93) | 0.90 | 2.08× | 15649.4× | 0.81 |
 
 ### Figures
 
@@ -150,17 +150,17 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 | ssimc | SSIMc | 0.897 (0.871–0.920) | 0.553 | 48.3 | 47.97 | 622.3 |  |
 | vmaf | VMAF | 0.892 (0.873–0.908) | 0.865 | 28.7 | 28.77 | 74.79 |  |
 | ssim-libvmaf | SSIM | 0.891 (0.864–0.914) | 0.591 | 8.464 | 11.11 | 14.46 |  |
-| stlpips-alex | STLPIPS | 0.891 (0.871–0.910) | 0.746 | 3177 | 3530 | 3.825e+04 |  |
-| lpips-alex | LPIPS-alex | 0.890 (0.864–0.914) | 0.616 | 467.3 | 505.4 | 2.365e+04 |  |
+| stlpips-alex | STLPIPS | 0.891 (0.871–0.910) | 0.746 | 3177 | 3530 | 1.912e+04 |  |
+| lpips-alex | LPIPS-alex | 0.890 (0.864–0.914) | 0.616 | 467.3 | 505.4 | 1.183e+04 |  |
 | psnr-ycbcr611 | PSNR-YCbCr611 | 0.888 (0.855–0.917) | 0.610 | 9.869 | 9.702 | 86.76 |  |
 | vifvec | VIF | 0.888 (0.848–0.923) | 0.833 | 109.4 | 159.2 | 768.1 |  |
 | psnr-y-studio601 | PSNR-Y | 0.885 (0.849–0.915) | 0.608 | 5.556 | 5.48 | 18.44 |  |
-| stlpips-vgg | STLPIPS-VGG | 0.883 (0.856–0.905) | 0.588 | 1.06e+04 | 1.181e+04 | 7.465e+04 |  |
+| stlpips-vgg | STLPIPS-VGG | 0.883 (0.856–0.905) | 0.588 | 1.06e+04 | 1.181e+04 | 3.733e+04 |  |
 | ciede2000 | CIEDE2000 | 0.878 (0.862–0.892) | 0.452 | 104.5 | 104.9 | 412.8 |  |
 | psnr | PSNR | 0.877 (0.850–0.901) | 0.592 | 1.502 | 1.48 | 7.344 |  |
-| dists | DISTS | 0.875 (0.848–0.899) | 0.758 | 9962 | 1.097e+04 | 5.534e+05 |  |
-| lpips-vgg | LPIPS-VGG | 0.868 (0.835–0.899) | 0.636 | 9656 | 1.07e+04 | 5.426e+05 |  |
-| deepdc | DeepDC | 0.856 (0.825–0.883) | 0.676 | 1.281e+04 | 1.377e+04 | 6.75e+05 |  |
+| dists | DISTS | 0.875 (0.848–0.899) | 0.758 | 9962 | 1.097e+04 | 2.767e+05 |  |
+| lpips-vgg | LPIPS-VGG | 0.868 (0.835–0.899) | 0.636 | 9656 | 1.07e+04 | 2.713e+05 |  |
+| deepdc | DeepDC | 0.856 (0.825–0.883) | 0.676 | 1.281e+04 | 1.377e+04 | 3.375e+05 |  |
 | ahiq | AHIQ | 0.795 (0.736–0.845) | 0.507 | – | – | 2.537e+05 |  |
 | cw-ssim | CW-SSIM | 0.784 (0.737–0.823) | 0.489 | 93.02 | 89.84 | 276 |  |
 | psnr-cr | PSNR-Cr | 0.767 (0.737–0.794) | 0.483 | 3.768 | 3.723 | 44.8 |  |
@@ -176,27 +176,31 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | metric | flops/px | separable passes | 2D stencils | transforms | network layers | pointwise / reductions | resampling | other | full-materialized B/px | unannotated B/px |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | pieapp | 7.658e+08 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
-| deepdc | 3.112e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
-| dists | 2.454e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
-| lpips-vgg | 2.452e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| ahiq-pyiqa | 4.782e+06 | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 46.97 | 0 |
+| pieapp-pyiqa | 2.337e+06 | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 24 | 0 |
+| deepdc | 1.556e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| dists | 1.227e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| lpips-vgg | 1.226e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | ahiq | 1.138e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | wd | 1.114e+06 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| dmm-pyiqa | 5.055e+05 | 0% | 0% | 0% | 95% | 0% | 0% | 5% | 34.34 | 0 |
 | dmm | 4.804e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | afine | 4.148e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
-| stlpips-vgg | 3.145e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | maniqa | 2.601e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
+| wadiqam-pyiqa | 2.485e+05 | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0 | 0 |
 | hyperiqa | 2.051e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
-| stlpips-alex | 1.765e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| stlpips-vgg | 1.572e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | wadiqam-fr-live | 1.41e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | wadiqam-fr-tid | 1.41e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | wadiqam-nr-live | 1.318e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | wadiqam-nr-tid | 1.318e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | liqe | 1.267e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
-| lpips-alex | 1.049e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | dreamsim | 1.012e+05 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
+| stlpips-alex | 8.824e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | paq2piq | 7.273e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
-| lpips-squeeze | 4.341e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
+| lpips-alex | 5.247e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | arniqa | 3.923e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
+| lpips-squeeze | 2.17e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24 | 0 |
 | mdctpsnr | 1.619e+04 | 56% | 2% | 31% | 0% | 11% | 0% | 0% | 7601 | 0 |
 | ckdn | 1.043e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | hdrvdp | 6403 | 0% | 46% | 43% | 0% | 3% | 7% | 0% | 357.3 | 0 |
@@ -243,6 +247,7 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | musiq | 302.8 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 0 | 0 |
 | ssimc-pyiqa-f32-k5 | 300 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
 | ssimc-pyiqa-f32-k6 | 295.6 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
+| cw-ssim-pyiqa | 294.3 | 0% | 11% | 74% | 0% | 12% | 0% | 2% | 149.3 | 0 |
 | vsi-nodownscale | 288.6 | 10% | 26% | 17% | 0% | 27% | 20% | 0% | 182.5 | 0 |
 | psnrhvs | 288.6 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 24.3 | 0 |
 | psnrhvs-daala | 262.5 | 0% | 0% | 0% | 0% | 18% | 0% | 82% | 6.39 | 0 |

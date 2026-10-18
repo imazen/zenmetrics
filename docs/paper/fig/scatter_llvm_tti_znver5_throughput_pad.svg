@@ -2,125 +2,130 @@
 <rect width="700" height="460" fill="white"/>
 <text x="350" y="20" text-anchor="middle" font-size="13">LLVM cost model znver5 throughput (other CPU), halo pad: estimate vs CPU time (i265, 1 thread, 1024²)</text>
 <path d="M70 40V400H630" fill="none" stroke="#333"/>
-<path d="M70.4 400v5" stroke="#333"/><text x="70.4" y="418" text-anchor="middle">10</text>
-<path d="M174.6 400v5" stroke="#333"/><text x="174.6" y="418" text-anchor="middle">100</text>
-<path d="M278.8 400v5" stroke="#333"/><text x="278.8" y="418" text-anchor="middle">1000</text>
-<path d="M383.1 400v5" stroke="#333"/><text x="383.1" y="418" text-anchor="middle">10000</text>
-<path d="M487.3 400v5" stroke="#333"/><text x="487.3" y="418" text-anchor="middle">100000</text>
-<path d="M591.5 400v5" stroke="#333"/><text x="591.5" y="418" text-anchor="middle">1e+06</text>
-<path d="M65 377.1h5" stroke="#333"/><text x="62" y="381.1" text-anchor="end">1</text>
-<path d="M65 310.1h5" stroke="#333"/><text x="62" y="314.1" text-anchor="end">10</text>
-<path d="M65 243.1h5" stroke="#333"/><text x="62" y="247.1" text-anchor="end">100</text>
-<path d="M65 176.1h5" stroke="#333"/><text x="62" y="180.1" text-anchor="end">1000</text>
-<path d="M65 109.1h5" stroke="#333"/><text x="62" y="113.1" text-anchor="end">10000</text>
-<path d="M65 42.1h5" stroke="#333"/><text x="62" y="46.1" text-anchor="end">100000</text>
+<path d="M70.6 400v5" stroke="#333"/><text x="70.6" y="418" text-anchor="middle">10</text>
+<path d="M167.6 400v5" stroke="#333"/><text x="167.6" y="418" text-anchor="middle">100</text>
+<path d="M264.6 400v5" stroke="#333"/><text x="264.6" y="418" text-anchor="middle">1000</text>
+<path d="M361.6 400v5" stroke="#333"/><text x="361.6" y="418" text-anchor="middle">10000</text>
+<path d="M458.6 400v5" stroke="#333"/><text x="458.6" y="418" text-anchor="middle">100000</text>
+<path d="M555.6 400v5" stroke="#333"/><text x="555.6" y="418" text-anchor="middle">1e+06</text>
+<path d="M65 378.7h5" stroke="#333"/><text x="62" y="382.7" text-anchor="end">1</text>
+<path d="M65 316.3h5" stroke="#333"/><text x="62" y="320.3" text-anchor="end">10</text>
+<path d="M65 254.0h5" stroke="#333"/><text x="62" y="258.0" text-anchor="end">100</text>
+<path d="M65 191.6h5" stroke="#333"/><text x="62" y="195.6" text-anchor="end">1000</text>
+<path d="M65 129.3h5" stroke="#333"/><text x="62" y="133.3" text-anchor="end">10000</text>
+<path d="M65 66.9h5" stroke="#333"/><text x="62" y="70.9" text-anchor="end">100000</text>
 <path d="M70.0 400.0L630.0 40.0" stroke="#bf5825" stroke-dasharray="5 4"/>
-<circle cx="520.7" cy="138.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>afine</title></circle><text x="525.7" y="134.4" font-size="9" fill="#444">afine</text>
-<circle cx="414.3" cy="168.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>arniqa</title></circle><text x="419.3" y="164.5" font-size="9" fill="#444">arniqa</text>
-<circle cx="227.7" cy="196.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>brisque</title></circle><text x="232.7" y="192.0" font-size="9" fill="#444">brisque</text>
-<circle cx="363.4" cy="234.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>butteraugli</title></circle><text x="368.4" y="230.1" font-size="9" fill="#444">butteraugli</text>
-<circle cx="358.3" cy="212.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>butteraugli-original</title></circle><text x="363.3" y="208.2" font-size="9" fill="#444">butteraugli-original</text>
-<circle cx="245.5" cy="305.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cambi</title></circle><text x="250.5" y="301.4" font-size="9" fill="#444">cambi</text>
-<circle cx="240.2" cy="241.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ciede2000</title></circle><text x="245.2" y="237.8" font-size="9" fill="#444">ciede2000</text>
-<circle cx="360.8" cy="251.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ckdn</title></circle><text x="365.8" y="247.9" font-size="9" fill="#444">ckdn</text>
-<circle cx="405.4" cy="251.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cvvdp</title></circle><text x="410.4" y="247.1" font-size="9" fill="#444">cvvdp</text>
-<circle cx="261.2" cy="245.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cw-ssim</title></circle><text x="266.2" y="241.2" font-size="9" fill="#444">cw-ssim</text>
-<circle cx="611.6" cy="101.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>deepdc</title></circle><text x="616.6" y="97.9" font-size="9" fill="#444">deepdc</text>
-<circle cx="601.5" cy="109.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dists</title></circle><text x="606.5" y="105.2" font-size="9" fill="#444">dists</text>
-<circle cx="527.5" cy="116.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dmm</title></circle><text x="532.5" y="112.9" font-size="9" fill="#444">dmm</text>
-<circle cx="457.9" cy="163.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dreamsim</title></circle><text x="462.9" y="159.3" font-size="9" fill="#444">dreamsim</text>
-<circle cx="298.8" cy="282.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dssim</title></circle><text x="303.8" y="278.2" font-size="9" fill="#444">dssim</text>
-<circle cx="317.0" cy="225.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>flip</title></circle><text x="322.0" y="221.8" font-size="9" fill="#444">flip</text>
-<circle cx="317.0" cy="225.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>flip-v17</title></circle><text x="322.0" y="221.2" font-size="9" fill="#444">flip-v17</text>
-<circle cx="237.6" cy="296.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim</title></circle><text x="242.6" y="292.8" font-size="9" fill="#444">fsim</text>
-<circle cx="300.4" cy="255.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k2</title></circle><text x="305.4" y="251.9" font-size="9" fill="#444">fsim-k2</text>
-<circle cx="263.1" cy="254.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k3</title></circle><text x="268.1" y="250.5" font-size="9" fill="#444">fsim-k3</text>
-<circle cx="237.6" cy="297.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k4</title></circle><text x="242.6" y="293.1" font-size="9" fill="#444">fsim-k4</text>
-<circle cx="366.3" cy="206.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-nodownscale</title></circle><text x="371.3" y="202.9" font-size="9" fill="#444">fsim-nodownscale</text>
-<circle cx="239.7" cy="299.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-y</title></circle><text x="244.7" y="295.4" font-size="9" fill="#444">fsim-y</text>
-<circle cx="149.9" cy="388.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>gmsd</title></circle><text x="154.9" y="384.2" font-size="9" fill="#444">gmsd</text>
-<circle cx="209.5" cy="300.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi</title></circle><text x="214.5" y="296.6" font-size="9" fill="#444">haarpsi</text>
-<circle cx="190.3" cy="317.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi-y</title></circle><text x="195.3" y="313.7" font-size="9" fill="#444">haarpsi-y</text>
-<circle cx="467.0" cy="182.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hdrvdp</title></circle><text x="472.0" y="178.9" font-size="9" fill="#444">hdrvdp</text>
-<circle cx="461.7" cy="177.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hdrvdp3</title></circle><text x="466.7" y="173.1" font-size="9" fill="#444">hdrvdp3</text>
-<circle cx="488.8" cy="114.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hyperiqa</title></circle><text x="493.8" y="110.1" font-size="9" fill="#444">hyperiqa</text>
-<circle cx="299.5" cy="273.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>iwssim</title></circle><text x="304.5" y="269.1" font-size="9" fill="#444">iwssim</text>
-<circle cx="299.4" cy="275.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>iwssim-piq</title></circle><text x="304.4" y="271.0" font-size="9" fill="#444">iwssim-piq</text>
-<circle cx="467.0" cy="230.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>liqe</title></circle><text x="472.0" y="226.4" font-size="9" fill="#444">liqe</text>
-<circle cx="459.0" cy="198.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-alex</title></circle><text x="464.0" y="194.2" font-size="9" fill="#444">lpips-alex</text>
-<circle cx="425.2" cy="201.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-squeeze</title></circle><text x="430.2" y="197.3" font-size="9" fill="#444">lpips-squeeze</text>
-<circle cx="601.2" cy="110.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-vgg</title></circle><text x="606.2" y="106.1" font-size="9" fill="#444">lpips-vgg</text>
-<circle cx="458.8" cy="178.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mad</title></circle><text x="463.8" y="174.2" font-size="9" fill="#444">mad</text>
-<circle cx="499.8" cy="136.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>maniqa</title></circle><text x="504.8" y="132.3" font-size="9" fill="#444">maniqa</text>
-<circle cx="430.4" cy="189.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdctpsnr</title></circle><text x="435.4" y="185.1" font-size="9" fill="#444">mdctpsnr</text>
-<circle cx="121.2" cy="365.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdsi</title></circle><text x="126.2" y="361.7" font-size="9" fill="#444">mdsi</text>
-<circle cx="209.1" cy="305.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsd</title></circle><text x="214.1" y="301.5" font-size="9" fill="#444">ms-gmsd</text>
-<circle cx="209.1" cy="304.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsdc</title></circle><text x="214.1" y="300.8" font-size="9" fill="#444">ms-gmsdc</text>
-<circle cx="279.8" cy="277.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa</title></circle><text x="284.8" y="273.7" font-size="9" fill="#444">ms-ssim-pyiqa</text>
-<circle cx="279.8" cy="278.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32</title></circle><text x="284.8" y="274.4" font-size="9" fill="#444">ms-ssim-pyiqa-f32</text>
-<circle cx="221.3" cy="305.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k2</title></circle><text x="226.3" y="301.0" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k2</text>
-<circle cx="190.9" cy="314.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k3</title></circle><text x="195.9" y="310.0" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k3</text>
-<circle cx="172.6" cy="317.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k4</title></circle><text x="177.6" y="313.5" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k4</text>
-<circle cx="160.6" cy="318.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k5</title></circle><text x="165.6" y="314.8" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k5</text>
-<circle cx="152.7" cy="319.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k6</title></circle><text x="157.7" y="315.6" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k6</text>
-<circle cx="247.7" cy="303.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>msssim</title></circle><text x="252.7" y="299.6" font-size="9" fill="#444">msssim</text>
-<circle cx="265.9" cy="271.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>msssim-libvmaf</title></circle><text x="270.9" y="267.0" font-size="9" fill="#444">msssim-libvmaf</text>
-<circle cx="196.1" cy="152.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>musiq</title></circle><text x="201.1" y="148.0" font-size="9" fill="#444">musiq</text>
-<circle cx="210.2" cy="228.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>niqe</title></circle><text x="215.2" y="224.3" font-size="9" fill="#444">niqe</text>
-<circle cx="296.2" cy="298.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>nlpd</title></circle><text x="301.2" y="294.1" font-size="9" fill="#444">nlpd</text>
-<circle cx="248.6" cy="330.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>nlpd-iqa</title></circle><text x="253.6" y="326.3" font-size="9" fill="#444">nlpd-iqa</text>
-<circle cx="441.8" cy="169.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>paq2piq</title></circle><text x="446.8" y="165.8" font-size="9" fill="#444">paq2piq</text>
-<circle cx="142.6" cy="256.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>piqe</title></circle><text x="147.6" y="252.4" font-size="9" fill="#444">piqe</text>
-<circle cx="104.0" cy="365.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr</title></circle><text x="109.0" y="361.2" font-size="9" fill="#444">psnr</text>
-<circle cx="168.8" cy="337.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-cb</title></circle><text x="173.8" y="333.2" font-size="9" fill="#444">psnr-cb</text>
-<circle cx="168.8" cy="338.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-cr</title></circle><text x="173.8" y="334.5" font-size="9" fill="#444">psnr-cr</text>
-<circle cx="111.9" cy="359.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y</title></circle><text x="116.9" y="355.1" font-size="9" fill="#444">psnr-y</text>
-<circle cx="151.5" cy="325.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y-libvmaf</title></circle><text x="156.5" y="321.5" font-size="9" fill="#444">psnr-y-libvmaf</text>
-<circle cx="137.5" cy="327.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y-studio601</title></circle><text x="142.5" y="323.2" font-size="9" fill="#444">psnr-y-studio601</text>
-<circle cx="111.9" cy="358.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y601</title></circle><text x="116.9" y="354.7" font-size="9" fill="#444">psnr-y601</text>
-<circle cx="198.1" cy="310.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-ycbcr611</title></circle><text x="203.1" y="306.5" font-size="9" fill="#444">psnr-ycbcr611</text>
-<circle cx="226.4" cy="306.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs</title></circle><text x="231.4" y="302.0" font-size="9" fill="#444">psnrhvs</text>
-<circle cx="227.3" cy="274.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs-daala</title></circle><text x="232.3" y="270.8" font-size="9" fill="#444">psnrhvs-daala</text>
-<circle cx="170.8" cy="328.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs-y</title></circle><text x="175.8" y="324.5" font-size="9" fill="#444">psnrhvs-y</text>
-<circle cx="289.4" cy="265.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim</title></circle><text x="294.4" y="261.3" font-size="9" fill="#444">ssim</text>
-<circle cx="146.0" cy="314.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-libvmaf</title></circle><text x="151.0" y="310.9" font-size="9" fill="#444">ssim-libvmaf</text>
-<circle cx="253.4" cy="283.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa</title></circle><text x="258.4" y="279.9" font-size="9" fill="#444">ssim-pyiqa</text>
-<circle cx="253.4" cy="285.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32</title></circle><text x="258.4" y="281.4" font-size="9" fill="#444">ssim-pyiqa-f32</text>
-<circle cx="196.5" cy="308.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k2</title></circle><text x="201.5" y="304.7" font-size="9" fill="#444">ssim-pyiqa-f32-k2</text>
-<circle cx="167.9" cy="317.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k3</title></circle><text x="172.9" y="313.4" font-size="9" fill="#444">ssim-pyiqa-f32-k3</text>
-<circle cx="151.4" cy="319.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k4</title></circle><text x="156.4" y="315.9" font-size="9" fill="#444">ssim-pyiqa-f32-k4</text>
-<circle cx="141.0" cy="320.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k5</title></circle><text x="146.0" y="316.0" font-size="9" fill="#444">ssim-pyiqa-f32-k5</text>
-<circle cx="134.3" cy="320.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k6</title></circle><text x="139.3" y="316.5" font-size="9" fill="#444">ssim-pyiqa-f32-k6</text>
-<circle cx="325.7" cy="243.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim2</title></circle><text x="330.7" y="239.7" font-size="9" fill="#444">ssim2</text>
-<circle cx="304.3" cy="264.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc</title></circle><text x="309.3" y="260.2" font-size="9" fill="#444">ssimc</text>
-<circle cx="304.3" cy="254.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32</title></circle><text x="309.3" y="250.0" font-size="9" fill="#444">ssimc-pyiqa-f32</text>
-<circle cx="250.4" cy="277.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k2</title></circle><text x="255.4" y="273.6" font-size="9" fill="#444">ssimc-pyiqa-f32-k2</text>
-<circle cx="243.1" cy="287.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k3</title></circle><text x="248.1" y="283.6" font-size="9" fill="#444">ssimc-pyiqa-f32-k3</text>
-<circle cx="240.2" cy="290.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k4</title></circle><text x="245.2" y="286.6" font-size="9" fill="#444">ssimc-pyiqa-f32-k4</text>
-<circle cx="238.8" cy="290.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k5</title></circle><text x="243.8" y="286.8" font-size="9" fill="#444">ssimc-pyiqa-f32-k5</text>
-<circle cx="238.0" cy="291.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k6</title></circle><text x="243.0" y="287.6" font-size="9" fill="#444">ssimc-pyiqa-f32-k6</text>
-<circle cx="406.2" cy="197.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimulacra1</title></circle><text x="411.2" y="193.3" font-size="9" fill="#444">ssimulacra1</text>
-<circle cx="481.7" cy="142.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>stlpips-alex</title></circle><text x="486.7" y="138.4" font-size="9" fill="#444">stlpips-alex</text>
-<circle cx="510.2" cy="107.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>stlpips-vgg</title></circle><text x="515.2" y="103.4" font-size="9" fill="#444">stlpips-vgg</text>
-<circle cx="301.5" cy="262.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vif</title></circle><text x="306.5" y="258.3" font-size="9" fill="#444">vif</text>
-<circle cx="327.1" cy="240.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vifvec</title></circle><text x="332.1" y="236.5" font-size="9" fill="#444">vifvec</text>
-<circle cx="264.4" cy="279.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf</title></circle><text x="269.4" y="275.4" font-size="9" fill="#444">vmaf</text>
-<circle cx="276.4" cy="278.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-4k</title></circle><text x="281.4" y="274.6" font-size="9" fill="#444">vmaf-4k</text>
-<circle cx="264.4" cy="278.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-neg</title></circle><text x="269.4" y="274.6" font-size="9" fill="#444">vmaf-neg</text>
-<circle cx="276.4" cy="278.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-neg-studio601</title></circle><text x="281.4" y="274.2" font-size="9" fill="#444">vmaf-neg-studio601</text>
-<circle cx="276.4" cy="277.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-studio601</title></circle><text x="281.4" y="273.8" font-size="9" fill="#444">vmaf-studio601</text>
-<circle cx="244.1" cy="284.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-v1</title></circle><text x="249.1" y="280.1" font-size="9" fill="#444">vmaf-v1</text>
-<circle cx="226.6" cy="267.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi</title></circle><text x="231.6" y="263.6" font-size="9" fill="#444">vsi</text>
-<circle cx="233.0" cy="259.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k2</title></circle><text x="238.0" y="255.0" font-size="9" fill="#444">vsi-k2</text>
-<circle cx="228.2" cy="264.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k3</title></circle><text x="233.2" y="260.4" font-size="9" fill="#444">vsi-k3</text>
-<circle cx="226.6" cy="269.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k4</title></circle><text x="231.6" y="265.2" font-size="9" fill="#444">vsi-k4</text>
-<circle cx="252.4" cy="242.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-nodownscale</title></circle><text x="257.4" y="238.6" font-size="9" fill="#444">vsi-nodownscale</text>
-<circle cx="471.7" cy="117.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-fr-live</title></circle><text x="476.7" y="113.5" font-size="9" fill="#444">wadiqam-fr-live</text>
-<circle cx="471.7" cy="130.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-fr-tid</title></circle><text x="476.7" y="126.0" font-size="9" fill="#444">wadiqam-fr-tid</text>
-<circle cx="468.6" cy="109.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-nr-live</title></circle><text x="473.6" y="105.3" font-size="9" fill="#444">wadiqam-nr-live</text>
-<circle cx="468.6" cy="123.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-nr-tid</title></circle><text x="473.6" y="119.3" font-size="9" fill="#444">wadiqam-nr-tid</text>
-<circle cx="565.2" cy="103.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wd</title></circle><text x="570.2" y="99.4" font-size="9" fill="#444">wd</text>
-<circle cx="235.3" cy="269.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ws-hv</title></circle><text x="240.3" y="265.9" font-size="9" fill="#444">ws-hv</text>
-<circle cx="308.9" cy="257.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>zensim</title></circle><text x="313.9" y="253.5" font-size="9" fill="#444">zensim</text>
+<circle cx="489.6" cy="156.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>afine</title></circle><text x="494.6" y="152.6" font-size="9" fill="#444">afine</text>
+<circle cx="592.3" cy="51.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ahiq-pyiqa</title></circle><text x="597.3" y="47.0" font-size="9" fill="#444">ahiq-pyiqa</text>
+<circle cx="390.7" cy="184.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>arniqa</title></circle><text x="395.7" y="180.5" font-size="9" fill="#444">arniqa</text>
+<circle cx="217.0" cy="210.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>brisque</title></circle><text x="222.0" y="206.2" font-size="9" fill="#444">brisque</text>
+<circle cx="343.3" cy="245.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>butteraugli</title></circle><text x="348.3" y="241.6" font-size="9" fill="#444">butteraugli</text>
+<circle cx="338.5" cy="225.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>butteraugli-original</title></circle><text x="343.5" y="221.2" font-size="9" fill="#444">butteraugli-original</text>
+<circle cx="233.5" cy="312.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cambi</title></circle><text x="238.5" y="308.0" font-size="9" fill="#444">cambi</text>
+<circle cx="228.7" cy="252.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ciede2000</title></circle><text x="233.7" y="248.8" font-size="9" fill="#444">ciede2000</text>
+<circle cx="340.9" cy="262.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ckdn</title></circle><text x="345.9" y="258.2" font-size="9" fill="#444">ckdn</text>
+<circle cx="382.4" cy="261.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cvvdp</title></circle><text x="387.4" y="257.4" font-size="9" fill="#444">cvvdp</text>
+<circle cx="248.2" cy="255.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cw-ssim</title></circle><text x="253.2" y="251.9" font-size="9" fill="#444">cw-ssim</text>
+<circle cx="235.6" cy="264.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>cw-ssim-pyiqa</title></circle><text x="240.6" y="260.0" font-size="9" fill="#444">cw-ssim-pyiqa</text>
+<circle cx="545.1" cy="122.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>deepdc</title></circle><text x="550.1" y="118.6" font-size="9" fill="#444">deepdc</text>
+<circle cx="535.6" cy="129.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dists</title></circle><text x="540.6" y="125.4" font-size="9" fill="#444">dists</text>
+<circle cx="495.9" cy="136.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dmm</title></circle><text x="500.9" y="132.6" font-size="9" fill="#444">dmm</text>
+<circle cx="570.5" cy="139.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dmm-pyiqa</title></circle><text x="575.5" y="135.3" font-size="9" fill="#444">dmm-pyiqa</text>
+<circle cx="431.2" cy="179.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dreamsim</title></circle><text x="436.2" y="175.7" font-size="9" fill="#444">dreamsim</text>
+<circle cx="283.1" cy="290.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>dssim</title></circle><text x="288.1" y="286.4" font-size="9" fill="#444">dssim</text>
+<circle cx="300.2" cy="237.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>flip</title></circle><text x="305.2" y="233.9" font-size="9" fill="#444">flip</text>
+<circle cx="300.1" cy="237.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>flip-v17</title></circle><text x="305.1" y="233.3" font-size="9" fill="#444">flip-v17</text>
+<circle cx="226.2" cy="303.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim</title></circle><text x="231.2" y="299.9" font-size="9" fill="#444">fsim</text>
+<circle cx="284.7" cy="265.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k2</title></circle><text x="289.7" y="261.9" font-size="9" fill="#444">fsim-k2</text>
+<circle cx="250.0" cy="264.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k3</title></circle><text x="255.0" y="260.6" font-size="9" fill="#444">fsim-k3</text>
+<circle cx="226.2" cy="304.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-k4</title></circle><text x="231.2" y="300.2" font-size="9" fill="#444">fsim-k4</text>
+<circle cx="346.0" cy="220.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-nodownscale</title></circle><text x="351.0" y="216.3" font-size="9" fill="#444">fsim-nodownscale</text>
+<circle cx="228.2" cy="306.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>fsim-y</title></circle><text x="233.2" y="302.4" font-size="9" fill="#444">fsim-y</text>
+<circle cx="144.6" cy="389.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>gmsd</title></circle><text x="149.6" y="385.0" font-size="9" fill="#444">gmsd</text>
+<circle cx="200.1" cy="307.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi</title></circle><text x="205.1" y="303.5" font-size="9" fill="#444">haarpsi</text>
+<circle cx="182.3" cy="323.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>haarpsi-y</title></circle><text x="187.3" y="319.4" font-size="9" fill="#444">haarpsi-y</text>
+<circle cx="439.7" cy="197.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hdrvdp</title></circle><text x="444.7" y="193.9" font-size="9" fill="#444">hdrvdp</text>
+<circle cx="434.7" cy="192.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hdrvdp3</title></circle><text x="439.7" y="188.6" font-size="9" fill="#444">hdrvdp3</text>
+<circle cx="460.0" cy="134.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>hyperiqa</title></circle><text x="465.0" y="130.0" font-size="9" fill="#444">hyperiqa</text>
+<circle cx="283.8" cy="281.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>iwssim</title></circle><text x="288.8" y="277.9" font-size="9" fill="#444">iwssim</text>
+<circle cx="283.7" cy="283.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>iwssim-piq</title></circle><text x="288.7" y="279.6" font-size="9" fill="#444">iwssim-piq</text>
+<circle cx="439.7" cy="242.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>liqe</title></circle><text x="444.7" y="238.2" font-size="9" fill="#444">liqe</text>
+<circle cx="403.0" cy="212.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-alex</title></circle><text x="408.0" y="208.2" font-size="9" fill="#444">lpips-alex</text>
+<circle cx="371.6" cy="215.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-squeeze</title></circle><text x="376.6" y="211.1" font-size="9" fill="#444">lpips-squeeze</text>
+<circle cx="535.4" cy="130.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>lpips-vgg</title></circle><text x="540.4" y="126.2" font-size="9" fill="#444">lpips-vgg</text>
+<circle cx="432.0" cy="193.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mad</title></circle><text x="437.0" y="189.7" font-size="9" fill="#444">mad</text>
+<circle cx="470.2" cy="154.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>maniqa</title></circle><text x="475.2" y="150.6" font-size="9" fill="#444">maniqa</text>
+<circle cx="405.6" cy="203.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdctpsnr</title></circle><text x="410.6" y="199.7" font-size="9" fill="#444">mdctpsnr</text>
+<circle cx="117.9" cy="368.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>mdsi</title></circle><text x="122.9" y="364.1" font-size="9" fill="#444">mdsi</text>
+<circle cx="199.7" cy="312.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsd</title></circle><text x="204.7" y="308.0" font-size="9" fill="#444">ms-gmsd</text>
+<circle cx="199.7" cy="311.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-gmsdc</title></circle><text x="204.7" y="307.4" font-size="9" fill="#444">ms-gmsdc</text>
+<circle cx="265.5" cy="286.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa</title></circle><text x="270.5" y="282.2" font-size="9" fill="#444">ms-ssim-pyiqa</text>
+<circle cx="265.5" cy="286.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32</title></circle><text x="270.5" y="282.8" font-size="9" fill="#444">ms-ssim-pyiqa-f32</text>
+<circle cx="211.1" cy="311.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k2</title></circle><text x="216.1" y="307.6" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k2</text>
+<circle cx="182.8" cy="320.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k3</title></circle><text x="187.8" y="316.0" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k3</text>
+<circle cx="165.8" cy="323.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k4</title></circle><text x="170.8" y="319.2" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k4</text>
+<circle cx="154.6" cy="324.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k5</title></circle><text x="159.6" y="320.4" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k5</text>
+<circle cx="147.3" cy="325.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ms-ssim-pyiqa-f32-k6</title></circle><text x="152.3" y="321.2" font-size="9" fill="#444">ms-ssim-pyiqa-f32-k6</text>
+<circle cx="235.6" cy="310.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>msssim</title></circle><text x="240.6" y="306.3" font-size="9" fill="#444">msssim</text>
+<circle cx="252.6" cy="280.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>msssim-libvmaf</title></circle><text x="257.6" y="276.0" font-size="9" fill="#444">msssim-libvmaf</text>
+<circle cx="187.6" cy="169.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>musiq</title></circle><text x="192.6" y="165.2" font-size="9" fill="#444">musiq</text>
+<circle cx="200.7" cy="240.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>niqe</title></circle><text x="205.7" y="236.3" font-size="9" fill="#444">niqe</text>
+<circle cx="280.7" cy="305.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>nlpd</title></circle><text x="285.7" y="301.1" font-size="9" fill="#444">nlpd</text>
+<circle cx="236.4" cy="335.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>nlpd-iqa</title></circle><text x="241.4" y="331.1" font-size="9" fill="#444">nlpd-iqa</text>
+<circle cx="416.2" cy="185.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>paq2piq</title></circle><text x="421.2" y="181.8" font-size="9" fill="#444">paq2piq</text>
+<circle cx="562.3" cy="106.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>pieapp-pyiqa</title></circle><text x="567.3" y="102.9" font-size="9" fill="#444">pieapp-pyiqa</text>
+<circle cx="137.9" cy="266.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>piqe</title></circle><text x="142.9" y="262.4" font-size="9" fill="#444">piqe</text>
+<circle cx="101.9" cy="367.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr</title></circle><text x="106.9" y="363.6" font-size="9" fill="#444">psnr</text>
+<circle cx="162.2" cy="341.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-cb</title></circle><text x="167.2" y="337.6" font-size="9" fill="#444">psnr-cb</text>
+<circle cx="162.2" cy="342.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-cr</title></circle><text x="167.2" y="338.7" font-size="9" fill="#444">psnr-cr</text>
+<circle cx="109.2" cy="362.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y</title></circle><text x="114.2" y="358.0" font-size="9" fill="#444">psnr-y</text>
+<circle cx="146.1" cy="330.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y-libvmaf</title></circle><text x="151.1" y="326.7" font-size="9" fill="#444">psnr-y-libvmaf</text>
+<circle cx="133.1" cy="332.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y-studio601</title></circle><text x="138.1" y="328.2" font-size="9" fill="#444">psnr-y-studio601</text>
+<circle cx="109.2" cy="361.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-y601</title></circle><text x="114.2" y="357.5" font-size="9" fill="#444">psnr-y601</text>
+<circle cx="189.5" cy="316.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnr-ycbcr611</title></circle><text x="194.5" y="312.7" font-size="9" fill="#444">psnr-ycbcr611</text>
+<circle cx="215.8" cy="312.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs</title></circle><text x="220.8" y="308.5" font-size="9" fill="#444">psnrhvs</text>
+<circle cx="216.6" cy="283.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs-daala</title></circle><text x="221.6" y="279.5" font-size="9" fill="#444">psnrhvs-daala</text>
+<circle cx="164.1" cy="333.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>psnrhvs-y</title></circle><text x="169.1" y="329.5" font-size="9" fill="#444">psnrhvs-y</text>
+<circle cx="274.5" cy="274.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim</title></circle><text x="279.5" y="270.6" font-size="9" fill="#444">ssim</text>
+<circle cx="141.0" cy="320.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-libvmaf</title></circle><text x="146.0" y="316.8" font-size="9" fill="#444">ssim-libvmaf</text>
+<circle cx="240.9" cy="292.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa</title></circle><text x="245.9" y="288.0" font-size="9" fill="#444">ssim-pyiqa</text>
+<circle cx="240.9" cy="293.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32</title></circle><text x="245.9" y="289.3" font-size="9" fill="#444">ssim-pyiqa-f32</text>
+<circle cx="188.0" cy="315.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k2</title></circle><text x="193.0" y="311.0" font-size="9" fill="#444">ssim-pyiqa-f32-k2</text>
+<circle cx="161.4" cy="323.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k3</title></circle><text x="166.4" y="319.1" font-size="9" fill="#444">ssim-pyiqa-f32-k3</text>
+<circle cx="146.0" cy="325.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k4</title></circle><text x="151.0" y="321.5" font-size="9" fill="#444">ssim-pyiqa-f32-k4</text>
+<circle cx="136.3" cy="325.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k5</title></circle><text x="141.3" y="321.6" font-size="9" fill="#444">ssim-pyiqa-f32-k5</text>
+<circle cx="130.1" cy="326.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim-pyiqa-f32-k6</title></circle><text x="135.1" y="322.0" font-size="9" fill="#444">ssim-pyiqa-f32-k6</text>
+<circle cx="308.3" cy="254.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssim2</title></circle><text x="313.3" y="250.6" font-size="9" fill="#444">ssim2</text>
+<circle cx="288.3" cy="273.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc</title></circle><text x="293.3" y="269.7" font-size="9" fill="#444">ssimc</text>
+<circle cx="288.3" cy="264.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32</title></circle><text x="293.3" y="260.2" font-size="9" fill="#444">ssimc-pyiqa-f32</text>
+<circle cx="238.2" cy="286.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k2</title></circle><text x="243.2" y="282.1" font-size="9" fill="#444">ssimc-pyiqa-f32-k2</text>
+<circle cx="231.3" cy="295.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k3</title></circle><text x="236.3" y="291.5" font-size="9" fill="#444">ssimc-pyiqa-f32-k3</text>
+<circle cx="228.6" cy="298.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k4</title></circle><text x="233.6" y="294.2" font-size="9" fill="#444">ssimc-pyiqa-f32-k4</text>
+<circle cx="227.3" cy="298.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k5</title></circle><text x="232.3" y="294.4" font-size="9" fill="#444">ssimc-pyiqa-f32-k5</text>
+<circle cx="226.6" cy="299.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimc-pyiqa-f32-k6</title></circle><text x="231.6" y="295.1" font-size="9" fill="#444">ssimc-pyiqa-f32-k6</text>
+<circle cx="383.1" cy="211.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ssimulacra1</title></circle><text x="388.1" y="207.3" font-size="9" fill="#444">ssimulacra1</text>
+<circle cx="424.1" cy="160.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>stlpips-alex</title></circle><text x="429.1" y="156.3" font-size="9" fill="#444">stlpips-alex</text>
+<circle cx="450.7" cy="127.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>stlpips-vgg</title></circle><text x="455.7" y="123.7" font-size="9" fill="#444">stlpips-vgg</text>
+<circle cx="285.7" cy="271.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vif</title></circle><text x="290.7" y="267.9" font-size="9" fill="#444">vif</text>
+<circle cx="309.5" cy="251.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vifvec</title></circle><text x="314.5" y="247.6" font-size="9" fill="#444">vifvec</text>
+<circle cx="251.1" cy="287.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf</title></circle><text x="256.1" y="283.8" font-size="9" fill="#444">vmaf</text>
+<circle cx="262.3" cy="287.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-4k</title></circle><text x="267.3" y="283.0" font-size="9" fill="#444">vmaf-4k</text>
+<circle cx="251.1" cy="287.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-neg</title></circle><text x="256.1" y="283.0" font-size="9" fill="#444">vmaf-neg</text>
+<circle cx="262.3" cy="286.7" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-neg-studio601</title></circle><text x="267.3" y="282.7" font-size="9" fill="#444">vmaf-neg-studio601</text>
+<circle cx="262.3" cy="286.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-studio601</title></circle><text x="267.3" y="282.3" font-size="9" fill="#444">vmaf-studio601</text>
+<circle cx="232.3" cy="292.2" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vmaf-v1</title></circle><text x="237.3" y="288.2" font-size="9" fill="#444">vmaf-v1</text>
+<circle cx="216.0" cy="276.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi</title></circle><text x="221.0" y="272.8" font-size="9" fill="#444">vsi</text>
+<circle cx="221.9" cy="268.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k2</title></circle><text x="226.9" y="264.8" font-size="9" fill="#444">vsi-k2</text>
+<circle cx="217.5" cy="273.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k3</title></circle><text x="222.5" y="269.8" font-size="9" fill="#444">vsi-k3</text>
+<circle cx="216.0" cy="278.3" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-k4</title></circle><text x="221.0" y="274.3" font-size="9" fill="#444">vsi-k4</text>
+<circle cx="240.0" cy="253.6" r="3.5" fill="#2179ac" fill-opacity=".75"><title>vsi-nodownscale</title></circle><text x="245.0" y="249.6" font-size="9" fill="#444">vsi-nodownscale</text>
+<circle cx="444.1" cy="137.1" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-fr-live</title></circle><text x="449.1" y="133.1" font-size="9" fill="#444">wadiqam-fr-live</text>
+<circle cx="444.1" cy="148.8" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-fr-tid</title></circle><text x="449.1" y="144.8" font-size="9" fill="#444">wadiqam-fr-tid</text>
+<circle cx="441.2" cy="129.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-nr-live</title></circle><text x="446.2" y="125.5" font-size="9" fill="#444">wadiqam-nr-live</text>
+<circle cx="441.2" cy="142.5" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-nr-tid</title></circle><text x="446.2" y="138.5" font-size="9" fill="#444">wadiqam-nr-tid</text>
+<circle cx="470.6" cy="159.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wadiqam-pyiqa</title></circle><text x="475.6" y="155.0" font-size="9" fill="#444">wadiqam-pyiqa</text>
+<circle cx="531.0" cy="124.0" r="3.5" fill="#2179ac" fill-opacity=".75"><title>wd</title></circle><text x="536.0" y="120.0" font-size="9" fill="#444">wd</text>
+<circle cx="224.1" cy="278.9" r="3.5" fill="#2179ac" fill-opacity=".75"><title>ws-hv</title></circle><text x="229.1" y="274.9" font-size="9" fill="#444">ws-hv</text>
+<circle cx="292.6" cy="267.4" r="3.5" fill="#2179ac" fill-opacity=".75"><title>zensim</title></circle><text x="297.6" y="263.4" font-size="9" fill="#444">zensim</text>
 <text x="350" y="448" text-anchor="middle">estimated cost per pixel (table units)</text>
 <text x="18" y="220" text-anchor="middle" transform="rotate(-90 18 220)">measured CPU ns per pixel</text></svg>
