@@ -196,3 +196,14 @@ hashing to wait while another file descriptor holds the lock; the historical
 controller fails that control. Frozen bundles are not edited or silently
 upgraded. Startup manifest verification remains distinct from this per-attempt
 fix; original running controllers retain their frozen behavior.
+
+`--protected-window --window-settle-seconds 5` holds the existing shared host
+lock across preparation, all 96 control cells and final verification. A
+private inner attempt lock avoids acquiring the same host lock twice.
+Requested/acquired/settled/releasing timestamps are recorded; quiet settling
+and optional per-attempt cadence stay outside metric clocks. The child
+controller inherits the held outer descriptor. This finite control window
+preserves the original NN controller and dependency graph, while preventing
+its repeated pre-lock hashes from interleaving between control cells. The
+original gate still rejects any foreign activity that remains during rounds.
+Use a new output directory and retain every earlier flagged control.
