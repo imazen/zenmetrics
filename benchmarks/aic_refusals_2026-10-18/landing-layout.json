@@ -1,0 +1,30 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "links": [
+      "/",
+      "/aic2026/",
+      "/aic2026/reproduction.html",
+      "/aic2026/complexity.html",
+      "https://github.com/imazen/zenmetrics/tree/f84dd4b24f786d024c6ef95a3c78261f05df2263",
+      "/aic2026/#downloads",
+      "https://gigapixels.imazen.org/"
+    ],
+    "overflow": false
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "links": [
+      "/",
+      "/aic2026/",
+      "/aic2026/reproduction.html",
+      "/aic2026/complexity.html",
+      "https://github.com/imazen/zenmetrics/tree/f84dd4b24f786d024c6ef95a3c78261f05df2263",
+      "/aic2026/#downloads",
+      "https://gigapixels.imazen.org/"
+    ],
+    "overflow": false
+  }
+]

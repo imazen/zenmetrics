@@ -1,0 +1,12 @@
+{
+  "url": "https://metrics.imazen.org/",
+  "landing": {
+    "source_commit": "f84dd4b24f786d024c6ef95a3c78261f05df2263",
+    "scope": "HTML/CSS navigation only"
+  },
+  "viewer_source": "1e147d80ffc59bc5eab8dd289b86fea03aa5f6d7",
+  "aic_source": "a823f80bbff7be17f9232528b628308c5ed8a2c9",
+  "index_hash_verified": true,
+  "unchanged_non_index_hashes": 42,
+  "gigapixels_link": true
+}

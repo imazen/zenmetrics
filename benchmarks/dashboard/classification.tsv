@@ -1065,3 +1065,5 @@ benchmarks/aic_refusals_2026-10-18/fsim-existing-before.tsv	ignored	Supplemental
 benchmarks/aic_refusals_2026-10-18/fsim-existing-after.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
 benchmarks/aic_refusals_2026-10-18/fsim-branch-comparison.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
 benchmarks/aic_refusals_2026-10-18/screenshot-timings.meta	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/landing-live-verification.json	ignored	Landing navigation and asset-preservation verification, not metric observations
+benchmarks/aic_refusals_2026-10-18/landing-layout.json	ignored	Landing navigation and asset-preservation verification, not metric observations

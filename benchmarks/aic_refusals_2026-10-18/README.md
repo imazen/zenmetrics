@@ -116,3 +116,16 @@ an explicit error, without enabling scoring. The real 64x64 process control
 changes exit 101 to exit 2. Its regression passes; the branch remains unmerged.
 The master inventory truthfully retains the panic. Exact resource receipts,
 RSS observations and private-adapter mappings are in `screenshot-timings.meta`.
+
+## Landing-page publication
+
+The live root now carries the seven-link navigation and responsive theme,
+including [Gigapixels](https://gigapixels.imazen.org/). The served HTML matches
+its manifest hash. All 42 other asset hashes remain unchanged. Viewer,
+AIC evidence and landing HTML retain separate truthful source identities;
+the landing-only update does not qualify a new metric/WASM build.
+The source is f84dd4b24f78; live and desktop-light/phone-dark layout receipts
+are retained here. Both layouts pass with no horizontal overflow.
+Layout resource receipt on r5900xt: rc0 2s, peak-RSS0.18GiB,
+min-avail51707MiB, peak-load1.04. Deployment resource receipt on dev:
+rc0 5s, peak-RSS0.31GiB, min-avail37016MiB, peak-load1.56.
