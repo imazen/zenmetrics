@@ -68,6 +68,61 @@ control bundle are retained at `~/benchmark-artifacts/iqa-mac-20261018/` on the
 coordinator. Original Mac receipts are under `~/tmp/iqa-mac-durable/`. These are
 local artifacts, not committed model weights, images or generated dumps.
 
+## Sequential live run, observed 2026-10-18 10:27 UTC
+
+The user started the core bundle after the qualification above. Remaining
+families are now installed as dependent launchd services, using the shared Mac
+heavy lock. All seven sizes and both thread budgets remain selected.
+
+| Order | Bundle suffix | Methods | Cells | Manifest SHA-256 |
+|---|---|---:|---:|---|
+| 1 | `core` | 14 | 1568 | `d8588fc41d242f3cf8bbf3dc44874d138af01f264688de8157d5f95713cc3bfc` |
+| 2 | `rest-v2` | 71 | 7952 | `e74f2e4d8cf4a80855b0986db9b224ded1631c2542e170a03866e53f1ba63da2` |
+| 3 | `nn-cpu-v3` | 23 | 1288 | `785ac3c6c01d2528e5ccf792fe1f132a42aea867b897b093016660eec7b9bdd5` |
+| 4 | `nn-metal-v3` | 23 | 1288 | `1b6e5c1b62e1826ff1b94837b5610ce10e5340d8e6636049e5a4943ade0a1954` |
+
+Bundle names begin `iqa-mac-20261018-` under `~/benchmark-bundles` on Mac.
+Outputs are `~/benchmark-results/iqa-core`, `iqa-rest-v2`, `iqa-nn-cpu-v3`
+and `iqa-nn-metal-v3`. Successor services were observed waiting on the correct
+predecessor, with no measurement output created early. Superseded waiting
+services were disabled and unloaded; their bundles and receipts remain retained.
+Recheck state with each bundle's `mac_service.py status BUNDLE OUTPUT` and the
+corresponding `.service/queue-wait.json`; this table records installation, not
+completion of these panels.
+
+The second build enables `compete-nn,metrics-parallel,zenmetrics-cli/nn-webgpu`
+at worker source `7310d24c`; binary SHA-256 is
+`0773cd747da14a2f535719810cbfe9b0f93e9ee01dc1491c330e0755661bd4f9`.
+It includes PIQE, NIQE and BRISQUE in the non-neural set, bringing that family
+to 85 methods. AHIQ and DMM are assigned to the neural family. PieAPP is excluded
+by the existing explicit-opt-in rule, so NN coverage is **23/24**, with scalar
+cold/warm cells and no invented native maps. Exports, heads, external tensors,
+ORT core 1.31.0 and WebGPU provider 0.4.0 are supplied locally and hash-frozen.
+Runner hashes are also bound into the new manifest identities (`82161fc3`).
+
+An interrupted NLPD warm attempt left a stale zenbench running reservation.
+Its worker and both retained process groups were absent; recovery acquired the
+ticket guard, archived the original bytes and kept a sibling backup. Subsequent
+warm cells completed. Failed attempts remain in the original output, including
+those awaiting retry. Exhausted-cell counts alone do not count failed attempts.
+The queued controllers include worker identity recorded before exec and
+post-cleanup recovery (`dcf93f35`). Linux controls pass 23/23 for that change,
+bundle/service controls 17/17 and admission controls 14/14; the added frozen
+runner rejection control passes separately. The 14 admission controls also
+pass on Mac. No acceptance threshold changed.
+
+Real LPIPS-Alex 512x512 controls on the updated controller complete one cold and
+one ten-round warm cell per engine. Within-engine score bits match exactly:
+RTEN `3f6f725bf4bbb08c`, ORT WebGPU/Metal `3f6f725c80000000`. These controls do
+not establish parity or timing acceptance for the other neural models. Original
+blocked controls are retained beside their successful replacements.
+
+Installation commands, manifests, original failed controls, successful control
+reports and the admission archive remain under `~/tmp/iqa-nn-sequence` on Mac;
+operator receipts are copied to `~/benchmark-artifacts/iqa-mac-sequence-20261018`
+on i265. Source commands are reproducible through `just bench-iqa-mac ...
+install --after ...` and `just iqa-nn-timing-check BUNDLE NEW_OUTPUT`.
+
 Resource wrapper receipts (scope observations, not metric-memory comparisons):
 
 ```

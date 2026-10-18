@@ -188,6 +188,9 @@ scalar scores because this adapter has no qualified NN native-map route.
 Metal uses the existing ORT WebGPU engine, which disables CPU fallback; runtime
 or resource refusals remain failed attempts, never CPU timings labelled Metal.
 These records qualify the timing protocol, not numerical parity for every model.
+The normal NN group uses the shared slow-metric selection policy: PieAPP is
+excluded unless named explicitly with `--metrics`. Its implementation remains
+available; a routine group does not spend the remaining machine window on it.
 
 The controller records a worker's PID, process group and start time before exec.
 After verifying that its entire group has exited, it can archive that worker's
