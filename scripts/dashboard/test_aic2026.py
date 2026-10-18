@@ -9,11 +9,26 @@ from unittest.mock import patch
 from catalog import ROOT, rows as catalog_rows
 from model_cards import cards
 import aic2026
+import repro
 from origins import check as check_origins
 from publish_extension import merge
 
 
 class AIC2026(unittest.TestCase):
+    def test_explicit_aic_routes_keep_crop_qualification_and_features(self):
+        by_name={c['metric']:c for c in cards()}
+        self.assertEqual(by_name['hdrvdp3-aic2026']['inputs']['code_bits_before_srgb_eotf'],10)
+        self.assertEqual(by_name['hdrvdp-aic2026']['inputs']['code_bits_before_srgb_eotf'],0)
+        self.assertEqual(by_name['cambi-aic2026']['kind'],'NR')
+        self.assertIn('cpu-hdrvdp',repro.FEATURES['hdrvdp3-aic2026'])
+        self.assertIn('cpu-vmaf',repro.FEATURES['cambi-aic2026'])
+        rows={r['column'].split(' / ',1)[0]:r for r in aic2026.reproduction_rows([], 'a'*40)}
+        self.assertEqual(rows['HDR_VDP_3']['n'],'61')
+        self.assertEqual(rows['HDR_VDP_3']['status'],'passes stated crop gate')
+        self.assertEqual(rows['CAMBI']['status'],'passes stated crop median gate')
+        self.assertEqual(rows['proposal-Butteraugli']['status'],'fails crop median gate')
+        self.assertIn('not 9618 native scores',rows['proposal-Butteraugli']['note'])
+
     def test_pyiqa_cards_follow_the_actual_package(self):
         by_name={c['metric']:c for c in cards()}
         for name in ('topiq-fr','topiq-fr-pipal','wadiqam-pyiqa','ahiq-pyiqa','pieapp-pyiqa','cw-ssim-pyiqa','dmm-pyiqa'):

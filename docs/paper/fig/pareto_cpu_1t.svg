@@ -33,16 +33,12 @@
 <circle cx="296.2" cy="47.3" r="4.5" fill="#bf5825"><title>ssim2</title></circle><text x="301.2" y="43.3" font-size="9" fill="#444">ssim2</text>
 <path d="M213.9 55.9V44.8" stroke="#9ab"/>
 <circle cx="213.9" cy="49.9" r="4.5" fill="#bf5825"><title>haarpsi</title></circle><text x="218.9" y="45.9" font-size="9" fill="#444">haarpsi</text>
-<path d="M310.2 57.2V47.1" stroke="#9ab"/>
-<circle cx="310.2" cy="51.7" r="3.2" fill="#2179ac"><title>butteraugli</title></circle><text x="315.2" y="47.7" font-size="9" fill="#444">butteraugli</text>
 <path d="M240.5 58.9V45.6" stroke="#9ab"/>
 <circle cx="240.5" cy="51.7" r="3.2" fill="#2179ac"><title>dssim</title></circle><text x="245.5" y="47.7" font-size="9" fill="#444">dssim</text>
 <path d="M251.2 58.2V46.2" stroke="#9ab"/>
 <circle cx="251.2" cy="51.8" r="3.2" fill="#2179ac"><title>psnrhvs-daala</title></circle><text x="256.2" y="47.8" font-size="9" fill="#444">psnrhvs-daala</text>
 <path d="M475.6 58.6V49.8" stroke="#9ab"/>
 <circle cx="475.6" cy="54.0" r="3.2" fill="#2179ac"><title>dmm-pyiqa</title></circle><text x="480.6" y="50.0" font-size="9" fill="#444">dmm-pyiqa</text>
-<path d="M384.3 66.7V49.7" stroke="#9ab"/>
-<circle cx="384.3" cy="57.4" r="3.2" fill="#2179ac"><title>hdrvdp</title></circle><text x="389.3" y="53.4" font-size="9" fill="#444">hdrvdp</text>
 <path d="M170.9 67.8V49.5" stroke="#9ab"/>
 <circle cx="170.9" cy="57.6" r="4.5" fill="#bf5825"><title>nlpd-iqa</title></circle><text x="175.9" y="53.6" font-size="9" fill="#444">nlpd-iqa</text>
 <path d="M323.0 63.8V53.4" stroke="#9ab"/>
@@ -51,8 +47,6 @@
 <circle cx="87.1" cy="60.1" r="4.5" fill="#bf5825"><title>gmsd</title></circle><text x="92.1" y="56.1" font-size="9" fill="#444">gmsd</text>
 <path d="M219.4 67.0V54.8" stroke="#9ab"/>
 <circle cx="219.4" cy="60.5" r="3.2" fill="#2179ac"><title>fsim</title></circle><text x="224.4" y="56.5" font-size="9" fill="#444">fsim</text>
-<path d="M392.6 71.2V51.6" stroke="#9ab"/>
-<circle cx="392.6" cy="60.6" r="3.2" fill="#2179ac"><title>hdrvdp3</title></circle><text x="397.6" y="56.6" font-size="9" fill="#444">hdrvdp3</text>
 <path d="M251.0 72.2V52.1" stroke="#9ab"/>
 <circle cx="251.0" cy="61.4" r="3.2" fill="#2179ac"><title>iwssim-piq</title></circle><text x="256.0" y="57.4" font-size="9" fill="#444">iwssim-piq</text>
 <path d="M285.6 73.0V51.5" stroke="#9ab"/>
@@ -113,8 +107,6 @@
 <circle cx="412.6" cy="119.8" r="3.2" fill="#2179ac"><title>dreamsim</title></circle><text x="417.6" y="115.8" font-size="9" fill="#444">dreamsim</text>
 <path d="M160.8 140.4V118.7" stroke="#9ab"/>
 <circle cx="160.8" cy="129.4" r="3.2" fill="#2179ac"><title>psnr-cb</title></circle><text x="165.8" y="125.4" font-size="9" fill="#444">psnr-cb</text>
-<path d="M206.9 295.7V229.6" stroke="#9ab"/>
-<circle cx="206.9" cy="261.8" r="3.2" fill="#2179ac"><title>cambi</title></circle><text x="211.9" y="257.8" font-size="9" fill="#444">cambi</text>
 <path d="M284.3 439.4V362.7" stroke="#9ab"/>
 <circle cx="284.3" cy="402.0" r="3.2" fill="#2179ac"><title>ckdn</title></circle><text x="289.3" y="398.0" font-size="9" fill="#444">ckdn</text>
 <text x="350" y="448" text-anchor="middle">measured CPU ns per pixel (log)</text>

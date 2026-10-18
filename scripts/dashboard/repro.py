@@ -18,6 +18,10 @@ def _features():
     for metric, features in re.findall(r'disabled_msg\(\s*"([a-z0-9-]+)",\s*"([a-z0-9,-]+)', text):
         found.setdefault(metric, [f for f in features.split(',') if f])
     names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',function(text,'name')))
+    dynamic=r'(MetricKind::\w+(?:\s*\|\s*MetricKind::\w+)*)\s*=>\s*(?:\{\s*)?Err\(disabled_msg\(kind.name\(\),\s*"([a-z0-9,-]+)"'
+    for arm,features in re.findall(dynamic,text):
+        for kind in re.findall(r'MetricKind::(\w+)',arm):
+            found.setdefault(names[kind],features.split(','))
     for group,kinds in compiled_groups(text).items():
         feature={'nn':'nn','nr':'nr','pyiqa':'pyiqa-ports'}.get(group)
         if feature:

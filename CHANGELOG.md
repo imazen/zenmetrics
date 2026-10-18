@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Connect the AIC2026 entrance, explorer, evidence, downloads and Gigapixels; show the four explicit routes' crop qualifications and exact SDR defaults without borrowing their predecessors' cost tallies (`64391e26` base).
+
 - Add explicit AIC2026 SDR HDR-VDP, integer-luma CAMBI and mapped Butteraugli CLI routes, with independent crop/oracle receipts and unchanged existing names (`f3df7410` base).
 
 - Generate an AIC2026 extension with every CLI configuration, reproduction gaps, public model cards, cost/runtime and preliminary agreement, full-population CID22 scatter diagnostics, and both screenshot inventories (`a6418abc` base). Preserve the existing viewer and reject third-party resource loads.

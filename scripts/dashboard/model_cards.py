@@ -43,6 +43,32 @@ def base_name(metric, names):
     return max(candidates,key=len) if candidates else None
 
 
+def explicit_aic_inputs(metric):
+    if metric in ('hdrvdp-aic2026','hdrvdp3-aic2026'):
+        v3=metric=='hdrvdp3-aic2026'
+        return {'format':'packed sRGB8; f64 conversion to absolute nits',
+                'sdr_peak_nits':200,'ppd':37.842505866 if v3 else 37.84,
+                'code_bits_before_srgb_eotf':10 if v3 else 0,
+                'code_rounding':'nearest, ties away from zero when enabled',
+                'encoding':'D65 XYZ from linear sRGB' if v3 else 'RGB BT.709',
+                'xyz_matrix':[[.4124564,.3575761,.1804375],[.2126729,.7151522,.0721750],[.0193339,.1191920,.9503041]] if v3 else None,
+                'task':'quality','emission':'OLED' if v3 else 'HDR-VDP 2 RGB BT.709 reference defaults',
+                'age':24 if v3 else 'reference defaults','surround':'none' if v3 else 'reference defaults',
+                'overrides':['--hdrvdp-sdr-peak','--hdrvdp-sdr-ppd','--hdrvdp-sdr-code-bits'],
+                'v2_strict_arithmetic':'--hdrvdp-sdr-strict; default false',
+                'outputs':['hdrvdp3_aic2026_q','hdrvdp3_aic2026_jod'] if v3 else ['hdrvdp_aic2026_q'],
+                'source':'crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs'}
+    if metric=='cambi-aic2026':
+        return {'format':'packed sRGB8; distorted image only','resize':'crop to even width and height',
+                'luma':'t=(8414R+16519G+3208B+(32<<14)+(1<<8))>>9; Y=(t+32)>>6',
+                'kernel':'CAMBI 8-bit luma; existing defaults','source':'crates/zenmetrics-cli/src/metrics/vmaf.rs'}
+    if metric=='proposal-butteraugli':
+        return {'format':'packed sRGB8','native_output':'butteraugli pnorm3, existing CPU defaults',
+                'output_map':'max(0.00459792*N, 2.0938201*N - 1.1033102)',
+                'source':'crates/zenmetrics-cli/src/metrics/mod.rs'}
+    return None
+
+
 def bibtex(citation):
     if not citation:return ''
     key=re.sub(r'[^a-zA-Z0-9]','',citation['key'])+citation['year']
@@ -84,12 +110,15 @@ def cards():
 
         status='Reported results' if parity.get('results') or parity.get('status') or any('reported_worst' in k for k in parity) or 'Measured' in parity.get('recorded_source_comments','') or row['parity'].startswith('reported gate:') else 'Declared gate' if parity else 'Not compared' if 'not compared' in row['parity'] else 'Not documented'
         inputs=model.get('input',{}) or ({'convention':plain(entry[5])} if len(entry)>5 else {'cli_contract':contracts.get(metric,MISSING)})
+        explicit=explicit_aic_inputs(metric)
+        if explicit:inputs=explicit
         output=plain(entry[6]) if len(entry)>6 else MISSING
         code=model.get('code',{});weights=model.get('weights',{})
         reference=code.get('upstream',parity.get('oracle',row['reference']))
         record_path=path.relative_to(ROOT).as_posix() if path else 'docs/METRIC_PROVENANCE.md'
+        if explicit:record_path=explicit['source']
         implementation_license=row['license']
-        manifest=ROOT/'crates'/(path.parts[-4] if path else 'zenmetrics-nn' if row['nn']=='true' or model else metric)/'Cargo.toml'
+        manifest=ROOT/'crates'/('zenmetrics-cli' if explicit else path.parts[-4] if path else 'zenmetrics-nn' if row['nn']=='true' or model else metric)/'Cargo.toml'
         if manifest.is_file():
             license_value=tomllib.loads(manifest.read_text()).get('package',{}).get('license')
             if isinstance(license_value,str):implementation_license=license_value
@@ -117,7 +146,7 @@ def cards():
         licenses=sorted(p.relative_to(ROOT).as_posix() for directory in ([path.parent,ROOT/'crates/zenmetrics-nn'] if path else [ROOT/'crates'/metric]) for p in directory.glob('LICENSE*') if not model or p.name.lower()=='license-'+model.get('name','').lower())
         yield clean(dict(metric=metric,name=cite.get('full_name',metric) if cite else metric,
              family='Classical' if metric=='cw-ssim-pyiqa' else 'Learned' if row['nn']=='true' or model or metric=='brisque' else 'Classical',
-             kind='NR' if ('no-reference' in model.get('kind','') and 'full-reference' not in model.get('kind','')) or 'wadiqam-nr-' in metric or metric in ['niqe','piqe','brisque','cambi'] else 'FR',
+             kind='NR' if ('no-reference' in model.get('kind','') and 'full-reference' not in model.get('kind','')) or 'wadiqam-nr-' in metric or metric in ['niqe','piqe','brisque','cambi','cambi-aic2026'] else 'FR',
              backend=row['backend'],backends=['CPU','GPU'] if model else [row['backend']],engines=model.get('execution',{}).get('engines',['rten','ort-cuda'] if model else [row['backend']]),
              citation=cite,citation_status='Verified primary metadata' if cite else 'citation needed',
              recorded_paper=model.get('paper',row['paper']),

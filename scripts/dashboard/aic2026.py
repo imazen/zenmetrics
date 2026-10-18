@@ -143,7 +143,21 @@ def reproduction_rows(cards, commit):
                 impl = 'butteraugli_pnorm3 + identified map'; status = 'configuration identified'
                 med, mx, jnd = '', '', '5.1e-5';note = 'max(0.00459792*N, 2.0938201*N - 1.1033102); median 3.2e-8 site-JND over all 9618 rows; constants provenance unknown.'
             rows.append(dict(column=plain(name), availability=where, implementation=plain(impl), n=n, median=med, maximum=mx, max_jnd=jnd, status=status, note=plain(note)))
-    rows.sort(key=lambda r: (0 if r['status'].startswith('MISSING') else 1 if r['status'] in ('unverifiable', 'unreproduced', 'fails native gate') else 2, r['column']))
+    native_path=ROOT/'benchmarks/aic_refusals_2026-10-18/summary.tsv'
+    native={r['col']:r for r in csv.DictReader(native_path.read_text().splitlines(),delimiter='\t')}
+    for row in rows:
+        column=row['column'].split(' / ',1)[0]
+        measured=native.get(column)
+        if not measured:continue
+        row.update(implementation=mapping[column],n=measured['n'],median=measured['med_abs'],maximum=measured['max_abs'],max_jnd=measured['max_jnd'])
+        qualification={
+            'HDR_VDP_3':('passes stated crop gate','Q output; 10-bit code quantization before 200-nit sRGB EOTF, D65 XYZ/OLED, 37.842505866 ppd.'),
+            'HDR_VDP_2':('unreproduced','Q output; unrounded 200-nit sRGB, BT.709, 37.84 ppd. Native median 0.0277768 Q vs published; independent Octave median 0.02651 Q vs published, native-vs-Octave median 0.00869019 Q. RGB accuracy and setting residual remain separate open questions.'),
+            'CAMBI':('passes stated crop median gate','Integer swscale-compatible luma; max raw 4.80485e-7. Near-zero nonlinear mapping amplifies max site-JND to 0.00212503; no maximum gate was specified.'),
+            'proposal-Butteraugli':('fails crop median gate','Native 61-pair pnorm3 plus identified map: median 3.06732e-7 exceeds requested 3.2e-8 site-JND gate. The separate 9618-row published-column mapping is not 9618 native scores. Constants provenance unknown.')}
+        row['status'],row['note']=qualification[column]
+        row['note']+=' Median site-JND '+measured['med_jnd']+'; Spearman '+measured['spearman']+'. Native receipt: benchmarks/aic_refusals_2026-10-18/README.md.'
+    rows.sort(key=lambda r: (0 if r['status'].startswith('MISSING') else 1 if r['status'] in ('unverifiable', 'unreproduced', 'fails native gate','fails crop median gate') else 2, r['column']))
     return rows
 
 
@@ -186,7 +200,7 @@ def build(output, cards):
     (folder/'style.css').write_text(STYLE)
     private=json.loads((ROOT/'benchmarks/dashboard/aic2026/private-aggregates.json').read_text())
     rows=reproduction_rows(cards,commit)
-    status_paths=['docs/AIC2026_REPRODUCTION_STATUS.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','benchmarks/dashboard/aic2026/private-aggregates.json']
+    status_paths=['docs/AIC2026_REPRODUCTION_STATUS.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','benchmarks/dashboard/aic2026/private-aggregates.json','benchmarks/aic_refusals_2026-10-18/README.md','benchmarks/aic_refusals_2026-10-18/summary.tsv']
     page('reproduction','Reproduction status', '<p class="notice">Missing evidence comes first. Native-oracle parity and matching a dataset column are separate checks. A matching method name alone qualifies neither. Current questions and detailed receipts: '+source_link(status_paths[0],commit)+'.</p>'+table(['Published column / site experiment','Availability','Implementation','n','Median |Δ|','Max |Δ|','Max site-JND Δ','Status','Configuration / qualification','Evidence'],[[e(r[k]) for k in ['column','availability','implementation','n','median','maximum','max_jnd','status','note']]+[source_link(status_paths[0],commit,'Current receipt ledger')] for r in rows]),status_paths)
     column_contract=json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())
     mapping=column_contract['map']
