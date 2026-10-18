@@ -32,7 +32,11 @@ def main():
     p.add_argument('--sizes', default='cid22,aic-small,aic-medium,aic-large,2k,4k,8k')
     p.add_argument('--threads', default='1,8', help='Explicit worker counts, frozen in the manifest')
     p.add_argument('--cold-repeats', type=int, default=3)
+    p.add_argument('--zenbench', type=Path, help='Freeze the native zenbench CLI for checked Linux P-core placement')
+    p.add_argument('--cpu-set', help='Explicit P-core IDs, comma-separated; requires --zenbench')
     a = p.parse_args()
+    if bool(a.zenbench) != bool(a.cpu_set):
+        p.error('--zenbench and --cpu-set must be supplied together')
     counts = list(dict.fromkeys(int(n) for n in a.threads.split(',')))
     if min(counts) < 1 or a.cold_repeats < 1:
         p.error('thread counts and cold repeats must be positive')
@@ -73,6 +77,9 @@ def main():
         companion = a.resource_wrapper.with_name('run-heavy-macos.py')
         if companion.is_file():
             shutil.copy2(companion, a.output / 'tools/run-heavy-macos.py')
+    if a.zenbench:
+        (a.output / 'tools').mkdir(exist_ok=True)
+        shutil.copy2(a.zenbench, a.output / 'tools/zenbench')
     for name in ('durable.py', 'mac_service.py', 'select_durable.py', 'admission_recovery.py'):
         shutil.copy2(HERE / name, a.output / name)
     shutil.copy2(HERE / 'bundle.just', a.output / 'justfile')
@@ -101,6 +108,10 @@ def main():
                                   warm_definition='10 zenbench rounds, 100 ms target per round, after initialization and warmup',
                                   input_provenance_sha256=sha(a.inputs_meta), corpus_scope='single S67 reference/distortion; scaling study, not perceptual ranking',
                                   metrics=metrics, sizes=sizes, threads=counts, inventory=inventory))
+    if a.zenbench:
+        manifest['input_sha256']['tools/zenbench'] = sha(a.output / 'tools/zenbench')
+        manifest['metadata']['cpu_placement'] = dict(policy='performance',
+            cpus=sorted(set(map(int, a.cpu_set.split(',')))), zenbench='tools/zenbench')
     (a.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (a.output / 'USAGE.txt').write_text('Run with Python 3: python3 durable.py run manifest.json /absolute/results --run-heavy /absolute/bundle/tools/run-heavy --lock ~/tmp/mac-heavy.lock --memory 12G --jobs 8\nUse mac_service.py install for launchd restart, status to inspect, stop to unload, start to resume. See the repository docs/IQA_DURABLE_MAC.md. This bundle is a single-pair scaling experiment, not a perceptual ranking.\n')
     hashes = {str(path.relative_to(a.output)): sha(path) for path in sorted(a.output.rglob('*')) if path.is_file()}

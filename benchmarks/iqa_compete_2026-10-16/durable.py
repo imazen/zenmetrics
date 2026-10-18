@@ -130,6 +130,14 @@ def manifest(path):
         if not isinstance(cell, dict):
             raise Refusal('cell must be an object')
         config = dict(cell)
+        placement = value['metadata'].get('cpu_placement')
+        if placement:
+            if (placement.get('policy') != 'performance' or not placement.get('cpus')
+                    or any(type(cpu) is not int or cpu < 0 for cpu in placement['cpus'])
+                    or placement.get('zenbench') not in value.get('input_sha256', {})):
+                raise Refusal('invalid checked CPU placement')
+            config['cpu_placement'] = dict(placement,
+                zenbench=str(relative(root, placement['zenbench'])))
         if cell.get('timing_phase') not in ('cold', 'warm') or cell.get('only_mode') not in ('score', 'score+map'):
             raise Refusal('each cell requires timing_phase and only_mode')
         if cell['timing_phase'] == 'cold' and not integer(cell.get('cold_repeat'), 0):
@@ -151,7 +159,7 @@ def manifest(path):
         if not isinstance(assets, list) or any(name not in hashes for name in assets):
             raise Refusal('every worker asset requires a frozen input hash')
         allowed = {'ZENMETRICS_NN_MODEL_DIR', 'ZENMETRICS_NN_ENGINE', 'ZENMETRICS_NN_ACCEPT_WEIGHTS',
-                   'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND'}
+                   'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND', 'LD_LIBRARY_PATH'}
         worker_env = cell.get('worker_environment', {})
         if not isinstance(worker_env, dict) or set(worker_env) - allowed:
             raise Refusal('unknown worker environment key')
@@ -159,7 +167,7 @@ def manifest(path):
         for key, val in worker_env.items():
             if not isinstance(val, str):
                 raise Refusal('worker environment values must be strings')
-            if key in ('ZENMETRICS_NN_MODEL_DIR', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB'):
+            if key in ('ZENMETRICS_NN_MODEL_DIR', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'LD_LIBRARY_PATH'):
                 target = relative(root, val)
                 files = [p for p in target.rglob('*') if p.is_file()] if target.is_dir() else [target]
                 if not files or any(str(p.relative_to(root)) not in assets for p in files):
@@ -184,9 +192,13 @@ def environment(config, scratch):
                 'RTEN_NUM_THREADS', 'ORT_NUM_THREADS', 'MKL_NUM_THREADS',
                 'OPENBLAS_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
         env[key] = str(config['threads'])
-    env.update(TMPDIR=str(scratch), ZENBENCH_NO_SAVE='1', ZENBENCH_CPU_POLICY='unrestricted')
+    placement = config.get('cpu_placement')
+    env.update(TMPDIR=str(scratch), ZENBENCH_NO_SAVE='1',
+               ZENBENCH_CPU_POLICY=placement['policy'] if placement else 'unrestricted')
+    if placement:
+        env['ZENBENCH_CPU_SET'] = ','.join(map(str, placement['cpus']))
     if config.get('worker_environment'):
-        for key in ('ZENMETRICS_NN_MODEL_DIR', 'ZENMETRICS_NN_ENGINE', 'ZENMETRICS_NN_ACCEPT_WEIGHTS', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND'):
+        for key in ('ZENMETRICS_NN_MODEL_DIR', 'ZENMETRICS_NN_ENGINE', 'ZENMETRICS_NN_ACCEPT_WEIGHTS', 'ORT_DYLIB_PATH', 'ZENMETRICS_NN_WEBGPU_EP_LIB', 'WGPU_BACKEND', 'LD_LIBRARY_PATH'):
             env.pop(key, None)
         env.update(config['worker_environment'])
     return env
@@ -209,6 +221,8 @@ def observation():
                 break
     return dict(cpu_model=cpu_model, logical_cpus=os.cpu_count(), host=platform.node(), os=platform.platform(), machine=platform.machine(),
                 processor=platform.processor(), python=sys.version, load=os.getloadavg(),
+                cpu_ticks=[line for line in Path('/proc/stat').read_text().splitlines() if line.startswith('cpu')]
+                    if Path('/proc/stat').exists() else None,
                 unix_ns=time.time_ns())
 
 
@@ -228,6 +242,8 @@ def validate_row(log, config):
                 'reference_sha256', 'distorted_sha256', 'impl_binary_sha', 'worker_environment', 'asset_sha256'):
         if row.get(key) != config.get(key):
             raise Refusal('IQA_ROW identity mismatch: ' + key)
+    if row.get('cpu_placement') != config.get('cpu_placement'):
+        raise Refusal('IQA_ROW identity mismatch: cpu_placement')
     if row.get('mode') != config['only_mode']:
         raise Refusal('IQA_ROW mode mismatch')
     status = row.get('status')
@@ -279,7 +295,36 @@ def worker_exec(attempt):
     """Persist the worker PID/group before exec can create an admission ticket."""
     intent = load(attempt / 'intent.json')
     atomic(attempt / 'worker-process.json', dict(pid=os.getpid(), pgid=os.getpgrp(), unix_s=int(time.time())))
+    config = load(attempt / 'config.json')
+    placement = config.get('cpu_placement')
+    if placement:
+        enforce_placement(placement, attempt)
     os.execv(intent['binary'], [intent['binary'], str(attempt / 'config.json')])
+
+
+def enforce_placement(placement, attempt):
+    """Constrain the actual resource scope, then ask zenbench to certify it."""
+    group = Path('/proc/self/cgroup').read_text().strip().split('0::')[-1]
+    scope = Path('/sys/fs/cgroup') / group.lstrip('/')
+    if ('..' in scope.parts or scope.suffix != '.scope' or 'app.slice' not in scope.parts
+            or f'user@{os.getuid()}.service' not in scope.parts):
+        raise Refusal('CPU placement requires an owned run-heavy user scope')
+    target = scope / 'cpuset.cpus'
+    cpus = ','.join(map(str, placement['cpus']))
+    # Some user managers delegate memory but leave cpuset files root-owned.
+    # The path comes from this process's kernel membership, never the manifest.
+    subprocess.run(['sudo', '-n', 'tee', str(target)], input=cpus + '\n',
+                   text=True, stdout=subprocess.DEVNULL, check=True)
+    os.sched_setaffinity(0, placement['cpus'])
+    observed = json.loads(subprocess.check_output([placement['zenbench'], 'cpu-info'], text=True))
+    proof = observed.get('placement', {}).get('Ok', {})
+    if (proof.get('status') != 'enforced_uniform' or proof.get('policy') != 'performance'
+            or proof.get('effective_cpus') != placement['cpus']):
+        raise Refusal('zenbench refused the requested P-core boundary')
+    atomic(attempt / 'cpu-placement.json', dict(zenbench=observed,
+        affinity=sorted(os.sched_getaffinity(0)), cgroup=str(scope),
+        memory_max=(scope / 'memory.max').read_text().strip(),
+        memory_swap_max=(scope / 'memory.swap.max').read_text().strip()))
 
 
 def payload(attempt, address, seconds):

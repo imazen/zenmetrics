@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 import durable
 
@@ -51,6 +52,24 @@ if behavior=='duplicate':print('IQA_ROW '+json.dumps(r),flush=True)
 
 
 class DurableTests(unittest.TestCase):
+    def test_frozen_performance_policy_overrides_diagnostic_parent(self):
+        value = self.freeze('ok', phase='cold')
+        tool = self.root / 'zenbench'
+        tool.write_bytes(b'fixture')
+        value['input_sha256']['zenbench'] = durable.file_hash(tool)
+        value['metadata']['cpu_placement'] = dict(policy='performance', cpus=[0, 1], zenbench='zenbench')
+        self.path.write_text(json.dumps(value))
+        _, configs, _ = durable.manifest(self.path)
+        with patch.dict(os.environ, {'ZENBENCH_CPU_POLICY': 'unrestricted'}):
+            env = durable.environment(configs[0], self.root)
+        self.assertEqual(env['ZENBENCH_CPU_POLICY'], 'performance')
+        self.assertEqual(env['ZENBENCH_CPU_SET'], '0,1')
+        self.assertEqual(configs[0]['cpu_placement']['zenbench'], str(tool))
+        value['metadata']['cpu_placement']['policy'] = 'unrestricted'
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(durable.Refusal, 'checked CPU placement'):
+            durable.manifest(self.path)
+
     def test_runner_hash_is_bound_to_executed_controller(self):
         value = self.freeze('ok', phase='cold')
         runner = self.root / 'durable.py'
