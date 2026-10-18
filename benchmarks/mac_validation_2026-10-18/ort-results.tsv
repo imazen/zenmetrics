@@ -1,0 +1,4 @@
+host	commit	model_selection	goldens_checked	goldens_total	exit	result	command
+mac	a3bc3a98	lpips_alex,dists	20	36	137	PARTIAL	"just nn-parity ""$MODEL_DIR"" ""$LADDER"" ort-webgpu model-tests,ort-webgpu lpips_alex,dists"
+mac	a3bc3a98	lpips_alex	18	18	0	PASS	"just nn-parity ""$MODEL_DIR"" ""$LADDER"" ort-webgpu model-tests,ort-webgpu lpips_alex"
+mac	a3bc3a98	dists	2	18	137	INCOMPLETE	"just nn-parity ""$MODEL_DIR"" ""$LADDER"" ort-webgpu model-tests,ort-webgpu dists"

@@ -1022,3 +1022,6 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/mac_validation_2026-10-18/results.tsv	ignored	Native correctness validation; pass/fail and parity evidence, not performance measurements
+benchmarks/mac_validation_2026-10-18/ort-results.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
+benchmarks/mac_validation_2026-10-18/providers.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements

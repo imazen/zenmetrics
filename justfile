@@ -1635,3 +1635,7 @@ complexity-check:
 complexity-regenerate:
     python3 scripts/complexity/coverage.py
     python3 scripts/complexity/paper.py
+
+# Run one integration-test module per process on the native wgpu backend.
+mac-validation-module package module:
+    cargo test --locked -p {{package}} --no-default-features --features wgpu --test it {{module}} -- --nocapture --test-threads=1

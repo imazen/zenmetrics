@@ -1,0 +1,3 @@
+package	version	wheel	url	dylib_sha256
+onnxruntime-ep-webgpu	0.4.0	onnxruntime_ep_webgpu-0.4.0-py3-none-macosx_14_0_universal2.whl	https://files.pythonhosted.org/packages/c3/9f/1e09865bbe4c9202ff1334545535be32dfdbeffc46e7d4c36c5de67ffafe/onnxruntime_ep_webgpu-0.4.0-py3-none-macosx_14_0_universal2.whl	894aa43c308c97afe58f6485b8411962181a39b27170f5f210cc7503adb52850
+onnxruntime	1.31.0	onnxruntime-1.31.0-cp312-cp312-macosx_14_0_arm64.whl	https://files.pythonhosted.org/packages/b3/bd/2ac094311163b803e3626c3937461d6900934bd56cca7601f6150ff860c3/onnxruntime-1.31.0-cp312-cp312-macosx_14_0_arm64.whl	ff52828ce7c6dd1aea99a5e9f5da9e2786e3d03e467fbf8b6893a4b624334920

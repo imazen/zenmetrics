@@ -561,6 +561,21 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-10-18 ORT WebGPU on mac/Metal:** official plugin 0.4.0 and ORT
+  core 1.31.0 load. LPIPS-Alex passes 18/18 golden pairs plus warm/cold parity.
+  DISTS reaches 2/18 pairs, then the resource wrapper kills both combined and
+  isolated attempts at 2048² when its available-page proxy falls below 4 GiB;
+  full DISTS parity and its warm/cold check remain unvalidated under the 12 GiB
+  guard. [Commands and measurements](benchmarks/mac_validation_2026-10-18/README.md).
+
+- **2026-10-18 Mac/Metal validation at a3bc3a98:** CVVDP Mode B walkers
+  8/8, CSF halos 5/5, Mode E 12/12, dispatch limits 2/2 and cancellation
+  4/4 pass in separate processes, with no device-thread error messages.
+  Zensim `it` passes 107/113: the two documented failures persist, plus
+  pointwise diffmap parity and three odd-dimension pyramid tests fail.
+  No implementation or threshold changes made.
+  [Commands, values and retained evidence](benchmarks/mac_validation_2026-10-18/README.md).
+
 - **2026-10-16 — PieAPP weight-head reconstruction:** the initial absolute-value
   hypothesis matched the positive observed weights, but opaque bias/projection
   controls identify signed `weight+1e-6`. Score revision 3 removes the
@@ -850,7 +865,10 @@ packed-sRGB-u8 sweep shape and answers a different question.
   (identity score 2.3330367, expected ~0 — the default CPU-diffmap path, 16×16) and
   `cached_ref_slot_rebuild::gpu_score_correct_after_foreign_size_rebuild` (one-shot AND cached-ref
   GPU 51.2412 vs CPU 48.8323, 2.41 JOD off after the 1024→1448 rebuild + `reclaim_pooled_vram`).
-  Not root-caused; the other 103 tests pass. Command:
+  Rechecked on Metal 2026-10-18 at a3bc3a98: identity remains 2.3330367; rebuild
+  GPU=51.24123255864118 vs CPU=48.827715234845805. The current suite has 107/113
+  passing, with four additional failures detailed in the dated validation report.
+  Not root-caused. Historical command:
   `cargo test -p zensim-gpu --no-default-features --features wgpu --tests`. The CI macos-latest
   Metal job runs this same suite — check whether it is red there before blaming a local change.
 
@@ -1058,8 +1076,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
   masking walker got the same treatment in `f29a8371`). After, on Vulkan:
   `mode_b_walker_parity` 8/8, `strip_mode_b_csf_halo_parity` 5/5, 0 device-thread panics,
   Strip == Full bit for bit at 256², 1024² and 1000×750; CUDA probe output byte-identical.
-  `cancel::strip_pair_mode_polls_per_strip` is no longer cuda-gated (`86449118`). **Not run on
-  Metal**, and cvvdp-gpu is still omitted from CI's Metal matrix.
+  `cancel::strip_pair_mode_polls_per_strip` is no longer cuda-gated (`86449118`). **Run on Metal 2026-10-18 at a3bc3a98:** walkers 8/8 and CSF halos 5/5
+  pass, with zero device-thread error messages. The existing 4096² test remains
+  ignored. cvvdp-gpu is still omitted from CI's Metal matrix.
 
 - **cvvdp-gpu Mode E (`MemoryMode::Strip`) on wgpu scored 1000×750 far from Full — FIXED
   2026-09-26 (`f29a8371`, test `445aa175`).** Root cause: the masking strip walker bound row-window
@@ -1070,6 +1089,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
   process). The earlier note here said the path did not trip the check; that was wrong. Mode E
   scored the noise pair 4.603752 against Full 5.008305 (mild 9.990167 vs 9.961642); CUDA
   matched exactly. After: wgpu Mode E = Full bit for bit, 0 device panics, CUDA byte-identical.
+  Rechecked on Metal 2026-10-18 at a3bc3a98: Mode E 12/12 pass; 1000x750
+  noise Full=Strip=5.008305 and offset Full=Strip=9.458392, printed difference 0
+  in both cases, with zero device-thread error messages.
   Gate: `strip_mode_e_parity::mode_e_matches_full_1000x750_h_body_128`. **Lesson: on wgpu a
   `cubecl-wgpu: storage buffer binding … not a multiple of …` line in stderr means the score is
   wrong, even when the call returns Ok.**
