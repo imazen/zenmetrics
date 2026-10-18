@@ -572,6 +572,18 @@ checkpoint-browser-build output:
 browser-coverage-check:
     python3 scripts/checkpoint/test_browser_coverage.py
 
+# Private model exports and native baseline are supplied explicitly by the caller.
+browser-local-weights-check site models native report:
+    python3 scripts/checkpoint/check-local-weights.py "{{site}}" "{{models}}" "{{native}}" "{{report}}"
+
+# Benchmark selection controls preserve explicit opt-in methods.
+bench-iqa-selection-check:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_selection.py
+
+# All cheap competition-controller controls.
+bench-iqa-python-check:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p 'test_*.py'
+
 checkpoint-browser-check package report oracle:
     python3 scripts/checkpoint/check-browser.py {{package}} {{report}} --oracle {{oracle}}
 
@@ -1630,6 +1642,7 @@ bench-iqa-optional-check:
 
 # IQA method-complexity tallies: evaluator tests and schema validation (docs/IQA_COMPLEXITY.md).
 complexity-check:
+    python3 scripts/complexity/test_nn_tallies.py
     cd scripts/complexity && python3 -m unittest test_evaluate
     python3 scripts/complexity/evaluate.py --check benchmarks/iqa_complexity_2026-10-17/tallies/*.json
     python3 scripts/complexity/coverage.py --check
