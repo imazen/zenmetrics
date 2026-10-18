@@ -189,5 +189,16 @@ Metal uses the existing ORT WebGPU engine, which disables CPU fallback; runtime
 or resource refusals remain failed attempts, never CPU timings labelled Metal.
 These records qualify the timing protocol, not numerical parity for every model.
 
+The controller records a worker's PID, process group and start time before exec.
+After verifying that its entire group has exited, it can archive that worker's
+orphaned zenbench admission ticket and preserve a backup beside the original.
+Live owners, live groups, other owners, old PID records and locked ticket guards
+are retained. Both Linux process inventory and macOS `ps` process inventory are
+covered by the admission-recovery controls. This cleanup changes scheduling
+state; interrupted samples remain unqualified.
+
 Controls: `just iqa-durable-check` and, with a preparation interpreter containing
 ONNX, `just iqa-durable-nn-check /absolute/path/to/python`.
+`just iqa-nn-timing-check BUNDLE NEW_OUTPUT` runs a real LPIPS-Alex cold/warm
+control at 512x512 through the same supervisor and requires identical score bits
+within the selected engine. It retains both rows and all attempt diagnostics.

@@ -1679,6 +1679,7 @@ iqa-durable-check:
     mkdir -p "$HOME/tmp"
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_durable.py
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_bundle.py
+    TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_admission_recovery.py
 
 iqa-durable-prepare binary pairs output revision *options:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' {{options}}
@@ -1692,6 +1693,9 @@ iqa-durable-nn-prepare template binary build inventory models output engine *opt
 
 iqa-durable-nn-check python="python3":
     TMPDIR="$HOME/tmp" '{{python}}' benchmarks/iqa_compete_2026-10-16/test_nn_bundle.py
+
+iqa-nn-timing-check bundle output *options:
+    python3 benchmarks/iqa_compete_2026-10-16/check_nn_timing.py '{{bundle}}' '{{output}}' {{options}}
 
 iqa-durable-run manifest output wrapper lock *options:
     python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}

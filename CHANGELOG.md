@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Queue frozen Mac benchmark families and retain NN engine, model and runtime hashes, including external tensors (`4c8ea3f6`, `4a6de1c9`).
+
 - Recount CPU LIQE trunk/head work and MUSIQ pooled-stem/class-token work from frozen graph schedules; retain explicit partial-count limits and regenerate derived projections (`cf630fe3`).
 
 - Add conditional CPU-WASM CKDN and HyperIQA scoring from hash-pinned local exports with per-model consent; retain native parity, worker-recovery and no-download controls (`0ed6c528`, `9ff6bb5d`, `ee9eb5dd`).
