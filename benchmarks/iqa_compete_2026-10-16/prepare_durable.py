@@ -39,7 +39,8 @@ def main():
     # Reuse the existing exact learned-model classification; no model files enter this bundle.
     from run import LEARNED
     inventory = json.loads(subprocess.check_output([str(a.binary.resolve()), 'inventory']))
-    eligible = [r['metric_name'] for r in inventory if r['compiled'] and not r['gpu'] and r['metric_name'] not in LEARNED]
+    neural = LEARNED | {'ahiq', 'dmm'}
+    eligible = [r['metric_name'] for r in inventory if r['compiled'] and not r['gpu'] and r['metric_name'] not in neural]
     metrics = eligible if a.metrics == 'all' else list(dict.fromkeys(a.metrics.split(',')))
     if not metrics or set(metrics) - set(eligible):
         p.error('requested metrics must be compiled non-neural CPU routes: ' + ','.join(eligible))

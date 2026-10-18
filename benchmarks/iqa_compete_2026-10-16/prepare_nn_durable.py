@@ -29,9 +29,11 @@ def model_files(directory, prefix):
         for tensor in _get_all_tensors(model):
             for item in tensor.external_data:
                 if item.key == 'location':
-                    external = (directory / item.value).resolve(strict=True)
-                    if not external.is_relative_to(directory.resolve()):
+                    name = Path(item.value)
+                    if name.is_absolute() or '..' in name.parts:
                         raise ValueError('external tensor escapes model directory')
+                    external = directory / name
+                    external.resolve(strict=True)  # Source caches may use symlinks; copy and hash their bytes.
                     files.add(external)
     return files
 

@@ -26,6 +26,12 @@ class ModelFilesTests(unittest.TestCase):
             weights = root / 'weights-without-extension'
             weights.write_bytes(b'\x00\x00\x80\x3f')
             self.assertEqual(model_files(root, 'fixture'), {path, weights, root / 'fixture.meta'})
+            with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as backing:
+                source = Path(backing) / 'source'
+                source.write_bytes(weights.read_bytes())
+                weights.unlink()
+                weights.symlink_to(source)
+                self.assertIn(weights, model_files(root, 'fixture'))
             # Absolute external references must not escape the supplied export directory.
             model.graph.node[0].attribute[0].t.external_data[0].value = str(Path(__file__).resolve())
             path.write_bytes(model.SerializeToString())

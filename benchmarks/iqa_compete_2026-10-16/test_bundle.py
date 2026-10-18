@@ -156,6 +156,8 @@ class BundleTests(unittest.TestCase):
             inventory = [dict(metric_name='psnr', compiled=True, gpu=False),
                          dict(metric_name='gmsd', compiled=True, gpu=False),
                          dict(metric_name='dists', compiled=True, gpu=False),
+                         dict(metric_name='ahiq', compiled=True, gpu=False),
+                         dict(metric_name='dmm', compiled=True, gpu=False),
                          dict(metric_name='ssim2-gpu', compiled=True, gpu=True)]
             with patch.object(prepare_durable, 'HERE', source), patch.object(sys, 'argv', args), \
                     patch.object(subprocess, 'check_output', return_value=json.dumps(inventory).encode()), \
