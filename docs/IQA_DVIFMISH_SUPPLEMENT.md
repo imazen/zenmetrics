@@ -85,3 +85,25 @@ lock, 12-GiB wrapper budget, eight-job wrapper cap, per-cell one/eight-worker
 budgets, watchdog and dead-ticket recovery. Linux records external waits in
 the supplement's `.service/queue-wait.json`; Mac uses the existing LaunchAgent
 dependency mechanism. Neither supplement becomes an NN512 predecessor.
+
+## i265 qualification observed 2026-10-18
+
+Source `121ecf3ff3f7536e2b12499302a2bb8b7875a1f3` produced the frozen
+worker SHA-256 `8d4204a6b70321b70caf1bb70e2133af4fe1f7adddc993c903997f28b6eef228`.
+The real 512 control completed 96/96 cells and 240 clean warm rounds, with
+exact within-route bits across all phases, modes and worker budgets. Its
+retained report is `~/benchmark-results/iqa-i265-20261018-dvifmish-control/control.json`,
+SHA-256 `e37d2efac512fb7429caeb82b47a998cce182a5229ccd28324ed1ac39797f729`.
+
+The private dependency overlay implementation passes all nine driver tests
+and strict driver clippy. The resource wrapper recorded test rc=0, 34 s,
+peak RSS 0.93 GiB, minimum available 24734 MiB and peak load 3.95; clippy
+rc=0, 8 s, peak RSS 0.54 GiB, minimum available 25462 MiB and peak load 3.51.
+These are build/test resource receipts, not metric memory measurements.
+
+Resolve current scheduling with `systemctl --user status iqa-durable-4018449423e7.service`
+and `python3 benchmarks/iqa_compete_2026-10-16/linux_service.py status
+~/benchmark-bundles/iqa-i265-20261018-dvifmish/sequence.json`. At 11:59 UTC
+the 512 supplement had five successful cells and 91 pending; larger was
+queued. The sequence freezes 96 and 576 cells respectively. Original coverage
+inputs and attempt ledgers remain separate.

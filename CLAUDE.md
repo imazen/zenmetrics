@@ -1889,3 +1889,15 @@ these count corrections. Pair-density pointwise estimates, MUSIQ resampling
 and hashing, traffic, halo and span remain partial. The standard 3840x2160
 MUSIQ evaluator point exceeds the scorer patch limit and is diagnostic only.
 Metric arithmetic and numerical gates are unchanged.
+
+### dvifmish benchmark coverage (2026-10-18)
+
+Six benchmark-only dvifmish routes cover four port presets and the default
+talk-inspired float/integer paths. Native maps retain per-plane/per-level
+block contributions in raw distortion units; they are not JND pixel maps.
+The dependency stays pinned in an explicit private benchmark snapshot overlay,
+with no normal workspace dependency or public API addition. Separate 512-first
+supplements preserve original manifests and share existing host resource locks.
+The i265 real control passes 96/96 cells and 240 clean warm rounds.
+Build, scope, hashes and scheduling commands belong in
+[the supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md). Publishing remains prohibited.

@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add six pinned dvifmish benchmark routes, native map metadata, private snapshot dependency isolation and separate frozen Linux/Mac supplements (`121ecf3f`, `1e147d80`, `f2e400bc`).
+
 - Freeze durable Linux P-core placement proofs, configure benchmark ORT session budgets explicitly, and run six 512-first CPU/NN CPU/NN CUDA families in a restarting user service (`9954fadd`, `aafa96b8`, `0b2af341`).
 
 - Queue frozen Mac benchmark families and retain NN engine, model and runtime hashes, including external tensors (`4c8ea3f6`, `4a6de1c9`).
