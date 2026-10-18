@@ -2709,9 +2709,10 @@ pub fn run_metric(
         // score): a `--metric zensim-gpu` SCORE request has no valid path, so fail
         // LOUD rather than silently produce a v1 number. Extract features via
         // `run_zensim_features` / the jobexec V2Ab path instead.
-        MetricKind::ZensimGpu => panic!(
+        MetricKind::ZensimGpu => Err(
             "zensim-gpu is DISABLED: the GPU zensim kernel is off pending v2 \
              GPU-port validation, and zensim is features-only (no score)"
+                .into(),
         ),
 
         // Unsuffixed cvvdp = the native SIMD CPU port (the
@@ -3621,6 +3622,19 @@ fn run_cpu_vsi_fixed(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn disabled_zensim_gpu_returns_error_without_panicking() {
+        use super::*;
+        let image = Rgb8Image {
+            pixels: vec![128; 64 * 64 * 3],
+            width: 64,
+            height: 64,
+        };
+        let error = run_metric(MetricKind::ZensimGpu, &image, &image, GpuRuntime::Cpu)
+            .expect_err("disabled scoring must return an error");
+        assert!(error.to_string().contains("zensim-gpu is DISABLED"));
+    }
+
     #[test]
     fn all_twenty_ssim_names_select_expected_conventions() {
         use super::*;

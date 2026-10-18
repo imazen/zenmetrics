@@ -1947,3 +1947,14 @@ hits the unchanged monitored 12-GiB guard on both allowed attempts (exit 137,
 unqualified and exhausted. Smaller retained qualified resolutions are not
 relabeled as 8K coverage. No downsampling, ingress, guard or metric arithmetic
 changed. See [the scalar deadline receipt](docs/IQA_SCALAR_PRIORITY.md#measured-8k-fsim-no-downscale-resource-refusal).
+
+### Known Bugs: AIC execution refusal outcomes (2026-10-18)
+
+The complexity repetition driver converted returned metric errors into panic
+exit 101. The historical HDR-VDP 2/3 SDR requests and NR-disabled build therefore
+looked like kernel crashes. It now preserves the refusal message and exits 2.
+The 64-square inventory also found an explicit panic in the disabled
+`zensim-gpu` dispatch arm; that arm now returns its existing diagnostic as an
+error. A direct dispatch regression covers that outcome without changing scores
+or enabling the disabled route. Evidence belongs in
+`benchmarks/aic_refusals_2026-10-18/`.
