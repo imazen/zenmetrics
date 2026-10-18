@@ -7,12 +7,12 @@ config=$3
 output=$4
 mkdir "$output" || exit 2
 cp "$config" "$output/config.json" || exit 2
-shasum -a 256 "$diag" "$worker" "$config" > "$output/source-hashes.txt"
+shasum -a 256 "$diag" "$worker" "$config" "$(dirname "$0")/worker.py" "$(dirname "$0")/../durable.py" > "$output/source-hashes.txt"
 if [ "$(uname -s)" = Darwin ]; then
   /usr/sbin/iostat -c 12 -w 1 > "$output/iostat.txt" 2>&1 &
   system_pid=$!
 fi
-"$worker" "$output/config.json" > "$output/worker.stdout" 2> "$output/worker.stderr" &
+python3 "$(dirname "$0")/worker.py" "$worker" "$output/config.json" "$output/scratch" > "$output/worker.stdout" 2> "$output/worker.stderr" &
 worker_pid=$!
 "$diag" external "$worker_pid" 300 > "$output/accounting.jsonl" 2> "$output/accounting.stderr" &
 sampler_pid=$!
