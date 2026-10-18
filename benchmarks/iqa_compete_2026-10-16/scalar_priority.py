@@ -487,7 +487,7 @@ def install(root):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['boundary', 'ranking', 'rollout', 'execute', 'status'])
+    p.add_argument('action', choices=['boundary', 'deadline-boundary', 'ranking', 'rollout', 'execute', 'status'])
     p.add_argument('config', type=Path)
     p.add_argument('--sha256')
     a = p.parse_args()
@@ -529,7 +529,12 @@ def main():
             if awake:
                 awake.terminate()
                 awake.wait()
+    if a.sha256 and sha(a.config) != a.sha256:
+        raise ValueError('boundary configuration changed')
     config = load(a.config)
+    if a.action == 'deadline-boundary':
+        while time.time() < config['deadline_unix']:
+            time.sleep(min(30, config['deadline_unix'] - time.time()))
     if config.get('parent_sequence') and sha(config['parent_sequence']) != config['parent_sequence_sha256']:
         raise ValueError('immutable parent sequence differs before boundary')
     root = Path(config['output'])
@@ -539,7 +544,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         print('acquired shared boundary lock', flush=True)
         boundary(config, root / 'boundary.json')
-        if a.action == 'boundary':
+        if a.action in ('boundary', 'deadline-boundary'):
             return 0
         replacement = remeasure(config, root, lock.fileno()) if config.get('remeasure_ranking') else []
         if config.get('ranking_final'):
