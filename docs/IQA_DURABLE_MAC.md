@@ -219,3 +219,23 @@ and shows a Herdr notification before attempting to prompt the existing agent.
 A blocked agent prompt therefore does not suppress the machine status record or
 notification. A half-hour user timer can invoke this command; once every phase
 is terminal the check-in stops `iqa-mac-checkin.timer`.
+
+### Coverage-first scheduling
+
+To run every method at 512×512 before expanding sizes, prepare six fresh
+bundles from the frozen core, remaining non-NN, NN CPU and NN Metal bundles:
+
+```sh
+just iqa-mac-coverage-prepare CORE REMAINING NN_CPU NN_METAL CORE_REPORT NEW_DIRECTORY
+```
+
+Install the phases listed in `NEW_DIRECTORY/sequence.json` in order, each
+with the previous bundle/output as its `--after` gate. The order is 512 non-NN,
+512 NN CPU, 512 NN Metal, then the three larger-size families. Larger sizes
+are ordered by pixel count. Retained successful and unsupported core cells
+are excluded only after validating their original attempt identities, configs,
+log hashes and parsed rows. A stale pending report does not erase validated
+attempt evidence. Old observations retain their original executable identity;
+the new bundles bind the retained report hash and both executable hashes in
+the sequence receipt. Failed attempts remain in their original output tree.
+`just iqa-mac-coverage-check` checks retention and corruption refusal.

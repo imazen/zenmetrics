@@ -1694,6 +1694,9 @@ bench-iqa-mac-progress bundle output *options:
 bench-iqa-mac-check-in plan logs *options:
     python3 benchmarks/iqa_compete_2026-10-16/mac_service.py check-in '{{plan}}' '{{logs}}' {{options}}
 
+iqa-mac-coverage-prepare core remaining nn_cpu nn_metal report output:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_coverage.py '{{core}}' '{{remaining}}' '{{nn_cpu}}' '{{nn_metal}}' '{{report}}' '{{output}}'
+
 iqa-durable-nn-prepare template binary build inventory models output engine *options:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_nn_durable.py '{{template}}' '{{binary}}' '{{build}}' '{{inventory}}' '{{models}}' '{{output}}' --engine '{{engine}}' {{options}}
 
@@ -1716,3 +1719,6 @@ iqa-timing-boundary-check:
 
 iqa-mac-service-check bundle output wrapper lock:
     python3 benchmarks/iqa_compete_2026-10-16/check_mac_service.py '{{bundle}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}'
+
+iqa-mac-coverage-check:
+    TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/test_prepare_coverage.py
