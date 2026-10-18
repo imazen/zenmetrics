@@ -350,6 +350,27 @@ class DurableTests(unittest.TestCase):
             fcntl.flock(guard,fcntl.LOCK_UN)
         self.finish(child)
 
+    def test_asset_rehash_waits_for_shared_admission(self):
+        self.freeze()
+        marker = self.root / 'asset-rehash-started'
+        shim = self.root / 'rehash-control.py'
+        shim.write_text('import sys\nfrom pathlib import Path\nsys.path.insert(0, ' + repr(str(Path(durable.SELF).parent)) + ')\nimport durable\noriginal = durable.verify_assets\ndef traced(config):\n    Path(' + repr(str(marker)) + ').touch()\n    return original(config)\ndurable.verify_assets = traced\nsys.exit(durable.main())\n')
+        with (self.root/'heavy.lock').open('a') as guard:
+            fcntl.flock(guard, fcntl.LOCK_EX)
+            log = (self.root / 'controller-rehash.log').open('wb')
+            child = subprocess.Popen([sys.executable, str(shim), 'run', str(self.path), str(self.output),
+                '--timeout-seconds', '1', '--lock', str(self.root/'heavy.lock')], stdout=log, stderr=subprocess.STDOUT)
+            log.close()
+            self.children.append(child)
+            beat = self.output/'controller-heartbeat'
+            self.until(beat.exists)
+            initial = beat.stat().st_mtime_ns
+            self.until(lambda: beat.stat().st_mtime_ns > initial)
+            self.assertFalse(marker.exists(), 'asset hashing ran while another holder owned admission')
+            fcntl.flock(guard, fcntl.LOCK_UN)
+        self.finish(child)
+        self.assertTrue(marker.exists())
+
     def test_sigterm_while_waiting_lock_is_restartable(self):
         self.freeze()
         with (self.root/'heavy.lock').open('a') as guard:

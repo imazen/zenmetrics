@@ -635,16 +635,17 @@ def run(args):
                         heartbeat()
                         if cell['status'] != 'pending' or STOP:
                             continue
-                        # Re-hash before each attempt; changed inputs cannot consume results.
-                        verify_assets(cell['config'])
-                        if file_hash(args.manifest) != frozen['manifest_sha256'] or file_hash(binary) != frozen['binary_sha256']:
-                            raise Refusal('manifest/binary content changed during run')
-                        for role in ('reference', 'distorted'):
-                            if file_hash(cell['config'][role]) != cell['config'][role + '_sha256']:
-                                raise Refusal('active input changed during run')
                         config = cell['config']
                         admission = locked(policy['lock'], wait=True, heartbeat=heartbeat) if policy['lock'] else contextlib.nullcontext(None)
                         with admission as heavy_fd:
+                            # Hashing model assets is substantial CPU work. Serialize it
+                            # with the worker, outside every cold/warm measurement clock.
+                            verify_assets(config)
+                            if file_hash(args.manifest) != frozen['manifest_sha256'] or file_hash(binary) != frozen['binary_sha256']:
+                                raise Refusal('manifest/binary content changed during run')
+                            for role in ('reference', 'distorted'):
+                                if file_hash(config[role]) != config[role + '_sha256']:
+                                    raise Refusal('active input changed during run')
                             directory, records = attempts(output, config, identity)
                             number = len(records) + 1
                             attempt = directory / f'attempt-{number:04d}'

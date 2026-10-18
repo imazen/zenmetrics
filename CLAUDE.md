@@ -1901,3 +1901,14 @@ supplements preserve original manifests and share existing host resource locks.
 The i265 real control passes 96/96 cells and 240 clean warm rounds.
 Build, scope, hashes and scheduling commands belong in
 [the supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md). Publishing remains prohibited.
+
+### Known Bugs: IQA controller pre-attempt hash admission (2026-10-18)
+
+An original frozen Mac NN controller hashes model assets before acquiring the
+shared heavy lock. A passive admitted observation resolved that controller as
+foreign CPU work. Maintained durable execution now acquires admission before
+per-attempt asset/manifest/binary/pair rehashing; all hashes still precede the
+measurement clocks. The OS-backed control fails on the historical controller.
+Existing frozen controllers/results remain unchanged; startup manifest checks
+are separate. Matched raw observations also identify genuine Spotlight work
+in a diagnostic run. See [the supplement contract](docs/IQA_DVIFMISH_SUPPLEMENT.md).

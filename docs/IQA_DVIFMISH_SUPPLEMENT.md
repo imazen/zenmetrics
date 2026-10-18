@@ -185,3 +185,14 @@ unchanged. The diagnostic binary hash is
 its frozen config still names the original worker, so the separate actual-binary
 receipt is mandatory. Native raw evidence lives at
 `~/tmp/iqa-dvifmish-mac/accounting-internal-1`.
+
+A separate passive quiet check resolved a foreign high-CPU PID to the original
+NN CPU controller, rather than its metric worker. That frozen controller
+hashes active model assets before acquiring the shared heavy lock, so its
+pre-attempt work can overlap another admitted benchmark. Maintained
+`durable.py` now places per-attempt asset, manifest, binary and pair rehashing
+inside admission and outside metric clocks. An OS-backed control requires
+hashing to wait while another file descriptor holds the lock; the historical
+controller fails that control. Frozen bundles are not edited or silently
+upgraded. Startup manifest verification remains distinct from this per-attempt
+fix; original running controllers retain their frozen behavior.
