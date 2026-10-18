@@ -93,3 +93,18 @@ now resolve to their actual package; CW-SSIM stays classical and has no model
 files. Restricted weight recipes explicitly state the required per-column
 consent without assuming consent. Regression controls require these contracts
 for every pyiqa CLI name. Metric arithmetic and parity limits are unchanged.
+
+### Exact ingress declarations
+
+The fixed-factor SSIM family reads colour, multiscale, rounding and factor
+flags directly from the current CLI dispatch. Its `f32` suffix means
+unrounded input: the native kernel actually accumulates in f64. Complete box
+blocks are averaged from the top-left; incomplete bottom/right blocks are
+dropped. Historical tally assumptions are labelled separately from current
+configuration metadata.
+
+VMAF's AIC column mappings select `vmaf-studio601` and
+`vmaf-neg-studio601`. Default `vmaf`/`vmaf-neg` use BT.709. The identified
+Butteraugli proposal uses the 3-norm output and an explicit piecewise map,
+not the default maximum output. CAMBI and HDR native configuration gaps stay
+attached to their nominal method mappings until their AIC routes qualify.

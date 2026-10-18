@@ -1,7 +1,4 @@
 document	table	row	column	value
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	status	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	note	excluded; placeholder map (a=b=c=1), no values to compare
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	10	name	proposal-DVIFM-lap-v0.2 (excluded)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	10	in CSV?	neither

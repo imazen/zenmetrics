@@ -73,12 +73,12 @@
 <circle cx="525.9" cy="64.0" r="3.2" fill="#2179ac"><title>pieapp-pyiqa</title></circle><text x="530.9" y="60.0" font-size="9" fill="#444">pieapp-pyiqa</text>
 <path d="M247.0 75.8V55.0" stroke="#9ab"/>
 <circle cx="247.0" cy="64.5" r="3.2" fill="#2179ac"><title>ms-ssim-pyiqa</title></circle><text x="252.0" y="60.5" font-size="9" fill="#444">ms-ssim-pyiqa</text>
-<path d="M245.7 71.3V58.9" stroke="#9ab"/>
-<circle cx="245.7" cy="64.6" r="3.2" fill="#2179ac"><title>vmaf-neg</title></circle><text x="250.7" y="60.6" font-size="9" fill="#444">vmaf-neg</text>
+<path d="M246.2 71.3V58.9" stroke="#9ab"/>
+<circle cx="246.2" cy="64.6" r="3.2" fill="#2179ac"><title>vmaf-neg-studio601</title></circle><text x="251.2" y="60.6" font-size="9" fill="#444">vmaf-neg-studio601</text>
 <path d="M266.5 75.8V57.6" stroke="#9ab"/>
 <circle cx="266.5" cy="66.1" r="3.2" fill="#2179ac"><title>ssimc</title></circle><text x="271.5" y="62.1" font-size="9" fill="#444">ssimc</text>
-<path d="M244.6 74.9V62.0" stroke="#9ab"/>
-<circle cx="244.6" cy="67.9" r="3.2" fill="#2179ac"><title>vmaf</title></circle><text x="249.6" y="63.9" font-size="9" fill="#444">vmaf</text>
+<path d="M246.9 74.9V62.0" stroke="#9ab"/>
+<circle cx="246.9" cy="67.9" r="3.2" fill="#2179ac"><title>vmaf-studio601</title></circle><text x="251.9" y="63.9" font-size="9" fill="#444">vmaf-studio601</text>
 <path d="M193.1 78.3V59.7" stroke="#9ab"/>
 <circle cx="193.1" cy="68.2" r="3.2" fill="#2179ac"><title>ssim-libvmaf</title></circle><text x="198.1" y="64.2" font-size="9" fill="#444">ssim-libvmaf</text>
 <path d="M442.8 75.8V61.4" stroke="#9ab"/>

@@ -1,7 +1,4 @@
 document	table	row	column	value
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ|	0.0691
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	status	reproduced
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	note	max 0.069 dB of a 24 dB range
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	name	SSIM
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	in CSV?	site+dataset
@@ -390,3 +387,5 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	max |Δ|	0.256
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	max |Δ| in JND	0.0408
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	status	close
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	note	the residual vs the site column is not ingress: the same probe matches the older dataset VMAF to med 0.0066 / max 0.076
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	name	VMAF-neg v0 / VMAF-v0.6.1neg
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	in CSV?	site

@@ -35,6 +35,17 @@ class AIC2026(unittest.TestCase):
         self.assertEqual(by_name['cw-ssim-pyiqa']['family'],'Classical')
         self.assertFalse(any('MODEL_DIR' in line for line in by_name['cw-ssim-pyiqa']['repro']['lines']))
 
+    def test_ssim_fixed_factors_are_current_dispatch_metadata(self):
+        variants=aic2026.ssim_dispatch_inputs()
+        self.assertEqual(variants['ssim-pyiqa-f32-k6']['fixed_box_factor'],6)
+        self.assertEqual(variants['ssim-pyiqa-f32-k6']['rounding'],'unrounded')
+        self.assertEqual(variants['ssim-pyiqa']['rounding'],'ties-to-even before downscale')
+        self.assertEqual(variants['ms-ssim-pyiqa-f32-k2']['scales'],5)
+        self.assertIn('f64',variants['ssimc-pyiqa-f32-k3']['arithmetic'])
+        mapping=json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())
+        self.assertEqual(mapping['map']['VMAF'],'vmaf-studio601')
+        self.assertEqual(mapping['map']['VMAF-neg'],'vmaf-neg-studio601')
+
     def test_external_resources_fail_but_citation_navigation_passes(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);p=root/'index.html'

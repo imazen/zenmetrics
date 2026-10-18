@@ -7,8 +7,8 @@
     "SSIM": "ssim-libvmaf",
     "MS-SSIM": "msssim-libvmaf",
     "PSNR-HVS": "psnrhvs-daala",
-    "VMAF-neg": "vmaf-neg",
-    "VMAF": "vmaf",
+    "VMAF-neg": "vmaf-neg-studio601",
+    "VMAF": "vmaf-studio601",
     "proposal-Butteraugli": "butteraugli",
     "DSSIM": "dssim",
     "HaarPSI": "haarpsi",
@@ -49,9 +49,14 @@
     "WaDIQaM": "wadiqam-pyiqa"
   },
   "notes": {
-    "proposal-Butteraugli": "submission tracks the libjxl 3-norm family (Pearson 0.99997 with our pnorm_3); not identity-reproduced",
+    "proposal-Butteraugli": "Select butteraugli_pnorm3, then max(0.00459792*N, 2.0938201*N - 1.1033102). Identified on all 9618 rows; constants provenance unknown; not the default max-norm score.",
     "A-FINE": "omitted: our upstream-verified afine sits 0.5-1.4 below the published column",
     "PSNR-HVS": "psnrhvs-daala is the FFI-verified Daala port of the published column",
-    "DMM": "dmm-pyiqa uses the matching square-resize convention; its native oracle parity fails 1e-3 JND (worst 0.071); mapping does not qualify parity."
+    "DMM": "dmm-pyiqa uses the matching square-resize convention; its native oracle parity fails 1e-3 JND (worst 0.071); mapping does not qualify parity.",
+    "VMAF": "Explicit studio BT.601 ingress; default vmaf uses BT.709 and does not match this column configuration.",
+    "VMAF-neg": "Explicit studio BT.601 ingress; default vmaf-neg uses BT.709.",
+    "CAMBI": "Default CLI luma differs from the identified swscale ingress; a nominal method mapping, not a reproduced pipeline.",
+    "HDR_VDP_2": "Reference-search res.Q and 200*sRGB_EOTF nits at 37.84 ppd; default CLI configuration is distinct; residual and native route qualification remain open.",
+    "HDR_VDP_3": "Reference-search res.Q, XYZ oled and 200*sRGB_EOTF nits at 37.84 ppd; default CLI Q_JOD is a distinct output; native AIC route remains pending aicfix."
   }
 }

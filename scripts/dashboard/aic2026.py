@@ -97,6 +97,23 @@ def timings():
                  wall_ms=statistics.median(b for _, b in v)) for (m, shape, t, p), v in observations.items()]
 
 
+
+def ssim_dispatch_inputs():
+    source=(ROOT/'crates/zenmetrics-cli/src/metrics/mod.rs').read_text()
+    names=dict(re.findall(r'MetricKind::(\w+) => "([^"]+)"',source))
+    start=source.index('fn ssim_pyiqa_flags(')
+    body=source[start:source.index('\n    }',start)]
+    result={}
+    for kind,color,multiscale,rounded,factor in re.findall(r'Self::(\w+) => Some\(\((true|false), (true|false), (true|false), (\d+)\)\)',body):
+        result[names[kind]]={'format':'packed sRGB8, codes 0–255', 'arithmetic':'f64 input and accumulation; f32 in the name means unrounded input',
+             'channels':'per-RGB-channel mean' if color=='true' else 'BT.601 luma: 0.299R + 0.587G + 0.114B',
+             'rounding':'ties-to-even before downscale' if rounded=='true' else 'unrounded',
+             'fixed_box_factor':int(factor),'edge_policy':'complete blocks from (0,0); discard incomplete bottom/right blocks',
+             'scales':5 if multiscale=='true' else 1,
+             'source':'crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs'}
+    if not result:raise ValueError('SSIM dispatch flags were not parsed')
+    return result
+
 def reproduction_rows(cards, commit):
     """Every published column, plus unavailable site experiments, from the versioned audit."""
     mapping = json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())['map']
@@ -171,7 +188,9 @@ def build(output, cards):
     rows=reproduction_rows(cards,commit)
     status_paths=['docs/AIC2026_REPRODUCTION_STATUS.md','docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md','benchmarks/dashboard/aic2026/private-aggregates.json']
     page('reproduction','Reproduction status', '<p class="notice">Missing evidence comes first. Native-oracle parity and matching a dataset column are separate checks. A matching method name alone qualifies neither. Current questions and detailed receipts: '+source_link(status_paths[0],commit)+'.</p>'+table(['Published column / site experiment','Availability','Implementation','n','Median |Δ|','Max |Δ|','Max site-JND Δ','Status','Configuration / qualification','Evidence'],[[e(r[k]) for k in ['column','availability','implementation','n','median','maximum','max_jnd','status','note']]+[source_link(status_paths[0],commit,'Current receipt ledger')] for r in rows]),status_paths)
-    mapping=json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())['map']
+    column_contract=json.loads((ROOT/'scripts/complexity/aic2026_columns.json').read_text())
+    mapping=column_contract['map']
+    ssim_inputs=ssim_dispatch_inputs()
     p=load_paper(); tallies=p.tallies(); measured=timings()
     by_name={c['metric']:c for c in cards}
     entries=ledger()
@@ -181,10 +200,11 @@ def build(output, cards):
         card_source=c['source'];model_crate=card_source.split('/')[1] if card_source.startswith('crates/') else None
         entry=entries.get(base_name(name,entries),[])
         crate=model_crate or (plain(entry[1]) if len(entry)>1 else 'zenmetrics-cli (implementation in dispatch module)')
-        options={'CLI':c['cli_contract'],'tally_parameters':params}
-        if tally: options['tally_assumptions']=tally[0].get('assumptions',[])
-        configs.append(dict(metric=name,crate=crate,source_commit=commit,measurement_source_commit=tally[0].get('source_commit','not recorded') if tally else 'not tallied',options=clean(options),ingress=c['inputs'],aic_columns=[k for k,v in mapping.items() if v==name],licence='public source; '+c['rust_license']+'; weights: '+c['weights_license'],parity=c['parity'],parity_status=c['parity_status'],source=card_source,reproduction=c['repro']))
-    config_paths=['crates/zenmetrics-cli/src/metrics/mod.rs','docs/METRIC_PROVENANCE.md','scripts/complexity/aic2026_columns.json']+sorted({c['source'] for c in cards if (ROOT/c['source']).is_file()})+sorted(str(x.relative_to(ROOT)) for x in (ROOT/B/'tallies').glob('*.json'))
+        options={'CLI':c['cli_contract'],'tally_parameters':params,
+                 'AIC_mapping_qualification':{col:column_contract.get('notes',{}).get(col,'See reproduction status for measured residual and pipeline scope.') for col,m in mapping.items() if m==name}}
+        if tally: options['historical_tally_assumptions_not_current_configuration']=tally[0].get('assumptions',[])
+        configs.append(dict(metric=name,crate=crate,source_commit=commit,measurement_source_commit=tally[0].get('source_commit','not recorded') if tally else 'not tallied',options=clean(options),ingress=ssim_inputs.get(name,c['inputs']),aic_columns=[k for k,v in mapping.items() if v==name],licence='public source; '+c['rust_license']+'; weights: '+c['weights_license'],parity=c['parity'],parity_status=c['parity_status'],source=card_source,reproduction=c['repro']))
+    config_paths=['crates/zenmetrics-cli/src/metrics/mod.rs','crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs','docs/METRIC_PROVENANCE.md','scripts/complexity/aic2026_columns.json']+sorted({c['source'] for c in cards if (ROOT/c['source']).is_file()})+sorted(str(x.relative_to(ROOT)) for x in (ROOT/B/'tallies').glob('*.json'))
     config_body='<p>Every CLI name is listed separately, including the pyiqa ports. Source commit identifies the configuration source; counted-source commits identify the historical tally. Ingress, resize and colour handling follow the linked contract. Display-dependent reproduction commands explicitly select <code>standard_fhd</code>; it is not an implicit universal default. Missing metadata is labelled, never inferred from a metric name.</p>'
     config_body+=table(['CLI metric','Crate / source','Source / counted commits','Options & defaults','Ingress (colour, resize, depth)','AIC column','Licence class','Native parity / gate'],[[e(r['metric']),e(r['crate'])+'<br>'+source_link(r['source'],commit),e(commit)+'<br>'+e(r['measurement_source_commit']),'<details><summary>Exact contract & counted options</summary><pre>'+json_text(r['options'])+'</pre></details>',json_text(r['ingress']),e(', '.join(r['aic_columns']) or 'no established column mapping'),e(r['licence']),e(r['parity_status'])+'<pre>'+json_text(r['parity'])+'</pre>'] for r in configs])
     config_body+='<h2>Private aggregate records</h2><p>Private implementations have no public CLI configuration or distributable model here. Only aggregate qualification is published.</p>'+table(['Metric','Class','Column match','Native gate'],[[e(r['metric']),'private; aggregates only',e(r['published_match']),e(r['native_gate'])] for r in private['models']])

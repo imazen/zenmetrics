@@ -1,6 +1,4 @@
 document	table	row	column	value
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	name	VMAF-neg v0 / VMAF-v0.6.1neg
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	in CSV?	site
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	zenmetrics metric	vmaf-neg (differs); crate + studio-601 Y close
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	n	61
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	median |Δ|	0.3
@@ -400,3 +398,6 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	zenmetrics metric	missing in zenmetrics; dvifmish port-2d-v0.2 has the same name
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	median |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ|	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	status	missing

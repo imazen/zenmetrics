@@ -105,9 +105,9 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	12	Actual implementation (identified)	libv
 docs/AIC2026_METRICS_AND_FITTING.md	4	12	Ours	vmaf crate vif_scales
 docs/AIC2026_METRICS_AND_FITTING.md	4	12	Qualification	matches
 docs/AIC2026_METRICS_AND_FITTING.md	4	13	AIC-4 column	VMAF / VMAF-neg / ADM2
-docs/AIC2026_METRICS_AND_FITTING.md	4	13	Actual implementation (identified)	libvmaf 3.2.1 vmaf_v0.6.1[neg] + adm2
-docs/AIC2026_METRICS_AND_FITTING.md	4	13	Ours	vmaf crate
-docs/AIC2026_METRICS_AND_FITTING.md	4	13	Qualification	reproduction-grade
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Actual implementation (identified)	libvmaf 3.2.1 vmaf_v0.6.1[neg] + adm2, studio BT.601 ingress
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Ours	vmaf-studio601, vmaf-neg-studio601; ADM2 is a crate feature
+docs/AIC2026_METRICS_AND_FITTING.md	4	13	Qualification	reproduction-grade within the stated residual; default CLI vmaf and vmaf-neg use BT.709 and remain distinct
 docs/AIC2026_METRICS_AND_FITTING.md	4	14	AIC-4 column	CVVDP
 docs/AIC2026_METRICS_AND_FITTING.md	4	14	Actual implementation (identified)	pycvvdp standard_fhd
 docs/AIC2026_METRICS_AND_FITTING.md	4	14	Ours	cvvdp + --display-model
@@ -141,9 +141,9 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	21	Actual implementation (identified)	jpeg
 docs/AIC2026_METRICS_AND_FITTING.md	4	21	Ours	iwssim-piq
 docs/AIC2026_METRICS_AND_FITTING.md	4	21	Qualification	✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); iwssim keeps the Python-IW-SSIM rounded-BT.601 oracle convention
 docs/AIC2026_METRICS_AND_FITTING.md	4	22	AIC-4 column	proposal-Butteraugli
-docs/AIC2026_METRICS_AND_FITTING.md	4	22	Actual implementation (identified)	AIC-4 submission — measured vs ours 2026-09-26: tracks pnorm_3 (libjxl 3-norm) with Pearson 0.99997, affine pub ≈ 2.09·ours − 1.10 resid-rms 0.011; score (max-norm) fits far worse (Pearson 0.957) and every other aggregation probed (pnorm p∈{1,2,2.5,4,5,6,8,10,12,16}, single-exponent norms, 8×8-blockmax norms) is worse still. So the submission is a pnorm-3-family butteraugli over a different diffmap (version/ingress — intensity_target 250 fits worse than default 80), not a different norm. Not identity-reproducible from the shipped artifacts
-docs/AIC2026_METRICS_AND_FITTING.md	4	22	Ours	butteraugli (butteraugli_pnorm3 column)
-docs/AIC2026_METRICS_AND_FITTING.md	4	22	Qualification	family identified; exact upstream config unrecovered
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Actual implementation (identified)	libjxl 3-norm N followed by max(0.00459792N, 2.0938201N - 1.1033102)
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Ours	butteraugli_pnorm3 plus the identified map
+docs/AIC2026_METRICS_AND_FITTING.md	4	22	Qualification	Configuration search identifies all 9,618 rows: median 3.2e-8, max 5.1e-5 site-JND; constants provenance remains unknown. This supersedes the earlier different-diffmap hypothesis.
 docs/AIC2026_METRICS_AND_FITTING.md	4	23	AIC-4 column	proposal-mDCTPSNR
 docs/AIC2026_METRICS_AND_FITTING.md	4	23	Actual implementation (identified)	mDCT-PSNR in JND units: the reference tool's -jnd remap, 0.000475997802·max(0, 80 − dB)^2.3182 — fits all 9,618 published rows to 5e-9 when applied to the mDCT-PSNR column (2026-10-09)
 docs/AIC2026_METRICS_AND_FITTING.md	4	23	Ours	mdctpsnr + mdct_psnr_jnd
@@ -323,3 +323,6 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	in CSV?	dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cr)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	n	61
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	median |Δ|	0.00306
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ|	0.0691
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	status	reproduced
