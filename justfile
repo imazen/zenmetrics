@@ -1706,8 +1706,18 @@ iqa-durable-nn-check python="python3":
 iqa-nn-timing-check bundle output *options:
     python3 benchmarks/iqa_compete_2026-10-16/check_nn_timing.py '{{bundle}}' '{{output}}' {{options}}
 
+iqa-cpu-timing-check bundle output *options:
+    python3 benchmarks/iqa_compete_2026-10-16/check_cpu_timing.py '{{bundle}}' '{{output}}' {{options}}
+
 iqa-durable-run manifest output wrapper lock *options:
     python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
+
+# Frozen family sequence in a restarting Linux user service.
+bench-iqa-linux plan action="status":
+    python3 benchmarks/iqa_compete_2026-10-16/linux_service.py '{{action}}' '{{plan}}'
+
+iqa-linux-coverage-prepare cpu nn_cpu nn_cuda output binary build:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_linux_sequence.py '{{cpu}}' '{{nn_cpu}}' '{{nn_cuda}}' '{{output}}' --lock "$HOME/tmp/i265-heavy.lock" --binary '{{binary}}' --build '{{build}}'
 
 iqa-timing-worker-check binary:
     TMPDIR="$HOME/tmp" IQA_TIMING_BINARY='{{binary}}' python3 benchmarks/heaptrack/drivers/cpu_profile/src/bin/test_iqa_compete_timing.py

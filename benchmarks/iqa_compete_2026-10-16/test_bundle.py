@@ -15,6 +15,7 @@ import mac_service
 import prepare_durable
 import select_durable
 import durable
+import linux_service
 import fcntl
 
 
@@ -41,6 +42,37 @@ def make_bundle(bundle):
 
 
 class BundleTests(unittest.TestCase):
+    def test_linux_sequence_refuses_changed_plan_and_incomplete_predecessor(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = Path(tmp)
+            bundle = make_bundle(root / 'bundle')
+            phases = [dict(name=str(i), bundle=str(bundle), output=str(root / str(i)),
+                           manifest_sha256=prepare_durable.sha(bundle / 'manifest.json')) for i in range(2)]
+            plan = root / 'sequence.json'
+            plan.write_text(json.dumps(dict(phases=phases, lock=str(root / 'heavy.lock'))))
+            with patch.object(linux_service, 'supervise') as run:
+                with self.assertRaisesRegex(ValueError, 'sequence changed'):
+                    linux_service.execute(plan, 'wrong')
+                run.assert_not_called()
+            with patch.object(linux_service, 'supervise', return_value=0) as run, \
+                 patch.object(linux_service, 'predecessor_complete', return_value=False):
+                with self.assertRaisesRegex(ValueError, 'predecessor incomplete'):
+                    linux_service.execute(plan, prepare_durable.sha(plan))
+                self.assertEqual(run.call_count, 1)
+
+    def test_linux_sequence_skips_only_terminal_predecessors(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            root = Path(tmp)
+            bundle = make_bundle(root / 'bundle')
+            phases = [dict(name=str(i), bundle=str(bundle), output=str(root / str(i)),
+                           manifest_sha256=prepare_durable.sha(bundle / 'manifest.json')) for i in range(2)]
+            plan = root / 'sequence.json'
+            plan.write_text(json.dumps(dict(phases=phases, lock=str(root / 'heavy.lock'))))
+            with patch.object(linux_service, 'supervise') as run, \
+                 patch.object(linux_service, 'predecessor_complete', return_value=True):
+                self.assertEqual(linux_service.execute(plan, prepare_durable.sha(plan)), 0)
+                run.assert_not_called()
+
     def test_progress_distinguishes_pending_failed_attempts_from_exhausted_cells(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             output = Path(tmp)
