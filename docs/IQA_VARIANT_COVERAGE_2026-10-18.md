@@ -2,6 +2,8 @@
 
 This audit compares the original six coverage manifests on each host against
 the captured 122-route worker inventory and the additional APIs inspected below.
+All 122 explicit current `MetricKind` names match that captured name set; the
+separate DVIF adapter adds six further routes.
 A route's presence in a manifest is scheduling coverage, not numerical or timing
 qualification. Failed or unsupported attempts are not missing scheduler cells.
 
