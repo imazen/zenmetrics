@@ -17,6 +17,7 @@ import subprocess
 
 from check_fixed_factor_oracle import check_manifest
 from supervision import scoring_command
+import image_resize_source
 
 
 def sha(path):
@@ -55,6 +56,7 @@ def main():
     p.add_argument('--octave', default='octave-cli')
     p.add_argument('--timeout', type=float, default=300)
     p.add_argument('--measure-memory', action='store_true', help='retain /usr/bin/time -v process peak RSS')
+    p.add_argument('--image-archive', type=Path, help='select the explicit hash-bound upstream resize M-file overlay')
     a = p.parse_args()
     if min(a.width, a.height, a.threads, a.samples) <= 0 or a.timeout <= 0:
         p.error('dimensions, threads, samples and timeout must be positive')
@@ -73,15 +75,26 @@ def main():
     before = [sha(path) for path in inputs]
     source_before = sha(source)
     executable = Path(shutil.which(a.octave) or a.octave).resolve(strict=True)
+    if a.image_archive:
+        a.image_archive = a.image_archive.resolve(strict=True)
+        image_resize_source.validate_archive(a.image_archive)
     a.evidence.mkdir()  # Fresh evidence only; no overwrite of earlier attempts.
     evidence = a.evidence.resolve()
     scratch = evidence / 'scratch'
     scratch.mkdir()
+    resize_receipt = None
+    resize_setup = ''
+    if a.image_archive:
+        overlay = evidence / 'image-resize-overlay'
+        resize_receipt = image_resize_source.prepare(a.image_archive, overlay)
+        resize_setup = (f"addpath({quoted(overlay)},'-begin'); clear imresize;\n"
+                        f"assert(strcmp(which('imresize'),{quoted(overlay / 'imresize.m')}));")
     output = f'[score1,score2] = {function}(reference,distorted);' if columns == 2 else f'score1 = {function}(reference,distorted);'
     release = 'clear reference distorted;'
     emit = "fprintf('%s %.0f %.17g %.17g\\n',label,elapsed,score1,score2);" if columns == 2 else "fprintf('%s %.0f %.17g\\n',label,elapsed,score1);"
     script = f"""more off;
 pkg load image;
+{resize_setup}
 addpath({quoted(source.parent)},'-begin');
 assert(strcmp(which('{function}'),{quoted(source)}));
 fprintf('VERSION octave-%s primary-{function}\\n',version());
@@ -128,6 +141,7 @@ end
               'source_sha256': source_before, 'input_sha256': before,
               'width': a.width, 'height': a.height, 'threads_requested': a.threads,
               'executable_sha256': sha(executable), 'adapter_sha256': sha(Path(__file__)),
+              'image_resize_overlay': resize_receipt,
               'headless': {'no_window_system': True, 'display_environment_removed': True},
               'environment': {k: env[k] for k in env if k.endswith('NUM_THREADS')},
               'memory_tool_locale': env.get('LC_ALL') if a.measure_memory else None,
@@ -141,6 +155,8 @@ end
         raise RuntimeError(f'Octave failed rc={result.returncode}; see {evidence}/stderr.log')
     if [sha(path) for path in inputs] != before or sha(source) != source_before:
         raise RuntimeError('input or source changed during oracle execution')
+    if a.image_archive:
+        image_resize_source.verify(a.image_archive, overlay, resize_receipt)
     check_manifest(a.manifest)
     text = (evidence / 'stdout.log').read_text()
     rows = [line.split() for line in text.splitlines() if line.startswith(('COLD ', 'SAMPLE '))]

@@ -94,3 +94,29 @@ octave-panel-resume inputs references rust_build output threads:
 [positional-arguments]
 oracle-memory-timeout-check evidence:
     python3 -B check_oracle_memory_timeout.py "$1"
+
+[positional-arguments]
+vsi-low-contrast-prepare output:
+    python3 -B prepare_vsi_low_contrast.py "$1"
+
+[positional-arguments]
+vsi-precision-prepare source pairs output +options:
+    python3 -B diagnose_vsi_precision.py "$@"
+
+# Caller supplies both heavy locks, run-heavy, TMPDIR, and the full output log.
+[positional-arguments]
+vsi-precision-run evidence:
+    env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 /usr/bin/time -v -o "$1/memory.txt" timeout --kill-after=20s 120s octave-cli --no-gui --no-window-system --no-history --no-init-file --quiet "$1/entry.m"
+
+[positional-arguments]
+image-resize-source-check archive evidence:
+    python3 -B check_image_resize_source.py "$1" "$2"
+
+# This controller supplies both locks and a resource wrapper for each scorer.
+[positional-arguments]
+octave-image-source-panel inputs references rust_build output threads image_archive:
+    nice -n 19 ionice -c 3 python3 -B run_octave_panel.py --inputs "$1" --references "$2" --rust-build "$3" --output "$4" --threads "$5" --image-archive "$6"
+
+[positional-arguments]
+vsi-image-source-panel inputs references rust_build output threads image_archive:
+    nice -n 19 ionice -c 3 python3 -B run_octave_panel.py --inputs "$1" --references "$2" --rust-build "$3" --output "$4" --threads "$5" --image-archive "$6" --families vsi

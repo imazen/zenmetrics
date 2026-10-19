@@ -19,6 +19,7 @@ from check_fixed_factor_oracle import check_manifest
 from fixed_factor_oracle import write_artifact
 from octave_primary import process_max_rss, sha
 from supervision import scoring_command
+import image_resize_source
 
 BASE = Path(__file__).resolve().parent
 
@@ -37,12 +38,16 @@ def main():
     p.add_argument('--pairs', default='all')
     p.add_argument('--sizes', default='all')
     p.add_argument('--resume', action='store_true')
+    p.add_argument('--image-archive', type=Path)
     p.add_argument('--octave', type=Path, default=Path(shutil.which('octave-cli') or 'octave-cli'))
     p.add_argument('--run-heavy', type=Path, default=Path.home() / 'work/claudehints/scripts/run-heavy')
     a = p.parse_args()
     for key in ['inputs', 'references', 'rust_build', 'run_heavy', 'octave']:
         setattr(a, key, getattr(a, key).resolve(strict=True))
     a.output = a.output.resolve()
+    if a.image_archive:
+        a.image_archive = a.image_archive.resolve(strict=True)
+        image_resize_source.validate_archive(a.image_archive)
     affinity = sorted(os.sched_getaffinity(0))
     cap = max(1, len(affinity) - 4)
     threads = sorted(set(cap if value == 'all' else int(value) for value in a.threads.split(',')))
@@ -81,14 +86,15 @@ def main():
                 p.error('input SHA256 mismatch')
     helpers = {name: sha(BASE / name) for name in
                ['run_octave_panel.py', 'octave_primary.py', 'probe_octave_parity.py',
-                'check_fixed_factor_oracle.py', 'fixed_factor_oracle.py', 'supervision.py']}
+                'check_fixed_factor_oracle.py', 'fixed_factor_oracle.py', 'supervision.py', 'image_resize_source.py']}
     identity = {'schema': 'primary-octave-panel/1', 'inputs_sha256': sha(a.inputs),
                 'references_sha256': sha(a.references), 'build_receipt_sha256': sha(a.rust_build / 'build-receipt.json'),
                 'binary_sha256': sha(binary), 'helpers': helpers, 'families': families,
                 'factors': factors, 'threads': threads, 'input_selection': selected,
                 'affinity': affinity, 'heavy_job_thread_cap': cap, 'run_heavy_sha256': sha(a.run_heavy),
                 'octave_executable': str(a.octave), 'octave_sha256': sha(a.octave),
-                'qualified_ratios': False}
+                'qualified_ratios': False,
+                'image_archive_sha256': sha(a.image_archive) if a.image_archive else None}
     if a.resume:
         if (a.output / 'identity.json').read_bytes() != encoded(identity):
             p.error('resume identity differs; preserve this attempt and use a fresh output')
@@ -119,6 +125,8 @@ def main():
                 raise RuntimeError('helper changed during frozen panel')
         if sha(a.octave) != identity['octave_sha256']:
             raise RuntimeError('Octave executable changed during frozen panel')
+        if a.image_archive:
+            image_resize_source.validate_archive(a.image_archive)
         key = f'{family}-k{factor}-{row["pair"]}-{row["size_name"]}-t{budget}'
         directory = output / key
         if a.resume and (directory / 'outcome.json').exists():
@@ -145,6 +153,8 @@ def main():
                    '--width', str(row['width']), '--height', str(row['height']),
                    '--threads', str(budget), '--samples', '1', '--evidence', str(directory / 'canonical'),
                    '--measure-memory', '--octave', str(a.octave)]
+        if a.image_archive:
+            command += ['--image-archive', str(a.image_archive)]
         canonical_rc = execute(command, budget, directory / 'canonical-wrapper.log')
         canonical = None
         if canonical_rc == 0:
