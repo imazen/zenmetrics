@@ -83,8 +83,8 @@ macro_rules! conv_rows_body {
                     &row[c0 + i - 3..c0 + i - 3 + $LANES].try_into().unwrap(),
                 );
                 // mul + add — two roundings like sepFilter2D, never fused.
-                a = a + kv * v;
-                b = b + kv * (v * v);
+                a += kv * v;
+                b += kv * (v * v);
             }
             a.store((&mut $mu[c0..c0 + $LANES]).try_into().unwrap());
             b.store((&mut $e2[c0..c0 + $LANES]).try_into().unwrap());
@@ -182,8 +182,8 @@ macro_rules! conv_cols_body {
             for i in 0..7 {
                 let kv = $F64::splat_t($token, $k[i]);
                 let base = ($y + i - 3) * $w + c0;
-                a = a + kv * $F64::load_t($token, &$tm[base..base + $LANES].try_into().unwrap());
-                b = b + kv * $F64::load_t($token, &$ts[base..base + $LANES].try_into().unwrap());
+                a += kv * $F64::load_t($token, &$tm[base..base + $LANES].try_into().unwrap());
+                b += kv * $F64::load_t($token, &$ts[base..base + $LANES].try_into().unwrap());
             }
             a.store((&mut $mu[c0..c0 + $LANES]).try_into().unwrap());
             b.store((&mut $e2[c0..c0 + $LANES]).try_into().unwrap());

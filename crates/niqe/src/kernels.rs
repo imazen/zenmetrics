@@ -88,11 +88,11 @@ macro_rules! conv7_cols_body {
                 for j in 0..7 {
                     let kv = $F64::splat_t($token, $k[i * 7 + j]);
                     // mul + add — two roundings like scipy, never fused.
-                    a = a + $F64::load_t(
+                    a += $F64::load_t(
                         $token,
                         &$xp[base + 6 - j..base + 6 - j + $LANES].try_into().unwrap(),
                     ) * kv;
-                    b = b + $F64::load_t(
+                    b += $F64::load_t(
                         $token,
                         &$sp[base + 6 - j..base + 6 - j + $LANES].try_into().unwrap(),
                     ) * kv;
@@ -221,7 +221,7 @@ fn pw_leaf_f32(token: Token, a: &[f32]) -> f32 {
     let mut r = f32x8::load_t(token, &a[..8].try_into().unwrap());
     let mut i = 8;
     while i < n - (n % 8) {
-        r = r + f32x8::load_t(token, &a[i..i + 8].try_into().unwrap());
+        r += f32x8::load_t(token, &a[i..i + 8].try_into().unwrap());
         i += 8;
     }
     let mut rv = [0.0f32; 8];
@@ -243,8 +243,8 @@ fn pw_leaf_f64(token: Token, a: &[f64]) -> f64 {
     let mut r_hi = f64x4::load_t(token, &a[4..8].try_into().unwrap());
     let mut i = 8;
     while i < n - (n % 8) {
-        r_lo = r_lo + f64x4::load_t(token, &a[i..i + 4].try_into().unwrap());
-        r_hi = r_hi + f64x4::load_t(token, &a[i + 4..i + 8].try_into().unwrap());
+        r_lo += f64x4::load_t(token, &a[i..i + 4].try_into().unwrap());
+        r_hi += f64x4::load_t(token, &a[i + 4..i + 8].try_into().unwrap());
         i += 8;
     }
     let mut lo = [0.0f64; 4];

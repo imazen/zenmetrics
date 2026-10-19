@@ -699,10 +699,10 @@ fn aggd(
             pairwise_sum_f32(a) / a.len() as f32
         }
     };
-    let left_std = sqrt32(mean32(&neg));
-    let right_std = sqrt32(mean32(&pos));
+    let left_std = sqrt32(mean32(neg));
+    let right_std = sqrt32(mean32(pos));
     let gammahat = left_std / right_std;
-    let rhat = powf32(mean32(&abs), 2.0) / mean32(&sq);
+    let rhat = powf32(mean32(abs), 2.0) / mean32(sq);
     // (rhat·(γ̂³+1)·(γ̂+1)) / ((γ̂²+1)²) — left-associative f32, `**` = powf.
     let g2 = powf32(gammahat, 2.0) + 1.0;
     let rhatnorm = rhat * (powf32(gammahat, 3.0) + 1.0) * (gammahat + 1.0) / powf32(g2, 2.0);
