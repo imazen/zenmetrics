@@ -1,0 +1,184 @@
+{
+  "panel": "/home/lilith/tmp/portcheck-haarpsi-pair-panel-20261019T1302",
+  "completed_cases": 25,
+  "planned_cases": 96,
+  "partial": true,
+  "qualified_timing_cells": 0,
+  "identity_sha256": "360772fd3dceb858dad04e2b891faf7dd90de2ce5f46007c1f3b50a401e9e6a7",
+  "artifacts": [
+    {
+      "case": "haarpsi-pairA-1mp-t1-cold",
+      "outcome_sha256": "a768a8b15b290463f2f896960359bdb2c4e667ac66dbd861208f0b0f81345b8d",
+      "packet_sha256": "76d5439a184292f01e00cb67ab29776acb665588f0578fbacbdeaf489d2a3967",
+      "wrapper_sha256": "ee29cf9db548617ed400c696fbf06a6e00dd6a373a8eb074770e440e4f15eba8"
+    },
+    {
+      "case": "haarpsi-pairA-1mp-t1-warm",
+      "outcome_sha256": "6ebb9131f393cbbf658af83bf8b0528f88ab9e160e7bd246b298b6c029a763dd",
+      "packet_sha256": "2578cbbe1962e6ddaecce34194ac3a61c9e1bb1b81e83fc8dc6cbc031e26955d",
+      "wrapper_sha256": "31b9b17bd186dc3ebf02f1a190b107f6458bb42d7ce828b45efb93140cfd009f"
+    },
+    {
+      "case": "haarpsi-pairA-1mp-t28-cold",
+      "outcome_sha256": "a6b17d37f9561ad99d7283c79656836da7cedc0d2b4d8d7fd8f009fbd7c55e2e",
+      "packet_sha256": "9b4ecb342131c09606fd80a09eecfa91355ad535c6aed102ea29a7fe6472ea87",
+      "wrapper_sha256": "49741f82e1c8c833f0b370412acf0a32f776701fb8fc3bca59a4845fb41470ba"
+    },
+    {
+      "case": "haarpsi-pairA-1mp-t28-warm",
+      "outcome_sha256": "aa112842a08ac6bbf4d57ea92eb40842279ea745863b8a82380770afb077e515",
+      "packet_sha256": "a8d44dfdd8b4e8962df6a5b1828acf0f5b26cc2476dc6b3ac0d81ff5cc1ab45b",
+      "wrapper_sha256": "3370ce334609d9a551445774063ba44c7fc3460e7ffbd6cde367e9e52e72d724"
+    },
+    {
+      "case": "haarpsi-pairA-4k-t1-cold",
+      "outcome_sha256": "cec0401fca2b6055bd3cd65d55733f3dfac2fd7cf6297b122df35fb72735892e",
+      "packet_sha256": "2a8497d969c8e835195d70327e7cb9936824677aca62d0f8a6f2ebaae55aa805",
+      "wrapper_sha256": "299b2ff8e62360ff6e84243415af416063830d9e9cff7b3aa3e3aefdca3bb6b3"
+    },
+    {
+      "case": "haarpsi-pairA-64-t1-cold",
+      "outcome_sha256": "1a4108ba1ed2eb159d29920aea6f5a7f86f77dab39969ec43f30c1da4643c641",
+      "packet_sha256": "a0ddddec6482688f457997d681ee86df4b39ce856817afe2a3d8a14cb6a18b30",
+      "wrapper_sha256": "08bdf48e37c5d8f92d70df3847b1b9594d0febb5d8d9a18d5ee5f5fc7ee00970"
+    },
+    {
+      "case": "haarpsi-pairA-64-t1-warm",
+      "outcome_sha256": "885572c738a8fe6e4dc1fa58c218b69d56c775b114ce7581fd954a39ded476d8",
+      "packet_sha256": "ce8be5ee686d18fe72a955a4b0acd96540af6798223aca2d9dfc4851265671e3",
+      "wrapper_sha256": "2e4478dead5729e2203dc48e5028ae708349fe5a1af4b9f9790cf9abc693a68e"
+    },
+    {
+      "case": "haarpsi-pairA-64-t28-cold",
+      "outcome_sha256": "100ec3500a40a717ea8884620cead8faf299533c6a4dab5485e4266477db2537",
+      "packet_sha256": "fcd6be86f18a6d1144b5e11b89835d55ab0e9ad9aa8e8703e1106d6cd58c2885",
+      "wrapper_sha256": "8b91553e805690db07d9051507e19fcc73cbbc8662cda68bf4392a9ad25e13ea"
+    },
+    {
+      "case": "haarpsi-pairA-64-t28-warm",
+      "outcome_sha256": "8d8a234408cdb82ed1e3dc638b228144e7704704ec355fc460a2c9cbb0cefaab",
+      "packet_sha256": "8ec4359aa75b06198bf044f7e985fa2850f63edc8dd45a15a12f551c548fba23",
+      "wrapper_sha256": "7576aa20554b51bfd5bc8388497baa68895f3ac4fea25ab892f3a9c83ca9c877"
+    },
+    {
+      "case": "haarpsi-pairA-odd-t1-cold",
+      "outcome_sha256": "3301420f9ad78c4b3e75bdde6178d2e69ca62c1f89f6178ea5b7525618f1b2fd",
+      "packet_sha256": "0eaa4c3fb07aec3b7d5454e7c62ed2d236ce63b6d69e6924cad96eb69fabf69b",
+      "wrapper_sha256": "db498a9e85e2f7e10b88e14477b453cd343cf5c7828f6c856f7de6b34343c8c0"
+    },
+    {
+      "case": "haarpsi-pairA-odd-t1-warm",
+      "outcome_sha256": "e4dc8b8520448a7da1cc4357b044e4532d3f550be90feccd65fbf5512d965fba",
+      "packet_sha256": "6619d80ac833b18522580c4472f6394eca655812eb5ef13130d8c2c2ad5dd098",
+      "wrapper_sha256": "8a165aff602d1a779bdc885ad22e065898f7caeb54a7fbd5d50beec5e183f3a3"
+    },
+    {
+      "case": "haarpsi-pairA-odd-t28-cold",
+      "outcome_sha256": "e33d1ec286e82970e7bf9bb4101dded14755194e76099a1768e50e67e0b8aeb8",
+      "packet_sha256": "4132f832e84db74d94a62760d1e68e92121b9604d49eabd60849e361992ccf15",
+      "wrapper_sha256": "566da19ac0f9da1df13dd269509a195552e849d103f1f55cef327c4db7b804e6"
+    },
+    {
+      "case": "haarpsi-pairA-odd-t28-warm",
+      "outcome_sha256": "114245b2a1d0b4f878ad13ae4c7fa2f56f56896cc2ff9c7fa787fae177e3d129",
+      "packet_sha256": "f004abb693f6dab83dc71cd99161b582737e05e98888ae42d3dde094755f5445",
+      "wrapper_sha256": "3e1a2fa7ab6b3e18d84ed9e15b9bc8af8bc8484d7a7a253199f31f5e1dedae5b"
+    },
+    {
+      "case": "haarpsi-y-pairA-1mp-t1-cold",
+      "outcome_sha256": "674cad22726e65fe444c8431ca12544d2993c4d67015ae82a8c797357b53b467",
+      "packet_sha256": "d41c46129186c80f8682df6a030fb382ae96cf3c9f1f0584feec054d1e7befa0",
+      "wrapper_sha256": "dd923843a1d1ca0a33aece14447d8faf52ade544938b73a0dfe79db8ce9e04d1"
+    },
+    {
+      "case": "haarpsi-y-pairA-1mp-t1-warm",
+      "outcome_sha256": "aae79d97a0e909cf316f73d1db3d34f54ad201c86f9ddacab0a99123627440cd",
+      "packet_sha256": "5042169d0c36b5258cd0bb1130820d63e5f91215b314af895ff11abb47fc541d",
+      "wrapper_sha256": "bd47cdb350399a5c499c7f9d4f4985e75266e2b97c9e66f26fd7a7d3a3d5402b"
+    },
+    {
+      "case": "haarpsi-y-pairA-1mp-t28-cold",
+      "outcome_sha256": "1086cb0a58838c5c5d4c9194311680e2aa5be4b91b0cd04f325bc1618802de0b",
+      "packet_sha256": "f087ba27a000f3abe61d8f4ad89dbfdfcc311d591c2b50caf305d18923767ac6",
+      "wrapper_sha256": "bc3b2defbaf6896f4ca066fb3d27525194cd86c3d560dd8ed8f8e9ffd13d2571"
+    },
+    {
+      "case": "haarpsi-y-pairA-1mp-t28-warm",
+      "outcome_sha256": "3df2fce3fd650b4fb6b0bf15cdacafa1aa929804d73d006b93d55c56849ba5d2",
+      "packet_sha256": "4d8b1e8686527df428f3b0a00ae20061b4aef96639a250b4ce92d6fa029e01ff",
+      "wrapper_sha256": "ab97868782484aacab604a7686493721b2b3f123ee0b69c39958769a5b224ed9"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t1-cold",
+      "outcome_sha256": "009e64e6eac179bc9a7b8343ded6e425a61562aca819f440fad0bf64c4e9be88",
+      "packet_sha256": "aeb6a3cd8820c3b6a3c90a54c3c4e8d7fa8671a613b39a1432fd3be7ec6d10d8",
+      "wrapper_sha256": "47294f1496ca1e29cf4e924f769883a365172e6fd40762d4fa55bed3faea73f7"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t1-warm",
+      "outcome_sha256": "e2fb3c7d5b85399cb608cd7637c56d519eaeac8c6dccd8342ccef08bfde1001a",
+      "packet_sha256": "651b32e31cca3ecd00019a9f25dfd92b2bd5ee3d530b3f2e4d73c786a6f10dee",
+      "wrapper_sha256": "9592eb0ca8bcc5b1dd3dafb16cdc008dd8986a2bb0082d82b624970052b61951"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t28-cold",
+      "outcome_sha256": "deb81003aa143ba9a68cb59245c73b8659368ab1afe7ae9463a5f274f7e8db0f",
+      "packet_sha256": "e0dfaa2ae00be0fec93f0c4fcdd2e9e7e152c844ee4741c4d9ccc2fc4ca81b6d",
+      "wrapper_sha256": "6923436ba2505daf21a44a1c7cfbe30129a2cb7c88ed2b3f6f9d40d7dd8c2b96"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t28-warm",
+      "outcome_sha256": "4323ba913dcd8902328da46ad133289c128d32682232b0d21367c9da34871e7a",
+      "packet_sha256": "53de348c4e1b0ee884e75b1ebf6067be88f3674d468aab7df6f6644be46ba632",
+      "wrapper_sha256": "afe92a3a4cc1cb908a90eec5aabee55ae08fc02c0ca8a52b175a901fec19a58b"
+    },
+    {
+      "case": "haarpsi-y-pairA-odd-t1-cold",
+      "outcome_sha256": "929ad5fba1dae542ccd9af1681af83c8285d115bf3b09d12e5d844ecc2c533ac",
+      "packet_sha256": "bc030761cfcb617b75de70019e8627724756d0ac823bce8b867f5471d1145893",
+      "wrapper_sha256": "7278f764d0130e9edf1d3620ffd5e863ba7867ed2fe792064b453be73783ec89"
+    },
+    {
+      "case": "haarpsi-y-pairA-odd-t1-warm",
+      "outcome_sha256": "440af25f7245c3b535dbd082802431aea88a9696ccd3cbd32d9750e764d7564e",
+      "packet_sha256": "0ac3a796a522a3c069dd8792166c3b01b876f4e2e1f349817ae261236ca08d38",
+      "wrapper_sha256": "008aeec0b34d0423917cb1c4f7be8244a4ecd524dbc128ece0884f2f95d80fce"
+    },
+    {
+      "case": "haarpsi-y-pairA-odd-t28-cold",
+      "outcome_sha256": "516443f54e90943e13088cf3ffeb9adfafbec9cdd214c834cfb5bfcf4707c996",
+      "packet_sha256": "329ee8f8ac7a4a92f41d43fc127dc7e47380820bdd294ef3b27434e208e5a5dc",
+      "wrapper_sha256": "f316bdf465c7cfd8cfe30e851f0ba454634118bb6ab7566ac7be5c6c3cab572a"
+    },
+    {
+      "case": "haarpsi-y-pairA-odd-t28-warm",
+      "outcome_sha256": "dc67bf8d6791f5c4955ea623f4a86637f8aabb18828ccdbc7ed62c8d4cb411a5",
+      "packet_sha256": "3747147d9db8ba634ada4d79bf459db22a0d6f4324512ee0d807974643b927cc",
+      "wrapper_sha256": "ad4cf20b9760aec99d30dca458e33e198e43a3b48fc0aeceea5576090b309f91"
+    }
+  ],
+  "profiles": [
+    {
+      "case": "haarpsi-pairA-64-t28-cold",
+      "path": "/home/lilith/tmp/portcheck-haarpsi-flag-profiles-20261019T1324/haarpsi-pairA-64-t28-cold/profile.json",
+      "sha256": "449f2289b9487db0468a80394d300c44bf72766bee290d4d5fe750b5b1feac1b"
+    },
+    {
+      "case": "haarpsi-pairA-64-t28-warm",
+      "path": "/home/lilith/tmp/portcheck-haarpsi-flag-profiles-20261019T1324/haarpsi-pairA-64-t28-warm/profile.json",
+      "sha256": "da324ea25c17e0e1bcfd983f9ffccff44a28ed4fca2722d8f9e5f3ec38276996"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t28-cold",
+      "path": "/home/lilith/tmp/portcheck-haarpsi-flag-profiles-20261019T1324/haarpsi-y-pairA-64-t28-cold/profile.json",
+      "sha256": "9ca13824d7a5b739c15b3d3516efab7fece71cb8f0ddd5f8fca080ee7a65006e"
+    },
+    {
+      "case": "haarpsi-y-pairA-64-t28-warm",
+      "path": "/home/lilith/tmp/portcheck-haarpsi-flag-profiles-20261019T1324/haarpsi-y-pairA-64-t28-warm/profile.json",
+      "sha256": "15113b1f8cf644cd6788972eab501e87e8b3638be871031521e334a6f66fb373"
+    }
+  ],
+  "summary_sha256": "c9a214005adaa8ed5f34b922c4e452690aabdb0d92e19c57ec5d857dd893d113",
+  "summary_bytes": 10229
+}

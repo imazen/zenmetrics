@@ -1148,3 +1148,7 @@ benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairB.tsv	ignored	Primary unch
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairC.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi.json	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi.meta	ignored	Primary MDSI command, source and artifact metadata; no qualified timings.
+benchmarks/port_spotcheck_2026-10-18/summary.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.json	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.meta	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
