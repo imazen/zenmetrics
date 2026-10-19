@@ -1094,3 +1094,4 @@ benchmarks/hdrvdp_canonical_2026-10-19/strata.tsv	ignored	Canonical-configuratio
 benchmarks/hdrvdp_canonical_2026-10-19/strata-correlations.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
 benchmarks/hdrvdp_canonical_2026-10-19/qualification.meta	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
 benchmarks/mac_validation_2026-10-18/stlpips-metal-variation-2026-10-19.json	ignored	Retained unqualified numerical diagnostic; not timing or oracle qualification
+benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json	ignored	Finite-only Mac Metal protocol and immutable scheduling receipt; not native-oracle or performance comparison qualification

@@ -1,0 +1,258 @@
+{
+  "schema": 1,
+  "measured_host": "mac",
+  "captured_utc": "2026-10-19T04:25:01.260105+00:00",
+  "policy": "mac-metal-finite-logged-v1",
+  "numerical_bound": null,
+  "qualification": "Protocol/timing acceptance only; native-oracle parity unchanged; no precision-cause claim",
+  "base_source": "3ca65f64d42cea44a30f4468092004f44bfa91fb",
+  "base_snapshot": "ffe384996876d2cd988ea3bd124f0c5b3100a337",
+  "telemetry_source": "5461e05e4c783acb51aa5d69cd5ecaff980284d6",
+  "binary_sha256": "c3dc4ddb5962549beff06ab419c63f296a85a5722f074e84155a3ddd21d43373",
+  "full_receipts": "/home/lilith/benchmark-artifacts/iqa-mac-finite-20261019",
+  "files": {
+    "build.json": "8278545f55c4ab3e604db606565092792a7fc734f3c3a123c3fd4e97d303d0ea",
+    "control-report.json": "f7cfd49f6642e1d83fd9c40c08cfd667f780e751dfedf5c77f2f0547f024b674",
+    "control-PASS.json": "b4c64b0de38870b0acc7aa40485963256617f3698db06e8fda3d363b1581b171",
+    "sequence.json": "37ed80c1267ceeb64864fde89700bba6ddfbb018a766bf4a71b97072e890b997",
+    "verification.json": "60d33e2c7b6cba43eeb596b1294ac6e837bfc4fc9de3649d6ba8ef8375075c5d",
+    "status.json": "50e9bd82a9b51e6bea2a4018271c4a3be71dba089f9ba89a46f44238ca7485fd",
+    "status-after-stlpips.json": "ee69314d957d066ef2420cfb27efab4094f6396f83417b4b246e1e51adc2ffea"
+  },
+  "controls": [
+    {
+      "status": "ok",
+      "n": 1,
+      "score_bits": "3f6f725c80000000",
+      "median_ns": 714909792,
+      "metric_name": "lpips-alex",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "timing_phase": "cold",
+      "gate_clean_rounds": 0
+    },
+    {
+      "status": "ok",
+      "raw_status": "ok",
+      "n": 10,
+      "score_bits": "3f6f725c80000000",
+      "median_ns": 10311752.979166668,
+      "gpu_reference_score_bits": "3f6f725c80000000",
+      "gpu_min_score_bits": "3f6f725c80000000",
+      "gpu_max_score_bits": "3f6f725c80000000",
+      "gpu_call_observation_count": 104,
+      "gpu_call_bit_variation_count": 0,
+      "gpu_nonfinite_observation_count": 0,
+      "gpu_max_abs_delta": 0.0,
+      "gpu_max_relative_delta": 0.0,
+      "gpu_delta_overflow": false,
+      "numerical_instability_flag": false,
+      "score_repeatability_qualified": true,
+      "numerical_qualification": "Finite observations only; no native-oracle parity qualification",
+      "metric_name": "lpips-alex",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "timing_phase": "warm",
+      "gate_clean_rounds": 10
+    },
+    {
+      "status": "ok",
+      "n": 1,
+      "score_bits": "3f6f725c80000000",
+      "median_ns": 65781541,
+      "metric_name": "lpips-alex",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "timing_phase": "cold",
+      "gate_clean_rounds": 0
+    },
+    {
+      "status": "ok",
+      "raw_status": "ok",
+      "n": 10,
+      "score_bits": "3f6f725c80000000",
+      "median_ns": 10330054.1875,
+      "gpu_reference_score_bits": "3f6f725c80000000",
+      "gpu_min_score_bits": "3f6f725c80000000",
+      "gpu_max_score_bits": "3f6f725c80000000",
+      "gpu_call_observation_count": 108,
+      "gpu_call_bit_variation_count": 0,
+      "gpu_nonfinite_observation_count": 0,
+      "gpu_max_abs_delta": 0.0,
+      "gpu_max_relative_delta": 0.0,
+      "gpu_delta_overflow": false,
+      "numerical_instability_flag": false,
+      "score_repeatability_qualified": true,
+      "numerical_qualification": "Finite observations only; no native-oracle parity qualification",
+      "metric_name": "lpips-alex",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "timing_phase": "warm",
+      "gate_clean_rounds": 10
+    },
+    {
+      "status": "ok",
+      "raw_status": "variant_mismatch",
+      "n": 10,
+      "score_bits": "3f82881020000000",
+      "median_ns": 518011627.0,
+      "gpu_reference_score_bits": "3f82881020000000",
+      "gpu_min_score_bits": "3f82881020000000",
+      "gpu_max_score_bits": "3f857d5180000000",
+      "gpu_call_observation_count": 12,
+      "gpu_call_bit_variation_count": 3,
+      "gpu_nonfinite_observation_count": 0,
+      "gpu_max_abs_delta": 0.0014443499967455864,
+      "gpu_max_relative_delta": 0.15962169409729945,
+      "gpu_delta_overflow": false,
+      "numerical_instability_flag": true,
+      "score_repeatability_qualified": false,
+      "numerical_qualification": "Finite observations only; no native-oracle parity qualification",
+      "metric_name": "stlpips-alex",
+      "width": 2048,
+      "height": 1080,
+      "threads": 1,
+      "timing_phase": "warm",
+      "gate_clean_rounds": 10
+    },
+    {
+      "status": "ok",
+      "raw_status": "variant_mismatch",
+      "n": 10,
+      "score_bits": "3f82881020000000",
+      "median_ns": 516941129.5,
+      "gpu_reference_score_bits": "3f82881020000000",
+      "gpu_min_score_bits": "3f82881020000000",
+      "gpu_max_score_bits": "3f857d5180000000",
+      "gpu_call_observation_count": 12,
+      "gpu_call_bit_variation_count": 3,
+      "gpu_nonfinite_observation_count": 0,
+      "gpu_max_abs_delta": 0.0014443499967455864,
+      "gpu_max_relative_delta": 0.15962169409729945,
+      "gpu_delta_overflow": false,
+      "numerical_instability_flag": true,
+      "score_repeatability_qualified": false,
+      "numerical_qualification": "Finite observations only; no native-oracle parity qualification",
+      "metric_name": "stlpips-alex",
+      "width": 2048,
+      "height": 1080,
+      "threads": 8,
+      "timing_phase": "warm",
+      "gate_clean_rounds": 10
+    }
+  ],
+  "resources": {
+    "build": "run-heavy rc=0 22s peak-RSS1.27GiB min-avail19159MiB peak-load6.32",
+    "controls": "run-heavy rc=0 42s peak-RSS0.20GiB min-avail16430MiB peak-load4.50",
+    "mac_memory_semantics": "monitored process-tree RSS guard12GiB; available-page proxy, not cgroup cap"
+  },
+  "retained_feature_omission_control": "feature-omission-control-report.json; no measurements, no production attempt budgets consumed",
+  "production": {
+    "service": "user/501/io.imazen.iqa-scalar.7ea9de0d2f40af9c",
+    "window_guard": "user/501/io.imazen.iqa-window.372afe5c8da4e851",
+    "checked_utc": "2026-10-19T04:24:29.920744+00:00",
+    "plan_sha256": "37ed80c1267ceeb64864fde89700bba6ddfbb018a766bf4a71b97072e890b997",
+    "maps_scheduled": 0,
+    "pending_8k_scheduled": 0,
+    "remaining_attempt_caps_preserved": true,
+    "policy_scope": "warm scalar Metal only",
+    "window_end_utc": "2026-10-19T12:56:43Z",
+    "phases": [
+      {
+        "name": "larger-nn-metal-attempts2-attempts2-attempts1",
+        "cells": 122,
+        "max_attempts": 1,
+        "binary_sha256": "c3dc4ddb5962549beff06ab419c63f296a85a5722f074e84155a3ddd21d43373",
+        "wait": {
+          "pending": [],
+          "active": true,
+          "phase": "larger-nn-metal-attempts2-attempts2-attempts1"
+        }
+      },
+      {
+        "name": "larger-nn-metal-attempts2-attempts2-attempts2",
+        "cells": 500,
+        "max_attempts": 2,
+        "binary_sha256": "c3dc4ddb5962549beff06ab419c63f296a85a5722f074e84155a3ddd21d43373",
+        "wait": {
+          "pending": [
+            {
+              "output": "/Users/lilith/benchmark-results/iqa-mac-20261019-finite-metal.noindex/larger-nn-metal-attempts2-attempts2-attempts1",
+              "manifest_sha256": "943697f2099929a83da14b9b10ca9ee5a21534e3a33f0b4b5a05171764edff04"
+            }
+          ],
+          "phase": "larger-nn-metal-attempts2-attempts2-attempts2"
+        }
+      },
+      {
+        "name": "larger-nn-cpu-attempts2-attempts1-attempts1",
+        "cells": 2,
+        "max_attempts": 1,
+        "binary_sha256": "0773cd747da14a2f535719810cbfe9b0f93e9ee01dc1491c330e0755661bd4f9",
+        "wait": {
+          "pending": [
+            {
+              "output": "/Users/lilith/benchmark-results/iqa-mac-20261019-finite-metal.noindex/larger-nn-metal-attempts2-attempts2-attempts2",
+              "manifest_sha256": "fd2b9bac204fbda179840a48e0d652dc501c1d09eae44db2c46b28a4b2dd4c3f"
+            }
+          ],
+          "phase": "larger-nn-cpu-attempts2-attempts1-attempts1"
+        }
+      },
+      {
+        "name": "larger-nn-cpu-attempts2-attempts2-attempts2",
+        "cells": 692,
+        "max_attempts": 2,
+        "binary_sha256": "0773cd747da14a2f535719810cbfe9b0f93e9ee01dc1491c330e0755661bd4f9",
+        "wait": {
+          "pending": [
+            {
+              "output": "/Users/lilith/benchmark-results/iqa-mac-20261019-finite-metal.noindex/larger-nn-cpu-attempts2-attempts1-attempts1",
+              "manifest_sha256": "cf82fc9b21d6ebf8076e480080360dc46617cf042c726bfeb53a8041532fd12d"
+            }
+          ],
+          "phase": "larger-nn-cpu-attempts2-attempts2-attempts2"
+        }
+      }
+    ],
+    "accepted_stlpips_retries": [
+      {
+        "cell_id": "000080-4dec6fb321635392",
+        "attempt": 1,
+        "status": "ok",
+        "threads": 1,
+        "raw_status": "variant_mismatch",
+        "numerical_instability_flag": true,
+        "score_repeatability_qualified": false,
+        "gate_clean_rounds": 10,
+        "gpu_call_observation_count": 12,
+        "gpu_call_bit_variation_count": 3,
+        "gpu_max_abs_delta": 0.0014443499967455864,
+        "gpu_max_relative_delta": 0.15962169409729945,
+        "result_sha256": "f1b538b6b0d2bc7d1ba2e13a74a4da9a6f8b4c8719308799735a5d5e666c56ce",
+        "result": "/home/lilith/benchmark-artifacts/iqa-mac-finite-20261019/production/stlpips-2k-warm1.json"
+      },
+      {
+        "cell_id": "000081-c0f58b41fe1c215f",
+        "attempt": 1,
+        "status": "ok",
+        "threads": 8,
+        "raw_status": "variant_mismatch",
+        "numerical_instability_flag": true,
+        "score_repeatability_qualified": false,
+        "gate_clean_rounds": 10,
+        "gpu_call_observation_count": 12,
+        "gpu_call_bit_variation_count": 3,
+        "gpu_max_abs_delta": 0.0014443499967455864,
+        "gpu_max_relative_delta": 0.15962169409729945,
+        "result_sha256": "9ef3ee9c22dfa14060a0417c3d3d877c73c4dcbe4923d8312044c46d3486c1ea",
+        "result": "/home/lilith/benchmark-artifacts/iqa-mac-finite-20261019/production/stlpips-2k-warm8.json"
+      }
+    ]
+  },
+  "production_evidence_captured_utc": "2026-10-19T04:28:52.448653+00:00"
+}

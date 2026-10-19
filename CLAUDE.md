@@ -1976,3 +1976,13 @@ resource-gate observations. Baseline bits `3f82881020000000`, observed alternate
 retries. The counter includes warmup and calibration; the varying timed rounds
 and cause are unproven. No gate, worker or service changes were made for the
 [read-only capture](benchmarks/mac_validation_2026-10-18/STLPIPS_VARIATION_2026-10-19.md).
+
+The owner subsequently authorized finite-only Mac GPU timing acceptance with
+logged error deltas and instability flags. A separate worker/bundle records
+all nonfinite observations and finite extrema after the measurement clock.
+Its six native controls pass all 40 warm resource gates; both original
+STLPIPS-Alex 2K cases then pass their remaining production attempt as flagged
+timings. Original failed packets and native-oracle checks remain unchanged.
+This does not establish a precision-related cause. See the
+[finite Metal policy receipt](benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json)
+and [timing contract](docs/IQA_DURABLE_MAC.md).

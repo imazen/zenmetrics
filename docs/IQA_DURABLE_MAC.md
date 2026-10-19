@@ -292,3 +292,37 @@ first alternate and final score, which cannot exclude a hidden intermediate
 nonfinite value. Their failed attempts remain unchanged. A replacement worker
 therefore requires a new binary hash, frozen bundle, protocol controls and
 successor lineage with the original remaining attempt budgets.
+
+The [native protocol/deployment receipt](../benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json)
+records six passing cells and 40 clean warm rounds. Both STLPIPS-Alex 2K warm
+controls varied in three of twelve observed calls, including calibration;
+maximum absolute delta was 0.0014443499967455864 and relative delta was
+0.15962169409729945. Both timings were accepted and flagged. LPIPS-Alex's
+512 controls remained stable. This does not identify the cause of variation.
+
+The replacement executable is `c3dc4ddb5962549beff06ab419c63f296a85a5722f074e84155a3ddd21d43373`:
+base source `3ca65f64`, tested snapshot `ffe384996876`, telemetry overlay
+`5461e05e`. Metric crate sources and sibling pins are unchanged from the
+original Metal worker source `7310d24c`; the base adds private DVIF routing and
+corrected process accounting. The build explicitly enables
+`zenmetrics-cli/nn-webgpu`; the reusable builder selects it with
+`IQA_NN_ENGINE=ort-webgpu`. The earlier feature-omission build and its six
+refused controls remain retained and consumed no production attempts.
+
+The immutable `iqa-mac-20261019-finite-metal.noindex` sequence retains 298
+qualified prior cells, then schedules 122 Metal cells with one remaining
+attempt, 500 Metal cells with two remaining attempts, and the existing 694
+CPU cells. Its LaunchAgent is `io.imazen.iqa-scalar.7ea9de0d2f40af9c`;
+`io.imazen.iqa-window.372afe5c8da4e851` preserves the
+2026-10-19T12:56:43Z endpoint. Both were observed running. CPU waits behind
+both Metal phases; pending maps and 8K geometries are absent. The previous
+coordinator and guard were disabled after the worker completed under the
+shared lock. The 30-minute check-in plan points at the new sequence. Resolve
+live progress with the frozen coordinator's `status sequence.json` command;
+the receipt records the exact paths, hashes and actual dependency waits.
+
+Both original STLPIPS-Alex 2K numerical refusals subsequently used their one
+remaining production attempt in the new bundle. Both timings passed all ten
+resource gates, were accepted with instability flags, and reproduced the
+control maximum deltas. Their original failed packets remain unchanged;
+the new packets explicitly report `score_repeatability_qualified=false`.

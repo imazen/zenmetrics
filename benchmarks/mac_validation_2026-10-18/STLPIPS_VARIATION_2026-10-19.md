@@ -44,3 +44,9 @@ are on i265 at `~/benchmark-artifacts/iqa-mac-stlpips-metal-20261019/`.
 Only the small diagnostic projection is committed; no graphs, weights or
 compiled outputs are included. This finding is separate from the known strict
 CPU-assignment refusals documented in [the node audit](WEBGPU_NODE_AUDIT.md).
+
+The later owner-authorized [finite-only timing policy](finite-metal-policy-2026-10-19.json)
+uses a separate worker and immutable successor. Both remaining production
+retries pass resource gates and are accepted with numerical-instability flags.
+The original attempts above retain their original failed classification;
+native-oracle parity and a cause for the variation remain separate questions.

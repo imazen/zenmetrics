@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export observed durable attempts for charts; never promote failed/flagged rows."""
+"""Export durable attempts with separate timing and numerical qualification."""
 import argparse
 import datetime
 import hashlib

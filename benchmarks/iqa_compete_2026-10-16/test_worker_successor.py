@@ -39,6 +39,16 @@ class Successor(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'differs'):
                     successor.main()
             self.assertFalse((root/'bad').exists())
+            binary.write_bytes(b'new-binary')
+            manifest['cells'][0]['worker_environment'] = dict(ZENMETRICS_NN_ENGINE='ort-webgpu')
+            (source/'manifest.json').write_text(json.dumps(manifest))
+            hashes = json.loads((source/'SHA256SUMS.json').read_bytes())
+            hashes['manifest.json'] = successor.sha(source/'manifest.json')
+            (source/'SHA256SUMS.json').write_text(json.dumps(hashes))
+            with patch('sys.argv',['prepare',str(source),str(binary),str(build),str(root/'bad-engine')]), patch.object(successor.subprocess,'check_output',return_value=inventory):
+                with self.assertRaisesRegex(ValueError,'WebGPU feature'):
+                    successor.main()
+            self.assertFalse((root/'bad-engine').exists())
 
 
 if __name__ == '__main__': unittest.main()
