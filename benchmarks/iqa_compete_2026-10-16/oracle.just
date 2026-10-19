@@ -64,3 +64,10 @@ primary-rust-compile snapshot:
 [positional-arguments]
 octave-rust-parity binary build_receipt canonical manifest reference distorted threads evidence:
     python3 -B probe_octave_parity.py --binary "$1" --build-receipt "$2" --canonical "$3" --manifest "$4" --reference "$5" --distorted "$6" --threads "$7" --evidence "$8"
+
+[positional-arguments]
+spotcheck-raw-prepare plan output:
+    python3 -B prepare_spotcheck_raw.py "$1" "$2"
+
+spotcheck-raw-check:
+    python3 -B -m unittest -v test_spotcheck_raw

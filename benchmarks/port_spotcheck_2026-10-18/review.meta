@@ -243,3 +243,18 @@ a57086e2afa7de87e3974ad0780e2ad3db234a0f93eaf5871f5c6694dd6e2aea  ~/tmp/portchec
 Parity join negative controls:5/5reject thread/input/manifest/nonfinite-reference/binary mismatches before creating probe evidence. Both locks+run-heavy12Gjobs1:rc0,0s,peakRSS0.02GiB,minavail13073MiB,peakload2.12.
 fbdba029b36a029b9d7c3bc1a51a1a4581d02997043117e64e086da8bebc8e41  ~/tmp/portcheck-primary-parity-guards-20261019T1017.log
 572e1f95bfd2accca3dbb27a79eed3e078d4fe87bd9be94182f1f430289715e1  ~/tmp/portcheck-primary-parity-guards-20261019T1017/results.json
+
+Primary raw crop grid preparation:
+  Three retained AIC raw pairs: S67 photo/CCM15, S68 stained-glass artwork/JXL15, S58 digital illustration/JXL15.
+  Center-crop64x64,255x257,1024x1024,3840x2160;12pairs, no pixel arithmetic/resampling/decoding.
+  Actual source hashes checked before and after preparation; S67 4k hashes match committed inputs.meta.json. B/C historical executable/source decode binding remains unverified.
+  Command: oracle.just spotcheck-raw-prepare <plan.json> <fresh-output>. All absolute argv retained in log below.
+  Manifest83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712 contains every output SHA256/geometry/crop and source SHA256.
+  Both locks+run-heavy12Gjobs1:rc0,1s,peakRSS0.07GiB,minavail12858MiB,peakload3.03.
+  Preparation controls:packed/strided coordinate-coded crops and unchanged sources/padding; full-row packed path, short/invalid geometry;2/2pass.
+  Controls:rc0,0s,peakRSS0.02GiB,minavail12847MiB,peakload1.66. No metric scored by preparation or controls.
+External artifacts(SHA256):
+47c4f6b871e7d9bbfe7155078f9c06bc98b3a60017fb8aae8b9a62bfceda5150  ~/tmp/portcheck-primary-grid-20261019T1020/plan.json
+83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712  ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json
+8b8fb34199cdbcf5c5f06701006caab20f8885709b58a8494d13fbd7616b76e6  ~/tmp/portcheck-primary-grid-20261019T1020-prepare.log
+87a1b419d96ca47c4bc67ee86f53f1046e0a3989afd3bea000ab3514128ad4af  ~/tmp/portcheck-primary-raw-controls-20261019T1022.log
