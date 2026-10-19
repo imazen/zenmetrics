@@ -12,3 +12,6 @@ mad-helper-selfcheck evidence +sources:
 
 mad-helper-check manifest:
     python3 -B check_mad_helper_patch.py check --manifest '{{manifest}}'
+
+native-scope-check source binary:
+    python3 -B check_libjxl_scope.py '{{source}}' --binary '{{binary}}'

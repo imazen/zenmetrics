@@ -74,3 +74,36 @@ eb3882ae7f4109356308300e8a2ecd5b03c26dce16ab2f8273601121d1fc0ef1  ~/tmp/portchec
   The earlier helper artifact comparison verified 18/18 array pairs by bytes
   and SHA256; it did not run the full metric. Original helper failure and
   compatibility-reference roles remain explicit in mad-helper-oracle.md.
+
+Native adapter preparation independent review (2026-10-19, lilith-wsl):
+  Reviewed candidate a52d8e32e747dc9f5e4be2a6bfb8215069337aba
+  Published rebase62aaf7e94acaee2ccbe9b4f6c16f0ec3416a3559
+  git merge-base --is-ancestor 62aaf7e94acaee2ccbe9b4f6c16f0ec3416a3559 origin/master
+  Ancestry exit0. GitHub contents API at published SHA matches all3 reviewed files.
+  libjxl_compute.cpp SHA2560633dd2017517483d9825c1d9294180fdb12cf91867cd83fc15643ff275bb574
+  check_libjxl_scope.py SHA256b5be3b5d5ba18194027a105cb2b0f2cc81d2329d656ea217f7acfe794a635e63
+  native-rgb-scope.md SHA2560d498088d7f02f694ff496fa8300d4ef23a461461fa39c007dde270574c38be7
+  Control binary SHA256de04cd3180d7ac40e2eac84464fe191ac5ee713201a0a96b393888fe691fb4e2
+  libjxl tarball SHA25603e9be69a30be4011f559da75328b6d7cea8ad921fabfbd551ce10bf45cdc992
+Root command on immutable candidate export:
+  python3 check_libjxl_scope.py libjxl_compute.cpp --binary <retained-0845-build>/iqa-jxl
+  36 structural source +5 argument/failed-open controls =41/41 pass.
+  Both host locks, owned diskTMPDIR, run-heavy --mem12G --jobs1:
+  rc0 0s peak-RSS0.01GiB min-avail13686MiB peak-load3.37.
+Author full build log independently read:
+  rc0 28s peak-RSS0.50GiB min-avail11359MiB peak-load7.29.
+  The original scratch wrapper could mask an earlier command's exit;
+  acceptance uses the retained individual successful build/control outputs,
+  not that wrapper's aggregate status. Wrapper accounting was repaired later.
+  These receipts are control/build memory, not metric-call measurements.
+External evidence on lilith-wsl:
+da41fc512d9044e70f1d790c36d7016805f6964f955c9a15cd23ab6397eae7c4  ~/tmp/portcheck-native-review-a52d8e32/review.md
+d042f68c981b51d91ad351db03434d1340df8bac0ba45762d9b3f62a0fc26fcb  ~/tmp/portcheck-native-review-a52d8e32/root-controls.log
+b4407344a7c26dfa051128f22b91b3d3248793856e18c7f7e7c25c9589f09ff6  ~/tmp/portcheck-native-review-a52d8e32/repair.diff
+48f779dc9e1cddc19e0777c503b674528cc76cfd3749457f6b26ee86c2a031fa  ~/tmp/portcheck-native-review-a52d8e32/historical-column-review.json
+56b08f65108cd1d7a49e2a2f35199ff2f9a9d901ffa66c4c66c9cfd1137e4ea1  ~/tmp/portcheck-native-review-a52d8e32/remote-verification.json
+3368f3983ed009f4a010549c829093336801879c3e546271278b90e2e11f2604  ~/tmp/portcheck-native-review-9781254b/native-reducer-review.txt
+  Native source inspection proves max reduction and per-call reference setup;
+  historical Rust headline column is explicit in retained IQA_ROW receipts.
+  Historical native path/version does not establish executable-hash binding.
+  No historical ratio accepted, no new score API called, no parity qualified.

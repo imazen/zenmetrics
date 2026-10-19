@@ -102,6 +102,29 @@ integration remain unqualified. The original helper artifacts are retained.
 [Repeatable artifact recipes](../iqa_compete_2026-10-16/oracle.just) cover
 both fixed-factor copies and this helper overlay. They execute no metric.
 
+## Native adapter preparation
+
+The opt-in [libjxl RGB-input scope](../iqa_compete_2026-10-16/native-rgb-scope.md)
+landed at `62aaf7e94acaee2ccbe9b4f6c16f0ec3416a3559`. It moves metadata,
+image bundles, RGB conversion, the used comparator and per-call object
+release inside a lexical timed scope. Raw input file reads and reusable
+pool lifecycle stay outside. The default scope retains its existing staging
+and header placement. Independent source review and compiled-binary
+argument/failed-open controls passed; the remote payload matches the review.
+No scoring API ran in those controls.
+
+Pinned libjxl source resolves the Butteraugli scalar reducer: `ComputeScore`
+sets the reference on every call, then returns the maximum of the diffmap.
+Historical Rust receipts explicitly select `butteraugli_max`. This resolves
+the reducer/column question without qualifying the historical batches. A
+current canonical executable hash and an older invocation path alone cannot
+bind that executable to past observations.
+
+The opt-in adapter starts a new cohort. Complete executable/source closure,
+matched cold/warm work, numerical parity and paired ratio intervals remain
+missing. The exact selected color-transform path still needs build-specific
+binding before claiming equivalent preprocessing. **0/19 remains unchanged.**
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,
