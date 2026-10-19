@@ -49,3 +49,21 @@ the new owned-child tests require its termination and reaping.
   four blocks; its fixed-look bootstrap code is descriptive only. Production
   stopping/retry policy, order balance and temporal dependence still require
   independent review. The remaining eighteen adapters remain unqualified.
+
+## Repair control evidence
+
+The acceptance run at source candidate `078859a8` passes 29/29 controls on
+r5900xt. `run-heavy`: rc=0, 5s, peak-RSS 0.03GiB, min-avail 51411MiB,
+peak-load 0.17, with a 2GiB cap and one job. This measures the control suite,
+not a scorer or metric performance. Full logs and the complete repair diff are
+retained outside git at `/mnt/v/aic2026-evidence-private/clean-panel-repair-2026-10-19/`
+(path verified on r5900xt). Acceptance log SHA256:
+`0ce12cd43c30cd17f22bcae04729aa2fd0c208af350e3f792d2f05aea4a82eb5`.
+
+The historical-module diagnostic encounters failures at all six selected control
+entrypoints. The deleted-file control fails earlier at the old implementation's
+missing immediate arm receipt; the new acceptance suite reaches and rejects the
+post-verification deletion explicitly. Historical diagnostic log SHA256:
+`ddd4e13a59464cd9b3aed40caccc846bc0e768542312a7f7da37bebbf5126e5a`.
+The initial diagnostic interrupted by its intentionally raised KeyboardInterrupt
+is also retained, not substituted for the completed diagnostic.
