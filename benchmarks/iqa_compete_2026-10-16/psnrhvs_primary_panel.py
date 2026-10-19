@@ -24,6 +24,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ['source', 'signal', 'inputs', 'binary', 'build-receipt', 'output']:
         p.add_argument('--' + name, required=True, type=Path)
+    p.add_argument('--suppress-compat-warning', action='store_true')
     a = p.parse_args()
     for name in ['source', 'signal', 'inputs', 'binary', 'build_receipt']:
         setattr(a, name, getattr(a, name).resolve(strict=True))
@@ -43,6 +44,7 @@ def main():
                     binary_sha256=receipt['binary_sha256'], receipt_sha256=sha(a.build_receipt),
                     origin='http://ponomarenko.info/psnrhvsm.htm', signal_version='1.4.1 / Ubuntu 1.4.1-4build2',
                     signal_reference='https://octave.sourceforge.io/signal/function/dct2.html',
+                    compat_warning_policy='off:Octave:possible-matlab-short-circuit-operator' if a.suppress_compat_warning else 'original-default',
                     absolute_bound=1e-3, gate_source='crates/psnrhvs/README.md: Verification', threads=[1, cap],
                     octave=str(octave), octave_sha256=sha(octave), qualified_timing_cells=0,
                     map_status='author psnrhvsm.m returns two scalars; no native map API')
@@ -64,8 +66,10 @@ def main():
                 planes = ("r=round(0.299*r(:,:,1)+0.587*r(:,:,2)+0.114*r(:,:,3));"
                           "d=round(0.299*d(:,:,1)+0.587*d(:,:,2)+0.114*d(:,:,3));") if metric.endswith('-y') else ''
                 bindings = '\n'.join(f"assert(strcmp(which('{name[:-2]}'),{quoted(path)}));" for name, path in sources.items())
+                warning_control = "warning('off','Octave:possible-matlab-short-circuit-operator');" if a.suppress_compat_warning else ''
                 entry = directory / 'entry.m'
                 entry.write_text(f"""more off;
+{warning_control}
 addpath({quoted(a.source.parent)},'-begin');addpath({quoted(a.signal)},'-begin');
 {bindings}
 fftw('threads',{threads});fprintf('VERSION octave-%s fftw-threads-%d\\n',version(),fftw('threads'));
