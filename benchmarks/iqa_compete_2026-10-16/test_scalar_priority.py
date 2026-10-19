@@ -28,6 +28,17 @@ class ScalarPriorityTests(unittest.TestCase):
                 priority.install_window_guard(p)
             self.assertFalse((p.parent/'window-guard.json').exists())
 
+    def test_explicit_deadline_guard_uses_authorized_endpoint(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as d:
+            p=Path(d)/'sequence.json'
+            p.write_text(json.dumps(dict(deadline_unix=1, window_end_unix=None, stop_at_deadline=True, lock='test-lock', phases=[])))
+            (p.parent/'installed-service.json').write_text(json.dumps(dict(service='test-service')))
+            with patch.object(priority.subprocess, 'run'):
+                priority.install_window_guard(p)
+            guard=json.loads((p.parent/'window-guard.json').read_bytes())
+            self.assertEqual(guard['deadline_unix'],1)
+
     def test_dimension_disable_ignores_labels_and_orientation(self):
         policy = dict(disabled_geometries=[[7680,4320]])
         self.assertTrue(priority.disabled_geometry(dict(width=7680,height=4320,size_name="other"),policy))

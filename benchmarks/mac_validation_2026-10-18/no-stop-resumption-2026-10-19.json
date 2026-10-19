@@ -292,6 +292,13 @@
           "cells": 2
         }
       ]
+    },
+    "first_completed_panel": {
+      "qualified": 56,
+      "cold": 42,
+      "warm": 14,
+      "clean_warm_rounds": 140,
+      "report_sha256": "96724d90d7c50aa731bd04476c526a1cd711e7f00e0fd8ca50d80e24e92f0711"
     }
   },
   "resource_wrappers": {
@@ -449,6 +456,7 @@
   "checks": {
     "named_consent": 4,
     "consent_retry_eligibility": 1,
-    "scheduler": 17
-  }
+    "scheduler": 18
+  },
+  "followup_captured_utc": "2026-10-19T14:57:17.733578+00:00"
 }

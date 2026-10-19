@@ -544,7 +544,7 @@ def install_window_guard(plan_path):
         raise ValueError('window guard requires explicit stop_at_deadline authorization')
     service = load(root / 'installed-service.json')['service']
     config = dict(lock=plan['lock'], sources=plan['phases'], stop_services=[service],
-                  output=str(root / 'window-boundary'), deadline_unix=plan['window_end_unix'],
+                  output=str(root / 'window-boundary'), deadline_unix=stop_endpoint(plan),
                   parent_sequence=str(plan_path), parent_sequence_sha256=sha(plan_path))
     path = root / 'window-guard.json'
     write(path, config)
@@ -566,7 +566,7 @@ def install_window_guard(plan_path):
             '--property=StandardOutput=append:'+str(root/'window-guard.log'),
             '--property=StandardError=append:'+str(root/'window-guard.stderr.log'),
             '--setenv=TMPDIR='+str(Path.home()/'tmp'), *command], check=True)
-    write(root/'window-guard-install.json', dict(service=native, command=command, window_end_unix=plan['window_end_unix']))
+    write(root/'window-guard-install.json', dict(service=native, command=command, window_end_unix=stop_endpoint(plan)))
 
 
 def main():
