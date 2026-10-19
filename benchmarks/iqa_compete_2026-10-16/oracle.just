@@ -198,3 +198,9 @@ primary-profile-flags panel output *options:
 pyiqa-ssim-full-join primary supplement multiscale single_scale additional output:
     python3 -B join_pyiqa_ssim.py --primary '{{primary}}' --supplement '{{supplement}}' --multiscale '{{multiscale}}' --single-scale '{{single_scale}}' --additional-primary '{{additional}}' --output '{{output}}'
 
+pyiqa-ssim-precision python joined inputs output:
+    '{{python}}' -B diagnose_ssim_precision.py --joined '{{joined}}' --inputs '{{inputs}}' --output '{{output}}'
+
+
+primary-pair-prefix-publish panel output profiles:
+    python3 -B publish_primary_pair_prefix.py '{{panel}}' '{{output}}' --profiles '{{profiles}}'
