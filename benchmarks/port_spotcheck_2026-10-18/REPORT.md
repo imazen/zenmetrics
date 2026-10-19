@@ -235,6 +235,16 @@ M-file is unchanged and source-bound; both process RSS values and the aggregate
 run-heavy receipt are retained. Map comparisons and qualified timing ratios
 remain missing.
 
+## Primary GMSD score and map grid
+
+The [source-bound primary C panel](primary-gmsd.md) passes all 18 even-size
+cases, with bit-identical maps, zero mean difference and maximum score relative
+difference 1.4294167329816467e-13 against the existing 1e-12 bound.
+All six original 255×257 C cases produce an instrumented buffer overflow;
+Rust retains its documented floor-sized geometry. No input cropping or timing
+qualification is inferred. Each process RSS and the aggregate resource
+receipt are retained with the hashed raw artifacts.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

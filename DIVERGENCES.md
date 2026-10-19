@@ -241,6 +241,12 @@ primitives but its own sp0 pyramid (`spyr0`), spectral path, and f64 FFT.
 
 ### `gmsd` — vs libgmsd
 
+A source-bound [October 19 primary C grid](benchmarks/port_spotcheck_2026-10-18/primary-gmsd.md)
+now rechecks the distinction below: 18 even-size cases have bit-identical maps,
+while all six original 255×257 C cases report an AddressSanitizer buffer overflow
+in `downsample_2x2`. The documented score/mean bounds remain unchanged; no odd
+input is cropped and no C odd-size numerical or timing pass is claimed.
+
 - **DIVERGES** — odd width/height: half-res grid is `⌊w/2⌋×⌊h/2⌋` with
   the trailing row/column dropped. libgmsd's `downsample_2x2` writes one
   element *past* that allocation on odd input (latent upstream bug);

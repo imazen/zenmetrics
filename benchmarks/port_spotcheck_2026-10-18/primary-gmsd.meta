@@ -1,0 +1,19 @@
+Observed 2026-10-19 on WSL2 / Ryzen 9 7950X. Primary C de646c9a957a892e4b9d78ff94601b83b363c158; frozen Rust e2d414c33a6d3c7da50a818fa36e56654d3ebeef.
+Harnes source a71826c8; independent retained-artifact publisher1036fe01. No metric-path changes and no qualified timing ratios.
+Build command (under both host locks and run-heavy12G/jobs1): just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just gmsd-primary-build ~/tmp/portcheck/canonical-source-audit-20261019/libgmsd-de646c9a.zip ~/tmp/portcheck-primary-rust-20261019T1010 ~/tmp/portcheck-gmsd-primary-build-20261019T1245-r2
+Panel command (under both host locks and run-heavy12G/jobs28): just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just gmsd-primary-panel ~/tmp/portcheck-gmsd-primary-build-20261019T1245-r2 ~/tmp/portcheck-primary-rust-20261019T1010 ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2
+Publisher command (under both host locks and run-heavy12G/jobs1): just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just gmsd-primary-publish ~/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2 ~/tmp/portcheck-gmsd-published-20261019T1256
+Build receipt: run-heavy: done rc=0 3s | peak-RSS 0.16GiB | min-avail 14712MiB | peak-load 4.88
+Panel receipt: run-heavy: done rc=0 18s | peak-RSS 0.26GiB | min-avail 14452MiB | peak-load 2.10
+Publisher receipt: run-heavy: done rc=0 0s | peak-RSS 0.03GiB | min-avail 14820MiB | peak-load 1.79
+First failed panel was a decimal-transport error of1.734723475976807e-18, corrected by scientific round-trip formatting without changing the assertion; it is not a metric finding.
+SHA256 external evidence (paths checked on lilith-wsl):
+1c1b458415375d0d7d08967f79ad980e5779d74263b5bbc444f1f9e29d62f2cb  /home/lilith/tmp/portcheck-gmsd-primary-build-20261019T1245-r2/build-receipt.json
+7fbf2a666e3583bb757af370a551e887c5559d455953cdf5609f7b0e2cd2c46b  /home/lilith/tmp/portcheck-gmsd-primary-build-20261019T1245-r2.log
+68b485a5a5b5aef8991e98bdf8cb83f44358b9419e747f52170d07ac77fc1c5d  /home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2/identity.json
+f1ce8a66ccff27b448ac2adf16cfe6060a15676401cdd70f63d3c4ef045af1c3  /home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2/completion.json
+20341b0a8649a23af7068b8513eb648be005b034eb973e67175c1c504eec2e7c  /home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2/files.sha256.jsonl
+c4b00df61713586558e1b6b2c5a6e287ed8e9f6e62eae9cf22c871181b2c8a12  /home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2.log
+625ea8740d27e120c9c6d0c0c11e7ff667d816a014a877a6cb0961727f0e7a97  /home/lilith/tmp/portcheck-gmsd-published-20261019T1256/primary-gmsd.json
+d101309bfd29d413f6e4c8693ad2e0cbe85c659f444ca4141a175ec8e22b90f8  /home/lilith/tmp/portcheck-gmsd-published-20261019T1256.log
+f6558daca8524018470078a85e18759b23589b9194bf73f4d3a301887fd9bfa8  /home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1240/transport-error.json

@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Bind primary libgmsd C and frozen Rust map probes (`a71826c8`), independently recheck artifact exports (`1036fe01`), and retain 18 even-size passes plus six instrumented odd-size C failures (`63cfa806`); no numerical gate changes.
+
 ### Changed
 
 - Propagate existing runtime-dispatched AVX512 support through metric consumer dependency edges, ported from `3494d8af`; preserve their existing threading features. Unsupported CPUs retain their fallback paths.

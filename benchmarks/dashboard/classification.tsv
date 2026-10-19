@@ -1135,3 +1135,4 @@ benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairA.tsv	ignored	Primary GMSD
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairB.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairC.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd.json	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd.meta	ignored	Primary GMSD source, commands and artifact integrity metadata; no qualified timings.
