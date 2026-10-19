@@ -114,3 +114,7 @@ The subsequent [symmetric-IFFT investigation](SYMMETRIC_IFFT.md) tests the
 previously untested negative-frequency-half semantics without repeating the
 configuration grids. Its results are a separate continuation of the original
 28-attempt evidence set; every original gate and historical attempt remains.
+
+The [decoded-pixel and spectral continuation](STAGE_CONTROLS.md) checks all
+122 PNGs against an independent decoder, then compares release/native
+spectral stages and the documented version-dependent interpolation behavior.

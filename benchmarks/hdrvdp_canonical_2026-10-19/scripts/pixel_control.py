@@ -4,7 +4,6 @@ Optional native directory adds image::open(...).to_rgb8() from the score probe.
 import csv
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess

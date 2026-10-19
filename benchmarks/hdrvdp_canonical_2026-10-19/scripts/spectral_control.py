@@ -56,10 +56,15 @@ for ver,root,base,display in [(2,v222,'v222','ccfl-lcd'),(3,v307/'data','v307','
         compare(f'native{ver}_vs_{base}/'+stage,native[stage],release[stage])
     for filename,label in zip(table_names+[f'emission_spectra_{display}.csv'],['cone_log','rod','display']):
         p=root/filename;d=np.loadtxt(p,delimiter=',');x,y=d[:,0],d[:,1:]
+        native_table=probe.parent/'data'/('v3' if ver==3 else '')/filename
+        native_data=np.loadtxt(native_table,delimiter=',')
+        assert np.array_equal(d,native_data), 'native/upstream source tables differ numerically'
         uniform=bool(np.allclose(np.diff(x),np.diff(x)[0],rtol=1e-10,atol=0))
         table_properties.append(dict(version=ver,name=filename,n=len(x),columns=y.shape[1],
                                      first=float(x[0]),last=float(x[-1]),uniform=uniform,
-                                     sha256=hashlib.sha256(p.read_bytes()).hexdigest()))
+                                     sha256=hashlib.sha256(p.read_bytes()).hexdigest(),
+                                     native_sha256=hashlib.sha256(native_table.read_bytes()).hexdigest(),
+                                     source_numeric_equal=True,source_byte_equal=p.read_bytes()==native_table.read_bytes()))
         pc=PchipInterpolator(x,y,axis=0)(q); pc[(q<x[0])|(q>x[-1])]=0
         compare(f'scipy_pchip_vs_{base}/raw_'+label,pc,release['raw_'+label])
         # Same queries isolate PCHIP arithmetic from linspace rounding.
