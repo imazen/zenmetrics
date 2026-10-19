@@ -155,3 +155,11 @@ The [written CTC evidence](../benchmarks/hdrvdp_canonical_2026-10-19/UPSTREAM.md
 specifies 203 cd/m² for SDR HDR-VDP, distinct from the AIC2026 paper's
 200-nit CVVDP statement. The exact HDR dataset calls remain unconfirmed;
 all original gates remain in force.
+
+The [symmetric-IFFT continuation](../benchmarks/hdrvdp_canonical_2026-10-19/SYMMETRIC_IFFT.md)
+completes two additional 61-pair HDR2 oracle controls, retaining nonnegative
+rows or columns before Hermitian completion. Both remain 0/61 exact; their
+Q changes versus the original Octave adapter are at most 9.947598300641403e-14.
+This adaptation does not explain the HDR2 column residual. Actual MATLAB
+runtime identity and the executable dataset calls remain unqualified; no
+metric implementation or original acceptance gate changed.
