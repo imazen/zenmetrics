@@ -25,6 +25,18 @@ class CanonicalComparison(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare(math.nan, .5, .01)
 
+    def test_projection_retains_missing_cases_and_unassigned_bounds(self):
+        from publish_canonical_comparison import project
+        row=dict(metric='example',excluded_contract='',expected_cases=6,plan_sha256='plan',
+                 passed=True,max_abs_delta=0.,ratio=.5,width=512,height=512,threads=1,
+                 rust_source='source',canonical='primary')
+        result=project([row])['example']
+        self.assertEqual(result['check'],'1/6 pass')
+        self.assertEqual(result['observed_cases'],1)
+        result=project([dict(row,passed=None,max_abs_delta=.001)])['example']
+        self.assertEqual(result['check'],'Δ 0.001')
+        self.assertEqual(result['passed_cases'],0)
+
 
 if __name__ == '__main__':
     unittest.main()

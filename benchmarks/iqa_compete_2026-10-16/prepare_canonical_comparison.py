@@ -20,6 +20,7 @@ def main():
     p.add_argument('--metrics', default='brisque,niqe,piqe,ssimulacra1,ssim2,flip-v17')
     p.add_argument('--sizes', default='64,odd,1mp,4k')
     p.add_argument('--threads', default='1,28')
+    p.add_argument('--registry', type=Path, help='Additional explicit primary commands, bounds and file hashes')
     a = p.parse_args()
     binary = str(Path(a.binary).resolve(strict=True))
     pairs_path = Path(a.pairs).resolve(strict=True)
@@ -40,6 +41,10 @@ def main():
         command=[a.ssim2, 'ssim2', '{width}', '{height}', '{reference}', '{distorted}', '{threads}', 'score', '{samples}'])
     bounds = dict(brisque=15.138428e-3, niqe=.602329e-3, piqe=12.486448e-3,
                   ssimulacra1=None, ssim2=None, **{'flip-v17': None})
+    extra = json.loads(a.registry.read_text()) if a.registry else {}
+    for name, entry in extra.get('metrics', {}).items():
+        canonical[name] = entry['canonical']
+        bounds[name] = entry['absolute_bound']
     requested = a.metrics.split(',')
     unknown = set(requested)-canonical.keys()
     if unknown:
@@ -50,6 +55,12 @@ def main():
         p.error('uncompiled metrics: '+','.join(sorted(set(requested)-compiled)))
     bindings = {str(path): sha(path) for path in [Path(binary), pairs_path, helper, Path(__file__).resolve(),
                 Path(a.python).absolute(), Path(a.brisque_weights), Path(a.ssim1), Path(a.ssim2)]}
+    for path, expected in extra.get('bindings', {}).items():
+        if sha(path) != expected:
+            raise ValueError('extra reference artifact mismatch: '+path)
+        bindings[path] = expected
+    if a.registry:
+        bindings[str(a.registry.resolve())] = sha(a.registry)
     for path in Path(a.extras).rglob('*'):
         if path.is_file() and path.suffix in ('.py', '.npz'):
             bindings[str(path)] = sha(path)
@@ -69,9 +80,9 @@ def main():
                 cases.append(dict(id=f'{name}-{pair.get("pair", "pair")}-{pair["size_name"]}-t{threads}',
                     metric=name, width=pair['width'], height=pair['height'], threads=threads, **paths,
                     canonical=canonical[name], absolute_bound=bounds[name],
-                    matched_scope=name != 'ssimulacra1', scope=(
+                    matched_scope=extra.get('metrics',{}).get(name,{}).get('matched_scope', name != 'ssimulacra1'), scope=extra.get('metrics',{}).get(name,{}).get('scope', (
                         'Rust RGB8 full call vs canonical RGB8 full call; immutable parameters resident'
-                        if name != 'ssimulacra1' else 'original adapter stages RGB-to-BGR before timing; ratio withheld')))
+                        if name != 'ssimulacra1' else 'original adapter stages RGB-to-BGR before timing; ratio withheld'))))
     if not cases:
         p.error('no matching input sizes')
     plan = dict(schema=1, binary=binary, rust_source=a.source, bindings=bindings, cases=cases,

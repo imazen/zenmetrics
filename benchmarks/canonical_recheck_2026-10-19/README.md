@@ -1,9 +1,12 @@
 # Local canonical rechecks
 
 Missing: the full per-name grid, remaining classical and learned references,
-map comparisons and qualified regression intervals. The first six-name panel
-is a scalar check on one 512×512 AIC photo pair, at one worker, on Ryzen 9
-7950X / WSL2. It does not replace multi-size or content validation.
+map comparisons and qualified regression intervals. These are scalar checks on
+Ryzen 9 7950X / WSL2. The first six-name panel uses one 512×512 photo pair.
+Additional original MATLAB, corrected VIF and libvmaf cohorts are indexed in
+[cohorts.json](cohorts.json); its observed/expected counts expose partial runs.
+The per-case TSVs retain exact dimensions, threads, bounds, deltas and ratios.
+They do not replace multi-size or content validation.
 
 The frozen Rust build is upstream master `efae6b8fed9e57346157d92dffc3cdb57c44560e`
 (clean exported tree `f82b3614b385`). Binary SHA256:
@@ -65,3 +68,27 @@ command restricts the named cohort. The comparison runner serializes heavy
 work under both existing local admission locks and the 12GiB resource wrapper.
 Existing outputs are refused rather than overwritten. Run
 `just bench-iqa-canonical-check` for parser, failure and scope controls.
+
+## Additional original implementations
+
+The explicit registry interface adds original MATLAB functions through GNU
+Octave 6.4, original DSSIM through its C API, and libvmaf 3.2.0 with named RGB
+ingress. Every conversion and per-call context/picture lifetime is timed;
+immutable model loading stays outside. The libvmaf version is the reference
+actually built, rather than the Rust metadata version. Assigned bounds remain
+unchanged; missing bounds produce a delta, never an implied pass.
+
+The first Octave VIF cohort used 0.299 luma where the port contract specifies
+0.2989. Those six observations remain in its TSV with an explicit exclusion;
+the separate corrected cohort checks the documented ingress. The corrected
+six cases pass 1e-9, with maximum absolute difference 5.379585665821196e-13.
+
+Add `--registry /path/to/explicit-registry.json --metrics NAME,...` when
+preparing these plans. A registry supplies `metrics` (canonical command,
+absolute bound, scope and whether scope matches) and `bindings` (absolute
+artifact path to SHA256). The runner rejects changed artifacts. Build helpers
+are `bench-iqa-canonical-dssim-build` and `bench-iqa-canonical-vmaf-build`.
+
+Project retained results with `just bench-iqa-canonical-publish OUTPUT COHORT...`;
+pass `--dispositions FILE` for explicit invalid-ingress exclusions. Raw evidence
+is retained; this command writes only the small public projection.

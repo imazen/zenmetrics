@@ -1657,6 +1657,19 @@ bench-iqa-canonical-plan +options:
 bench-iqa-canonical-check:
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_compare_canonical.py
 
+bench-iqa-canonical-publish output +cohorts:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_canonical_comparison.py '{{output}}' {{cohorts}}
+
+bench-iqa-canonical-dssim-build source output:
+    bash benchmarks/iqa_compete_2026-10-16/build_dssim_reference.sh '{{source}}' '{{output}}'
+
+# Link an explicitly supplied original libvmaf archive; no replacement kernel.
+bench-iqa-canonical-vmaf-build source library output:
+    c++ -O3 -Wall -Wextra -ffp-contract=off -std=c++17 -I '{{source}}/libvmaf/include' benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp '{{library}}' -pthread -lm -o '{{output}}'
+
+bench-iqa-canonical-nr-goldens source target root:
+    ZENMETRICS_NR_GOLDEN_ROOT='{{root}}' CARGO_TARGET_DIR='{{target}}' cargo test --locked --release --manifest-path '{{source}}/Cargo.toml' -p brisque -p niqe -p piqe --all-features --test parity -- --nocapture
+
 # Historical portable 5/3/1 panel: supplemental evidence, never canonical replacements.
 bench-iqa-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete --bin bench-iqa

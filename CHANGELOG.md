@@ -44,6 +44,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Add explicit original-reference comparative commands and a compact per-metric README with measured Rust/canonical ratios (`69a0cb75`); preserve partial DMM canonical coverage and original model-card joins (`0d3807c4`).
+
 - FSIM exposes strided luma-only scoring with its existing automatic/fixed-factor policy, avoiding chroma computation when only luma is requested (PR 92, `c9f98a98`).
 
 - Execute and retain the primary HaarPSI RGB/luma scalar grid (`0d6e2c37`); all 48 cases pass the unchanged bound, with map and timing qualification still open.

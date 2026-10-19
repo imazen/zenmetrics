@@ -1,80 +1,674 @@
 {
   "brisque": {
     "canonical": "PIQ 0.8.0",
-    "check": "pass",
+    "check": "1/1 pass",
     "ratio": 0.11907126763723552,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 1,
+    "failed_cases": 0,
     "max_abs_delta": 0.0025634765625,
-    "absolute_bound": 0.015138428,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
     "qualified": false
   },
   "flip-v17": {
     "canonical": "NVIDIA FLIP 1.7",
     "check": "\u0394 0",
     "ratio": 0.335881773407624,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 0,
+    "failed_cases": 0,
     "max_abs_delta": 0.0,
-    "absolute_bound": null,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
     "qualified": false
   },
   "niqe": {
     "canonical": "BasicSR 1.4.2",
-    "check": "pass",
+    "check": "1/1 pass",
     "ratio": 0.1821820729695662,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 1,
+    "failed_cases": 0,
     "max_abs_delta": 9.065496319360378e-05,
-    "absolute_bound": 0.000602329,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
     "qualified": false
   },
   "piqe": {
     "canonical": "pypiqe 1.2",
-    "check": "pass",
+    "check": "1/1 pass",
     "ratio": 0.1027578724461734,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 1,
+    "failed_cases": 0,
     "max_abs_delta": 4.618527782440651e-14,
-    "absolute_bound": 0.012486448,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
     "qualified": false
   },
   "ssim2": {
     "canonical": "primary SSIMULACRA2 v2.1",
     "check": "\u0394 0",
     "ratio": 0.584558838720874,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 0,
+    "failed_cases": 0,
     "max_abs_delta": 0.0,
-    "absolute_bound": null,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
     "qualified": false
   },
   "ssimulacra1": {
     "canonical": "original SSIMULACRA1 / OpenCV",
     "check": "\u0394 3.8e-09",
     "ratio": null,
-    "width": 512,
-    "height": 512,
-    "threads": 1,
+    "ratio_width": null,
+    "ratio_height": null,
+    "ratio_threads": null,
+    "ratio_cases": 0,
+    "observed_cases": 1,
+    "expected_cases": 1,
+    "passed_cases": 0,
+    "failed_cases": 0,
     "max_abs_delta": 3.826276126668582e-09,
-    "absolute_bound": null,
-    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+    ],
+    "qualified": false
+  },
+  "dssim": {
+    "canonical": "original dssim-core eec33f55",
+    "check": "1 findings",
+    "ratio": null,
+    "ratio_width": null,
+    "ratio_height": null,
+    "ratio_threads": null,
+    "ratio_cases": 0,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 0,
+    "failed_cases": 1,
+    "max_abs_delta": 3.772523560208185e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "fsim-k2": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.1797351550468677,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 8.88441795687811e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "fsim-k3": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.1610591276222832,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 1.8109096577845207e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "fsim-k4": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.14113184072248872,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 1.38497604496024e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "fsim-nodownscale": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.21062659760104355,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.329927450832713e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "fsim": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.21859190502808892,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.329927450832713e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "haarpsi": {
+    "canonical": "original HaarPSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.12092149389739834,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.1793922838343462e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "haarpsi-y": {
+    "canonical": "original HaarPSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.1332953846594191,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.6168560379448138e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "mdsi": {
+    "canonical": "original MDSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.20873879133256915,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.0685896612017132e-14,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "msssim": {
+    "canonical": "original msssim / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.027846190625725152,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 1.7640623451997683e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vifvec": {
+    "canonical": "original vifvec / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.09563488052493009,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 2.4030777368011513e-13,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k2": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.06722756671344365,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 6.297474430816408e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k3": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.06246488915144919,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 6.385277306897308e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k4": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.06213789408019461,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 2.516036712307823e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-nodownscale": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.07826055276827207,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 5.0279395091834544e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "4/6 pass",
+    "ratio": 0.07844859151986996,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 6,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "max_abs_delta": 5.0279395091834544e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vif": {
+    "canonical": "original vifp_mscale / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.0761951737804624,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "max_abs_delta": 5.379585665821196e-13,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "eabc27785fd4262b6a01f44ef2f8fd6f4c7f2bbb287c7df6e3e2754bd4310978"
+    ],
+    "qualified": false
+  },
+  "cambi-aic2026": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 0.6761586941395279,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "cambi": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 1.0004570236271104,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "psnr-y-libvmaf": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 0.7624703726985029,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "ssim-libvmaf": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 6e-08",
+    "ratio": 0.36193038631961927,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 5.960464477539063e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-4k": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 0.8947246019462416,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-neg": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.8732582806645126,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "max_abs_delta": 0.0002482166810153785,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-neg-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "1/2 pass",
+    "ratio": 0.9451284726258932,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 2,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "max_abs_delta": 7.238667720343983e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.8852710249639332,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "max_abs_delta": 0.00028193174530599663,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-v1": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0.00023",
+    "ratio": 0.7430638158871904,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "max_abs_delta": 0.00022515701154190992,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
     "qualified": false
   }
 }
