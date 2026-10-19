@@ -144,3 +144,8 @@ haarpsi-primary-panel source inputs binary receipt output:
 haarpsi-primary-publish panel inputs output:
     python3 -B publish_haarpsi_panel.py '{{panel}}' '{{inputs}}' '{{output}}'
 
+
+# The comparison controller supplies both locks and a resource wrapper per group.
+[positional-arguments]
+ssim-candidate-compare baseline candidate inputs output:
+    nice -n 19 ionice -c 3 python3 -B compare_ssim_candidate.py --baseline "$1" --candidate "$2" --inputs "$3" --output "$4"

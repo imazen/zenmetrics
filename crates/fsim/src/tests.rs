@@ -470,3 +470,52 @@ fn oversized_fixed_factor_is_refused_for_score_and_map() {
         );
     }
 }
+
+#[test]
+fn fixed_luma_matches_rgb_headline_and_strided_input() {
+    let (w, h) = (67usize, 71usize);
+    let r: Vec<u8> = (0..w * h * 3)
+        .map(|i| ((i * 13 + i / (w * 3) * 17) % 256) as u8)
+        .collect();
+    let d: Vec<u8> = r.iter().map(|v| v.saturating_sub(7)).collect();
+    let auto = Fsim::default().score_luma8(&r, &d, w, h, w * 3).unwrap();
+    assert_eq!(
+        auto.to_bits(),
+        fsim_luma8(&r, &d, w, h, w * 3).unwrap().to_bits()
+    );
+    let stride = w * 3 + 11;
+    let pad = |src: &[u8]| {
+        let mut out = vec![173; stride * h];
+        for y in 0..h {
+            out[y * stride..y * stride + w * 3].copy_from_slice(&src[y * w * 3..(y + 1) * w * 3]);
+        }
+        out
+    };
+    for factor in [2, 3, 4] {
+        let scorer = Fsim::with_downscale(Downscale::Factor(
+            core::num::NonZeroU32::new(factor).unwrap(),
+        ));
+        let luma = scorer.score_luma8(&r, &d, w, h, w * 3).unwrap();
+        assert_eq!(
+            luma.to_bits(),
+            scorer
+                .score_rgb8(&r, &d, w, h, w * 3)
+                .unwrap()
+                .fsim
+                .to_bits()
+        );
+        assert_eq!(
+            luma.to_bits(),
+            scorer
+                .score_luma8(&pad(&r), &pad(&d), w, h, stride)
+                .unwrap()
+                .to_bits()
+        );
+    }
+    let oversized =
+        Fsim::with_downscale(Downscale::Factor(core::num::NonZeroU32::new(72).unwrap()));
+    assert!(matches!(
+        oversized.score_luma8(&r, &d, w, h, w * 3),
+        Err(Error::DownscaleFactor { .. })
+    ));
+}

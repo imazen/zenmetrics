@@ -1997,3 +1997,14 @@ timings. Original failed packets and native-oracle checks remain unchanged.
 This does not establish a precision-related cause. See the
 [finite Metal policy receipt](benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json)
 and [timing contract](docs/IQA_DURABLE_MAC.md).
+
+### Known Bugs: fixed-factor MS-SSIM pyramid ordering (2026-10-19)
+
+The fixed-factor PyIQA MS-SSIM variants previously pooled the initial image
+and built their pyramid from that pooled image. The corrected route pools
+each scoring view independently while the twofold pyramid advances from the
+unpooled level. It checks the 11×11 scoring window at every level, including
+odd dimensions. Unsuffixed SSIM/MS-SSIM routes retain their existing path.
+Tests compare against independent materialized scoring views and direct
+window statistics; historical fixed-factor results must not be relabeled
+as results of this correction. Source change: `970ea199`.

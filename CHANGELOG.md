@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed-factor MS-SSIM pools each scoring view independently of its twofold pyramid; unsuffixed variants retain their existing path (from `970ea199`).
+
+### Added
+
+- FSIM exposes strided luma-only scoring with its existing automatic/fixed-factor policy, avoiding chroma computation when only luma is requested (PR 92, `c9f98a98`).
+
 - Execute and retain the primary HaarPSI RGB/luma scalar grid (`0d6e2c37`); all 48 cases pass the unchanged bound, with map and timing qualification still open.
 
 - Execute original automatic-factor reference bodies with explicit source-mode joins (`18427a98`) and retain their completed scalar grid (`9a89dfe0`); no existing metric code or gate changes.

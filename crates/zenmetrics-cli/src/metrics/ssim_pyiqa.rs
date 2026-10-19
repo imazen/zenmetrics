@@ -10,6 +10,57 @@
 
 use crate::decode::Rgb8Image;
 
+/// Owner-defined fixed-factor MS-SSIM: pool each scoring view while the
+/// twofold pyramid continues from the unpooled level, as in PyIQA 0.1.16.
+/// Kept separate so the five unsuffixed configurations retain `score`.
+pub(super) fn score_fixed_multiscale(
+    r: &Rgb8Image,
+    d: &Rgb8Image,
+    color: bool,
+    rounded: bool,
+    factor: usize,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    debug_assert!(factor > 1);
+    if (r.width, r.height) != (d.width, d.height) {
+        return Err("SSIM-pyiqa: dimension mismatch".into());
+    }
+    let (w, h) = (r.width as usize, r.height as usize);
+    let (mut lw, mut lh) = (w, h);
+    for scale in 0..5 {
+        let (sw, sh) = (lw / factor, lh / factor);
+        if sw < 11 || sh < 11 {
+            return Err(format!("SSIM-pyiqa: scale {} is {sw}x{sh}; valid 11x11 window requires at least 11x11 (fixed factor {factor})",scale+1).into());
+        }
+        lw = lw.div_ceil(2);
+        lh = lh.div_ceil(2);
+    }
+    let mut total = 0.0;
+    for channel in 0..if color { 3 } else { 1 } {
+        let mut a = plane(&r.pixels, w, h, w * 3, color, channel, rounded)?;
+        let mut b = plane(&d.pixels, w, h, w * 3, color, channel, rounded)?;
+        let (mut lw, mut lh) = (w, h);
+        let mut product = 1.0;
+        for (scale, weight) in [0.0448, 0.2856, 0.3001, 0.2363, 0.1333]
+            .into_iter()
+            .enumerate()
+        {
+            let (view_a, sw, sh) = boxdown(&a, lw, lh, factor);
+            let (view_b, _, _) = boxdown(&b, lw, lh, factor);
+            let (ssim, cs) = statistics(&view_a, &view_b, sw, sh)?;
+            product *= if scale == 4 { ssim } else { cs }.powf(weight);
+            if scale < 4 {
+                let (next, nw, nh) = pool2(&a, lw, lh);
+                a = next;
+                b = pool2(&b, lw, lh).0;
+                lw = nw;
+                lh = nh;
+            }
+        }
+        total += product;
+    }
+    Ok(total / if color { 3.0 } else { 1.0 })
+}
+
 pub(super) fn score(
     r: &Rgb8Image,
     d: &Rgb8Image,
@@ -341,6 +392,96 @@ mod tests {
     }
 
     #[test]
+    fn fixed_multiscale_uses_each_unpooled_pyramid_level() {
+        for (factor, w, h) in [(2, 337, 353), (3, 515, 529), (4, 691, 705)] {
+            let r = Rgb8Image {
+                width: w as u32,
+                height: h as u32,
+                pixels: (0..w * h * 3)
+                    .map(|i| ((i * 37 + i / 11) % 256) as u8)
+                    .collect(),
+            };
+            let d = Rgb8Image {
+                width: r.width,
+                height: r.height,
+                pixels: r
+                    .pixels
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &v)| if i % 7 == 0 { v.wrapping_add(43) } else { v })
+                    .collect(),
+            };
+            let mut a = plane(&r.pixels, w, h, w * 3, false, 0, false).unwrap();
+            let mut b = plane(&d.pixels, w, h, w * 3, false, 0, false).unwrap();
+            let (mut lw, mut lh) = (w, h);
+            let mut expected = 1.0;
+            for (level, weight) in [0.0448, 0.2856, 0.3001, 0.2363, 0.1333]
+                .into_iter()
+                .enumerate()
+            {
+                // Materialize each scoring view independently; the outer
+                // pyramid below always reads a/b, never these pooled views.
+                let scoring_view = |src: &[f64]| {
+                    let mut view = Vec::new();
+                    for rows in src.chunks_exact(lw * factor) {
+                        for x in 0..lw / factor {
+                            let sum: f64 = rows
+                                .chunks_exact(lw)
+                                .flat_map(|row| row[x * factor..(x + 1) * factor].iter().copied())
+                                .sum();
+                            view.push(sum / (factor * factor) as f64);
+                        }
+                    }
+                    view
+                };
+                let (ssim, cs) = direct_statistics(
+                    &scoring_view(&a),
+                    &scoring_view(&b),
+                    lw / factor,
+                    lh / factor,
+                );
+                expected *= if level == 4 { ssim } else { cs }.powf(weight);
+                if level < 4 {
+                    let down = |src: &[f64]| {
+                        let (pw, ph) = (lw + 2 * (lw % 2), lh + 2 * (lh % 2));
+                        let mut padded = vec![0.0; pw * ph];
+                        for y in 0..lh {
+                            padded[(y + lh % 2) * pw + lw % 2..(y + lh % 2) * pw + lw % 2 + lw]
+                                .copy_from_slice(&src[y * lw..(y + 1) * lw]);
+                        }
+                        let mut dst = Vec::new();
+                        for y in (0..ph - 1).step_by(2) {
+                            for x in (0..pw - 1).step_by(2) {
+                                dst.push(
+                                    (padded[y * pw + x]
+                                        + padded[y * pw + x + 1]
+                                        + padded[(y + 1) * pw + x]
+                                        + padded[(y + 1) * pw + x + 1])
+                                        / 4.0,
+                                );
+                            }
+                        }
+                        dst
+                    };
+                    a = down(&a);
+                    b = down(&b);
+                    lw = lw.div_ceil(2);
+                    lh = lh.div_ceil(2);
+                }
+            }
+            let actual = score_fixed_multiscale(&r, &d, false, false, factor).unwrap();
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "factor {factor}, {w}x{h}: {actual} vs direct {expected}"
+            );
+            assert_ne!(
+                actual.to_bits(),
+                score(&r, &d, false, true, false, factor).unwrap().to_bits()
+            );
+        }
+    }
+
+    #[test]
     fn odd_pool_has_top_left_zero_padding_and_fixed_divisor() {
         let a: Vec<f64> = (1..=9).map(f64::from).collect();
         assert_eq!(pool2(&a, 3, 3), (vec![0.25, 1.25, 2.75, 7.0], 2, 2));
@@ -391,6 +532,25 @@ mod boundary_tests {
     fn fixed_box_uses_complete_blocks() {
         let a: Vec<f64> = (1..=15).map(f64::from).collect();
         assert_eq!(boxdown(&a, 5, 3, 2), (vec![4.0, 6.0], 2, 1));
+    }
+
+    #[test]
+    fn fixed_multiscale_checks_the_scoring_view_at_each_level() {
+        // ceil(335/16)/2 = 10, while ceil(floor(335/2)/16) = 11.
+        // The former is the reference's final scoring width and must fail
+        // before pixel access; the latter is the old initial-pool shortcut.
+        let image = Rgb8Image {
+            pixels: vec![],
+            width: 335,
+            height: 351,
+        };
+        let error = score_fixed_multiscale(&image, &image, false, false, 2)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("scale 5") && error.contains("10x11"),
+            "{error}"
+        );
     }
 
     #[test]

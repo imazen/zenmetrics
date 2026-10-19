@@ -47,3 +47,13 @@ selects a fixed factor for `score_rgb8` and generic `Metric::evaluate` (includin
 maps). `Default` and the free scoring functions retain automatic
 decimation. Factor 1 disables decimation. All factors use the same reference box
 filter and sampling anchor; map geometry records the selected factor.
+
+### Fixed-factor luma-only scoring
+
+`Fsim::with_downscale(Downscale::Factor(factor)).score_luma8(...)` applies the
+same reference box-filter decimation to unrounded BT.601 luma, without computing
+chroma planes. It accepts strided RGB8 rows. `Downscale::Auto` matches the existing
+`fsim_luma8` function; `score_rgb8` continues to return both FSIM and FSIMc.
+
+The `fixed_luma_reps` example accepts prepared RGB pairs from the complexity
+fixture exporter, so counter-delta measurements exclude decoding and tiling.

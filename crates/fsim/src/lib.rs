@@ -504,6 +504,28 @@ impl Fsim {
         Ok(Scores { fsim, fsimc })
     }
 
+    /// Score only the unrounded BT.601 luma of strided RGB8 images, using
+    /// this scorer's decimation policy. Chroma planes are not computed.
+    ///
+    /// With [`Downscale::Auto`], this is identical to [`crate::fsim_luma8`].
+    ///
+    /// # Errors
+    /// Returns [`Error::BufferLength`] for invalid input geometry, or
+    /// [`Error::DownscaleFactor`] when the factor exceeds the shorter dimension.
+    pub fn score_luma8(
+        &self,
+        r: &[u8],
+        d: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Result<f64, Error> {
+        check_len_rgb(r, w, h, stride)?;
+        check_len_rgb(d, w, h, stride)?;
+        self.downscale.validate(w, h)?;
+        Ok(kernel::fsim_luma8_planes_with_downscale(r, d, w, h, stride, None, self.downscale).0)
+    }
+
     fn diffmap_rgb8(
         &self,
         r: &[u8],
