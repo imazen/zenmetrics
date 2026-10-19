@@ -1,0 +1,34 @@
+Canonical port-check evidence status: source review, not a timing dataset
+Observed UTC: 2026-10-19T07:48:17.962730+00:00
+Host label: lilith-wsl; Ryzen 9 7950X, WSL2. No cross-host extrapolation.
+Report base: zenmetrics 73c04e413fddc0e95e66b4147785910253772192
+Reviewed BRISQUE delta: ac542221f0908ed423537bbc87cbcadc3e4e4511..ef9763f23b1cfd429140b6dbe9be5b432f7bb538
+Remote verification command: gh api repos/imazen/zenmetrics/git/ref/heads/opt/brisque-simd --jq '.object.sha'
+Observed remote SHA: ef9763f23b1cfd429140b6dbe9be5b432f7bb538
+
+Author test commands, checked against retained complete logs:
+  scripts/ci/lock.sh --check --rev ef9763f23b1cfd429140b6dbe9be5b432f7bb538
+  cargo test --locked -p brisque --features _dev,avx512 --lib
+  cargo test --locked -p brisque --test behavior
+All use separate CI-pinned exported tree, target directory, both host heavy locks,
+run-heavy --mem 12G --jobs 8, RUSTFLAGS and CARGO_BUILD_RUSTFLAGS unset.
+Resource receipts (build/test processes, not metric-call memory measurements):
+  lock check: rc=0 51s | peak-RSS 0.15GiB | min-avail 13510MiB | peak-load 2.23
+  lib: rc=0 6s | peak-RSS 0.42GiB | min-avail 13345MiB | peak-load 2.16
+  behavior: rc=0 4s | peak-RSS 0.40GiB | min-avail 13621MiB | peak-load 2.16
+Consumed Cargo.lock SHA256: 8b8e55b1844967bbea0ede6811ee50ce6d83b3b8bac9622ea69724cb5f635ce1
+Compiler: rustc1.99.0 (b940084d7 2026-09-28), cargo1.99.0 (5f94df478 2026-08-27).
+The provenance file's trailing sibling_revs are live-checkout observations, not
+substitutes for the exported tree's23pins printed in lock-check/provenance.
+
+Local external evidence (host lilith-wsl); SHA256 binds the reviewed versions:
+ac1972002b66f65c6e1be9d85af0e116e0390ab2b50ce84a8e2578d6d940ac47  ~/tmp/handoff/aic2026-portcheck-20261018/canonical-adapter-source-audit.md
+88c8f3aa3fe15be08f727b9461009650a8f592f4984e35a1c8a0ea8cb0b667d3  ~/tmp/handoff/aic2026-portcheck-20261018/canonical-python-jxl-source-audit.md
+dd7079f77a03fbb15c57db236fa4af3a2f7b2f7a787e811e3efbb4f1581dd18c  ~/tmp/handoff/aic2026-swe2opt-20261018/brisque-test-followup-codex-review.md
+abb086a239948de7fff36850d017b703857bbc2c525a4a97da7d6867fe18594a  ~/tmp/handoff/aic2026-swe2opt-20261018/brisque-followup-reviewed.diff
+323964904ba8615e8a7e9a4a8ed7e03b91adfb6bbbe3f1dcabc6e9411c305874  ~/tmp/clean-panel-prerequisites-20261019/plugin-dynamic.txt
+733d933e926a35197b73fdb0c78d13d4ab8b664cd02c75605dbacc0cc36cb79d  ~/tmp/clean-panel-prerequisites-20261019/plugin-ldd.txt
+34c4e66cd0d37d0542a32c2ac3bfdf55ce6666eb03fca09a482f313aabb3bbdb  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/provenance.txt
+e3a4f11ba861f4db6a7625640a8ab18d9e2ed1d4f58e8c8fa73542697e2324f5  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/lock-check.log
+35288ce984914bdc733a21ebfa2765f4b10705355b98e982d5493adf6fee36db  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/lib.log
+991ca747d34ecf16a87c4fb2f1b3fd30eecb4c76638fdb12590aabbda6cde155  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/behavior.log
