@@ -1156,3 +1156,7 @@ benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim-precision.json	ignored	P
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.meta	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
 benchmarks/port_spotcheck_2026-10-18/execution-coverage.tsv	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
 benchmarks/port_spotcheck_2026-10-18/execution-coverage.json	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairA.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairB.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairC.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2.json	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.

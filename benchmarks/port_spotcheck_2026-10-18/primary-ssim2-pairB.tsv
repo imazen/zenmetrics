@@ -1,0 +1,9 @@
+metric	pair	size	width	height	threads	ours	canonical	max_abs_delta	bound	status	rust_process_rss_kbytes	canonical_process_rss_kbytes	qualified_ratio	panel_resource_receipt
+ssim2	pairB	1mp	1024	1024	1	50.80415996369243	50.80415996376602	7.359091114267358e-11	UNBOUND	UNQUALIFIED	124828	167436	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	1mp	1024	1024	28	50.80415996369243	50.80415996376602	7.359091114267358e-11	UNBOUND	UNQUALIFIED	223040	163852	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	4k	3840	2160	1	48.248057126249854	48.24805712872471	2.474855875789217e-09	UNBOUND	UNQUALIFIED	977480	1262348	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	4k	3840	2160	28	48.248057126249854	48.24805712872471	2.474855875789217e-09	UNBOUND	UNQUALIFIED	1669820	1259060	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	64	64	64	1	57.01412786265155	57.01412786265155	0.0	UNBOUND	UNQUALIFIED	5796	5944	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	64	64	64	28	57.01412786265155	57.01412786265155	0.0	UNBOUND	UNQUALIFIED	5788	5884	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	odd	255	257	1	50.45811198781798	50.458111987829554	1.1574741165532032e-11	UNBOUND	UNQUALIFIED	12448	16164	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+ssim2	pairB	odd	255	257	28	50.45811198781798	50.458111987829554	1.1574741165532032e-11	UNBOUND	UNQUALIFIED	12392	14604	False	run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72

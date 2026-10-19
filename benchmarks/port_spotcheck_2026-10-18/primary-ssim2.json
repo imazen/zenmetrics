@@ -1,0 +1,52 @@
+{
+  "panel": "/home/lilith/tmp/portcheck-ssim2-primary-panel-20261019T1356",
+  "identity": {
+    "metric": "ssim2",
+    "canonical_sha256": "9d0fc033b44580055909b52e2cabad87d2c5f6fb28c4fe970391738fe3f67ac1",
+    "primary_source_sha256": "38d8f92634ef1f8975bd45e7106c5a2d1a99a02de1c2f3828443ad8e16560d5f",
+    "primary_build_log_sha256": "57986eb46c879a641890fe661756679541b2ad6f60d2312a9d1c1a588ec26e51",
+    "helpers": {
+      "ssim2_primary_panel.py": "8b57b566e1406c54bdbb858d52e3ba31394e661c125c0aa081a7a62f02ea539e",
+      "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+      "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+      "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    "origin": "https://github.com/cloudinary/ssimulacra2/tree/fb5d0dbe866e5113d320666a09ddbc8d145b5fde",
+    "binary_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "rust_revision": "e2d414c33a6d3c7da50a818fa36e56654d3ebeef",
+    "receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "bound": "UNBOUND",
+    "qualified_timing_cells": 0,
+    "map_status": "primary v2.1 exposes scalar/features, no native pixel map",
+    "runtime_cms_branch": "not established by this scalar experiment"
+  },
+  "identity_sha256": "f2d755fa1483ce696d1c5be9db1b086a75d98a86173db8e4698b03c9b52b54fc",
+  "completion_sha256": "cb0595c085e34f3a686fb34890256864df7d5d6e12bab5a5e1e2085d1cb61d35",
+  "artifact_manifest_sha256": "588d2adb8a569a48c9c5786e59f36eb870e83e1671feb72d189e0bc71f269ae6",
+  "wrapper_sha256": "128c920876703c54219d06d2b95ec8f8c53101f4bc20d89b5472f9b77d967400",
+  "outputs": [
+    {
+      "path": "primary-ssim2-pairA.tsv",
+      "sha256": "d3ac71da6efb2825700d7e61ae4dd9ed64016596f51509353809cfb4a0fc8236",
+      "bytes": 1741
+    },
+    {
+      "path": "primary-ssim2-pairB.tsv",
+      "sha256": "d6d1c479ca1a733ffa0bcca9832bc0d19937e20811ef0c5bbccddece76682b96",
+      "bytes": 1785
+    },
+    {
+      "path": "primary-ssim2-pairC.tsv",
+      "sha256": "07cf2daf3fb09b09e58f87e19f08d0f77d9aa6f48ac40cdb461305431b9dce7d",
+      "bytes": 1747
+    }
+  ],
+  "cases": 24,
+  "max_abs_delta": 2.474855875789217e-09,
+  "qualified_timing_cells": 0
+}
