@@ -1,0 +1,34 @@
+Observed 2026-10-19 on WSL2 / Ryzen 9 7950X.
+Rust baseline e2d414c33a6d3c7da50a818fa36e56654d3ebeef; binary b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+Source: unchanged author VSI.m; image package 2.20.1 two-M-file resize overlay only; package not installed; all other image functions system 2.12.0. Actual Octave6.4.0 is below complete package minimum8.1; this function-level compatibility control is not a full installation claim.
+All score controls under both heavy locks, run-heavy12Gjobs1; complete argv and peak-RSS lines in each log. No speed ratios.
+Original rng(42) resize validation cannot run: rng is unimplemented in this runtime. That attempt is retained separately; no original test altered.
+External evidence SHA256:
+0d9bda9df7c6434c9058cee20efd07ff0fd1eed1be7f77303ec1d4948c6fff3d  ~/tmp/portcheck-octave-image-2.20.1-20261019T1125/receipt.json
+0948138d3258bdfdedd9141e3d3fefbf564640b0719bc17071bd53f3f060606a  ~/tmp/portcheck-vsi-precision-20261019T1122.log
+c94cb9b9fcfd2ed9e3d30aa1ae92d61bba9b7fef98d6d2f18231d2589d3c2332  ~/tmp/portcheck-vsi-precision-20261019T1122/manifest.json
+2927b8db4ce8b6f5018d76f004954bac3363934f74d979123925158b946d6a1a  ~/tmp/portcheck-vsi-precision-20261019T1122/memory.txt
+096d8d6dd72375f9c9aa30a3d266dbbccaf8667014ccbc42511785daa773499e  ~/tmp/portcheck-vsi-precision-20261019T1122/entry.m
+a18aecfd962d940438d080bcbd19b665a6143d8879f6fa698b9c24f9894a2454  ~/tmp/portcheck-vsi-precision-image2201-20261019T1130.log
+ae905f6780ddd972ee1e8ab9a760d091d6d8e54c1d080d8d7d08aea415d42ee6  ~/tmp/portcheck-vsi-precision-image2201-20261019T1130/manifest.json
+15f08a368ade3b5152258544e51c0c53e2e5daff711b09b8657876e43930e243  ~/tmp/portcheck-vsi-precision-image2201-20261019T1130/memory.txt
+3af8f5385a8ea03a9d31d094bbf634216653456f8e8a41b193f30734f9fe87c0  ~/tmp/portcheck-vsi-precision-image2201-20261019T1130/entry.m
+eca2328ab9c44280d5cc838776458395c257f90066278e16153a7c80b852b276  ~/tmp/portcheck-vsi-photo-image2201-20261019T1132.log
+482878191254f902ac8db7723cd95a972245e5e9edfdf91cda6aa9c49f898b04  ~/tmp/portcheck-vsi-photo-image2201-20261019T1132/manifest.json
+f09408a36531813cb6e0096601a25f8afbf9a32b30bf0ce497905a2dba61d9c2  ~/tmp/portcheck-vsi-photo-image2201-20261019T1132/memory.txt
+70c99fb05f4109d8cd20e7446bfd9833104b196a43609f458c73d95c84b55641  ~/tmp/portcheck-vsi-photo-image2201-20261019T1132/entry.m
+Archive-overlay controls7/7pass; rc0,0s,peakRSS0.02GiB,minavail13959MiB,peakload2.75.
+Distinct portable 17-geometry resize fixture reaches 120s deadline, rc124; it supplies no complete validation result. Original rng(42) script was not modified. run-heavy peakRSS0.05GiB,minavail14161MiB,peakload3.81.
+0df13e7ca44d4822d4643add653a59c07c6c20cfc0fe4d1a830aed2339350308  ~/tmp/portcheck-image-resize-source-controls-20261019T1145.log
+6df8bbf408a3c0837a52d751926b656cd15a17acc7fc9edae1d8900e5972082c  ~/tmp/portcheck-image-resize-source-controls-20261019T1145/results.json
+987e021d9f8b5b5d6d61dc7129d676107510fa6d41e8b8412f04923ffe0913a8  ~/tmp/portcheck-image-resize-source-controls-20261019T1145/deliberately altered control/imresize.m
+bcd3156239d6d4dccb626108a642afead1b4c60b400fed8b11d73ef5edcc6beb  ~/tmp/portcheck-image-resize-source-controls-20261019T1145/deliberately altered control/private/interp_method.m
+c358d5381f325c5ab58c7eb0c3ccc8acc2141bc70634c66cc516541b823a15c8  ~/tmp/portcheck-image-resize-source-controls-20261019T1145/quoted source's overlay/imresize.m
+bcd3156239d6d4dccb626108a642afead1b4c60b400fed8b11d73ef5edcc6beb  ~/tmp/portcheck-image-resize-source-controls-20261019T1145/quoted source's overlay/private/interp_method.m
+eacb5bd5aeb2c059a5942a7f7ba654d444e65bba55fba9ad9fa602611292e5a4  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1135.log
+3289c418119e53785ebfcda8f5c8f08924e9a24db02f34ee8eaa1158af62d4f2  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1135/entry.m
+2242d4fe854b124ac764da0bb4689cfceddb2ab181a22f545e657232db83ceee  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1142-portable.log
+36dc4dbd9e198448cc6fd85027324ee5c1770db2a0462ad270364482aa6d2f92  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1142-portable/entry.m
+60ba776d7e62e67c0fb4bf05bbc83e1f5af8508d4f4cde862a544a0d85ee20a8  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1142-portable/preparation.json
+Deadline workspace-save artifact preserved outside repository:
+1c1d8a4f4d22ca6dc8910de5bfc0fa3862644ae5622db08c14a2308efedd1091  ~/tmp/portcheck-vsi-image2201-resize-validation-20261019T1142-portable/octave-workspace

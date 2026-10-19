@@ -1105,3 +1105,5 @@ benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only r
 benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
 benchmarks/port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv	ignored	Partial numerical controls against primary fixed-factor references; no qualified speed ratios or full matrix completion.
 benchmarks/port_spotcheck_2026-10-18/primary-panel.meta	ignored	Primary parity-controller controls and provenance; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.tsv	ignored	Focused VSI resize-dependency numerical control; no qualified timing ratios or full matrix claim.
+benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.meta	ignored	Source and resource receipts for the focused VSI resize-dependency control.
