@@ -64,6 +64,7 @@ use alloc::vec::Vec;
 use za::zenpixels::PixelDescriptor;
 use zenmetrics_abstractions as za;
 
+mod kernels;
 mod params;
 use params::{COV_PRIS, GAUSS_WINDOW, MU_PRIS};
 
@@ -211,12 +212,27 @@ fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, u
                     )),
             );
         }
+        // The three channel products are pure functions of the u8 sample —
+        // table values are the exact f64 products `to_y` computes per pixel.
+        let mut wb = [0.0f64; 256];
+        let mut wg = [0.0f64; 256];
+        let mut wr = [0.0f64; 256];
+        for (v, ((b, g), r)) in wb.iter_mut().zip(&mut wg).zip(&mut wr).enumerate() {
+            let nf = f64::from(v as u8 as f32 / 255.0f32);
+            *b = 24.966 * nf;
+            *g = 128.553 * nf;
+            *r = 65.481 * nf;
+        }
         let mut y = Vec::with_capacity(iw * ih);
         for r in 0..ih {
             let row = &px[(r + crop) * stride..(r + crop) * stride + w * 3];
             for c in 0..iw {
                 let x = (c + crop) * 3;
-                y.push(to_y(row[x], row[x + 1], row[x + 2]));
+                // to_y's left-associative f64 add chain, then the f32 tail.
+                let d =
+                    wb[row[x + 2] as usize] + wg[row[x + 1] as usize] + wr[row[x] as usize] + 16.0;
+                let y01 = (d / 255.0) as f32;
+                y.push(f64::from(rint32(y01 * 255.0f32)));
             }
         }
         return Ok((y, iw, ih));
@@ -248,18 +264,11 @@ fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, u
     ))
 }
 
-/// `bgr2ycbcr(y_only)` + `*255` + `.round()` — the oracle's exact f32/f64
-/// cast chain (see module docs). `r`,`g`,`b` are u8 samples.
-fn to_y(r: u8, g: u8, b: u8) -> f64 {
-    // to_y_channel: img.astype(f32)/255. — f32 division (weak scalar).
-    let nf = |v: u8| f64::from(v as f32 / 255.0f32);
-    // np.dot(f32 HWC, f64 [3]) promotes: f64 accumulation on f32-widened
-    // inputs; +16.0; then _convert_output_type_range: f64 /= 255 → f32;
-    // then to_y_channel's img*255. is an f32 multiply; .round() in f32.
-    let d = 24.966 * nf(b) + 128.553 * nf(g) + 65.481 * nf(r) + 16.0;
-    let y01 = (d / 255.0) as f32;
-    f64::from(rint32(y01 * 255.0f32))
-}
+// `bgr2ycbcr(y_only)` + `*255` + `.round()` — the oracle's exact f32/f64
+// cast chain (see module docs), evaluated in `gray_f64` via u8→product
+// tables (each table entry is the identical f64 product this chain
+// computes): img.astype(f32)/255. — f32 division; np.dot promotes f64 on
+// f32-widened inputs; +16.0; f64 /= 255 → f32; img*255. f32; .round() f32.
 
 /// Full NIQE pipeline on the Y plane (`niqe()` + `computequality`).
 /// Non-finite results (degenerate content → NaN features, where the oracle
@@ -295,6 +304,13 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
     let mut cur: Vec<f32> = (0..ch)
         .flat_map(|r| img[r * w..r * w + cw].iter().map(|&v| v as f32))
         .collect();
+    let mut scratch = AggdScratch {
+        neg: Vec::with_capacity(BLOCK * BLOCK),
+        pos: Vec::with_capacity(BLOCK * BLOCK),
+        abs: Vec::with_capacity(BLOCK * BLOCK),
+        sq: Vec::with_capacity(BLOCK * BLOCK),
+    };
+    let mut shifted: Vec<f32> = Vec::with_capacity(BLOCK * BLOCK);
 
     for scale_iter in 0..2u8 {
         if scale_iter == 1 {
@@ -309,14 +325,11 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
         }
         opts.checkpoint()?;
 
-        let mu = conv_gauss(&cur, cw, ch);
-        let sq: Vec<f32> = cur.iter().map(|&v| v * v).collect();
-        let mu_sq = conv_gauss(&sq, cw, ch);
-        let mut norm = vec![0.0f32; cw * ch];
-        for i in 0..norm.len() {
-            let sigma = sqrt32((mu_sq[i] - mu[i] * mu[i]).abs());
-            norm[i] = (cur[i] - mu[i]) / (sigma + 1.0);
-        }
+        let (xp, sp, pw) = kernels::pad_edge3_pair(&cur, cw, ch);
+        let mut mu = vec![0.0f32; cw * ch];
+        let mut mu_sq = vec![0.0f32; cw * ch];
+        kernels::conv7_pair(&xp, &sp, pw, cw, &mut mu, &mut mu_sq);
+        let norm = kernels::normalize(&cur, &mu, &mu_sq, cw * ch);
 
         let bs = BLOCK >> scale_iter; // 96 at scale 1, 48 at scale 2
         // Same block iteration order both scales → consistent block index.
@@ -332,7 +345,14 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
                     })
                     .collect();
                 let base = bi * NFEAT + scale_iter as usize * 18;
-                compute_feature(&block, bs, &r_gam, &mut distparam[base..base + 18]);
+                compute_feature(
+                    &block,
+                    bs,
+                    &r_gam,
+                    &mut scratch,
+                    &mut shifted,
+                    &mut distparam[base..base + 18],
+                );
             }
         }
     }
@@ -372,28 +392,11 @@ fn niqe_quality(img: &[f64], w: usize, h: usize, opts: za::EvalOpts<'_>) -> za::
     Ok(sqrt64(q))
 }
 
-/// scipy `ndimage.convolve(img, gaussian_window, mode='nearest')` — true
-/// convolution (the window is symmetric) over a clamped-edge input. scipy
-/// widens the computation: both the f32 image and the f64 window are used
-/// in f64, then the result is stored in the input's f32 dtype (verified
-/// bitwise vs scipy 1.18: f64·f64 accumulate → f32 store matches exactly).
-fn conv_gauss(img: &[f32], w: usize, h: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; w * h];
-    for r in 0..h {
-        for c in 0..w {
-            let mut acc = 0.0f64;
-            for a in 0..7usize {
-                let rr = (r + 3).saturating_sub(a).min(h - 1);
-                for b in 0..7usize {
-                    let cc = (c + 3).saturating_sub(b).min(w - 1);
-                    acc += f64::from(img[rr * w + cc]) * GAUSS_WINDOW[a * 7 + b];
-                }
-            }
-            out[r * w + c] = acc as f32;
-        }
-    }
-    out
-}
+// scipy `ndimage.convolve(img, gaussian_window, mode='nearest')` — true
+// convolution over a clamped-edge input, computed in f64 then stored f32.
+// Implemented as `kernels::conv7_pair` over edge-replicated f64 pad planes:
+// the (a,b) tap order (padded offsets r+6−a, c+6−b) and the f64 mul+add
+// two-rounding are preserved bitwise on every dispatch tier.
 
 /// MATLAB-compatible antialiased bicubic `imresize(img, scale)` for
 /// `scale < 1` — port of BasicSR's `imresize`: `calculate_weights_indices`
@@ -483,10 +486,10 @@ fn resample_rows(img: &[f32], in_len: usize, rows: usize, scale: f64, dot8: bool
     let sym_e = (max_idx - in_len as i64).max(0) as usize; // indices.max() − in_length
 
     let aug_len = sym_s + in_len + sym_e;
+    let mut aug = vec![0.0f32; aug_len];
     let mut out = vec![0.0f32; rows * out_len];
     for r in 0..rows {
         let row = &img[r * in_len..(r + 1) * in_len];
-        let mut aug = vec![0.0f32; aug_len];
         for i in 0..aug_len {
             aug[i] = if i < sym_s {
                 row[sym_s - 1 - i]
@@ -628,24 +631,64 @@ fn cubic32(x: f32) -> f32 {
 /// stay f32 — `np.mean` accumulates with numpy's f32 pairwise summation,
 /// scalar `**` is C `powf`, and the whole std/rhat chain is f32.
 /// `gam`/`r_gam` are f64 and `f32 · f64` products promote, so βs are f64.
-fn aggd(block: &[f32], r_gam: &[f64]) -> [f64; 4] {
+/// Reusable aggd workspaces (one per `compute_feature` call chain): the
+/// same filtered materializations `estimate_aggd_param` builds, without
+/// per-block reallocation. Push order is unchanged → bitwise.
+struct AggdScratch {
+    neg: Vec<f32>,
+    pos: Vec<f32>,
+    abs: Vec<f32>,
+    sq: Vec<f32>,
+}
+
+/// `estimate_aggd_param` on `v`: either `v = block` or `v = block·shifted`
+/// (elementwise — the oracle's `struct_mat_mul`). The unconditional |v|/v²
+/// streams take indexed writes (elementwise-exact, auto-vectorizes); the
+/// sign-filtered v² streams keep the oracle's push order.
+fn aggd(
+    block: &[f32],
+    other: Option<&[f32]>,
+    r_gam: &[f64],
+    scratch: &mut AggdScratch,
+) -> [f64; 4] {
     // `block[block<0]**2` / `block[block>0]**2`, `np.abs`, `block**2` — the
     // oracle materializes these as f32 arrays, then `np.mean` reduces them
     // with numpy's f32 pairwise summation. Scalar `**k` on np.float32 goes
     // through C `powf` (verified bitwise).
-    let mut neg = Vec::with_capacity(block.len());
-    let mut pos = Vec::with_capacity(block.len());
-    let mut abs = Vec::with_capacity(block.len());
-    let mut sq = Vec::with_capacity(block.len());
-    for &v in block {
-        let v2 = v * v;
-        if v < 0.0 {
-            neg.push(v2);
-        } else if v > 0.0 {
-            pos.push(v2);
+    let AggdScratch { neg, pos, abs, sq } = scratch;
+    let n = block.len();
+    neg.clear();
+    pos.clear();
+    abs.resize(n, 0.0);
+    sq.resize(n, 0.0);
+    if let Some(b) = other {
+        for i in 0..n {
+            let v = block[i] * b[i];
+            abs[i] = v.abs();
+            sq[i] = v * v;
         }
-        abs.push(v.abs());
-        sq.push(v2);
+        for i in 0..n {
+            let v = block[i] * b[i];
+            if v < 0.0 {
+                neg.push(sq[i]);
+            } else if v > 0.0 {
+                pos.push(sq[i]);
+            }
+        }
+    } else {
+        for i in 0..n {
+            let v = block[i];
+            abs[i] = v.abs();
+            sq[i] = v * v;
+        }
+        for i in 0..n {
+            let v = block[i];
+            if v < 0.0 {
+                neg.push(sq[i]);
+            } else if v > 0.0 {
+                pos.push(sq[i]);
+            }
+        }
     }
     // np.mean on an empty array returns NaN (RuntimeWarning); np.sqrt
     // propagates it, so a block with no negatives → left_std = NaN.
@@ -666,15 +709,32 @@ fn aggd(block: &[f32], r_gam: &[f64]) -> [f64; 4] {
     // np.argmin((r_gam − rhatnorm)**2): array `**2` is elementwise multiply;
     // NaN distances never compare below `best`, so all-NaN → position 0.
     let rhatnorm64 = f64::from(rhatnorm);
-    let mut pos = 0usize;
-    let mut best = f64::INFINITY;
-    for (i, &r) in r_gam.iter().enumerate() {
-        let d = (r - rhatnorm64) * (r - rhatnorm64);
-        if d < best {
-            best = d;
-            pos = i;
+    // r_gam is strictly decreasing over its whole domain (guarded by the
+    // `r_gam_strictly_decreasing` test), so (r−x)² is unimodal and argmin is
+    // the nearer of the two entries bracketing x — the scalar scan's result
+    // bitwise. NaN x → partition point 0 → pos 0 (all-NaN scan → 0). +inf
+    // likewise → 0; −inf → the scan's all-inf distances keep pos = 0.
+    // r_gam is strictly increasing over its whole domain (guarded by the
+    // `r_gam_strictly_increasing` test), so (r−x)² is unimodal and argmin is
+    // the nearer of the two entries bracketing x — the scalar scan's result
+    // bitwise. NaN x → partition point 0 → pos 0 (all-NaN scan → 0); ±inf →
+    // the scan's all-inf distances keep pos = 0.
+    let pos = if !rhatnorm64.is_finite() {
+        0
+    } else {
+        let j = r_gam.partition_point(|&r| r < rhatnorm64);
+        if j == 0 {
+            0
+        } else if j == r_gam.len() {
+            r_gam.len() - 1
+        } else {
+            let dl = (r_gam[j - 1] - rhatnorm64) * (r_gam[j - 1] - rhatnorm64);
+            let dr = (r_gam[j] - rhatnorm64) * (r_gam[j] - rhatnorm64);
+            // argmin keeps the first minimum on ties.
+            if dl <= dr { j - 1 } else { j }
         }
-    }
+    };
+
     let alpha = GAM_LO + pos as f64 * GAM_STEP;
     // gamma(1/α)/gamma(3/α): division arguments, distinct from the gr·k
     // arguments in the r_gam table (one-ulp difference).
@@ -697,21 +757,9 @@ fn pairwise_sum_f32(a: &[f32]) -> f32 {
     if n < 8 {
         a.iter().fold(0.0f32, |s, &v| s + v)
     } else if n <= PW {
-        let mut r = [0.0f32; 8];
-        r.copy_from_slice(&a[..8]);
-        let mut i = 8;
-        while i < n - (n % 8) {
-            for j in 0..8 {
-                r[j] += a[i + j];
-            }
-            i += 8;
-        }
-        let mut res = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
-        while i < n {
-            res += a[i];
-            i += 1;
-        }
-        res
+        // The 8-accumulator unroll is a fixed-lane f32x8 accumulate —
+        // `kernels::leaf_sum_f32` keeps the identical per-lane add order.
+        kernels::leaf_sum_f32(a)
     } else {
         let n2 = n / 2 - (n / 2) % 8;
         pairwise_sum_f32(&a[..n2]) + pairwise_sum_f32(&a[n2..])
@@ -725,21 +773,8 @@ fn pairwise_sum_f64(a: &[f64]) -> f64 {
     if n < 8 {
         a.iter().fold(0.0f64, |s, &v| s + v)
     } else if n <= PW {
-        let mut r = [0.0f64; 8];
-        r.copy_from_slice(&a[..8]);
-        let mut i = 8;
-        while i < n - (n % 8) {
-            for j in 0..8 {
-                r[j] += a[i + j];
-            }
-            i += 8;
-        }
-        let mut res = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
-        while i < n {
-            res += a[i];
-            i += 1;
-        }
-        res
+        // Two f64x4 lane groups keep the 8-accumulator order bitwise.
+        kernels::leaf_sum_f64(a)
     } else {
         let n2 = n / 2 - (n / 2) % 8;
         pairwise_sum_f64(&a[..n2]) + pairwise_sum_f64(&a[n2..])
@@ -904,21 +939,35 @@ fn sinpi64(x: f64) -> f64 {
 /// then for np.roll shifts [[0,1],[1,0],[1,1],[1,−1]] on the shifted
 /// product: [α, mean, βl, βr] with `mean = (βr−βl)·Γ(2/α)/Γ(1/α)`.
 /// Writes 18 values into `out` (len ≥ 18).
-fn compute_feature(block: &[f32], bs: usize, r_gam: &[f64], out: &mut [f64]) {
-    let a0 = aggd(block, r_gam);
+/// `np.roll(block, [dy,dx])`: `shifted[r·bs+c] = block[(r−dy mod bs)·bs +
+/// (c−dx mod bs)]` — a row permutation plus a per-row rotation, done as bs
+/// row copies of ≤2 contiguous runs instead of a per-element gather.
+fn roll_block(block: &[f32], bs: usize, dy: i64, dx: i64, out: &mut Vec<f32>) {
+    out.resize(bs * bs, 0.0);
+    let k = dx.rem_euclid(bs as i64) as usize;
+    for r in 0..bs {
+        let sr = (r as i64 - dy).rem_euclid(bs as i64) as usize;
+        let (dst, src) = (r * bs, sr * bs);
+        out[dst..dst + k].copy_from_slice(&block[src + bs - k..src + bs]);
+        out[dst + k..dst + bs].copy_from_slice(&block[src..src + bs - k]);
+    }
+}
+
+fn compute_feature(
+    block: &[f32],
+    bs: usize,
+    r_gam: &[f64],
+    scratch: &mut AggdScratch,
+    shifted: &mut Vec<f32>,
+    out: &mut [f64],
+) {
+    let a0 = aggd(block, None, r_gam, scratch);
     out[0] = a0[0];
     out[1] = (a0[2] + a0[3]) / 2.0;
     let mut o = 2;
     for (dy, dx) in [(0i64, 1i64), (1, 0), (1, 1), (1, -1)] {
-        let mut prod = vec![0.0f32; bs * bs];
-        for r in 0..bs {
-            for c in 0..bs {
-                let sr = (r as i64 - dy).rem_euclid(bs as i64) as usize;
-                let sc = (c as i64 - dx).rem_euclid(bs as i64) as usize;
-                prod[r * bs + c] = block[r * bs + c] * block[sr * bs + sc];
-            }
-        }
-        let a = aggd(&prod, r_gam);
+        roll_block(block, bs, dy, dx, shifted);
+        let a = aggd(block, Some(shifted), r_gam, scratch);
         let mean = (a[3] - a[2]) * cephes_gamma(2.0 / a[0]) / cephes_gamma(1.0 / a[0]);
         out[o] = a[0];
         out[o + 1] = mean;
@@ -1060,4 +1109,29 @@ fn pinv_sym(a: &[f64; NFEAT * NFEAT]) -> [f64; NFEAT * NFEAT] {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod gam_monotone_check {
+    use super::*;
+
+    /// `aggd`'s argmin-as-nearest-point optimization requires r_gam to be
+    /// strictly increasing; if the table construction ever changes so this
+    /// fails, the argmin must return to a linear scan.
+    #[test]
+    fn r_gam_strictly_increasing() {
+        let mut r_gam = Vec::new();
+        for g in 0..GAM_N {
+            let gr = 1.0 / (GAM_LO + g as f64 * GAM_STEP);
+            let (g1, g2, g3) = (
+                cephes_gamma(gr),
+                cephes_gamma(gr * 2.0),
+                cephes_gamma(gr * 3.0),
+            );
+            r_gam.push((g2 * g2) / (g1 * g3));
+        }
+        for w in r_gam.windows(2) {
+            assert!(w[1] > w[0], "r_gam not strictly increasing: {w:?}");
+        }
+    }
 }

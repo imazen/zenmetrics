@@ -63,6 +63,8 @@ use alloc::vec::Vec;
 use za::zenpixels::PixelDescriptor;
 use zenmetrics_abstractions as za;
 
+mod kernels;
+
 /// Output revision of [`Piqe`] on the generic surface; bump when any output
 /// can change.
 const SCORE_REVISION: u32 = 1;
@@ -213,35 +215,12 @@ fn sym(i: usize, size: usize) -> usize {
     if i < size { i } else { 2 * size - 1 - i }
 }
 
-/// `cv2.GaussianBlur(src, ksize=(7,7), sigmaX=7/6, BORDER_REPLICATE)` on a
-/// f64 plane: OpenCV's separable `sepFilter2D` — a row filter over columns
-/// then a column filter over rows, both sampling clamped indices.
-fn gauss7(src: &[f64], w: usize, h: usize) -> Vec<f64> {
-    let mut tmp = vec![0.0f64; w * h];
-    for y in 0..h {
-        let (row, out) = (&src[y * w..y * w + w], &mut tmp[y * w..y * w + w]);
-        for (x, o) in out.iter_mut().enumerate() {
-            let mut acc = 0.0;
-            for (k, &t) in KERNEL.iter().enumerate() {
-                let sx = (x + k).saturating_sub(3).min(w - 1);
-                acc += t * row[sx];
-            }
-            *o = acc;
-        }
-    }
-    let mut dst = vec![0.0f64; w * h];
-    for x in 0..w {
-        for y in 0..h {
-            let mut acc = 0.0;
-            for (k, &t) in KERNEL.iter().enumerate() {
-                let sy = (y + k).saturating_sub(3).min(h - 1);
-                acc += t * tmp[sy * w + x];
-            }
-            dst[y * w + x] = acc;
-        }
-    }
-    dst
-}
+// `cv2.GaussianBlur(src, ksize=(7,7), sigmaX=7/6, BORDER_REPLICATE)` on a
+// f64 plane: OpenCV's separable `sepFilter2D` — a row filter over columns
+// then a column filter over rows, both sampling clamped indices.
+// Implemented as `kernels::gauss7_pair` over edge-replicated pad planes:
+// the k = 0..7 tap order and f64 mul+add two-rounding are preserved
+// bitwise on every dispatch tier.
 
 /// `np.var(v, ddof=1)`.
 fn var1(v: &[f64]) -> f64 {
@@ -352,9 +331,8 @@ fn score_gray_u8(gray: &[u8], w: usize, h: usize) -> f64 {
     }
 
     // mu = G*im, sigma = sqrt(|G*(im*im) − mu*mu|), imnorm = (im − mu)/(sigma+1)
-    let mu = gauss7(&im, pw, ph);
-    let sq: Vec<f64> = im.iter().map(|&v| v * v).collect();
-    let e2 = gauss7(&sq, pw, ph);
+    let (mu, e2) = kernels::gauss7_pair(&im, pw, ph, &KERNEL);
+    let norm = kernels::normalize(&im, &mu, &e2, pw * ph);
 
     let mut nhsa = 0u64;
     let mut dist_scores = 0.0f64;
@@ -363,9 +341,7 @@ fn score_gray_u8(gray: &[u8], w: usize, h: usize) -> f64 {
             let mut b = [0.0f64; 256];
             for r in 0..BLOCK {
                 for c in 0..BLOCK {
-                    let i = (by + r) * pw + bx + c;
-                    let sigma = sqrt64((e2[i] - mu[i] * mu[i]).abs());
-                    b[r * BLOCK + c] = (im[i] - mu[i]) / (sigma + 1.0);
+                    b[r * BLOCK + c] = norm[(by + r) * pw + bx + c];
                 }
             }
             let bvar = var1(&b);

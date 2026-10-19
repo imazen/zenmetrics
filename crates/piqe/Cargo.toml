@@ -20,9 +20,14 @@ workspace = true
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
 std = ["zenmetrics-abstractions/std"]
+# Opt-in AVX-512 (v4x) kernels — off by default (double-pumped penalty on
+# Zen 4; see workspace docs).
+avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
+archmage = { workspace = true }
+magetypes = { workspace = true }
 libm = { version = "0.2.16", default-features = false }
 
 [dev-dependencies]
