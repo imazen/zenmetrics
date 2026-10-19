@@ -149,3 +149,19 @@ haarpsi-primary-publish panel inputs output:
 [positional-arguments]
 ssim-candidate-compare baseline candidate inputs output:
     nice -n 19 ionice -c 3 python3 -B compare_ssim_candidate.py --baseline "$1" --candidate "$2" --inputs "$3" --output "$4"
+
+gmsd-primary-build archive rust_build output:
+    python3 -B build_gmsd_primary.py --archive '{{archive}}' --rust-build '{{rust_build}}' --output '{{output}}'
+
+gmsd-primary-panel build rust_build inputs output:
+    python3 -B run_gmsd_primary.py --build '{{build}}' --rust-build '{{rust_build}}' --inputs '{{inputs}}' --output '{{output}}'
+
+haarpsi-pair-prepare inputs source rust_build output blocks +options:
+    python3 -B prepare_haarpsi_pair.py --inputs '{{inputs}}' --source '{{source}}' --rust-build '{{rust_build}}' --output '{{output}}' --blocks '{{blocks}}' {{options}}
+
+zenbench-pair-build manifest target:
+    env CARGO_TARGET_DIR='{{target}}' cargo build --manifest-path '{{manifest}}' --locked --release --no-default-features --features cli --bin zenbench
+
+primary-pair-run zenbench plan output:
+    '{{zenbench}}' pair '{{plan}}' --output '{{output}}'
+
