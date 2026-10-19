@@ -1406,12 +1406,11 @@ mod bmp_tests {
     }
 
     #[test]
-    fn thirty_two_bit_bgra_drops_alpha_consistently() {
+    fn thirty_two_bit_bgra_requires_an_explicit_alpha_policy() {
         // encode_bmp_rgba's `layout` parameter names the SOURCE buffer's
         // layout, not zenbitmaps' internal on-disk order; feed it via Rgba8
-        // and confirm the RGB channels survive a partial-alpha round trip
-        // (alpha itself is intentionally dropped, matching decode_gif's
-        // alpha-drop policy elsewhere in this file).
+        // and confirm default rejection plus an explicit alpha-discard
+        // round trip with every RGB channel preserved.
         let mut rgba = Vec::with_capacity(RGB8_SRC.len() / 3 * 4);
         for (i, px) in RGB8_SRC.as_chunks::<3>().0.iter().enumerate() {
             rgba.extend_from_slice(px);
@@ -1424,8 +1423,23 @@ mod bmp_tests {
             sniff_format(&bmp_bytes, Path::new("x.bmp")),
             Some(ImageFormat::Bmp)
         );
-        let decoded =
-            decode_rgb8_from_bytes(&bmp_bytes, "fixture32.bmp").expect("decode_rgb8_from_bytes");
+        let error = match decode_rgb8_from_bytes(&bmp_bytes, "fixture32.bmp") {
+            Ok(_) => panic!("default BMP decoding must reject non-opaque alpha"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            error.downcast_ref::<zenmetrics_api::alpha::AlphaError>(),
+            Some(zenmetrics_api::alpha::AlphaError::AlphaNotOpaque {
+                non_opaque_count: 6,
+                max_transparency: 255,
+            })
+        ));
+        let decoded = decode_bytes_to_rgb8_with_policy(
+            &bmp_bytes,
+            sniff_format(&bmp_bytes, Path::new("fixture32.bmp")),
+            zenmetrics_api::alpha::AlphaPolicy::DiscardUnchecked,
+        )
+        .expect("explicit alpha discard");
         assert_eq!((decoded.width, decoded.height), (W, H));
         assert_eq!(
             decoded.pixels, RGB8_SRC,
@@ -1453,8 +1467,23 @@ mod bmp_tests {
         ];
         for &(layout, bpp) in cases {
             let px = vec![0u8; bpp * (W * H) as usize];
-            let out = bmp_layout_to_rgb8(&px, W, H, layout)
-                .unwrap_or_else(|e| panic!("{layout:?} should have a real arm: {e}"));
+            if matches!(
+                layout,
+                PixelLayout::Rgba8 | PixelLayout::Bgra8 | PixelLayout::Rgba16
+            ) {
+                assert!(
+                    bmp_layout_to_rgb8(&px, W, H, layout).is_err(),
+                    "{layout:?} must reject zero alpha by default"
+                );
+            }
+            let out = bmp_layout_to_rgb8_with_policy(
+                &px,
+                W,
+                H,
+                layout,
+                zenmetrics_api::alpha::AlphaPolicy::DiscardUnchecked,
+            )
+            .unwrap_or_else(|e| panic!("{layout:?} should have a real arm: {e}"));
             assert_eq!(out.pixels.len(), (W * H * 3) as usize);
         }
     }
