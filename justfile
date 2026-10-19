@@ -1877,6 +1877,9 @@ hdrvdp-canonical-prepare-cubic tree newtree:
 hdrvdp-canonical-check-cubic:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" octave --quiet benchmarks/hdrvdp_canonical_2026-10-19/scripts/check_cubic_control.m
 
+hdrvdp-canonical-prepare-matrix tree native newtree:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_matrix_control.py '{{tree}}' '{{native}}' '{{newtree}}'
+
 # Finite Mac GPU timing policy and strict numerical refusal controls.
 iqa-finite-gpu-policy-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py

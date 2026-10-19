@@ -54,14 +54,19 @@ fn main() {
         let e=v3::spectral::emission_columns(&v3::params::Emission::Preset(v3::params::DisplayPreset::Oled)).unwrap();
         emit(&mut f,"receptors",&s);emit(&mut f,"emission",&e);
         emit(&mut f,"xyz_cmf",&v3::spectral::xyz_cmf().unwrap());
-        emit(&mut f,"aging24",&[v3::spectral::aging_optical_density_filter(24)]);
+        let aging=v3::spectral::aging_optical_density_filter(24);
+        emit(&mut f,"aging24",&[aging.clone()]);
+        let aged:Vec<Vec<_>>=e.iter().map(|c|c.iter().zip(&aging).map(|(v,t)|v*t).collect()).collect();
+        emit(&mut f,"emission_after_age",&aged);
         let trans=v3::spectral::itu2native(v3::params::InputEncoding::Xyz,&e).unwrap().unwrap();
         let trans_cols:Vec<Vec<_>>=(0..3).map(|c|trans.iter().map(|r|r[c]).collect()).collect();
         emit(&mut f,"xyz_to_native",&trans_cols);
-        let cols:Vec<Vec<f64>>=(0..4).map(|r|(0..3).map(|c| {
-            let p:Vec<_>=(0..420).map(|i|s[r][i]*e[c][i]*683.002).collect();interp::trapz(&grid,&p)
-        }).collect()).collect();
-        let norm:f64=cols.iter().take(2).flat_map(|c|c.iter()).sum();
-        emit(&mut f,"mixing",&cols.iter().map(|c|c.iter().map(|v|v/norm).collect()).collect::<Vec<Vec<_>>>());
+        for (emission,name) in [(&e,"mixing_unaged"),(&aged,"mixing")] {
+            let cols:Vec<Vec<f64>>=(0..4).map(|r|(0..3).map(|c| {
+                let p:Vec<_>=(0..420).map(|i|s[r][i]*emission[c][i]*683.002).collect();interp::trapz(&grid,&p)
+            }).collect()).collect();
+            let norm:f64=(0..3).map(|c|cols[0][c]+cols[1][c]).sum();
+            emit(&mut f,name,&cols.iter().map(|c|c.iter().map(|v|v/norm).collect()).collect::<Vec<Vec<_>>>());
+        }
     }
 }

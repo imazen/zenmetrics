@@ -84,7 +84,6 @@ for ver,root,base,display in [(2,v222,'v222','ccfl-lcd'),(3,v307/'data','v307','
             modern[(q<x[0])|(q>x[-1])]=0
             compare('independent_modern_vs_octave_model/raw_'+label,modern,releases['modern-model']['raw_'+label])
     if ver==3:
-        compare('native3_age24_filter_vs_identity',native['aging24'],np.ones((420,1)))
         # Extrapolated raw receptor tails are discarded by native v3 before use.
         for label in ['cone_log','rod']:
             a=native['raw_'+label].copy();a[:20]=0
@@ -92,7 +91,8 @@ for ver,root,base,display in [(2,v222,'v222','ccfl-lcd'),(3,v307/'data','v307','
 fields=list(reports[0])
 with (out/'comparisons.tsv').open('w') as f:
     w=csv.DictWriter(f,fieldnames=fields,delimiter='\t');w.writeheader();w.writerows(reports)
-meta=dict(scipy=scipy.__version__,numpy=np.__version__,commands=commands,tables=table_properties,
+upstream_files={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [v221/'load_spectral_resp.m',v222/'load_spectral_resp.m',v307/'utils/load_spectral_resp.m',v307/'hdrvdp_visual_pathway.m',v307/'utils/hdrvdp_iturgb2native.m']}
+meta=dict(scipy=scipy.__version__,numpy=np.__version__,commands=commands,tables=table_properties,upstream_files=upstream_files,
           probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest(),
           files={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.iterdir() if p.is_file()},
           native_sources_sha256=hashlib.sha256((probe.parent/'source-sha256.json').read_bytes()).hexdigest(),

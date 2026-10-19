@@ -43,9 +43,22 @@ for c=1:3
  end
 end
 if version==3, M=M/sum(sum(M(:,1:2))); end
-emit(f,'mixing',M);
 if version==3
+ emit(f,'mixing_unaged',M);
  [~,cmf]=load_spectral_resp(fullfile(data,'ciexyz31.csv')); emit(f,'xyz_cmf',cmf);
  addpath(data); emit(f,'xyz_to_native',hdrvdp_iturgb2native('xyz',E));
+ % Execute the original release's optical-density block, without copying it.
+ source=fileread(fullfile(a{1},'hdrvdp_visual_pathway.m'));
+ start=strfind(source,'if( metric_par.do_aod )'); assert(numel(start)==1);
+ tail=source(start:end); finish=strfind(tail,'% =================================');
+ assert(~isempty(finish)); block=tail(1:finish(1)-1);
+ metric_par.do_aod=true; metric_par.age=24; IMG_E=E; lambda=grid;
+ eval(block);
+ emit(f,'aging24',trans_filter(:)); emit(f,'emission_after_age',IMG_E);
+ for c=1:3
+  for r=1:4, M(c,r)=trapz(grid,S(:,r).*IMG_E(:,c)*683.002); end
+ end
+ M=M/sum(sum(M(:,1:2)));
 end
+emit(f,'mixing',M);
 fclose(f);
