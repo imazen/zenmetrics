@@ -55,3 +55,9 @@ Generic59/60red and diagnostic9d69 pending remain; statistical order,
 selection,dependence and strict precision gates are unchanged.0/19 and
 attribution_ready=false. Prior bounded known-handle/single-interruption guard
 acceptance retains its unknown-handle and late-evidence limitations.
+
+Supplementary compiler identity capture resolves rustup to actual rustc/cargo,
+CMake's launcher to CMAKE_COMMAND, and compiler drivers to cc1/cc1plus and
+assembler, with Rust compiler shared libraries. These are post-build identities,
+not a retained exec trace; original preflight launcher hashes remain intact.
+The separately checksummed supplement preserves the original archive manifest.
