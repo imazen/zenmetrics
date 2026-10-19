@@ -208,14 +208,76 @@ primary-pair-prefix-publish panel output profiles:
 ssim2-primary-panel canonical inputs binary receipt output:
     python3 -B ssim2_primary_panel.py --canonical '{{canonical}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
 
+psnrhvs-primary-panel source signal inputs binary receipt output:
+    python3 -B psnrhvs_primary_panel.py --source '{{source}}' --signal '{{signal}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
+
+native-scalar-publish panel inputs output:
+    python3 -B publish_native_scalar_panel.py '{{panel}}' '{{inputs}}' '{{output}}'
+
+classical-octave-scalar-panel metric source inputs binary receipt output:
+    python3 -B octave_scalar_panel.py --metric '{{metric}}' --source '{{source}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
+
+primary-gpu-rust-build snapshot output:
+    python3 -B build_primary_gpu.py '{{snapshot}}' '{{output}}'
+
+psnrhvs-primary-quiet-panel source signal inputs binary receipt output:
+    python3 -B psnrhvs_primary_panel.py --source '{{source}}' --signal '{{signal}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}' --suppress-compat-warning
+
+classical-octave-scalar-publish metric panel inputs output:
+    python3 -B publish_haarpsi_panel.py '{{panel}}' '{{inputs}}' '{{output}}' --metric '{{metric}}'
+
+primary-gpu-pilot gpu_build cpu_build inputs output:
+    python3 -B probe_primary_gpu.py --gpu-build '{{gpu_build}}' --cpu-build '{{cpu_build}}' --inputs '{{inputs}}' --output '{{output}}'
+
+primary-candidate-build baseline revision source_file output:
+    python3 -B build_primary_candidate.py --baseline-build '{{baseline}}' --revision '{{revision}}' --file '{{source_file}}' --output '{{output}}'
+
+pyiqa-ssim-qualify joined output:
+    python3 -B qualify_pyiqa_ssim.py '{{joined}}' '{{output}}'
+
+vif-candidate-compare baseline candidate inputs output:
+    nice -n19 ionice -c3 python3 -B compare_ssim_candidate.py --baseline '{{baseline}}' --candidate '{{candidate}}' --inputs '{{inputs}}' --output '{{output}}' --vif-family
+
+ssim2-primary-cms-check canonical panel output:
+    python3 -B check_ssim2_cms_runtime.py --canonical '{{canonical}}' --panel '{{panel}}' --output '{{output}}'
+
+haarpsi-primary-map-check python build source panel inputs output:
+    '{{python}}' -B check_haarpsi_maps.py --build '{{build}}' --source '{{source}}' --panel '{{panel}}' --inputs '{{inputs}}' --output '{{output}}'
+
+psnr-definition-panel python build inputs output:
+    '{{python}}' -B check_psnr_definitions.py --build '{{build}}' --inputs '{{inputs}}' --output '{{output}}'
+
+psnrhvs-primary-plane-supplement panel output:
+    python3 -B supplement_psnrhvs.py '{{panel}}' '{{output}}'
+
+vifvec-primary-panel source build inputs output:
+    python3 -B vifvec_primary_panel.py --source '{{source}}' --build '{{build}}' --inputs '{{inputs}}' --output '{{output}}'
+
+primary-contained-check output:
+    nice -n19 ionice -c3 python3 -B check_contained_primary.py '{{output}}'
+
+psnrhvs-primary-plane-supplement-wait panel output:
+    nice -n19 ionice -c3 python3 -B supplement_psnrhvs.py '{{panel}}' '{{output}}' --wait-for-panel
+
+psnrhvs-primary-continue source signal inputs binary receipt previous output:
+    nice -n19 ionice -c3 python3 -B psnrhvs_primary_panel.py --source '{{source}}' --signal '{{signal}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}' --suppress-compat-warning --contained-calls --continue-from '{{previous}}'
+
+primary-cpu-master-build revision output:
+    python3 -B build_primary_cpu.py '{{revision}}' '{{output}}'
+
+vif-candidate-join matrix primary output:
+    python3 -B join_vif_candidate.py --matrix '{{matrix}}' --primary '{{primary}}' --output '{{output}}'
+
+vif-regression-check revision output:
+    python3 -B check_vif_regression.py '{{revision}}' '{{output}}'
+
 ssim2-primary-cms-callers canonical panel output:
     python3 -B trace_ssim2_cms_callers.py --canonical '{{canonical}}' --panel '{{panel}}' --output '{{output}}'
+
 
 haarpsi-primary-maps-publish panel output:
     python3 -B publish_haarpsi_maps.py '{{panel}}' '{{output}}'
 
-haarpsi-primary-map-check python build source panel inputs output:
-    '{{python}}' -B check_haarpsi_maps.py --build '{{build}}' --source '{{source}}' --panel '{{panel}}' --inputs '{{inputs}}' --output '{{output}}'
 
 checkpoint-math-observe:
     python3 -B checkpoint_math_observe.py
