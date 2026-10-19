@@ -1209,3 +1209,10 @@ benchmarks/iqa_changed_2026-10-19/r7900x-initial27/snapshot.json	ignored	Initial
 benchmarks/iqa_changed_2026-10-19/r7900x-initial27/timings.csv	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
 benchmarks/iqa_changed_2026-10-19/r7900x-initial27/run.meta	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
 benchmarks/iqa_changed_2026-10-19/i265/run.meta	ignored	Exact portable invocation, toolchain and binary provenance for collected timings.
+benchmarks/iqa_changed_2026-10-19/mac/canonical-input-copy.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/observations.jsonl	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/retry-manifest.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/retry-no-overwrite.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/run.meta	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/snapshot.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/timings.csv	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.

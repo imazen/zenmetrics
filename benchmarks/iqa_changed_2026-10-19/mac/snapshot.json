@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "captured_utc": "2026-10-19T17:24:32.524033+00:00",
+  "collector_sha256": "f256d621c81acb69e1612cc4a344cbc191c1eeca954d4b43f12fb9edef451c15",
+  "sources": [
+    {
+      "path": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/rows.jsonl",
+      "sha256": "16ee6a45dbecf1d0fcba518854d67b8c20d820426579abd0b34776a56f3d19e0",
+      "rows": 324,
+      "complete": true
+    },
+    {
+      "path": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/708b29fc5bc193a2/rows.jsonl",
+      "sha256": "b1fbf46135d777e0c89cc2d6ea6cd96c6cdbb51b95ac903349b43cafa0d500be",
+      "rows": 1,
+      "complete": true
+    },
+    {
+      "path": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/7cd109ea4760f878/rows.jsonl",
+      "sha256": "817703f3851ad8a72f21b462f482ac524047c7db17c292bd791ea98d67ca554f",
+      "rows": 1,
+      "complete": true
+    },
+    {
+      "path": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/db7428d081907478/rows.jsonl",
+      "sha256": "2e6db5f05d7b53b4e07e09b9b96d4209b29803029b82c580e8e8f035079b7a7a",
+      "rows": 1,
+      "complete": true
+    }
+  ],
+  "rows": 327,
+  "qualified_timing_rows": 312,
+  "observations_sha256": "59d3995621ca3f00e1a5877dc49f2d90aca2a6ec8c71ad1401c7dc0ee9486509",
+  "timings_csv_sha256": "c170582d7ac8b711a6dfb3848dc9a8980353b533983c8088bb60b10e20a95e6f",
+  "memory_precision_note": "Peak RSS is retained at the resource wrapper reporting precision; exact bytes are not inferred."
+}

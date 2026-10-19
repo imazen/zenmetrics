@@ -1,0 +1,105 @@
+{
+  "checked_utc": "2026-10-19T16:55:36.845146+00:00",
+  "identity": "431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7",
+  "files": [
+    {
+      "name": "cid22-reference.rgb",
+      "expected_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "copied_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/cid22-reference.rgb",
+      "rejected_preparation_sha256": "635f3e7ff6f6713e27c4df54a8e06661b95ffc6f006014699bb2e21c4340ef65"
+    },
+    {
+      "name": "cid22-distorted.rgb",
+      "expected_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "copied_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/cid22-distorted.rgb",
+      "rejected_preparation_sha256": "6834f0a59a172526294f92d8156d9852edce9b7d3c0981ff1e37838aacd39218"
+    },
+    {
+      "name": "aic-small-reference.rgb",
+      "expected_sha256": "752ecf2cbd7da34f11110a7fa4efee498e4a6e8f345e7f8810079a7325b4598b",
+      "copied_sha256": "752ecf2cbd7da34f11110a7fa4efee498e4a6e8f345e7f8810079a7325b4598b",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-small-reference.rgb",
+      "rejected_preparation_sha256": "21c8da674e30ceb1497a29d9a8d26ae394ccc4c06822e9086351fb586198aef4"
+    },
+    {
+      "name": "aic-small-distorted.rgb",
+      "expected_sha256": "4401cecaec10efe0a825837eb518108acc6d89ee9e42b425107b51a751d9f5e9",
+      "copied_sha256": "4401cecaec10efe0a825837eb518108acc6d89ee9e42b425107b51a751d9f5e9",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-small-distorted.rgb",
+      "rejected_preparation_sha256": "dfafe262c427dab088ae1929791c8a23ccba753880697c40c9a02f8afa39aef9"
+    },
+    {
+      "name": "aic-medium-reference.rgb",
+      "expected_sha256": "a0b8f76ea11647ec057fe1b838187dc1580e3d202af63953f972f15b2581b447",
+      "copied_sha256": "a0b8f76ea11647ec057fe1b838187dc1580e3d202af63953f972f15b2581b447",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-medium-reference.rgb",
+      "rejected_preparation_sha256": "79b08bb9a04dc74effd34e3a4ede3bebe348989fd94c15db75fb190e2f8c79bd"
+    },
+    {
+      "name": "aic-medium-distorted.rgb",
+      "expected_sha256": "2ce5cf7a7072257c27ae3ba4b1ba586d9627d9562143152829dc45dd06301b43",
+      "copied_sha256": "2ce5cf7a7072257c27ae3ba4b1ba586d9627d9562143152829dc45dd06301b43",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-medium-distorted.rgb",
+      "rejected_preparation_sha256": "a4ece2c31cac16171947bd0f6ddc415329defb4ecfee548a9cb7dfafd05c94d2"
+    },
+    {
+      "name": "aic-large-reference.rgb",
+      "expected_sha256": "d26f2db52c78525d62b23d7f6649fb5aa4ee6b75a19c2b9b1c73f79be1570b33",
+      "copied_sha256": "d26f2db52c78525d62b23d7f6649fb5aa4ee6b75a19c2b9b1c73f79be1570b33",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-large-reference.rgb",
+      "rejected_preparation_sha256": "d26f2db52c78525d62b23d7f6649fb5aa4ee6b75a19c2b9b1c73f79be1570b33"
+    },
+    {
+      "name": "aic-large-distorted.rgb",
+      "expected_sha256": "59f0489144f71f0ffb4d68ab196d3d102a2bc58a8e2377083c9ae9d1301afe3a",
+      "copied_sha256": "59f0489144f71f0ffb4d68ab196d3d102a2bc58a8e2377083c9ae9d1301afe3a",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/aic-large-distorted.rgb",
+      "rejected_preparation_sha256": "59f0489144f71f0ffb4d68ab196d3d102a2bc58a8e2377083c9ae9d1301afe3a"
+    },
+    {
+      "name": "2k-reference.rgb",
+      "expected_sha256": "d5d183c7dfe899dc7558625a6551327730ed8b7b38529822f6827454cf954c9a",
+      "copied_sha256": "d5d183c7dfe899dc7558625a6551327730ed8b7b38529822f6827454cf954c9a",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/2k-reference.rgb",
+      "rejected_preparation_sha256": "19c6fe31462c940ea4f1c1cd696cc7c0bcd00dfec8e710acaf1158049d093a84"
+    },
+    {
+      "name": "2k-distorted.rgb",
+      "expected_sha256": "0a291f50340712738e04f24369c7494df6fee6dfea25da9eac1ab92c51b4cc76",
+      "copied_sha256": "0a291f50340712738e04f24369c7494df6fee6dfea25da9eac1ab92c51b4cc76",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/2k-distorted.rgb",
+      "rejected_preparation_sha256": "ba5e8afae8b5b770a92d758dbfde7d1d2e02e57ecc46c37c65c71fdfe490024b"
+    },
+    {
+      "name": "4k-reference.rgb",
+      "expected_sha256": "0c27d6336788760b50b03589a64a00a86869f14cc638a2ea24c59a6161c57951",
+      "copied_sha256": "0c27d6336788760b50b03589a64a00a86869f14cc638a2ea24c59a6161c57951",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/4k-reference.rgb",
+      "rejected_preparation_sha256": "0c27d6336788760b50b03589a64a00a86869f14cc638a2ea24c59a6161c57951"
+    },
+    {
+      "name": "4k-distorted.rgb",
+      "expected_sha256": "7b49af0b68961d157ee00083c02ad73f82cbf50cf56aa6feaa36ff5b6e66e7eb",
+      "copied_sha256": "7b49af0b68961d157ee00083c02ad73f82cbf50cf56aa6feaa36ff5b6e66e7eb",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/4k-distorted.rgb",
+      "rejected_preparation_sha256": "7b49af0b68961d157ee00083c02ad73f82cbf50cf56aa6feaa36ff5b6e66e7eb"
+    },
+    {
+      "name": "8k-reference.rgb",
+      "expected_sha256": "1677b580c66ed8f0955707bfe1da1e4a89e84b282264e37941f379934af9b5a5",
+      "copied_sha256": "1677b580c66ed8f0955707bfe1da1e4a89e84b282264e37941f379934af9b5a5",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/8k-reference.rgb",
+      "rejected_preparation_sha256": "1677b580c66ed8f0955707bfe1da1e4a89e84b282264e37941f379934af9b5a5"
+    },
+    {
+      "name": "8k-distorted.rgb",
+      "expected_sha256": "392a57cec67715aa44a1add99a9cc98d4ecda5c5b384b799af1d6f8f05cde2bb",
+      "copied_sha256": "392a57cec67715aa44a1add99a9cc98d4ecda5c5b384b799af1d6f8f05cde2bb",
+      "source": "/Users/lilith/benchmark-bundles/iqa-mac-20261018-coverage-v2/512-nn-cpu/inputs/8k-distorted.rgb",
+      "rejected_preparation_sha256": "392a57cec67715aa44a1add99a9cc98d4ecda5c5b384b799af1d6f8f05cde2bb"
+    }
+  ],
+  "original_preparation_preserved": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic"
+}

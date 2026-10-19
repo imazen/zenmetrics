@@ -87,7 +87,7 @@ the resource header counts and maximum-RSS row. Timing qualification is unchange
 27-name panel, not the full inventory. All 324 requested scopes finish:
 312 successful timing rows, of which 301 are clean; eleven retain heavy-process
 flags and remain unqualified. Twelve deterministic MS-SSIM size refusals are
-retained separately. Runtime is 1670 seconds, peak RSS 9.47 GiB, minimum available
+retained separately. The initial clone/build/control/panel job takes 1670 seconds, peak RSS 9.47 GiB, minimum available
 memory 14300 MiB, peak load 4.62. As on i265, native recipe workers use 16 GiB
 scopes separately from the 12 GiB outer launcher.
 
@@ -96,3 +96,23 @@ before measurement. That snapshot and log are preserved. A fresh snapshot
 includes those links, with an independent target directory so the initial
 worker binary and its source snapshot are preserved. Full CPU remainder
 measurement is pending; this initial table does not establish that coverage.
+
+## Collected Mac panel and bounded retries
+
+[mac/timings.csv](mac/timings.csv) and [mac/observations.jsonl](mac/observations.jsonl)
+contain 327 observed rows covering 324 distinct requested scopes. There are
+312 distinct clean timings and twelve MS-SSIM size refusals. Three initial
+CPU-load-flagged rows remain unqualified. Each received one additional scope
+with the identical config, same worker/input hashes, sample counts and gates,
+after five seconds outside the clocks. All three retries are clean and their
+score bits exactly match their parent observations. No successful clean cells
+were repeated. The primary panel completes rc0 in 1517 seconds, peak RSS
+10.49 GiB, minimum available-page proxy 10953 MiB, peak load 6.38. The Mac
+12 GiB guard monitors process-tree RSS; it is not a cgroup hard limit.
+
+The retry manifest records a one-attempt cap per flagged cell. A repeat
+invocation refuses the existing output, with all prior artifact hashes
+unchanged. Proof is retained in [retry-no-overwrite.json](mac/retry-no-overwrite.json).
+The same read-only scalar collector binds native BSD-time RSS bytes and rounded
+wrapper RSS to every row. Under the shared lock, `just iqa-portable-retry-flagged`
+can execute this bounded continuation; it never modifies the parent attempts.

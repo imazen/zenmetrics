@@ -1,0 +1,486 @@
+{
+  "created_utc": "2026-10-19T17:20:52.617128+00:00",
+  "parent": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7",
+  "parent_rows_sha256": "16ee6a45dbecf1d0fcba518854d67b8c20d820426579abd0b34776a56f3d19e0",
+  "parent_meta_sha256": "3d9ddf5e046dfe95023ccab39ab65c5b8169d0aea43acb60491f9a13d8982e19",
+  "runner_sha256": "77cd46a72704ea980c8a5049727dfa6274d69a2c2818e72213bca246ed144043",
+  "coordinator_sha256": "b27e5cb52efc0b3875cad79998391d71bccdca1cfd8ac9fe93fa4fc155a98679",
+  "worker_sha256": "8175996a46815a734cac60cb7ad3282f91b83c7725a53f482cb5d51a833ac534",
+  "quiet_settle_seconds": 5,
+  "cases": [
+    {
+      "directory": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/7cd109ea4760f878",
+      "config": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/7cd109ea4760f878/ssim-libvmaf-cid22-1-0.json",
+      "config_sha256": "059be0dbbf417dfcff396b05afe55fed3772ae8e5e0121f6924245fb89c9d2f8",
+      "parent_log_sha256": "16d794d6f4d500400fb9f5af484dc1464c4fc17c23a2b3570be94829b6a65718",
+      "parent_row": {
+        "host": "mac",
+        "os": "macos",
+        "arch": "aarch64",
+        "cpu_model": "aarch64",
+        "gpu": null,
+        "device": "cpu",
+        "impl": "zenmetrics",
+        "impl_version": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+        "impl_binary_sha": "8175996a46815a734cac60cb7ad3282f91b83c7725a53f482cb5d51a833ac534",
+        "engine": "native",
+        "metric_family": "ssim-libvmaf",
+        "metric_name": "ssim-libvmaf",
+        "size_name": "cid22",
+        "width": 512,
+        "height": 512,
+        "threads": 1,
+        "reference": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/cid22-reference.rgb",
+        "distorted": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/cid22-distorted.rgb",
+        "pair_sha256": "60e658bd4165bd80d4ee28c9f4cb11915711b9acf094d64ee4a0664dc58c1460",
+        "input_sha256": {
+          "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+          "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+        },
+        "coverage_first": true,
+        "required_samples": 5,
+        "sample_target_ns": 1000000,
+        "chunk_budget_ms": 850000,
+        "locked_process_accounting": true,
+        "notes": "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles",
+        "only_mode": "score",
+        "mode": "score",
+        "timing_phase": "warm",
+        "input_load_ns": 139750,
+        "load_before": [
+          3.72,
+          9.02,
+          8.37
+        ],
+        "admitted_unix_ns": 1792428939038503000,
+        "model_preload_adapter": false,
+        "declared_columns": [
+          "ssim_libvmaf"
+        ],
+        "headline_declared_column": "ssim_libvmaf",
+        "round_means_ns": [
+          5886570.0,
+          5811350.0,
+          5613989.0,
+          4530975.0,
+          4469920.0
+        ],
+        "zenbench_arm_index": 0,
+        "zenbench_samples": [
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 6437000,
+            "gate_observation": "reason=Some(CpuLoad(0.28077807453771436)) state=SystemState { cpu_load: 0.28077807453771436, available_ram_bytes: 20988493824, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              5886570
+            ],
+            "compensated_ns": [
+              5886570
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 12339834,
+            "gate_observation": "reason=Some(CpuLoad(0.28077807453771436)) state=SystemState { cpu_load: 0.28077807453771436, available_ram_bytes: 20988493824, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              5811350
+            ],
+            "compensated_ns": [
+              5811350
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 18166792,
+            "gate_observation": "reason=Some(CpuLoad(0.28077807453771436)) state=SystemState { cpu_load: 0.28077807453771436, available_ram_bytes: 20988493824, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              5613989
+            ],
+            "compensated_ns": [
+              5613989
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 23807625,
+            "gate_observation": "reason=Some(CpuLoad(0.28077807453771436)) state=SystemState { cpu_load: 0.28077807453771436, available_ram_bytes: 20988493824, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              4530975
+            ],
+            "compensated_ns": [
+              4530975
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 28353584,
+            "gate_observation": "reason=Some(CpuLoad(0.28077807453771436)) state=SystemState { cpu_load: 0.28077807453771436, available_ram_bytes: 20988493824, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              4469920
+            ],
+            "compensated_ns": [
+              4469920
+            ]
+          }
+        ],
+        "rayon_threads_observed": 1,
+        "simd_tier": "neon-capable",
+        "n": 5,
+        "median_ns": 5613989.0,
+        "p10_ns": 4494342.0,
+        "p90_ns": 5856482.0,
+        "mean_ns": 5262560.8,
+        "score": 0.998548686504364,
+        "score_bits": "3feff41c60000000",
+        "map_score_matches_scalar_bits": true,
+        "ref_score": 0.998548686504364,
+        "self_warmup_score": 0.998548686504364,
+        "abs_delta": 0.0,
+        "relative_delta": 0.0,
+        "status": "ok",
+        "load_after": [
+          3.72,
+          9.02,
+          8.37
+        ]
+      },
+      "new_attempt_cap": 1
+    },
+    {
+      "directory": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/708b29fc5bc193a2",
+      "config": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/708b29fc5bc193a2/cambi-aic2026-cid22-1-0.json",
+      "config_sha256": "79d0dd1d27aee24cc0109c0f63d1f8ab2bb801d340b633184fca7e14d3cff039",
+      "parent_log_sha256": "04a146c1af25364aeb9469bef9a1c1a456eec69d36b9c8b33e6553e20c2082e8",
+      "parent_row": {
+        "host": "mac",
+        "os": "macos",
+        "arch": "aarch64",
+        "cpu_model": "aarch64",
+        "gpu": null,
+        "device": "cpu",
+        "impl": "zenmetrics",
+        "impl_version": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+        "impl_binary_sha": "8175996a46815a734cac60cb7ad3282f91b83c7725a53f482cb5d51a833ac534",
+        "engine": "native",
+        "metric_family": "cambi-aic2026",
+        "metric_name": "cambi-aic2026",
+        "size_name": "cid22",
+        "width": 512,
+        "height": 512,
+        "threads": 1,
+        "reference": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/cid22-reference.rgb",
+        "distorted": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/cid22-distorted.rgb",
+        "pair_sha256": "60e658bd4165bd80d4ee28c9f4cb11915711b9acf094d64ee4a0664dc58c1460",
+        "input_sha256": {
+          "reference": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+          "distorted": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+        },
+        "coverage_first": true,
+        "required_samples": 5,
+        "sample_target_ns": 1000000,
+        "chunk_budget_ms": 850000,
+        "locked_process_accounting": true,
+        "notes": "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles",
+        "only_mode": "score",
+        "mode": "score",
+        "timing_phase": "warm",
+        "input_load_ns": 167000,
+        "load_before": [
+          3.72,
+          9.02,
+          8.37
+        ],
+        "admitted_unix_ns": 1792428940862447000,
+        "model_preload_adapter": false,
+        "declared_columns": [
+          "cambi_aic2026"
+        ],
+        "headline_declared_column": "cambi_aic2026",
+        "round_means_ns": [
+          3923406.0,
+          3948572.0,
+          3972465.0,
+          3958840.0,
+          3961340.0
+        ],
+        "zenbench_arm_index": 0,
+        "zenbench_samples": [
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 4433375,
+            "gate_observation": "reason=Some(CpuLoad(0.2937753976384798)) state=SystemState { cpu_load: 0.2937753976384798, available_ram_bytes: 21069643776, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              3923406
+            ],
+            "compensated_ns": [
+              3923406
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 8370709,
+            "gate_observation": "reason=Some(CpuLoad(0.2937753976384798)) state=SystemState { cpu_load: 0.2937753976384798, available_ram_bytes: 21069643776, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              3948572
+            ],
+            "compensated_ns": [
+              3948572
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 12326042,
+            "gate_observation": "reason=Some(CpuLoad(0.2937753976384798)) state=SystemState { cpu_load: 0.2937753976384798, available_ram_bytes: 21069643776, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              3972465
+            ],
+            "compensated_ns": [
+              3972465
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 16308667,
+            "gate_observation": "reason=Some(CpuLoad(0.2937753976384798)) state=SystemState { cpu_load: 0.2937753976384798, available_ram_bytes: 21069643776, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              3958840
+            ],
+            "compensated_ns": [
+              3958840
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 20277125,
+            "gate_observation": "reason=Some(CpuLoad(0.2937753976384798)) state=SystemState { cpu_load: 0.2937753976384798, available_ram_bytes: 21069643776, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              3961340
+            ],
+            "compensated_ns": [
+              3961340
+            ]
+          }
+        ],
+        "rayon_threads_observed": 1,
+        "simd_tier": "neon-capable",
+        "n": 5,
+        "median_ns": 3958840.0,
+        "p10_ns": 3933472.4,
+        "p90_ns": 3968015.0,
+        "mean_ns": 3952924.6,
+        "score": 0.0,
+        "score_bits": "0000000000000000",
+        "map_score_matches_scalar_bits": true,
+        "ref_score": 0.0,
+        "self_warmup_score": 0.0,
+        "abs_delta": 0.0,
+        "relative_delta": 0.0,
+        "status": "ok",
+        "load_after": [
+          3.72,
+          9.02,
+          8.37
+        ]
+      },
+      "new_attempt_cap": 1
+    },
+    {
+      "directory": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/db7428d081907478",
+      "config": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/flagged-retries/db7428d081907478/ssim2-aic-medium-1-0.json",
+      "config_sha256": "2caf600970e77a6ad0f4fa2b8babdc1b71971e5b474021a4b548189ed59876f6",
+      "parent_log_sha256": "3d0e04c9b2e1878e532134d8e1c79249e675fb55fcb9d96de7e01c535eaa1b2b",
+      "parent_row": {
+        "host": "mac",
+        "os": "macos",
+        "arch": "aarch64",
+        "cpu_model": "aarch64",
+        "gpu": null,
+        "device": "cpu",
+        "impl": "zenmetrics",
+        "impl_version": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+        "impl_binary_sha": "8175996a46815a734cac60cb7ad3282f91b83c7725a53f482cb5d51a833ac534",
+        "engine": "native",
+        "metric_family": "ssim2",
+        "metric_name": "ssim2",
+        "size_name": "aic-medium",
+        "width": 1680,
+        "height": 1888,
+        "threads": 1,
+        "reference": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/aic-medium-reference.rgb",
+        "distorted": "/Users/lilith/tmp/iqa-changed-20261019T1620Z/results-canonical/431f402edb74be5deb93df3786c81c586a646c3c1c1b6200b0fad0ec629601b7/inputs/aic/aic-medium-distorted.rgb",
+        "pair_sha256": "5934a840f72bbacfaa55ec42e01641913a9f8eaf0bfcdf5763d5692398ea1e51",
+        "input_sha256": {
+          "reference": "a0b8f76ea11647ec057fe1b838187dc1580e3d202af63953f972f15b2581b447",
+          "distorted": "2ce5cf7a7072257c27ae3ba4b1ba586d9627d9562143152829dc45dd06301b43"
+        },
+        "coverage_first": true,
+        "required_samples": 5,
+        "sample_target_ns": 1000000,
+        "chunk_budget_ms": 850000,
+        "locked_process_accounting": true,
+        "notes": "RGB8 resident; CLI compute call incl. metric colour conversion; initialization warmup excluded; zenbench round batch means, not individual-call percentiles",
+        "only_mode": "score",
+        "mode": "score",
+        "timing_phase": "warm",
+        "input_load_ns": 1435834,
+        "load_before": [
+          3.12,
+          5.84,
+          7.11
+        ],
+        "admitted_unix_ns": 1792429152251053000,
+        "model_preload_adapter": false,
+        "declared_columns": [
+          "ssim2"
+        ],
+        "headline_declared_column": "ssim2",
+        "round_means_ns": [
+          166975926.0,
+          166355631.0,
+          166777174.0,
+          166135671.0,
+          166178438.0
+        ],
+        "zenbench_arm_index": 0,
+        "zenbench_samples": [
+          {
+            "gate_clean": true,
+            "gate_observation_age_ns": 205265500,
+            "gate_observation": "reason=None state=SystemState { cpu_load: 0.14183773967127006, available_ram_bytes: 20917633024, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              166975926
+            ],
+            "compensated_ns": [
+              166975926
+            ]
+          },
+          {
+            "gate_clean": true,
+            "gate_observation_age_ns": 140746709,
+            "gate_observation": "reason=None state=SystemState { cpu_load: 0.17222949663798015, available_ram_bytes: 20916666368, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              166355631
+            ],
+            "compensated_ns": [
+              166355631
+            ]
+          },
+          {
+            "gate_clean": true,
+            "gate_observation_age_ns": 99394208,
+            "gate_observation": "reason=None state=SystemState { cpu_load: 0.11602343002955118, available_ram_bytes: 20915650560, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              166777174
+            ],
+            "compensated_ns": [
+              166777174
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 63500167,
+            "gate_observation": "reason=Some(CpuLoad(0.21152428627014158)) state=SystemState { cpu_load: 0.21152428627014158, available_ram_bytes: 20915748864, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              166135671
+            ],
+            "compensated_ns": [
+              166135671
+            ]
+          },
+          {
+            "gate_clean": false,
+            "gate_observation_age_ns": 229641375,
+            "gate_observation": "reason=Some(CpuLoad(0.21152428627014158)) state=SystemState { cpu_load: 0.21152428627014158, available_ram_bytes: 20915748864, total_ram_bytes: 25769803776, cpu_temp_c: None, heavy_process_count: 0 }",
+            "iterations": 1,
+            "execution_order": [
+              0
+            ],
+            "elapsed_ns": [
+              166178438
+            ],
+            "compensated_ns": [
+              166178438
+            ]
+          }
+        ],
+        "rayon_threads_observed": 1,
+        "simd_tier": "neon-capable",
+        "n": 5,
+        "median_ns": 166355631.0,
+        "p10_ns": 166152777.8,
+        "p90_ns": 166896425.2,
+        "mean_ns": 166484568.0,
+        "score": 77.3412585904734,
+        "score_bits": "405355d72e4563fd",
+        "map_score_matches_scalar_bits": true,
+        "ref_score": 77.3412585904734,
+        "self_warmup_score": 77.3412585904734,
+        "abs_delta": 0.0,
+        "relative_delta": 0.0,
+        "status": "ok",
+        "load_after": [
+          4.07,
+          5.99,
+          7.16
+        ]
+      },
+      "new_attempt_cap": 1
+    }
+  ]
+}

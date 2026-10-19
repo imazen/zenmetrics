@@ -1964,3 +1964,7 @@ iqa-portable-collect output +roots:
 
 iqa-portable-collect-check:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_portable_collection.py
+
+# Caller holds the same host benchmark lock; one unchanged-config scope per flagged row.
+iqa-portable-retry-flagged parent output wrapper:
+    python3 benchmarks/iqa_compete_2026-10-16/retry_portable_flagged.py '{{parent}}' '{{output}}' '{{wrapper}}'
