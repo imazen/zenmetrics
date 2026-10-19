@@ -54,3 +54,11 @@ New durable runners also acquire shared admission for initial full asset hashing
 This prevents coordinator preflight CPU work from overlapping another admitted
 measurement. Hashing remains outside cold and warm clocks; frozen older runners
 retain their original identities.
+
+After a campaign is terminal, `just iqa-canonical-gate-retry BUNDLE RESULTS
+NEW_DIRECTORY LOCK` validates its retained attempt seals and freezes only warm
+cells with resource flags or missing rounds and an original attempt remaining.
+`retry-plan.json` records the exact maximum attempts for each successor and
+lists exhausted unqualified cells. It does not install a service or grant new
+attempts. Replacements retain the parent report hash; final selection counts
+each logical cell once. Clean cells and input-contract refusals are not repeated.

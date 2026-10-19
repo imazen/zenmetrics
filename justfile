@@ -2016,3 +2016,10 @@ iqa-canonical-cpu-prepare *args:
 # Fixed canonical IQA recipe arguments, immutable output and shared-lock controls.
 iqa-canonical-command-check:
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_canonical_commands.py
+
+# Immutable retry subsets for flagged warm rows, preserving original remaining caps.
+iqa-canonical-gate-retry bundle results output lock:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_gate_retry.py '{{bundle}}' '{{results}}' '{{output}}' --lock '{{lock}}'
+
+iqa-canonical-gate-retry-check:
+    TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_gate_retry.py
