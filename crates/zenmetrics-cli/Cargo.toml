@@ -147,6 +147,7 @@ hdr-svt = ["hdr", "sweep", "dep:zenav1-svt", "dep:zenavif-serialize"]
 
 # CPU metric feature flags
 cpu-metrics = [
+    "avx512",
     "dep:nlpd",
     "dep:tempfile",
     "dep:butteraugli",

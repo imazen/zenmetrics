@@ -1915,3 +1915,34 @@ iqa-weight-consent-tests:
 # Requires explicit owner authorization for a separate consent-only attempt budget.
 iqa-consent-retry config:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_consent_retry.py '{{config}}'
+
+clean-panel-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/clean_panel_2026-10-19 -p 'test_*.py'
+
+# Negative control only: run acceptance assertions against an exported old candidate.
+
+clean-panel-before-check historical_directory:
+    TMPDIR="$HOME/tmp" python3 benchmarks/clean_panel_2026-10-19/baseline_regressions.py {{historical_directory}}
+
+# Synthetic extraction only: no metric graph, scorer or timing run.
+
+clean-panel-nr-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    directory=$(mktemp -d "$HOME/tmp/clean-panel-nr-control.XXXXXX")
+    rustc --edition=2024 --test benchmarks/clean_panel_2026-10-19/nr_observer.rs -o "$directory/control"
+    "$directory/control"
+
+# Isolated nonmetric monitor diagnostics; invoke under run-heavy and shared lock.
+
+clean-panel-monitor-build directory:
+    cargo test --manifest-path {{directory}}/source/Cargo.toml --locked --offline --no-default-features --lib --no-run --message-format=json
+
+
+clean-panel-monitor-control binary source_manifest output:
+    python3 benchmarks/clean_panel_2026-10-19/monitor_control.py {{binary}} {{source_manifest}} {{output}}
+
+# Focused repair controls; retained generic diagnostic failure remains unchanged.
+
+clean-panel-monitor-repair-check current output retained_author retained_reviewer:
+    python3 benchmarks/clean_panel_2026-10-19/monitor_repair_controls.py {{current}} {{output}} {{retained_author}} {{retained_reviewer}}

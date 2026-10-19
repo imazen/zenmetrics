@@ -219,3 +219,12 @@ haarpsi-primary-map-check python build source panel inputs output:
 
 checkpoint-math-observe:
     python3 -B checkpoint_math_observe.py
+
+fixed-factor-create name factor source output:
+    python3 -B fixed_factor_oracle.py patch --name '{{name}}' --factor '{{factor}}' --source-path '{{source}}' --out '{{output}}'
+
+pyiqa-ssim-probe python manifest inputs output threads:
+    '{{python}}' -B probe_pyiqa_ssim.py --manifest '{{manifest}}' --inputs '{{inputs}}' --output '{{output}}' --threads '{{threads}}'
+
+ssim-candidate-publish input output:
+    python3 -B publish_ssim_candidate.py '{{input}}' '{{output}}'

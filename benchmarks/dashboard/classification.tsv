@@ -1190,3 +1190,10 @@ benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.json	ignored	Native map o
 benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
 benchmarks/opt_ssimulacra1_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssimulacra1-blur-simd branch; not a dashboard metric schema.
 benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/msssim-libvmaf-mt-gate branch; not a dashboard metric schema.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairA.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairB.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairC.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.json	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.meta	ignored	Unmerged SSIM before/after experiment commands and artifact hashes; no qualified timing data.
+benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fixed-look benchmark policy metadata; no measured or qualified timing results.
+benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
