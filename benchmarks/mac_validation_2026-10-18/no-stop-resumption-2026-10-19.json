@@ -151,7 +151,7 @@
         },
         {
           "metric": "deepdc",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 4
         },
         {
@@ -161,7 +161,7 @@
         },
         {
           "metric": "dists",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 4
         },
         {
@@ -186,7 +186,7 @@
         },
         {
           "metric": "lpips-vgg",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 1
         },
         {
@@ -201,7 +201,7 @@
         },
         {
           "metric": "stlpips-vgg",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 8
         },
         {
@@ -233,12 +233,12 @@
         },
         {
           "metric": "deepdc",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 4
         },
         {
           "metric": "dists",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 8
         },
         {
@@ -263,7 +263,7 @@
         },
         {
           "metric": "lpips-vgg",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 1
         },
         {
@@ -278,7 +278,7 @@
         },
         {
           "metric": "stlpips-vgg",
-          "classification": "scope-timeout",
+          "classification": "worker-or-wrapper-exit-143",
           "cells": 8
         },
         {

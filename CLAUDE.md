@@ -2038,5 +2038,5 @@ explicit benchmark acceptance. The preparation path now expands explicitly
 requested acceptance to named terms and records both forms; default empty
 consent and the native gate stay strict. A separately owner-authorized retry
 campaign preserves all old attempts and grants two new attempts only to
-proven exhausted consent refusals. Other exhausted bounds/allocation/timeout
+proven exhausted consent refusals. Other exhausted bounds/allocation/incomplete-round and process-exit
 failures remain separately blocked. See [the owning contract](docs/IQA_DURABLE_MAC.md).
