@@ -34,6 +34,11 @@ just bench-iqa-changed --host i265 --corpus /path/to/AIC2026/img --skip-native
 This runs only the 23 changed CPU names and four additions since `f7668c7`.
 To restrict sizes, use the same selection directly, for example
 `just bench-iqa cid22,4k changed --host i265 --corpus /path/to/AIC2026/img --skip-native`.
+Add `--scalar-only` to omit maps. This uses a separate run identity and passes
+`only_mode=score` to the existing worker; default score/map behavior is unchanged.
+Use `--threads 1,8` to retain a one/eight-worker comparison; omitted budgets
+default to one/all available workers. Budgets above available parallelism refuse.
+
 Within each size and thread count, metrics run fastest first by the historical
 1024×1024 single-thread median in
 [order.tsv](../benchmarks/rebenchmark_since_f7668c7/order.tsv). Each row cites its

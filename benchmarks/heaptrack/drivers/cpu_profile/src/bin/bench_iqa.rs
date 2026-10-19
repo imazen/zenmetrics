@@ -139,7 +139,7 @@ fn main() -> Result<()> {
     }
     if args.iter().any(|s| s == "--help") {
         println!(
-            "just bench-iqa [sizes] [metrics: all|changed|comma-separated names] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR] [--with-dvifmish]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
+            "just bench-iqa [sizes] [metrics: all|changed|comma-separated names] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR] [--with-dvifmish] [--scalar-only] [--threads 1,8]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
         );
         return Ok(());
     }
@@ -159,12 +159,15 @@ fn main() -> Result<()> {
     let mut output = PathBuf::from("target/bench-iqa");
     let mut skip_native = false;
     let mut with_dvifmish = false;
+    let mut scalar_only = false;
+    let mut requested_threads: Option<String> = None;
     let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
             "--skip-native" => skip_native = true,
+            "--scalar-only" => scalar_only = true,
             "--with-dvifmish" => with_dvifmish = true,
-            "--host" | "--fixture" | "--corpus" | "--output" => {
+            "--host" | "--fixture" | "--corpus" | "--output" | "--threads" => {
                 let flag = &args[i];
                 i += 1;
                 let value = args.get(i).ok_or("Missing option value")?;
@@ -172,6 +175,7 @@ fn main() -> Result<()> {
                     "--host" => host = Some(value.clone()),
                     "--fixture" => fixture = Some(value.clone()),
                     "--corpus" => corpus = Some(PathBuf::from(value)),
+                    "--threads" => requested_threads = Some(value.clone()),
                     _ => output = PathBuf::from(value),
                 }
             }
@@ -220,7 +224,16 @@ fn main() -> Result<()> {
     let ordered_metrics = benchmark_selection::schedule(metrics, &selected);
     eprintln!("Metric order: {}", ordered_metrics.join(","));
     let all = thread::available_parallelism()?.get();
-    let threads: BTreeSet<usize> = [1, all].into_iter().collect();
+    let threads: BTreeSet<usize> = match requested_threads {
+        Some(value) => value
+            .split(',')
+            .map(str::parse)
+            .collect::<std::result::Result<_, _>>()?,
+        None => [1, all].into_iter().collect(),
+    };
+    if threads.is_empty() || threads.iter().any(|n| *n == 0 || *n > all) {
+        return Err("Thread budgets must be between one and available parallelism".into());
+    }
     let repo = env::current_dir()?;
     let optional_fingerprint = if with_dvifmish {
         Some(optional_dvifm::fingerprint(&repo)?)
@@ -228,6 +241,15 @@ fn main() -> Result<()> {
         None
     };
     let identity = json!({"commit":source,"binary_sha256":sha(&executable_identity::normalized(&bytes)?),"binary_identity":"pe-relink-metadata-v1","host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"fixture":fixture,"corpus":corpus,"threads":threads,"protocol":"coverage-5-3-1-v1","with_dvifmish":with_dvifmish,"optional_fingerprint":optional_fingerprint});
+    let mut identity = identity;
+    if scalar_only {
+        identity["scalar_only"] = json!(true);
+    }
+    let modes: &[&str] = if scalar_only {
+        &["score"]
+    } else {
+        &["score", "score+map"]
+    };
     let content = sha(&serde_json::to_vec(&identity)?);
     let root = output.join(&content);
     fs::create_dir_all(&root)?;
@@ -320,14 +342,17 @@ fn main() -> Result<()> {
         let pair_sha = sha(&serde_json::to_vec(&hashes)?);
         for count in &threads {
             for metric in &ordered_metrics {
-                if ["score", "score+map"]
+                if modes
                     .iter()
                     .all(|mode| done.contains(&format!("{metric}:{size}:{count}:{mode}")))
                 {
-                    skipped += 2;
+                    skipped += modes.len();
                     continue;
                 }
-                let config = json!({"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"cpu_model":env::var("PROCESSOR_IDENTIFIER").unwrap_or_else(|_|env::consts::ARCH.into()),"gpu":null,"device":"cpu","impl":"zenmetrics","impl_version":source,"impl_binary_sha":sha(&bytes),"engine":"native","metric_family":metric,"metric_name":metric,"size_name":size,"width":w,"height":h,"threads":count,"reference":fs::canonicalize(&r)?,"distorted":fs::canonicalize(&d)?,"pair_sha256":pair_sha,"input_sha256":hashes,"coverage_first":true,"required_samples":required(size),"sample_target_ns":1000000,"chunk_budget_ms":850000,"locked_process_accounting":true,"notes":"Portable CPU smoke; no OS affinity pin or contention qualification claimed"});
+                let mut config = json!({"host":host,"os":env::consts::OS,"arch":env::consts::ARCH,"cpu_model":env::var("PROCESSOR_IDENTIFIER").unwrap_or_else(|_|env::consts::ARCH.into()),"gpu":null,"device":"cpu","impl":"zenmetrics","impl_version":source,"impl_binary_sha":sha(&bytes),"engine":"native","metric_family":metric,"metric_name":metric,"size_name":size,"width":w,"height":h,"threads":count,"reference":fs::canonicalize(&r)?,"distorted":fs::canonicalize(&d)?,"pair_sha256":pair_sha,"input_sha256":hashes,"coverage_first":true,"required_samples":required(size),"sample_target_ns":1000000,"chunk_budget_ms":850000,"locked_process_accounting":true,"notes":"Portable CPU smoke; no OS affinity pin or contention qualification claimed"});
+                if scalar_only {
+                    config["only_mode"] = json!("score");
+                }
                 let attempt = root.join(format!("{metric}-{size}-{count}-{}.json", rows.len()));
                 fs::write(&attempt, serde_json::to_vec_pretty(&config)?)?;
                 let log = attempt.with_extension("log");
@@ -375,8 +400,8 @@ fn main() -> Result<()> {
                         produced += 1;
                     }
                 }
-                if produced != 2 {
-                    return Err("Worker must report both score and score+map".into());
+                if produced != modes.len() {
+                    return Err("Worker must report exactly the requested modes".into());
                 }
             }
         }
