@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Execute original automatic-factor reference bodies with explicit source-mode joins (`18427a98`) and retain their completed scalar grid (`9a89dfe0`); no existing metric code or gate changes.
+
 - Export retained fixed-factor numerical cohorts through artifact-checked scalar shards (`30b0ddd9`, original system-runner data `582c0cef`), with per-process RSS and resource receipts; qualified speed ratios remain missing.
 
 - Bind optional upstream image-2.20.1 resize M-files for primary reference runs (`13d4e8a1`) and distinguish focused VSI reference-runtime differences from metric defects (`fad84fd0`), retaining prior observations and all numerical bounds.

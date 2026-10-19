@@ -1,7 +1,7 @@
 # VSI reference resize control
 
-Missing: unsuffixed automatic-factor coverage, full reference-runtime
-qualification, and matched speed ratios. The initial focused control below
+Missing: full reference-runtime qualification and matched speed ratios.
+The initial focused control below
 covers **4 of 4 selected 64×64 pairs** at
 factor 1 and one thread; it establishes no broader matrix result.
 
@@ -63,8 +63,13 @@ resource-wrapper receipt. [primary-fixed-panel.meta](primary-fixed-panel.meta)
 binds raw records, complete commands, and the publication controls. Every
 Rust thread-budget pair is bit-identical in these two completed panels.
 The primary functions expose scalar outputs, so no map comparison is claimed.
-Automatic factors, including factor 8 at 4K, remain separate work. These
-numerical panels acquire **zero qualified timing ratios**.
+The separate [automatic-factor panel](primary-automatic.json) now passes
+48/48 cases: 24 FSIM/FSIMc cases (both scalar columns) and 24 VSI cases over
+the same input and thread grid. It executes the registered original author
+source, including factor 8 at 4K, and selects the unsuffixed Rust names.
+Maximum differences remain 1.329927450832713e-6 for FSIM/FSIMc and
+3.1678478384922215e-7 for VSI, within the same unchanged gates.
+These numerical panels acquire **zero qualified timing ratios**.
 
 Repeatable preparation and execution recipes live in
 [oracle.just](../iqa_compete_2026-10-16/oracle.just):

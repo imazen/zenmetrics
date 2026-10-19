@@ -19,3 +19,18 @@ bce38eaea3dcd9e048ef448032b242a49ce434d77d0b36df8480830526f75b3c  ~/tmp/portchec
 c9672cc3a922993c2c5deb2c552e6b33c39a558b8151ce09bdf935b7a5a9e540  ~/tmp/portcheck-panel-summary-image2201-20261019T1152-r2/runner-image2201.json
 4580567fc7b04f940ff42da2f40fef471d2ce418108e0ffb48dab6c8677d2242  ~/tmp/portcheck-panel-summary-negative-controls-20261019T1147.log
 f988dadbfdac021072119210066c00a4d02cc193629c840ade042cea7602924e  ~/tmp/portcheck-panel-summary-negative-controls-20261019T1147/results.json
+Automatic source mode18427a98:48/48cases pass;24FSIM cases check2columns,24VSI cases check1column. Original source executes, including autoF8 at4K. Carrier factor1artifact not executed. Numeric bounds unchanged. Published data9a89dfe0.
+Mode confusion3/3negative controls:rc0,0s,peakRSS0.02GiB,minavail13936MiB,peakload3.06; no metric execution in negative controls.
+5477139cb5b512a039bf96459d160c9499f0783cafe4e4b5aabfefb1a0064fd0  ~/tmp/portcheck-automatic-smoke-20261019T1157.log
+b7c9617fff6ebdea776dea76faf1b892b11a9158ed77f56a821e06242bb2cb89  ~/tmp/portcheck-automatic-smoke-20261019T1157/identity.json
+df5cedd63f4c0791f1a5336eb576d3d94ebbcf5a777f375b799716609e14c322  ~/tmp/portcheck-automatic-smoke-20261019T1157/summary.json
+cedc9874b11925e325c6927328938e55712a0d5e7272b97afcdc5dc32e7704ce  ~/tmp/portcheck-automatic-panel-20261019T1200.log
+0d56fc81f6ac0e7d67daf077a933c7ea4066fa5829a912c432cb11625ab27109  ~/tmp/portcheck-automatic-panel-20261019T1200/identity.json
+db629a1273bb9d26ed8c570eca723fa1060274db605fb94b72da3c5e0068f2c6  ~/tmp/portcheck-automatic-panel-20261019T1200/summary.json
+8b89c40ade24eb2f20dbc32f7df6ab31cfc235cd69ab22d19ecf50f33b6b77dc  ~/tmp/portcheck-auto-mode-controls-20261019T1200.log
+faaa965e9ddff900105bae0afb527b2b9e30ec4f8d56c8f8f379e1ac01ffea71  ~/tmp/portcheck-auto-mode-controls-20261019T1200/wrong-resolved-factor.json
+c4c6f90a3c1a4c35bb73475b4f6c7d7e79380e3dfa4d4b76d755fa535e6ec387  ~/tmp/portcheck-auto-mode-controls-20261019T1200/wrong-source-mode.json
+ca9d3d611ca2a9a30c391d085af81f7643f9854789203b2609824de4fe46ba91  ~/tmp/portcheck-auto-mode-controls-20261019T1200/results.json
+d353a0d12595e1fccc95533b8af9d19274c5bc5677df700c2b329b3631e0f810  ~/tmp/portcheck-auto-mode-controls-20261019T1200/unknown-mode.json
+862c85acf9cb4a9036d2edb9712f5d7ab4fe4d0e27326765e360607d198b33b0  ~/tmp/portcheck-automatic-summary-20261019T1208.log
+1a7d708c13e588963d270dad73dc67e13b0b072c10f55b24ed8280709fa9567d  ~/tmp/portcheck-automatic-summary-20261019T1208/primary-automatic.json

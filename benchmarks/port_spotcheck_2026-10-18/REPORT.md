@@ -212,7 +212,9 @@ maximum difference 3.1678478384922215e-7 against the unchanged 1e-4 gate.
 The older image-2.12 VSI cohort remains retained: 82/96 pass, 14 fail.
 All Rust thread-budget pairs are bit-identical. Raw artifacts and process
 memory/resource receipts remain bound in the two result indexes; no maps or
-qualified ratios are claimed. Unsuffixed automatic-factor cases remain missing.
+qualified ratios are claimed. A separate [automatic-factor panel](primary-automatic.json)
+passes 48/48 cases across unsuffixed FSIM/FSIMc and VSI, including original
+author factor 8 at 4K. Its maxima are the same as the fixed-factor panels.
 
 The owner-requested MS-SSIM correction is separately pushed and verified at
 [`970ea199`](https://github.com/imazen/zenmetrics/tree/970ea199538b6efc64eb109e4db81de90137919d)
@@ -221,7 +223,7 @@ Across the same twelve pairs/geometries and two thread budgets, the five
 unsuffixed names produce 108 bit-identical baseline/candidate score cases and
 12 matching small-input refusals. Fixed-name behavior changes remain separate
 before/after observations; independent primary-reference comparison and
-qualified speed ratios are still missing. No metric change landed on master.
+qualified speed ratios are still missing. This SSIM correction has not landed on master.
 
 ## Qualification contract
 
