@@ -1105,3 +1105,7 @@ benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only r
 benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
 benchmarks/port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv	ignored	Partial numerical controls against primary fixed-factor references; no qualified speed ratios or full matrix completion.
 benchmarks/port_spotcheck_2026-10-18/primary-panel.meta	ignored	Primary parity-controller controls and provenance; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairA.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairB.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairC.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.json	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
