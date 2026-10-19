@@ -1,0 +1,31 @@
+{
+  "rows": 240,
+  "statuses": {
+    "base:bit-identical": 108,
+    "base:both-refused": 12,
+    "fixed:both-refused": 60,
+    "fixed:bit-identical": 8,
+    "fixed:changed-score": 46,
+    "fixed:changed-refusal": 6
+  },
+  "outputs": [
+    {
+      "path": "ssim-fixed-before-after-pairA.tsv",
+      "sha256": "d0b024636a44a898d37763342b26865f4ae1f9aa1425fd72d8157b980a953e41",
+      "bytes": 17679
+    },
+    {
+      "path": "ssim-fixed-before-after-pairB.tsv",
+      "sha256": "a493ac0e97f6922d60a34bda72adceb6bf26b7257a3cb42c5ddc24eee6bb1def",
+      "bytes": 17653
+    },
+    {
+      "path": "ssim-fixed-before-after-pairC.tsv",
+      "sha256": "c69d55c77fb32a509f56f8da00d9ce6952adc16165bba59f810d809dcef170d6",
+      "bytes": 17689
+    }
+  ],
+  "input_root": "/home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151",
+  "artifact_manifest_sha256": "a976fc205901d054b1c0b00ad3b61e675c8ce867aad1a07ed04226bf0c819aec",
+  "qualified_timing_cells": 0
+}

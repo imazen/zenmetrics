@@ -1,0 +1,11 @@
+# Fixed-factor MS-SSIM before and after
+
+Missing: complete primary-reference comparison and qualified cold/warm ratio intervals. The before/after delta is a behavior change, not a canonical error or a new acceptance bound.
+
+The unmerged correction is [970ea199538b6efc64eb109e4db81de90137919d](https://github.com/imazen/zenmetrics/commit/970ea199538b6efc64eb109e4db81de90137919d), on `fix/ssim-pyiqa-fixed-factor`. It applies fixed pooling to the SSIM view at every MS-SSIM level while advancing the outer pyramid from the unpooled input. The old path pooled once before the entire pyramid. Base names and single-scale SSIM retain the old function bodies. The public API and numerical gates are unchanged.
+
+The frozen baseline is `e2d414c33a6d3c7da50a818fa36e56654d3ebeef`. Twelve raw RGB8 input pairs/geometries at thread budgets 1 and 28 cover ten names. For the five base names there are 108 bit-identical scored cases and 12 matching small-input refusals. For fixed MS-SSIM factors 2–6 there are 60 cases where both refuse, 46 changed scores, eight bit-identical scores and six changed refusals. The latter are factor 6 at 1024²: the reference-style final view has width 10 and cannot accommodate the existing 11×11 valid window. Two new regression tests cover per-level pooling and early geometry rejection; all ten focused unit tests pass.
+
+The largest baseline/candidate score change is 6.261501946347448e-5. It must not be compared with another metric’s numerical bound. A separate initial primary PyIQA control at factor 3, the photo 1024² pair and one thread returns 0.9981693696863055: baseline absolute difference 6.848234999634606e-6, candidate difference 5.184784268585929e-9. That single observation does not qualify the complete grid or establish an undocumented gate.
+
+The [result index](ssim-fixed-before-after.json) binds all three small TSV shards and the full raw-artifact manifest. Rows retain both process maximum RSS values and their group resource receipt. The contained candidate build used 0.88 GiB peak RSS; its focused test run used 0.91 GiB. Exact commands, frozen binary identities and resource receipts are in [the metadata](ssim-fixed-before-after.meta). This branch remains unmerged.

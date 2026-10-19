@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Keep the fixed-factor MS-SSIM per-level correction unmerged (`970ea199`), with a frozen baseline/candidate score and refusal matrix (`40f79ce5`) and separate primary PyIQA collection (`f88b0e6b`); no numerical gate changes.
+
 - Execute the primary FSIM/VSI fixed-factor references through a hash-checked headless Octave benchmark adapter (`e2d414c3`); retain diagnostic scalar results separately from Rust parity and timing qualification.
 
 - Bind an opt-in primary SSIMULACRA2 benchmark build to owned Highway source and compiler receipts (`763820ae`), preserving older executable cohorts and their stated limits.

@@ -1,0 +1,15 @@
+Observed 2026-10-19, WSL2 / Ryzen 9 7950X. No timing ratios acquired. Metric source970ea199 unchanged by collector/publication children.
+Baseline binary b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d
+Candidate binary a438615020db8b0fb7ef86f61c74c992a354942ee10c3f79f72a1efb2eb1a36b
+Candidate build: run-heavy: done rc=0 41s | peak-RSS 0.88GiB | min-avail 12293MiB | peak-load 5.45
+Focused tests: run-heavy: done rc=0 42s | peak-RSS 0.91GiB | min-avail 12482MiB | peak-load 5.02
+Acquisition command: just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just ssim-candidate-compare ~/tmp/portcheck-primary-rust-20261019T1010 ~/tmp/portcheck-ssim-fixed-rust-20261019T1158 ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-ssim-candidate-matrix-20261019T1151
+Publisher command: just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just ssim-candidate-publish ~/tmp/portcheck-ssim-candidate-matrix-20261019T1151 ~/tmp/portcheck-ssim-candidate-published-20261019T1210
+SHA256 external artifacts (paths checked on lilith-wsl):
+7a993b46cb6fa2128d869a4e9902cee1a9b6a44cbc0cfb80fc5b782df9431511  /home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151/identity.json
+8d4dd6011825697603d19006ea1f541510a68bd1e658ff27c400ddc4b6bf2e42  /home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151/completion.json
+a976fc205901d054b1c0b00ad3b61e675c8ce867aad1a07ed04226bf0c819aec  /home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151/publication-files.sha256.jsonl
+b2bc99b8ffc5c6f3fffdea520ef469612a4bd67ebcc0d58f9aa0fa52a8bc81e0  /home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151.log
+02043f1bbc03e987e3afff487d590e09b9ac0e2419d304c75ac54c07ff200d7c  /home/lilith/tmp/portcheck-ssim-candidate-published-20261019T1210/ssim-fixed-before-after.json
+0a11a836eddee14c67884235177a287bb918497eefd6561e1993056045ee6d75  /home/lilith/tmp/portcheck-ssim-fixed-rust-20261019T1158/build-receipt.json
+1cc10563c849cbeb40ac0a18014cbe44b338d8a9982e00be67c0f87844eb9df6  /home/lilith/tmp/portcheck-pyiqa-fixed-20261019T1204/first-k3-t1/results.json
