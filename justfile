@@ -1871,6 +1871,12 @@ hdrvdp-canonical-build-stages newdir:
 hdrvdp-canonical-stages v221 v222 v307 probe output:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" OPENBLAS_NUM_THREADS=1 python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/spectral_control.py '{{v221}}' '{{v222}}' '{{v307}}' '{{probe}}' '{{output}}'
 
+hdrvdp-canonical-prepare-cubic tree newtree:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_cubic_control.py '{{tree}}' '{{newtree}}'
+
+hdrvdp-canonical-check-cubic:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" octave --quiet benchmarks/hdrvdp_canonical_2026-10-19/scripts/check_cubic_control.m
+
 # Finite Mac GPU timing policy and strict numerical refusal controls.
 iqa-finite-gpu-policy-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py
