@@ -1908,3 +1908,10 @@ clean-panel-nr-check:
     directory=$(mktemp -d "$HOME/tmp/clean-panel-nr-control.XXXXXX")
     rustc --edition=2024 --test benchmarks/clean_panel_2026-10-19/nr_observer.rs -o "$directory/control"
     "$directory/control"
+
+# Isolated nonmetric monitor diagnostics; invoke under run-heavy and shared lock.
+clean-panel-monitor-build directory:
+    cargo test --manifest-path {{directory}}/source/Cargo.toml --locked --offline --no-default-features --lib --no-run --message-format=json
+
+clean-panel-monitor-control binary source_manifest output:
+    python3 benchmarks/clean_panel_2026-10-19/monitor_control.py {{binary}} {{source_manifest}} {{output}}
