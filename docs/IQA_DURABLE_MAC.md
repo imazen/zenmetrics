@@ -374,3 +374,27 @@ verified without recovery or mutation. It retains source report and extra
 result hashes, numerical-instability flags, native error text, engine and
 explicit weight-consent names. Counts remain attempt counts, not distinct
 coverage. The October 18 snapshot remains unchanged.
+
+### Canonical CPU refresh, 2026-10-19
+
+`just iqa-canonical-cpu-prepare` freezes existing native workers against the
+committed RGB derivative hashes. It emits scalar scopes at one and eight
+workers for six non-8K geometries: three fresh constructor-inclusive cold
+processes plus ten warm zenbench rounds targeting 100 ms. RGB loading precedes
+the cold clock. Portable 5/3-round observations remain supplemental. A changed
+worker/source remains a separate series; preparing a bundle does not establish
+compatibility with previous implementations or numerical oracle parity.
+
+The i265 and Mac four-scope SSIMULACRA2 controls passed before their full
+89-route campaigns started. The r7900x campaign contains 95 compiled non-NN
+routes, including six private DVIF variants. All use the existing durable
+controller and per-host shared locks with 12G/8-job wrappers; i265 retains
+checked zenbench performance-core placement. Mac's wrapper is a monitored
+process-tree guard, not a Linux hard memory-cap claim. Native logs retain the
+resource measurements. No NN CPU or GPU campaign was started. The due time is
+reporting metadata and does not stop unfinished cells.
+
+Immutable bundles and live output paths are recorded outside the repository in
+`~/benchmark-artifacts/iqa-unified-20261019/STATUS.json`. Full coverage remains
+pending while those controllers run. Previous attempts and frozen bundles are
+retained, including unsupported input-contract refusals and flagged timings.

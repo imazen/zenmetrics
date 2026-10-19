@@ -1976,3 +1976,9 @@ iqa-chart-export-live root output host *options:
 iqa-chart-export-tests:
     python3 benchmarks/iqa_compete_2026-10-16/test_chart_export.py
 
+iqa-canonical-cpu-check:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_canonical_cpu.py
+
+iqa-canonical-cpu-prepare *args:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_canonical_cpu.py {{args}}
+
