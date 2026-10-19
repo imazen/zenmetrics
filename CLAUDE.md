@@ -561,6 +561,13 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **NR AVX-512 feature build exposed missing generated arms (2026-10-19).**
+  Enabling NIQE/PIQE `avx512` called three `_v4x_t` functions omitted by the
+  default `attune(_*_t)` expansion. The integration explicitly generates those
+  arms while preserving their existing lane layout and arithmetic. The combined
+  all-feature crate tests are the build regression gate; final verification is
+  recorded with the snapshot evidence.
+
 - **Checkpoint portability gates fail on the frozen 53f6d26d source (2026-10-19).**
   [Run 39275363269](https://github.com/imazen/zenmetrics/actions/runs/39275363269)
   fails the common BMP alpha tests on all seven native configurations; the
@@ -570,8 +577,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
   unchanged 1e-9 allowance). The native math observation workflow records the
   same fixture outputs without accepting new values or bounds.
   The browser job refuses `ms-ssim-pyiqa-f32-k6` at the 1024 fixture: its fifth
-  scoring view is 10×10, below the unchanged 11×11 requirement. A prepared test
-  patch retains that refusal and adds a 1152 success fixture; approval is pending.
+  scoring view is 10×10, below the unchanged 11×11 requirement. The owner-approved test
+  patch retains that refusal and adds a 1152 success fixture.
   These are checkpoint-publication blockers, independent of the 23-name rerun
   scope in `benchmarks/rebenchmark_since_f7668c7/README.md`.
 

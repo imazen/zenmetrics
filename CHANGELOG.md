@@ -13,6 +13,15 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Integrate VIF RGB precision (`e818a787`), VIFvec accumulation order (`40c546c2`),
+  SSIMULACRA1 SIMD (`5914beed`), and MS-SSIM dispatch gating (`0603960f`) for the
+  owner-directed rebenchmark. The source-audited minimal set is 23 existing CPU
+  CLI names plus four additions; historical measurements retain their source pins.
+- Integrate reviewed dashboard dependency PRs 91, 93, 94 and 95; include classical
+  NR metrics and the existing comparison driver in the checkpoint build profile.
+- Apply the owner-approved BMP alpha and browser k6 fixture corrections; retain
+  existing numerical bounds. Repair NIQE/PIQE opt-in AVX-512 generated dispatch arms.
+
 - Treat IQA due times as reporting metadata unless stopping is explicitly authorized; expand explicit benchmark weight acceptance into native named consents and support a separately authorized consent-only retry campaign (`c777ae3e`).
 
 - Retain primary Wang MS-SSIM passes and the VIFp RGB precision finding (`0628a938`, `38b74376`, `23be24ea`); preserve numerical gates and keep the candidate correction unmerged.

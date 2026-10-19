@@ -422,6 +422,16 @@ fn scalars() -> serde_json::Value {
             }
             other => (256, other),
         };
+        let (fixture_side, scored) = if name == "ms-ssim-pyiqa-f32-k6" {
+            assert!(
+                scored
+                    .as_ref()
+                    .is_err_and(|e| e.contains("scale 5 is 10x10"))
+            );
+            (1152, run(&fixture(1152), 1152))
+        } else {
+            (fixture_side, scored)
+        };
         let scored: serde_json::Value =
             serde_json::from_str(&scored.unwrap_or_else(|e| panic!("{name}: {e}"))).unwrap();
         out.insert(

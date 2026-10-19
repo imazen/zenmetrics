@@ -208,3 +208,9 @@ artifact storage. No rotating Wrangler login credential belongs in CI.
 Without that secret, the workflow builds and verifies the viewer but
 reports that deployment is not configured. Production deployment and its live
 browser check run only when the credential is supplied.
+
+The checkpoint also includes `drivers/iqa-compete` (`.exe` on Windows), built
+with the existing comparison and metric-threading features plus classical NR
+metrics. Its build receipt contains the executable hash and compiled inventory.
+Packaging refuses a driver that lacks any name in the
+[minimal rerun scope](../benchmarks/rebenchmark_since_f7668c7/README.md).

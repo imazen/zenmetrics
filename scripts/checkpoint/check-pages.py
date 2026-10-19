@@ -577,6 +577,13 @@ try:
               response=wait();worker.postMessage({type:'compare',metric,mapMetric,reference:rBig,distorted:dBig,...inputBig,display:'standard_4k'});
               got=await response;scalarFixture[metric]=1024;
             }
+            if(metric==='ms-ssim-pyiqa-f32-k6'){
+              if(got.type!=='error'||!got.message.includes('scale 5 is 10x10'))throw new Error('k6 must refuse the 1024 fixture');
+              const side=1152,r6=new Uint8Array(side*side*4),d6=new Uint8Array(r6.length);
+              for(let i=0;i<r6.length;i++){r6[i]=i%4===3?255:(i*13+Math.floor(i/(side*4))*17)%256;d6[i]=i%4===3?255:Math.max(0,r6[i]-7);}
+              response=wait();worker.postMessage({type:'compare',metric,mapMetric,reference:r6,distorted:d6,width:side,height:side,display:'standard_4k'});
+              got=await response;scalarFixture[metric]=side;
+            }
             if(got.type!=='result')throw new Error(metric+': '+JSON.stringify(got));metrics[metric]=got.score;
             if(got.score.module!==(ready.metrics.includes(metric)?'core':'full'))throw new Error(metric+' scored in module '+got.score.module);
             if(mapMetric){

@@ -277,7 +277,7 @@ pub(crate) fn gauss7_pair(im: &[f64], w: usize, h: usize, k: &[f64; 7]) -> (Vec<
 
 /// Per-element `sigma = sqrt(|e2 − mu²|)`, `norm = (im − mu)/(sigma + 1)`
 /// over the whole plane — every op elementwise-exact on any width.
-#[attune(_*_t, define(f64x4))]
+#[attune(_*_t, +v4x(cfg(avx512)), define(f64x4))]
 fn norm_plane(token: Token, im: &[f64], mu: &[f64], e2: &[f64], out: &mut [f64]) {
     let n = out.len();
     let chunks = n / 4;

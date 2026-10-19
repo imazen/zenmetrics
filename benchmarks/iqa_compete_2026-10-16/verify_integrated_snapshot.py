@@ -40,15 +40,26 @@ def main():
         run(['cargo', 'fmt', *[x for name in packages for x in ['-p', name]], '--', '--check'], tree)
         metric_packages = [x for name in packages[:-1] for x in ['-p', name]]
         run(['cargo', 'test', '--locked', *metric_packages, '--all-features'], tree)
-        common = ['--locked', '-p', 'zenmetrics-cli', '--no-default-features', '--features', 'cpu-metrics,png,jpeg,bmp']
+        common = ['--locked', '-p', 'zenmetrics-cli', '--no-default-features', '--features', 'cpu-metrics,png,jpeg,bmp,nr']
         run(['cargo', 'test', *common, '--all-targets'], tree)
         run(['cargo', 'test', *common, '--doc'], tree)
         run(['cargo', 'clippy', *common, '--all-targets', '--', '-D', 'warnings'], tree)
-        run(['cargo', 'build', '--locked', '--release', '-p', 'cpu-profile', '--features', 'compete,metrics-parallel', '--bin', 'iqa-compete'], tree)
+        run(['cargo', 'build', '--locked', '--release', '-p', 'cpu-profile', '--features', 'compete,metrics-parallel,zenmetrics-cli/nr', '--bin', 'iqa-compete'], tree)
         binary = output / 'target/release/iqa-compete'
         receipt['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+        inventory = json.loads(subprocess.check_output([str(binary), 'inventory'], cwd=tree, text=True, env=env))
+        required = (tree / 'benchmarks/rebenchmark_since_f7668c7/existing.txt').read_text().splitlines()
+        required += (tree / 'benchmarks/rebenchmark_since_f7668c7/new.txt').read_text().splitlines()
+        compiled = {row['metric_name'] for row in inventory if row['compiled']}
+        assert not set(required) - compiled, sorted(set(required) - compiled)
+        receipt['compiled_required_names'] = required
+        receipt['nr_avx512_fingerprints'] = {}
+        for crate in ['brisque', 'niqe', 'piqe']:
+            records = [json.loads(p.read_text())['features'] for p in (output/'target/release/.fingerprint').glob(crate+'-*/lib-*.json')]
+            assert records and all('"avx512"' in features for features in records), (crate, records)
+            receipt['nr_avx512_fingerprints'][crate] = records
         run([str(binary), 'inventory'], tree)
-        run(['python3', '-B', 'benchmarks/iqa_compete_2026-10-16/checkpoint_math_observe.py'], tree)
+        run(['python3', '-B', 'benchmarks/iqa_compete_2026-10-16/checkpoint_math_observe.py', '--source', revision], tree)
         run(['npm', 'ci', '--no-audit', '--no-fund'], tree / 'crates/zenfleet-dash/web')
         run(['npm', 'run', 'build'], tree / 'crates/zenfleet-dash/web')
         receipt['outcome'] = 'pass'

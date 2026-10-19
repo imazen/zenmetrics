@@ -215,7 +215,7 @@ pub(crate) fn normalize(x: &[f32], mu: &[f32], std_c: &[f32], n: usize) -> Vec<f
 /// `r[j] += a[i+j]` — an 8-lane accumulate identical on every backend.
 /// Returns the combined `((r0+r1)+(r2+r3)) + ((r4+r5)+(r6+r7))` plus the
 /// sequential tail — the scalar leaf's exact arithmetic.
-#[attune(_*_t, define(f32x8))]
+#[attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn pw_leaf_f32(token: Token, a: &[f32]) -> f32 {
     let n = a.len();
     let mut r = f32x8::load_t(token, &a[..8].try_into().unwrap());
@@ -236,7 +236,7 @@ fn pw_leaf_f32(token: Token, a: &[f32]) -> f32 {
 
 /// f64 leaf: the same 8-accumulator unroll as two f64x4 lane groups —
 /// `r0_3[j] += a[i+j]`, `r4_7[j] += a[i+4+j]`, per-lane identical adds.
-#[attune(_*_t, define(f64x4))]
+#[attune(_*_t, +v4x(cfg(avx512)), define(f64x4))]
 fn pw_leaf_f64(token: Token, a: &[f64]) -> f64 {
     let n = a.len();
     let mut r_lo = f64x4::load_t(token, &a[..4].try_into().unwrap());

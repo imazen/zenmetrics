@@ -15,7 +15,8 @@
       "jpegai",
       "orchestrator",
       "orchestrator-cpu-all",
-      "feature-jobs"
+      "feature-jobs",
+      "nr"
     ],
     "full-cuda": [
       "gpu",
@@ -30,7 +31,8 @@
       "jpegai",
       "orchestrator-cuda",
       "orchestrator-cpu-all",
-      "feature-jobs"
+      "feature-jobs",
+      "nr"
     ],
     "full-cpu": [
       "sweep",
@@ -43,7 +45,8 @@
       "jpegai",
       "orchestrator",
       "orchestrator-cpu-all",
-      "feature-jobs"
+      "feature-jobs",
+      "nr"
     ]
   },
   "excluded_features": {

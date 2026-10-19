@@ -92,6 +92,29 @@ def main():
     elif args.profile == 'full-cuda': driver_features = ['study-gpu-cuda']
     driver_dir = args.out / 'drivers'
     driver_dir.mkdir()
+    # The study driver intentionally has a smaller protocol catalog. Ship the
+    # existing comparison driver too, including the classical NR routes, for
+    # the source-audited rebenchmark set.
+    compete_features = ['compete', 'metrics-parallel', 'zenmetrics-cli/nr']
+    compete_command = ['cargo', 'build', '--locked', '--release', '--target', args.target,
+                       '-p', 'cpu-profile', '--bin', 'iqa-compete', '--features',
+                       ','.join(compete_features)]
+    execute(compete_command)
+    commands.append(compete_command)
+    compete_binary = driver_dir / ('iqa-compete' + suffix)
+    shutil.copy2(target / args.target / 'release' / ('iqa-compete' + suffix), compete_binary)
+    inventory = json.loads(subprocess.check_output([str(compete_binary), 'inventory'], text=True))
+    required = (root / 'benchmarks/rebenchmark_since_f7668c7/existing.txt').read_text().splitlines()
+    required += (root / 'benchmarks/rebenchmark_since_f7668c7/new.txt').read_text().splitlines()
+    compiled = {row['metric_name'] for row in inventory if row['compiled']}
+    missing = set(required) - compiled
+    if missing:
+        parser.error('Checkpoint comparison driver lacks required metrics: ' + ', '.join(sorted(missing)))
+    (driver_dir / 'iqa-compete-build.json').write_text(json.dumps({
+        'schema': 1, 'target': args.target, 'source_revision': args.source,
+        'binary_sha256': digest(compete_binary), 'features': compete_features,
+        'compiler': compiler, 'rustflags': [], 'inventory': inventory,
+    }, indent=2) + '\n')
     for variant in ['latency', 'memory']:
         selected = driver_features + (['heap-phases'] if variant == 'memory' else [])
         command = ['cargo', 'build', '--locked', '--release', '--target', args.target,

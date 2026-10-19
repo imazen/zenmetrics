@@ -5,6 +5,7 @@ This standalone probe compiles the unmodified modules with Rust's default
 target settings. A successful run means the observation executed; acceptance
 remains the existing checkpoint tests. Keep all output for platform diagnosis.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -19,6 +20,11 @@ def digest(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', help='Immutable source for a metadata-free CI snapshot')
+    args = parser.parse_args()
+    if args.source is not None:
+        assert len(args.source) == 40 and all(c in '0123456789abcdef' for c in args.source)
     repo = Path(__file__).resolve().parents[2]
     output = Path.home() / 'tmp' / ('checkpoint-math-' + str(os.getpid()))
     output.mkdir(parents=True, exist_ok=False)
@@ -65,7 +71,8 @@ def main():
         assert result.returncode == 0, (name, result.returncode, str(output))
     revision_command = (['jj', 'log', '--no-graph', '--ignore-working-copy', '-r', '@', '-T', 'commit_id']
                         if (repo / '.jj').exists() else ['git', 'rev-parse', 'HEAD'])
-    record = dict(source=subprocess.check_output(revision_command, cwd=repo, text=True).strip(),
+    source = args.source or subprocess.check_output(revision_command, cwd=repo, text=True).strip()
+    record = dict(source=source,
                   platform=platform.platform(), machine=platform.machine(),
                   rustc=subprocess.check_output(['rustc', '-vV'], text=True),
                   module_sha256={name: digest(output / name) for name in files},
