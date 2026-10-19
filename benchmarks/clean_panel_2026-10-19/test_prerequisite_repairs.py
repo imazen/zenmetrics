@@ -172,6 +172,9 @@ class FixedLook(unittest.TestCase):
         d=f.diagnostic_stats([1.]*120,['AB','BA']*60,permutations=9)
         self.assertEqual((d['p_order'],d['p_lag']),(1.,1.))
         d=f.diagnostic_stats([1.]*60+[2.]*60,['AB']*60+['BA']*60,permutations=99)
+        self.assertEqual(d['p_order'],.89)  # Inclusive median ties: low order-test power.
+        self.assertFalse(d['iid_established'])
+        d=f.diagnostic_stats(list(range(1,121)),['AB']*60+['BA']*60,permutations=99)
         self.assertLessEqual(d['p_order'],.025);self.assertTrue(d['diagnostic_refusal']);self.assertFalse(d['iid_established'])
 
 
