@@ -2922,10 +2922,12 @@ pub fn run_metric(
             let (color, multiscale, rounded, factor) = kind
                 .ssim_pyiqa_flags()
                 .ok_or("missing SSIM-pyiqa configuration")?;
-            Ok(vec![(
-                kind.column_names()[0],
-                ssim_pyiqa::score(reference, distorted, color, multiscale, rounded, factor)?,
-            )])
+            let value = if multiscale && factor > 1 {
+                ssim_pyiqa::score_fixed_multiscale(reference, distorted, color, rounded, factor)?
+            } else {
+                ssim_pyiqa::score(reference, distorted, color, multiscale, rounded, factor)?
+            };
+            Ok(vec![(kind.column_names()[0], value)])
         }
         // FSIM/FSIMc: direct call into the in-tree crate (no umbrella,
         // no GPU twin — same shape as GMSD). `fsim` emits both the
