@@ -41,6 +41,8 @@ def group(plan_path):
     rows = []
     for metric in plan.get('metrics', BASE_NAMES + FIXED_NAMES):
         row = {'metric': metric, 'base_name': metric in BASE_NAMES}
+        if plan.get('vif_family'):
+            row['base_name'] = metric == 'vifvec'
         for arm, binary in plan['binaries'].items():
             binary = Path(binary)
             assert sha(binary) == plan['binary_sha256'][arm]
@@ -71,8 +73,13 @@ def group(plan_path):
             row['bit_identical'] = b['scores'] == c['scores']
             row['absolute_deltas'] = [abs(x - y) for x, y in zip(b['values'], c['values'], strict=True)]
         else:
-            row['both_refused'] = (b['returncode'] == c['returncode'] == 1
-                                   and '11x11' in b.get('stderr', '') and '11x11' in c.get('stderr', ''))
+            if plan.get('vif_family'):
+                row['both_refused'] = (metric == 'vifvec' and min(plan['input']['width'], plan['input']['height']) < 72
+                                       and b['returncode'] == c['returncode'] == 1
+                                       and b.get('stderr') == c.get('stderr') and '72' in b.get('stderr', ''))
+            else:
+                row['both_refused'] = (b['returncode'] == c['returncode'] == 1
+                                       and '11x11' in b.get('stderr', '') and '11x11' in c.get('stderr', ''))
         rows.append(row)
     for role in ['reference', 'distorted']:
         assert sha(Path(plan[role])) == plan['input'][role + '_sha256']
@@ -86,11 +93,16 @@ def main():
     p.add_argument('--group', type=Path)
     p.add_argument('--single-scale-fixed', action='store_true',
                    help='Collect only the ten additional fixed single-scale luma/RGB names')
+    p.add_argument('--vif-family', action='store_true',
+                   help='Compare VIF RGB correction and require unchanged vifvec scores/refusals')
     for name in ['baseline', 'candidate', 'inputs', 'output']:
         p.add_argument('--' + name, type=Path)
     a = p.parse_args()
     metrics = ([f'{family}-pyiqa-f32-k{k}' for family in ['ssim', 'ssimc'] for k in range(2, 7)]
                if a.single_scale_fixed else BASE_NAMES + FIXED_NAMES)
+    if a.vif_family:
+        assert not a.single_scale_fixed
+        metrics = ['vif', 'vifvec']
     if a.group:
         return group(a.group.resolve(strict=True))
     if any(getattr(a, name) is None for name in ['baseline', 'candidate', 'inputs', 'output']):
@@ -110,6 +122,8 @@ def main():
     cap = max(1, len(os.sched_getaffinity(0)) - 4)
     identity = {'builds': receipts, 'binary_sha256': hashes, 'inputs_sha256': sha(a.inputs),
                 'worker_sha256': sha(Path(__file__)), 'threads': [1, cap], 'metrics': metrics, 'qualified_timing_cells': 0}
+    if a.vif_family:
+        identity['vif_family'] = True
     write(root / 'identity.json', identity)
     results = []
     for row in inputs:

@@ -25,6 +25,8 @@ def main():
     for name in ['source', 'signal', 'inputs', 'binary', 'build-receipt', 'output']:
         p.add_argument('--' + name, required=True, type=Path)
     p.add_argument('--suppress-compat-warning', action='store_true')
+    p.add_argument('--contained-calls', action='store_true', help='Controller acquires both locks and a resource scope separately for each call')
+    p.add_argument('--continue-from', type=Path, help='Retain completed cases from a stopped, source-bound panel')
     a = p.parse_args()
     for name in ['source', 'signal', 'inputs', 'binary', 'build_receipt']:
         setattr(a, name, getattr(a, name).resolve(strict=True))
@@ -48,6 +50,29 @@ def main():
                     absolute_bound=1e-3, gate_source='crates/psnrhvs/README.md: Verification', threads=[1, cap],
                     octave=str(octave), octave_sha256=sha(octave), qualified_timing_cells=0,
                     map_status='author psnrhvsm.m returns two scalars; no native map API')
+    runner = execute
+    previous = {}
+    if a.contained_calls:
+        from contained_primary import execute as runner
+        identity['containment'] = 'both host locks and run-heavy12G separately per call'
+        identity['contained_helper_sha256'] = sha(base / 'contained_primary.py')
+    if a.continue_from:
+        assert a.contained_calls
+        old = a.continue_from.resolve(strict=True)
+        prior_identity = json.loads((old / 'identity.json').read_text())
+        assert (old / 'retirement.json').is_file() and not (old / 'completion.json').exists()
+        for key in ['metrics', 'sources', 'source_sha256', 'inputs_sha256', 'binary_sha256', 'receipt_sha256',
+                    'compat_warning_policy', 'absolute_bound', 'threads', 'octave_sha256']:
+            assert identity[key] == prior_identity[key], key
+        imported = {}
+        for path in sorted(old.glob('*/results.json')):
+            result = json.loads(path.read_text())
+            assert result['bound'] == 1e-3 and result['rust_returncode'] == 0
+            result['origin_directory'] = str(path.parent)
+            previous[path.parent.name] = result
+            imported[path.parent.name] = {p.name: sha(p) for p in path.parent.iterdir() if p.is_file()}
+        identity['continued_from'] = dict(root=str(old),identity_sha256=sha(old/'identity.json'),
+            retirement_sha256=sha(old/'retirement.json'),completed_case_files=imported)
     write(root / 'identity.json', identity)
     outcomes = []
     for row in json.loads(a.inputs.read_text())['pairs']:
@@ -57,6 +82,10 @@ def main():
         for metric in ['psnrhvs', 'psnrhvs-y']:
             for threads in [1, cap]:
                 directory = root / f'{metric}-{row["pair"]}-{row["size_name"]}-t{threads}'
+                if directory.name in previous:
+                    outcomes.append(previous.pop(directory.name))
+                    print('CASE_RETAINED',len(outcomes),directory.name,flush=True)
+                    continue
                 directory.mkdir()
                 env = dict(os.environ, TMPDIR=str(directory), LC_ALL='C')
                 for key in ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY']:
@@ -83,11 +112,11 @@ for c=1:size(r,3);[masked,unmasked]=psnrhvsm(r(:,:,c),d(:,:,c));values(c,:)=[unm
 scores=mean(values,1);assert(all(isfinite(scores)));
 fprintf('SCORES %.17g %.17g\\n',scores(1),scores(2));fflush(stdout);
 """)
-                canonical_rc, canonical_command = execute([str(octave), '--no-gui', '--no-window-system', '--no-history',
+                canonical_rc, canonical_command = runner([str(octave), '--no-gui', '--no-window-system', '--no-history',
                     '--no-init-file', '--quiet', str(entry)], env, directory, 'canonical', 300)
                 write(directory / 'config.json', dict(width=w, height=h, reference=str(paths['reference']), distorted=str(paths['distorted']),
                      metric_name=metric, threads=threads, probe_only=True, only_mode='score', timing_phase='warm'))
-                rust_rc, rust_command = execute([str(a.binary), str(directory / 'config.json')], env, directory, 'rust', 120)
+                rust_rc, rust_command = runner([str(a.binary), str(directory / 'config.json')], env, directory, 'rust', 120)
                 result = dict(metric=metric, pair=row['pair'], size=row['size_name'], width=w, height=h, threads=threads,
                               canonical_returncode=canonical_rc, rust_returncode=rust_rc, canonical_command=canonical_command,
                               rust_command=rust_command, bound=1e-3, status='process-finding', qualified_ratio=False)
@@ -110,6 +139,7 @@ fprintf('SCORES %.17g %.17g\\n',scores(1),scores(2));fflush(stdout);
                 assert all(sha(path) == row[role + '_sha256'] for role, path in paths.items())
                 write(directory / 'results.json', result); outcomes.append(result)
                 print('CASE_DONE', len(outcomes), directory.name, result['status'], result.get('max_abs_delta'), flush=True)
+    assert not previous
     write(root / 'completion.json', dict(cases=outcomes, qualified_timing_cells=0))
     if any(r['status'] != 'pass' for r in outcomes):
         raise SystemExit(1)
