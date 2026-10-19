@@ -1,0 +1,55 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-mdsi-primary-panel-20261019T1306",
+  "identity": {
+    "metric": "mdsi",
+    "source_sha256": "4dff198b28e57b39b20877c7bcb75af2c6278c95f9f321362a2046ee3e37351b",
+    "source": "/home/lilith/tmp/portcheck-mdsi-primary-source-20261019T1304/MDSI.m",
+    "helpers": {
+      "octave_scalar_panel.py": "58bfef0caefd21c0097660d0eb1274ce93bdcef7cd010f3d2233a9bcabdca3b8",
+      "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+      "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+      "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    "origin": "https://www.mathworks.com/matlabcentral/fileexchange/59809-mean-deviation-similarity-index-mdsi",
+    "binary_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "build_receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "octave_sha256": "66ee110ee2bc13b7a9547e1f619cd06e041269aac819b9f344992da4e79ea7f7",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "relative_bound": 1e-09,
+    "gate_source": "crates/gmsd/README.md: MDSI",
+    "qualified_timing_cells": 0,
+    "map_status": "author MDSI.m exposes only scalar Q; no synthetic map comparison"
+  },
+  "identity_sha256": "bd72a5545aba335713722b7ce0f2d45a4415c49175f7d2076966a83b8591cf0e",
+  "completion_sha256": "417425708070bfe3e501abb3a173f102ba271a1aa4791ddec76e84b8be6ebf7b",
+  "artifact_manifest_sha256": "2cd9ffe509aad33494813d69239ad5d797ea288fafc5ff5694899d6ea6ba1017",
+  "wrapper_log_sha256": "5edd637493485f50f57e90a2d16bb3e9ff54c2359ae220b0fd7ede7204dca4d6",
+  "cases": 24,
+  "statuses": {
+    "pass": 24
+  },
+  "max_abs_delta": 8.17512724182734e-13,
+  "qualified_timing_cells": 0,
+  "shards": [
+    {
+      "path": "primary-mdsi-pairA.tsv",
+      "bytes": 2300,
+      "sha256": "a34f52708f17777f33d2c9bdb5acc8e7004738920da0f8beb81cebc6de51207e"
+    },
+    {
+      "path": "primary-mdsi-pairB.tsv",
+      "bytes": 2284,
+      "sha256": "76a0a8f772400b455a0c4c4bf115cd00c9e353869e413696a76dedc028b21e03"
+    },
+    {
+      "path": "primary-mdsi-pairC.tsv",
+      "bytes": 2294,
+      "sha256": "e68e5e3341fc8926929ad8064d35a1656c4d146bf9a5538cf154450fa7235cec"
+    }
+  ],
+  "max_relative_delta": 7.364215176352893e-12
+}

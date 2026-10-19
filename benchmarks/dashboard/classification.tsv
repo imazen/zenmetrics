@@ -1143,3 +1143,7 @@ benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairA.tsv	ignored	Prim
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.json	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairA.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairB.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairC.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi.json	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
