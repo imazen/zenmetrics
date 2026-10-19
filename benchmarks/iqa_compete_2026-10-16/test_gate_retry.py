@@ -1,5 +1,8 @@
 import unittest
-from prepare_gate_retry import selection
+from prepare_gate_retry import selection, reserve
+from pathlib import Path
+import tempfile
+import os
 
 
 def cell(attempts, clean):
@@ -9,6 +12,15 @@ def cell(attempts, clean):
 
 
 class GateRetry(unittest.TestCase):
+    def test_successor_reservation_cannot_be_reused(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            results=Path(tmp)
+            reserve(results,'identity',results/'first')
+            original=(results/'gate-retry-reservation.json').read_bytes()
+            with self.assertRaises(FileExistsError):
+                reserve(results,'identity',results/'second')
+            self.assertEqual((results/'gate-retry-reservation.json').read_bytes(),original)
+
     def test_preserves_caps_and_never_repeats_clean_cells(self):
         report=dict(complete=True, cells=[cell(1,False),cell(2,False),cell(2,True)])
         groups, exhausted=selection(report,2)

@@ -31,6 +31,15 @@ def selection(report, cap):
     return pending, exhausted
 
 
+def reserve(results, identity, output):
+    # One reservation per parent prevents a second successor from reusing its cap.
+    reservation = results / 'gate-retry-reservation.json'
+    with reservation.open('x') as stream:
+        json.dump(dict(parent_identity=identity, successor_directory=str(output.resolve()),
+                       policy='remaining attempts reserved once; retain this record even if preparation fails'), stream, indent=2)
+        stream.write('\n')
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('bundle', type=Path)
@@ -60,6 +69,7 @@ def main():
                 raise ValueError('parent report projection differs from sealed attempt history')
         groups, exhausted = selection(report, saved['policy']['max_attempts'])
         original = durable.load(a.bundle / 'manifest.json')['cells']
+        reserve(a.results, identity, a.output)
         a.output.mkdir(parents=True, exist_ok=False)
         successors = []
         for remaining, indices in sorted(groups.items()):

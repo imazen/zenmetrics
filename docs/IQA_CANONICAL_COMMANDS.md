@@ -62,3 +62,9 @@ cells with resource flags or missing rounds and an original attempt remaining.
 lists exhausted unqualified cells. It does not install a service or grant new
 attempts. Replacements retain the parent report hash; final selection counts
 each logical cell once. Clean cells and input-contract refusals are not repeated.
+
+A create-once reservation beside the parent report prevents preparing another
+successor against the same remaining caps. Preserve that reservation if
+preparation fails; inspect its recorded successor before taking further action.
+Existing manually prepared successor lineages must be audited before using this
+helper on their original parent.
