@@ -130,6 +130,14 @@ Strict versus relaxed native differs by median 1.6615683477994025e-6 Q;
 this control does not identify the missing setting. Full rows are in the
 [retained strict panel](../benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-comparison.tsv).
 
+Data provenance for both HDR columns (2026-10-19,
+[PROVENANCE.md](../benchmarks/hdrvdp_canonical_2026-10-19/PROVENANCE.md)): the
+cropped `HDR_VDP_2`/`HDR_VDP_3` values are identical in DaRUS v2.0, the site's
+2026-10-05 CSV and our 61-row subset. Fullres differs only on the 32 large
+(category-3) sources, so the cropped columns were scored on the crops. The 122
+crop PNGs are byte-identical to the DaRUS `PTC-crops-all/` members. 27 of the
+61 pairs are category 3. The July label table has no HDR columns.
+
 The native proposal-Butteraugli panel has median 3.06732e-7 site-JND, above
 the requested 3.2e-8 gate. The 9,618-row mapping of published columns must
 not be presented as 9,618 independently computed native scores.
