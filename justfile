@@ -1629,6 +1629,16 @@ bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *o
     cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete --bin bench-iqa
     '{{env_var_or_default("CARGO_TARGET_DIR","target")}}/release/bench-iqa{{if os() == "windows" { ".exe" } else { "" }}}' '{{sizes}}' '{{metrics}}' {{options}}
 
+# Only the changed-since-f7668c7 scope, fastest first within each size/thread budget.
+bench-iqa-changed *options:
+    just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k,8k changed {{options}}
+
+# Standalone checks for exact changed scope and retained timing order.
+bench-iqa-changed-check:
+    mkdir -p "$HOME/tmp/changed-benchmark-selection"
+    rustc --edition 2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/benchmark_selection_tests.rs -o "$HOME/tmp/changed-benchmark-selection/tests"
+    "$HOME/tmp/changed-benchmark-selection/tests"
+
 bench-iqa-advanced sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
     python3 benchmarks/iqa_compete_2026-10-16/bench.py '{{sizes}}' '{{metrics}}' {{options}}
 

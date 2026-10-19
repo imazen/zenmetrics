@@ -25,6 +25,23 @@ silently omit native competitors. Full pinned native comparator orchestration
 without Python/Meson is **not implemented**; use the explicitly advanced route
 below for that existing panel. This is a remaining portability gap.
 
+## Rebenchmark the changed metrics
+
+```sh
+just bench-iqa-changed --host i265 --corpus /path/to/AIC2026/img --skip-native
+```
+
+This runs only the 23 changed CPU names and four additions since `f7668c7`.
+To restrict sizes, use the same selection directly, for example
+`just bench-iqa cid22,4k changed --host i265 --corpus /path/to/AIC2026/img --skip-native`.
+Within each size and thread count, metrics run fastest first by the historical
+1024×1024 single-thread median in
+[order.tsv](../benchmarks/rebenchmark_since_f7668c7/order.tsv). Each row cites its
+measurement source. These historical timings are scheduling hints; the integrated
+code, host and size can change the ranking. Corrected fixed-factor MS-SSIM may
+refuse sizes accepted by the older implementation. Existing resume checks and
+explicit refusal reporting still apply. The resolved order is printed at startup.
+
 ## Linux
 
 The 2026-10-18 scheduling update was checked on i265 with the pinned debug

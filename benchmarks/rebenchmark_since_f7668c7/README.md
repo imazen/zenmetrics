@@ -31,3 +31,10 @@ The earlier MS-SSIM gate experiment includes a 4K multithreaded slowdown in
 [msssim-libvmaf results](../opt_msssim-libvmaf_2026-10-18/summary.tsv).
 Re-measure that cell explicitly; the gate is not established as a win at every
 size. Snapshot publication additionally requires green checkpoint tests and CI.
+
+Run `just bench-iqa-changed --host <label> --corpus <AIC2026-img-dir> --skip-native`
+for this exact 27-name scope. The coordinator retains the historical fastest-first
+order in [order.tsv](order.tsv) for each size/thread budget instead of sorting
+names alphabetically. The table cites historical 1024×1024 single-thread timing
+sources; it does not claim that the integrated implementation has that ranking.
+For selected sizes, use `just bench-iqa cid22,4k changed` with the same options.

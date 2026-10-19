@@ -139,7 +139,7 @@ fn main() -> Result<()> {
     }
     if args.iter().any(|s| s == "--help") {
         println!(
-            "just bench-iqa [sizes] [metrics] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR] [--with-dvifmish]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
+            "just bench-iqa [sizes] [metrics: all|changed|comma-separated names] --host LABEL (--fixture synthetic-v1 | --corpus DIR) --skip-native [--output DIR] [--with-dvifmish]\nCPU only; GPU/NN/Python use just bench-iqa-advanced explicitly. Native comparator setup currently requires the advanced path."
         );
         return Ok(());
     }
@@ -217,6 +217,8 @@ fn main() -> Result<()> {
         )
         .into());
     }
+    let ordered_metrics = benchmark_selection::schedule(metrics, &selected);
+    eprintln!("Metric order: {}", ordered_metrics.join(","));
     let all = thread::available_parallelism()?.get();
     let threads: BTreeSet<usize> = [1, all].into_iter().collect();
     let repo = env::current_dir()?;
@@ -317,7 +319,7 @@ fn main() -> Result<()> {
         let hashes = json!({"reference":sha(&fs::read(&r)?),"distorted":sha(&fs::read(&d)?)});
         let pair_sha = sha(&serde_json::to_vec(&hashes)?);
         for count in &threads {
-            for metric in &selected {
+            for metric in &ordered_metrics {
                 if ["score", "score+map"]
                     .iter()
                     .all(|mode| done.contains(&format!("{metric}:{size}:{count}:{mode}")))
