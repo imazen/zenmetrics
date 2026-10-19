@@ -1078,3 +1078,8 @@ benchmarks/aic_refusals_2026-10-18/refusals-64x64-1.tsv	ignored	Complete CLI exe
 benchmarks/aic_refusals_2026-10-18/refusals-64x64-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
 benchmarks/aic_refusals_2026-10-18/refusal-inventory.meta	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
 benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
+benchmarks/aic_refusals_2026-10-18/vif-before-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-after-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-branch-comparison.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-covariance-retally.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification

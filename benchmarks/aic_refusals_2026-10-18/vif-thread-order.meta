@@ -1,0 +1,18 @@
+host=r5900xt
+baseline_metric_source=64391e266cbb13d007487e8c88a4425876640199 plus frozen-driver.patch
+candidate_metric_source=0281c13edbf9db946498bc182f802797d2b95b62
+branch=fix/vifvec-thread-order; unmerged; no master metric change
+candidate_binary_sha256=19424dc92a2110c7ba8022f8185c3458858fb4a0ba13749a9f85c45f46f27648
+build=just snap-cargo SOURCE build --release -p cpu-profile --features zenmetrics-cli/nr,zenmetrics-cli/nn,metrics-parallel --bin complexity-reps
+command=just aic-perf BINARY OUTPUT vifvec 1024x1024,3840x2160 THREADS CPUS
+budgets=THREADS1 CPUS2; THREADS8 CPUS2-9; three adaptive repetition deltas per cell
+fixture=identical corpus source/JPEG-q20 mirror-tiled pair; decode/preparation excluded by repetition deltas
+rss_command=just complexity-process-rss BINARY vifvec SHAPE THREADS CPUS OUTPUT
+rss_scope=one process including initialization and preparation; /usr/bin/time -v max RSS, not VRAM
+regression=exact covariance test fails before and passes after; 22 crate tests, doctests and strict all-target clippy pass without changing existing assertions
+before_test_resource=run-heavy: done rc=101 3s | peak-RSS 0.32GiB | min-avail 52099MiB | peak-load 0.45
+fixed_gate_resource=run-heavy: done rc=0 39s | peak-RSS 0.94GiB | min-avail 50950MiB | peak-load 3.45
+ab_resource=run-heavy: done rc=0 104s | peak-RSS 0.95GiB | min-avail 51016MiB | peak-load 3.87
+count_scope=existing vifvec.swe2.json core covariance count remains 9 subtractions and45 products/additions per overlapping position; it omitted striped-merge additions. Source-loop retally removes81 additions per stripe, two subbands at each of four levels, stripes=clamp(floor((floor(height/3)*3-2)/16),1,64). Scheduling/allocation overhead is not counted as arithmetic.
+no_std_check=passes with default features disabled; resource rc0 3s peak-RSS0.19GiB min-avail51730MiB load3.11
+coverage=12 before plus12 after timing observations; all finite; corrected one/eight budgets exactly match historical one-worker scores at both sizes

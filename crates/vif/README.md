@@ -84,3 +84,13 @@ Optimization measurements and profiles: [2026-10-12 report](benchmarks/vif_2026-
 This crate ports the LIVE/UT Austin VIF releases, whose copyright notice must
 appear in all copies: [`LICENSE-live-vif`](LICENSE-live-vif). `vifvec` reproduces
 matlabPyrTools' `sp5Filters` taps (MIT): [`LICENSE-matlabPyrTools`](LICENSE-matlabPyrTools).
+
+### Thread-order correction under review
+
+The unmerged `fix/vifvec-thread-order` branch keeps covariance accumulation
+in the original one-worker raster order at every worker budget. Parallel
+striped partial sums previously changed covariance and score bits. Other
+independent parallel work remains enabled. The exact covariance regression
+fails on the original path and passes on the correction; existing numerical
+expectations are unchanged. The owner must review the measured speed/memory
+tradeoff before merging and requalifying published benchmarks.

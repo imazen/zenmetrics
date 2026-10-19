@@ -1,0 +1,5 @@
+shape	threads	before_partial_merge_adds	after_partial_merge_adds	covariance_products_and_raster_adds_unchanged	qualification
+1024x1024	1	0	0	True	Analytical source-loop additions, not retired instructions; inherited core tally omitted this partial-merge overhead
+1024x1024	8	18792	0	True	Analytical source-loop additions, not retired instructions; inherited core tally omitted this partial-merge overhead
+3840x2160	1	0	0	True	Analytical source-loop additions, not retired instructions; inherited core tally omitted this partial-merge overhead
+3840x2160	8	28674	0	True	Analytical source-loop additions, not retired instructions; inherited core tally omitted this partial-merge overhead
