@@ -56,3 +56,32 @@ individual hashes. Compilation has not run: the new production wrapper was
 independently rejected, so further production use of that wrapper stopped.
 Its in-flight source staging completed and retained reap/unlock evidence.
 Native build preparation remains independent of its bounded repair.
+
+## Bounded guard acceptance and next frozen action
+
+Independent boundary review accepts 21a12e02 only for demonstrated returned-
+handle, single-interruption paths; prior P2/helper/monitor acceptance remains.
+Unknown-handle quarantine is source-only; late release evidence can fail after
+proven cleanup, and repeated interrupts/fatal failures are not qualified.
+This closes the demonstrated P1, not general execution or acquisition gates.
+
+`native_plan.py` freezes a build-only plan from retained identity receipts.
+It binds Rust base73c04e413fddc0e95e66b4147785910253772192, Butteraugli
+pin791d08d725f27b5331ef7b96e73aad89ed895f45, landed adapter62aaf7e9,
+reviewed three blobs, unchanged Cargo.lock, explicit max-column benchmark
+source overlay and the two 512x512 packed RGB inputs. Requested features are
+compete,metrics-parallel; no NR or NN feature is added. No inference about
+unrelated optional dependency membership follows from that feature selection.
+
+Next bounded action under existing build-only authorization is fresh native
+and Rust compilation, after live two-lock resolution/admission and run-heavy,
+source/input/overlay revalidation and unchanged locked metadata. Build outputs
+must be fresh; bind compiler/linker/header/static-library and resolved features,
+then both actual executable/runtime closures and used controller dependencies.
+No compiled-cohort or closure claim exists yet. No scorer/warmup/parity/timing
+calls are included. Independent exact cohort/protocol/scope review and existing
+numerical, runtime, generic and statistical gates remain afterward.
+
+The supervisor's blocked SSIM builder and unapproved inventory are not consumed;
+CMS/SSIM research stays in its owning lane. Historical canonical executable
+binding remains absent; no current binary retrobinds old rows.
