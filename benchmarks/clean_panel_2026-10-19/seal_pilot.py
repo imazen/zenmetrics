@@ -10,6 +10,7 @@ import sys
 import platform
 import runtime_closure
 import workload
+import bytecode_inventory
 from panel import digest, identity
 
 
@@ -67,12 +68,12 @@ def main():
     envroot=args.python.parent.parent
     environment=[]
     for directory,dirs,files in os.walk(envroot/'lib'):
-        dirs[:]=sorted(d for d in dirs if d!='__pycache__')
+        dirs[:]=sorted(dirs)
         for name in sorted(files):
             path=Path(directory)/name
-            if path.is_file() and path.suffix not in {'.pyc','.pyo'}:environment.append(record(path))
+            if path.is_file():environment.append(record(path))
     environment.extend([record(args.python),record(sys.executable),record(here/'brisque_oracle.py')])
-    runtime=json.loads(subprocess.check_output([str(args.python),'-c','import sys,sysconfig,json;print(json.dumps(dict(version=sys.version,stdlib=sysconfig.get_path("stdlib"))))'],text=True))
+    runtime=json.loads(subprocess.check_output([str(args.python),'-B','-c','import sys,sysconfig,json;print(json.dumps(dict(version=sys.version,stdlib=sysconfig.get_path("stdlib"))))'],env=bytecode_inventory.environment(),text=True))
     stdlib=Path(runtime['stdlib'])
     for path in sorted(stdlib.rglob('*.py')):
         if 'site-packages' not in path.parts and '__pycache__' not in path.parts:environment.append(record(path))
@@ -86,8 +87,13 @@ def main():
     for path in [Path('/etc/ld.so.cache'),Path('/etc/ld.so.conf'),*Path('/etc/ld.so.conf.d').glob('*'),Path('/usr/bin/ldd'),Path('/usr/bin/readelf')]:
         if path.is_file(): environment.append(record(path))
     packages=json.loads(subprocess.check_output([str(args.python),'-c',
-        'import importlib.metadata as m,json;print(json.dumps(sorted((d.metadata.get("Name",""),d.version) for d in m.distributions())))'],text=True))
-    canonical={'runtime':runtime,'packages':packages,'artifacts':environment,'weights':record(weights),'native_closure':native}
+        'import importlib.metadata as m,json;print(json.dumps(sorted((d.metadata.get("Name",""),d.version) for d in m.distributions())))'],env=bytecode_inventory.environment(),text=True))
+    contention=source/'benchmarks/iqa_compete_2026-10-16/contention.py'
+    probes=[dict(executable=str(args.python),script_directory=str(here)),
+            dict(executable=str(Path(sys.executable).absolute()),script_directory=str(here)),
+            dict(executable=str(Path(sys.executable).absolute()),script_directory=str(contention.parent))]
+    bytecode=bytecode_inventory.capture(probes,[str(envroot/'lib'),str(stdlib)])
+    canonical={'bytecode_binding':bytecode,'runtime':runtime,'packages':packages,'artifacts':environment,'weights':record(weights),'native_closure':native}
     canonical_file=root/'canonical.json';canonical_file.write_text(json.dumps(canonical,indent=2))
     config=root/'cell.json'
     config.write_text(json.dumps(dict(width=512,height=512,reference=str(root/'reference.rgb'),distorted=str(root/'distorted.rgb'),metric_name='brisque',only_mode='score',timing_phase='warm',locked_process_accounting=True,threads=1,chunk_budget_ms=60000)))
@@ -95,13 +101,13 @@ def main():
     containment=here/'containment.py'
     heavy=Path.home()/'work/claudehints/scripts/run-heavy'
     scope='resident RGB8 reference and distorted; separate NR scores for both; ingress+metric+result allocation timed; immutable model load and input file I/O excluded'
-    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(containment),record(heavy),record(here/'panel.py'),record(here/'workload.py'),record(here/'runtime_closure.py'),record('/usr/bin/taskset')]
+    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(containment),record(heavy),record(here/'panel.py'),record(here/'workload.py'),record(here/'runtime_closure.py'),record(here/'bytecode_inventory.py'),record('/usr/bin/taskset')]
     # Duplicate resolved library paths carry one authoritative expected hash.
     artifacts=list({r['path']:r for r in artifacts}.values())
     work=dict(metric_name='brisque',width=512,height=512,threads=1,mode='score',timing_phase='warm',reference=str(root/'reference.rgb'),distorted=str(root/'distorted.rgb'))
     pyiqa_version=next(version for name,version in packages if name.lower()=='pyiqa')
     manifest=dict(schema=2,metric='brisque',shape=[512,512,1,'score'],scope={'ours':scope,'canonical':scope},cpu=2,parity_abs_bound=15.138428/1000,
-                  inputs=inputs,artifacts=artifacts,host_observation=platform.uname()._asdict(),contention_script=str(contention),containment_script=str(containment),run_heavy=str(heavy),controller_python=str(Path(sys.executable).absolute()),taskset='/usr/bin/taskset',workload=work,native_closure=native,arms={
+                  inputs=inputs,artifacts=artifacts,host_observation=platform.uname()._asdict(),contention_script=str(contention),containment_script=str(containment),run_heavy=str(heavy),controller_python=str(Path(sys.executable).absolute()),taskset='/usr/bin/taskset',workload=work,native_closure=native,bytecode_binding=bytecode,arms={
                       'ours':dict(build_identity=identity(build_identity),argv=[str(baseline),str(config)],protocol='iqa-row',sample_count=10),
                       'canonical':dict(build_identity=identity(canonical),argv=[str(args.python),str(here/'brisque_oracle.py'),str(root/'reference.rgb'),str(root/'distorted.rgb'),str(weights)],protocol='canonical-v2',adapter=workload.ADAPTER,pyiqa_version=pyiqa_version,version='pyiqa-'+pyiqa_version+workload.VERSION_SUFFIX,sample_count=10)})
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2))

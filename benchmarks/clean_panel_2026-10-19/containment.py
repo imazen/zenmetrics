@@ -47,15 +47,21 @@ def execute(command, output, env, receipt, timeout=120, grace=1.0):
     owner = os.getpid()
     if any(p['ppid'] == owner for p in processes().values()):
         raise RuntimeError('containment requires no pre-existing controller children')
+    # Fail before launch if the required PID-safe facilities are unavailable.
+    probe = os.pidfd_open(owner)
+    try: signal.pidfd_send_signal(probe, 0)
+    finally: os.close(probe)
     child = None
     known = {}
     details = {}
     events = []
     reason, code, error = 'complete', None, None
+    failures = {}
+    last_remaining = None
+    interrupted = []
     previous = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
     def interrupt(sig, frame):
-        raise KeyboardInterrupt('signal ' + str(sig))
-    for sig in previous: signal.signal(sig, interrupt)
+        interrupted.append(sig)
 
     def refresh():
         current = processes()
@@ -97,15 +103,36 @@ def execute(command, output, env, receipt, timeout=120, grace=1.0):
     def state(status):
         return dict(status=status, reason=reason, exit_code=code, error=error,
                     owner_pid=owner, owned=list(details.values()),
-                    remaining=refresh(), signals=events)
+                    remaining=last_remaining, signals=events,
+                    cleanup_failures=list(failures.values()), interrupted_signals=interrupted)
+
+    # Keep an already-open diagnostic sink: receipt replacement itself may fail
+    # under EMFILE. A write failure never authorizes releasing admission.
+    emergency = os.open(str(receipt)+'.errors.jsonl', os.O_CREAT|os.O_EXCL|os.O_WRONLY, 0o600)
+    def failure(phase, exc):
+        key = (phase, type(exc).__name__, str(exc))
+        item = failures.setdefault(key, dict(phase=phase,type=type(exc).__name__,message=str(exc),count=0))
+        item['count'] += 1
+        if item['count'] == 1:
+            try: os.write(emergency, (json.dumps(item)+'\n').encode())
+            except BaseException: pass  # Retain in memory; normal receipt retries.
+    try:
+        for sig in previous: signal.signal(sig, interrupt)
+        write(receipt, state('preflight'))
+    except BaseException:
+        os.close(emergency)
+        for sig, handler in previous.items(): signal.signal(sig, handler)
+        raise  # No child has been launched.
     try:
         child = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT,
                                  env=env, start_new_session=True)
-        refresh()
+        last_remaining = refresh()
         write(receipt, state('running'))
         deadline = time.monotonic() + timeout
         while child.poll() is None:
-            refresh()
+            last_remaining = refresh()
+            if interrupted:
+                reason = 'interrupted'; error = dict(type='KeyboardInterrupt',message='signal '+str(interrupted[-1])); break
             if time.monotonic() >= deadline:
                 reason = 'timeout'; break
             time.sleep(.02)
@@ -118,33 +145,43 @@ def execute(command, output, env, receipt, timeout=120, grace=1.0):
         reason = 'interrupted' if isinstance(exc, KeyboardInterrupt) else 'launch-or-monitor-error'
         error = dict(type=type(exc).__name__, message=str(exc))
     finally:
-        # Repeated user signals cannot bypass teardown or release experiment locks.
-        for sig in previous: signal.signal(sig, signal.SIG_IGN)
-        try:
-            send(signal.SIGTERM)
-            deadline = time.monotonic() + grace
-            while refresh() and time.monotonic() < deadline:
+        # Nothing in teardown may unwind to panel.acquire's ordinary rejection
+        # path until a fresh scan proves emptiness AND the terminal receipt is
+        # durable. Errors in monitoring, signaling, reaping or writing quarantine
+        # the locks held by the caller. The signal handler only records requests.
+        term_deadline = time.monotonic() + grace
+        while True:
+            phase = 'refresh'
+            try:
+                last_remaining = refresh()
+                phase = 'reap'
                 if child is not None: child.poll()
-                reap(); time.sleep(.02)
-            send(signal.SIGKILL)
-            deadline = time.monotonic() + grace
-            while refresh() and time.monotonic() < deadline:
-                if child is not None: child.poll()
-                reap(); time.sleep(.02)
-            if child is not None: child.poll()
-            reap()
-            # No terminal return with survivors. Unkillable tasks quarantine
-            # admission; persist the blocker instead of releasing the locks.
-            while refresh():
-                write(receipt, state('containment-blocked'))
-                send(signal.SIGKILL)
-                if child is not None: child.poll()
-                reap(); time.sleep(.1)
-            if reason == 'timeout': code = 124
-            elif reason != 'complete': code = 130 if reason == 'interrupted' else 125
-            write(receipt, state('empty'))
-        finally:
-            for sig, handler in previous.items(): signal.signal(sig, handler)
+                reap()
+                phase = 'refresh-after-reap'
+                last_remaining = refresh()
+                if last_remaining:
+                    phase = 'send'
+                    send(signal.SIGTERM if time.monotonic() < term_deadline else signal.SIGKILL)
+                    phase = 'blocked-receipt'
+                    write(receipt, state('containment-blocked'))
+                else:
+                    if reason == 'timeout': code = 124
+                    elif reason != 'complete': code = 130 if reason == 'interrupted' else 125
+                    phase = 'terminal-receipt'
+                    write(receipt, state('empty'))
+                    phase = 'final-empty-verification'
+                    last_remaining = refresh()
+                    if not last_remaining:
+                        break
+            except BaseException as exc:
+                last_remaining = None  # Failed observation is UNKNOWN, not empty.
+                failure(phase, exc)
+                try: write(receipt, state('containment-blocked'))
+                except BaseException as write_error: failure('blocked-receipt', write_error)
+            try: time.sleep(.05)
+            except BaseException as exc: failure('retry-wait', exc)
+        os.close(emergency)
+        for sig, handler in previous.items(): signal.signal(sig, handler)
     if reason == 'interrupted':
         raise KeyboardInterrupt(error['message'])
     if reason == 'launch-or-monitor-error':

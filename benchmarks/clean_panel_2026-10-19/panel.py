@@ -15,6 +15,7 @@ import signal
 import containment
 import workload
 import runtime_closure
+import bytecode_inventory
 
 METRICS = set('brisque butteraugli butteraugli-original cambi cambi-aic2026 mdctpsnr psnr-y-libvmaf ssim2 vmaf vmaf-4k vmaf-neg vmaf-neg-studio601 vmaf-studio601 vmaf-v1 vsi vsi-k2 vsi-k3 vsi-k4 vsi-nodownscale'.split())
 
@@ -48,6 +49,7 @@ def verify(manifest):
             raise ValueError('missing build identity')
     workload.validate_contract(manifest)
     runtime_closure.verify(manifest['native_closure'])
+    bytecode_inventory.verify(manifest['bytecode_binding'])
     bound = manifest['parity_abs_bound']
     if not math.isfinite(bound) or bound < 0:
         raise ValueError('invalid parity gate')
@@ -133,7 +135,7 @@ def run_arm(name, manifest, block_id, directory):
     command = [sys.executable, manifest['contention_script'], str(contention), str(log), '--',
                manifest['run_heavy'], '--mem', '12G', '--jobs', '1', '--',
                manifest['taskset'], '-c', str(manifest['cpu']), *spec['argv']]
-    env = runtime_closure.environment(manifest['native_closure']['loader'])
+    env = bytecode_inventory.environment(runtime_closure.environment(manifest['native_closure']['loader']))
     env.update({k: '1' for k in ('RAYON_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','RTEN_NUM_THREADS')})
     env.pop('PYTHONPATH', None)
     env.update(PYTHONNOUSERSITE='1', PYTHONDONTWRITEBYTECODE='1', TMPDIR=str(directory), ZENBENCH_NO_SAVE='1', ZENBENCH_CPU_POLICY='unrestricted')

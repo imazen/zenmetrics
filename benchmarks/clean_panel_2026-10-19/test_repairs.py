@@ -15,6 +15,7 @@ import panel
 import runtime_closure
 import seal_pilot
 import workload
+import bytecode_inventory
 
 HERE = Path(__file__).resolve().parent
 
@@ -28,9 +29,9 @@ def fixture(root):
     binary=file('baseline');cell=file('cell.json',json.dumps(config));weights=file('weights')
     native=runtime_closure.closure([],runtime_closure.loader_environment())
     paths=[binary,cell,weights,sys.executable,'/usr/bin/taskset',str(HERE/'containment.py'),str(HERE/'brisque_oracle.py')]
-    contention=file('contention.py');heavy=file('heavy');paths += [contention,heavy] + [str(HERE/name) for name in ('panel.py','workload.py','runtime_closure.py')]
+    contention=file('contention.py');heavy=file('heavy');paths += [contention,heavy] + [str(HERE/name) for name in ('panel.py','workload.py','runtime_closure.py','bytecode_inventory.py')]
     return dict(schema=2,metric='brisque',shape=[512,512,1,'score'],scope=dict(ours='paired-NR',canonical='paired-NR'),
-        workload=work,native_closure=native,artifacts=[seal_pilot.record(p) for p in paths],
+        workload=work,native_closure=native,bytecode_binding=bytecode_inventory.capture([],[str(root)]),artifacts=[seal_pilot.record(p) for p in paths],
         inputs=[seal_pilot.record(p) for p in [reference,distorted]],parity_abs_bound=.001,cpu=0,
         resources_script='unused-legacy-helper',controller_python=sys.executable,taskset='/usr/bin/taskset',containment_script=str(HERE/'containment.py'),contention_script=contention,run_heavy=heavy,
         arms=dict(ours=dict(build_identity='native-build',argv=[binary,cell],protocol='iqa-row',sample_count=10),
@@ -196,7 +197,7 @@ class SealerLayout(unittest.TestCase):
                 (build/name).write_text('{}')
             env=root/'env';(env/'bin').mkdir(parents=True);(env/'lib').mkdir();stdlib=root/'stdlib';stdlib.mkdir();(stdlib/'fake.py').write_text('# fake stdlib\n')
             python=env/'bin/python'
-            python.write_text('#!'+sys.executable+'\nimport sys,json\nif "stdlib" in sys.argv[-1]: print(json.dumps({"version":"fake", "stdlib":'+repr(str(stdlib))+'}))\nelse: print(json.dumps([["pyiqa","test"]]))\n')
+            python.write_text('#!'+sys.executable+'\nimport sys,json\nif "stdlib" in sys.argv[-1]: print(json.dumps({"version":"fake", "paths":[], "cache_prefix":None, "stdlib":'+repr(str(stdlib))+'}))\nelse: print(json.dumps([["pyiqa","test"]]))\n')
             python.chmod(0o755)
             reference=root/'r.rgb';distorted=root/'d.rgb';weights=root/'weights'
             reference.write_bytes(bytes(512*512*3));distorted.write_bytes(bytes(512*512*3));weights.write_text('fake')

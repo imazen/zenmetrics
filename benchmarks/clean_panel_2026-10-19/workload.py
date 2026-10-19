@@ -28,7 +28,7 @@ def validate_contract(m):
     import sys
     if m['controller_python'] != str(Path(sys.executable).absolute()):
         raise ValueError('controller Python mismatch')
-    for name in ('panel.py','workload.py','runtime_closure.py'):
+    for name in ('panel.py','workload.py','runtime_closure.py','bytecode_inventory.py'):
         require(str(Path(__file__).with_name(name).absolute()))
     if Path(m['containment_script']).resolve() != Path(__file__).with_name('containment.py').resolve():
         raise ValueError('unsupported containment helper')
