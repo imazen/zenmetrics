@@ -245,6 +245,15 @@ Rust retains its documented floor-sized geometry. No input cropping or timing
 qualification is inferred. Each process RSS and the aggregate resource
 receipt are retained with the hashed raw artifacts.
 
+## Primary MDSI scalar grid
+
+The [unchanged-author MDSI panel](primary-mdsi.md) passes 24/24 scalar cases,
+covering the four requested sizes, three retained pairs and both thread budgets.
+Maximum relative difference is 7.364215176352893e-12 against the existing 1e-9
+bound. Source, runtime, input hashes, both process memory receipts and the
+aggregate resource receipt are retained. The author exposes no map output;
+qualified speed ratios remain missing.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

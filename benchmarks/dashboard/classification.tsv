@@ -1147,3 +1147,4 @@ benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairA.tsv	ignored	Primary unch
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairB.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairC.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-mdsi.json	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi.meta	ignored	Primary MDSI command, source and artifact metadata; no qualified timings.

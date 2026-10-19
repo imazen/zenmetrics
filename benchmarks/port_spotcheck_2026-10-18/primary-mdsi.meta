@@ -1,0 +1,17 @@
+Observed 2026-10-19 on WSL2 / Ryzen 9 7950X. Rust e2d414c33a6d3c7da50a818fa36e56654d3ebeef, binaryb9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+Source adapter and exporter45e1a9bb; completed data cd384f1c. No qualified ratios.
+Panel command under both host locks/run-heavy12G/jobs28:
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just mdsi-primary-panel ~/tmp/portcheck-mdsi-primary-source-20261019T1304/MDSI.m ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-primary-rust-20261019T1010/target/release/iqa-compete ~/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json ~/tmp/portcheck-mdsi-primary-panel-20261019T1306
+Publisher command under both host locks/run-heavy12G/jobs1:
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just mdsi-primary-publish ~/tmp/portcheck-mdsi-primary-panel-20261019T1306 ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-mdsi-published-20261019T1311
+Panel:run-heavy: done rc=0 20s | peak-RSS 0.62GiB | min-avail 13822MiB | peak-load 1.25
+Exporter:run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 14242MiB | peak-load 1.21
+SHA256 external evidence (paths checked on lilith-wsl):
+1b34e8821808a5a24bff2064e8ed044539e3569536b5fc2488635afd83f2fd96  /home/lilith/tmp/portcheck-mdsi-primary-source-20261019T1304/source.json
+4dff198b28e57b39b20877c7bcb75af2c6278c95f9f321362a2046ee3e37351b  /home/lilith/tmp/portcheck-mdsi-primary-source-20261019T1304/MDSI.m
+bd72a5545aba335713722b7ce0f2d45a4415c49175f7d2076966a83b8591cf0e  /home/lilith/tmp/portcheck-mdsi-primary-panel-20261019T1306/identity.json
+417425708070bfe3e501abb3a173f102ba271a1aa4791ddec76e84b8be6ebf7b  /home/lilith/tmp/portcheck-mdsi-primary-panel-20261019T1306/completion.json
+2cd9ffe509aad33494813d69239ad5d797ea288fafc5ff5694899d6ea6ba1017  /home/lilith/tmp/portcheck-mdsi-primary-panel-20261019T1306/publication-files.sha256.jsonl
+5edd637493485f50f57e90a2d16bb3e9ff54c2359ae220b0fd7ede7204dca4d6  /home/lilith/tmp/portcheck-mdsi-primary-panel-20261019T1306.log
+bd04f227e10b68c5e532ab0d8cd8b90fce7d74c1339dd5051e29770e0a7c2897  /home/lilith/tmp/portcheck-mdsi-published-20261019T1311/primary-mdsi.json
+28c45bf78cd6ed1b992d359d60d81bc086410d05d6ead86fd966c92f17563978  /home/lilith/tmp/portcheck-mdsi-published-20261019T1311.log

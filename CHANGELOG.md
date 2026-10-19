@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Execute the unchanged-author MDSI scalar grid and retain its relative-gate artifact checks (`45e1a9bb`), with all 24 cases passing the existing 1e-9 bound (`cd384f1c`); no timing qualification.
+
 - Bind primary libgmsd C and frozen Rust map probes (`a71826c8`), independently recheck artifact exports (`1036fe01`), and retain 18 even-size passes plus six instrumented odd-size C failures (`63cfa806`); no numerical gate changes.
 
 ### Changed
