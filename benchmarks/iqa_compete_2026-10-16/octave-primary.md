@@ -6,7 +6,7 @@ verified scratch copies produced by [the fixed-factor patcher](fixed-factor-orac
 Original source bytes remain unchanged; the copy replaces only the factor
 expression with k in 1–4. This is a benchmark reference, outside shipped crates.
 
-Missing: the full size/content/thread matrix, direct Rust comparisons, map
+Missing: the full size/content/thread matrix, remaining Rust comparisons, map
 comparisons where both APIs expose them, qualified paired ratios and runtime
 call-graph closure. Successful Octave execution does not establish equivalence
 to every MATLAB/toolbox release. No numerical gate changes here.
@@ -68,3 +68,23 @@ attempt finishes in one second, with the same scalar; no metric speed ratio is
 inferred from those process durations. A failed help query and its termination
 workspace are preserved outside the repository. Scratch directories must exist
 before Octave starts; its help formatter needs them even for metadata queries.
+
+## Partial Rust parity
+
+The [frozen-Rust probe](probe_octave_parity.py) joins an actual executable
+inventory, build receipt, canonical execution record, factor manifest and input
+hashes before comparison. It calls the existing harness's untimed `probe_only`
+path, which checks repeated Rust values for bit equality. It inherits the
+existing base gates (FSIM 5e-5, VSI 1e-4) for the owner-defined fixed variants.
+It does not acquire timing samples or infer a ratio from canonical clocks.
+
+The eight 64×64 factor cases pass at one thread on this control pair, including
+both FSIM output columns. Maximum absolute differences are
+9.231485020855246e-9 for FSIM/FSIMc and 8.306581955475068e-5 for VSI.
+The [partial scalar table](../port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv)
+retains each observed delta. This is one pair, not the requested content grid.
+The whole serialized probe panel reports
+`done rc=0 1s | peak-RSS 0.02GiB | min-avail 13122MiB | peak-load 3.82`.
+Run `oracle.just octave-rust-parity` with the eight explicit arguments listed
+by `just --show`; preserve full output under both locks and the resource wrapper.
+Full matrix, map coverage where available and qualified speed ratios remain missing.

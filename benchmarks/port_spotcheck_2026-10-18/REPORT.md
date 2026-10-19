@@ -167,7 +167,7 @@ The [verified fixed-factor adapter](../iqa_compete_2026-10-16/octave-primary.md)
 landed at `e2d414c3`. The primary FSIM and VSI releases now execute at factors
 1–4 on the retained 64×64 control pair. Each case selects a separately verified
 source copy, and first/warm scalar strings repeat. This establishes execution
-beyond the earlier metadata-only staging. Direct Rust parity, the requested
+beyond the earlier metadata-only staging. Remaining Rust parity, the requested
 size/content/thread grid and qualified ratios remain missing. An explicit
 headless environment resolves the observed startup stall; process durations
 are not used as metric speed comparisons.
@@ -177,6 +177,14 @@ variant's current placement, including the MS-SSIM per-level-view difference
 that still requires an unmerged correction. A fresh Rust comparison harness
 now builds from the unchanged CI-pinned source, with source-byte checks and
 retained compiler/runtime receipts; compilation alone qualifies no score.
+
+The first direct [partial scalar comparisons](parity-fsim-vsi-64.tsv) now pass
+for all eight fixed-factor FSIM/VSI names at 64×64, one synthetic pair and one
+thread. Both FSIM columns are checked. Maximum observed absolute differences
+are 9.231485020855246e-9 (FSIM/FSIMc, gate 5e-5) and
+8.306581955475068e-5 (VSI, gate 1e-4). No numerical bound changed. This covers
+only those eight input/configuration cases; it does not complete either
+method's requested grid or qualify a replacement-panel timing cell.
 
 ## Qualification contract
 

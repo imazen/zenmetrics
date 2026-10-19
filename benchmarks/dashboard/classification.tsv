@@ -1103,3 +1103,4 @@ benchmarks/port_spotcheck_2026-10-18/inventory-source-01.tsv	ignored	Source-only
 benchmarks/port_spotcheck_2026-10-18/inventory-source-02.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
 benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
 benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv	ignored	Partial numerical controls against primary fixed-factor references; no qualified speed ratios or full matrix completion.

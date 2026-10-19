@@ -217,3 +217,29 @@ External evidence(SHA256):
 33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd  ~/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json
 b569b0c98ea3133c7252b4b8ea6b39b7b353813df0dd5f5c412c355691424112  ~/tmp/portcheck-primary-rust-20261019T1010/rustc.txt
 3bd465ae930450e84fa774dcf411245faf4a47241fbabd15154dd68064a6e19c  ~/tmp/portcheck-primary-rust-20261019T1010/ldd.txt
+
+Partial primary FSIM/VSI Rust parity,2026-10-19,lilith-wsl:
+  Existing probe_only path in the unchanged e2d414c33a6d frozen Rust source; binaryb9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+  Actual executable inventory126names,SHA25645ea82844da47d174a784a60e9db7b343b21e23dadf695deaba30dec23efa612; compiled state retained pername.
+  Eight named variant cases at64x64,one synthetic pair,1thread;12scalarcolumns vs primary author releases with factor1-4.
+  All8cases pass existing base gates:FSIM5e-5,VSI1e-4. Gate source docs/METRIC_PROVENANCE.md at exact frozen revision; no changed bound.
+  Max VSI delta8.306581955475068e-5; max FSIM/FSIMc delta9.231485020855246e-9.
+  No acquired Rust timing or accepted ratio; score maps unsupported by selected primary entry points.
+  Command template: oracle.just octave-rust-parity <binary> <build-receipt> <canonical-results> <factor-manifest> <reference.rgb> <distorted.rgb> 1 <fresh-evidence>.
+  Full percase argv in saved log. Each input/source/executable binding checked; Rust probe itself asserts repeated values have identical bits.
+  Serialized whole-panel wrapper:rc0,1s,peakRSS0.02GiB,minavail13122MiB,peakload3.82; both locks,run-heavy12Gjobs1,owned ext4TMPDIR.
+  Public partial table preserves every scalar delta and result hash; this is not the final summary.tsv.
+External evidence(SHA256):
+5b59afb8bf25767c1966cf2f3a06fc8d04d5e15d3dffc749aaf3bff5a11faae3  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015.log
+8b223a54ca802852944f2ab5d973b81b6265d3974b9fb8d00b746e97a0ba5bc9  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/FeatureSIM-k1/results.json
+cf2c08a9d23a0b31a19ed19b04a9a426b13d146cde7cdb95b781bda95f17b6b7  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/FeatureSIM-k2/results.json
+c11df30d028dc7ae2fac64aa7907b14d3023bb60649fa52c1b99e272488b92f2  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/FeatureSIM-k3/results.json
+e91eb00702864a06aa95958f4925e9222618f0eaf7a2e7bb4c069169de3df6ee  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/FeatureSIM-k4/results.json
+01cb762eeb4da480fdd0a4c6214ba83479e44b7b9301840c6377970d9fdbc1dd  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/VSI-k1/results.json
+9f5067727b273249e403318d8a2642368644fba28264e592102dba3f639aec99  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/VSI-k2/results.json
+a57086e2afa7de87e3974ad0780e2ad3db234a0f93eaf5871f5c6694dd6e2aea  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/VSI-k3/results.json
+2c60b33ea57d28d637388138c9b1cba2393831f2dbf372ae28aa1c277bae0211  ~/tmp/portcheck-primary-fsim-vsi-parity-20261019T1015/VSI-k4/results.json
+
+Parity join negative controls:5/5reject thread/input/manifest/nonfinite-reference/binary mismatches before creating probe evidence. Both locks+run-heavy12Gjobs1:rc0,0s,peakRSS0.02GiB,minavail13073MiB,peakload2.12.
+fbdba029b36a029b9d7c3bc1a51a1a4581d02997043117e64e086da8bebc8e41  ~/tmp/portcheck-primary-parity-guards-20261019T1017.log
+572e1f95bfd2accca3dbb27a79eed3e078d4fe87bd9be94182f1f430289715e1  ~/tmp/portcheck-primary-parity-guards-20261019T1017/results.json

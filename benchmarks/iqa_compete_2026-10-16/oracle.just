@@ -60,3 +60,7 @@ primary-rust-freeze snapshot revision:
 [positional-arguments]
 primary-rust-compile snapshot:
     env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS -u CARGO_BUILD_RUSTFLAGS CARGO_TARGET_DIR="$1/target" CARGO_PROFILE_RELEASE_LTO=thin cargo build --manifest-path "$1/work/zenmetrics/Cargo.toml" --locked --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete
+
+[positional-arguments]
+octave-rust-parity binary build_receipt canonical manifest reference distorted threads evidence:
+    python3 -B probe_octave_parity.py --binary "$1" --build-receipt "$2" --canonical "$3" --manifest "$4" --reference "$5" --distorted "$6" --threads "$7" --evidence "$8"
