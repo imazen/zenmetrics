@@ -2044,3 +2044,14 @@ consent and the native gate stay strict. A separately owner-authorized retry
 campaign preserves all old attempts and grants two new attempts only to
 proven exhausted consent refusals. Other exhausted bounds/allocation/incomplete-round and process-exit
 failures remain separately blocked. See [the owning contract](docs/IQA_DURABLE_MAC.md).
+
+### Known Bugs: AIC execution refusal outcomes (2026-10-18)
+
+The complexity repetition driver converted returned metric errors into panic
+exit 101. The historical HDR-VDP 2/3 SDR requests and NR-disabled build therefore
+looked like kernel crashes. It now preserves the refusal message and exits 2.
+The 64-square inventory also found an explicit panic in the disabled
+`zensim-gpu` dispatch arm; that arm now returns its existing diagnostic as an
+error. A direct dispatch regression covers that outcome without changing scores
+or enabling the disabled route. Evidence belongs in
+`benchmarks/aic_refusals_2026-10-18/`.

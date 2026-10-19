@@ -1129,62 +1129,19 @@ fn refparams_vecgsm(y: &[f64], w: usize, h: usize) -> (Vec<f64>, Vec<f64>, usize
         *m /= np as f64;
     }
     let mut cu = alloc::vec![0.0f64; n2 * n2];
-    // Striped partial covariance: each stripe owns a ty range and a
-    // private 81×81 buffer; the ordered merge keeps the sum order fixed
-    // for any thread count (within ~1e-14 of serial — tolerance-passed).
-    #[cfg(feature = "parallel")]
-    let mut ran_par = false;
-    #[cfg(not(feature = "parallel"))]
-    let ran_par = false;
-    #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
-        use rayon::prelude::*;
-        let rows = ch - (M - 1);
-        let stripes = (rows / 16).clamp(1, 64);
-        let bounds: Vec<usize> = (0..=stripes).map(|s| s * rows / stripes).collect();
-        let mut partials: Vec<Vec<f64>> = (0..stripes)
-            .into_par_iter()
-            .map(|s| {
-                let mut pc = alloc::vec![0.0f64; n2 * n2];
-                for ty in bounds[s]..bounds[s + 1] {
-                    for tx in 0..(cw - (M - 1)) {
-                        let mut v = [0.0f64; 9];
-                        for c in 0..M {
-                            for r in 0..M {
-                                v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
-                            }
-                        }
-                        for i in 0..n2 {
-                            for j in i..n2 {
-                                pc[i * n2 + j] += v[i] * v[j];
-                            }
-                        }
-                    }
+    // Keep the same raster-order accumulation at every worker budget.
+    // Striped partial sums change the covariance bits and the final score.
+    for ty in 0..(ch - (M - 1)) {
+        for tx in 0..(cw - (M - 1)) {
+            let mut v = [0.0f64; 9];
+            for c in 0..M {
+                for r in 0..M {
+                    v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
                 }
-                pc
-            })
-            .collect();
-        for mut pc in partials.drain(..) {
-            for (e, p) in cu.iter_mut().zip(pc.drain(..)) {
-                *e += p;
             }
-        }
-        ran_par = true;
-    }
-    let _ = ran_par;
-    if !ran_par {
-        for ty in 0..(ch - (M - 1)) {
-            for tx in 0..(cw - (M - 1)) {
-                let mut v = [0.0f64; 9];
-                for c in 0..M {
-                    for r in 0..M {
-                        v[c * M + r] = y[(ty + r) * w + tx + c] - mean[c * M + r];
-                    }
-                }
-                for i in 0..n2 {
-                    for j in i..n2 {
-                        cu[i * n2 + j] += v[i] * v[j];
-                    }
+            for i in 0..n2 {
+                for j in i..n2 {
+                    cu[i * n2 + j] += v[i] * v[j];
                 }
             }
         }
@@ -2057,6 +2014,39 @@ pub(crate) fn vifvec_core_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn covariance_is_bit_identical_across_thread_budgets() {
+        let (w, h) = (73, 81);
+        let y: Vec<f64> = (0..w * h)
+            .map(|i| ((i * 37 % 257) as f64 - 123.0) / 7.0)
+            .collect();
+        let evaluate = |threads| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(|| refparams_vecgsm(&y, w, h))
+        };
+        let serial = evaluate(1);
+        let parallel = evaluate(8);
+        assert_eq!((serial.2, serial.3), (parallel.2, parallel.3));
+        for (a, b) in serial.0.iter().zip(&parallel.0) {
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "S-field changes with worker budget"
+            );
+        }
+        for (a, b) in serial.1.iter().zip(&parallel.1) {
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "eigenvalue changes with worker budget"
+            );
+        }
+    }
 
     #[test]
     fn local_statistics_match_scalar_windows() {

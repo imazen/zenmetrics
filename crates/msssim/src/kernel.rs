@@ -55,13 +55,30 @@ fn decimate(x: &[f32], w: usize, h: usize) -> (usize, usize, Vec<f32>) {
     (w2, h2, out)
 }
 
+/// Plane-sample count below which rayon dispatch costs more than the
+/// work itself. Measured on lilith-wsl's 32-thread pool: float_ms_ssim
+/// runs 1.8ms serial vs 93ms parallel at 255x257 and still loses at 1MP
+/// (41 vs 56ms); the parallel path only wins at 4K+. Serial and parallel
+/// produce identical results, so this gate is scheduling-only. Same
+/// discipline as `zenmetrics-math::par::PAR_MIN_SAMPLES`, tuned to this
+/// crate's per-call work sizes.
+pub(crate) const PAR_MIN: usize = 1 << 21;
+
+/// True when a `parallel` dispatch over `n` plane samples beats serial.
+#[cfg(feature = "parallel")]
+#[inline]
+pub(crate) fn par_ok(n: usize) -> bool {
+    n >= PAR_MIN && rayon::current_num_threads() > 1
+}
+
 /// Row-map driver — `f(y, out_row)` for every row. Under `parallel`
-/// rows are `par_chunks_mut`-mapped when the pool has >1 thread;
-/// otherwise the serial loop runs. Writes are disjoint per row either
-/// way, so results are bit-identical at any thread count.
+/// rows are `par_chunks_mut`-mapped when the pool has >1 thread and the
+/// plane is at least `PAR_MIN` samples; otherwise the serial loop runs.
+/// Writes are disjoint per row either way, so results are bit-identical
+/// at any thread count.
 pub(crate) fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
     #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
+    if par_ok(out.len()) {
         use rayon::prelude::*;
         out.par_chunks_mut(row_w)
             .enumerate()
@@ -73,9 +90,11 @@ pub(crate) fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut
     }
 }
 
-/// `rayon::join` under `parallel`, sequential otherwise — each side
-/// writes its own `Vec`, so results are identical at any thread count.
+/// `rayon::join` under `parallel` when `n` (the plane samples each side
+/// works over) clears `PAR_MIN`, sequential otherwise — each side writes
+/// its own `Vec`, so results are identical at any thread count.
 pub(crate) fn maybe_join<A, B>(
+    n: usize,
     fa: impl FnOnce() -> A + Send,
     fb: impl FnOnce() -> B + Send,
 ) -> (A, B)
@@ -85,13 +104,14 @@ where
 {
     #[cfg(feature = "parallel")]
     {
-        if rayon::current_num_threads() <= 1 {
+        if !par_ok(n) {
             return (fa(), fb());
         }
         rayon::join(fa, fb)
     }
     #[cfg(not(feature = "parallel"))]
     {
+        let _ = n;
         (fa(), fb())
     }
 }
@@ -244,7 +264,7 @@ macro_rules! score_body {
                 }
             };
             #[cfg(feature = "parallel")]
-            if rayon::current_num_threads() > 1 {
+            if par_ok(n) {
                 use rayon::prelude::*;
                 // Each worker computes its own halo; the final fold remains raster-ordered.
                 let band_rows = out_h.div_ceil(rayon::current_num_threads());
@@ -279,7 +299,7 @@ macro_rules! score_body {
 
             if l + 1 < level {
                 let ((w2, h2, d1), (_, _, d2)) =
-                    maybe_join(|| decimate(&im1, w, h), || decimate(&im2, w, h));
+                    maybe_join(w * h, || decimate(&im1, w, h), || decimate(&im2, w, h));
                 im1 = alloc::borrow::Cow::Owned(d1);
                 im2 = alloc::borrow::Cow::Owned(d2);
                 w = w2;

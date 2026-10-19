@@ -1,0 +1,21 @@
+metric	cell	threads	stage	median_ms	score_bits	note
+ssim-libvmaf	255x257	32	before	21.871	3fefeea600000000	rayon storm on small planes
+ssim-libvmaf	255x257	32	after	1.119	3fefeea600000000	19.5x; ~= t1 (1.03)
+ssim-libvmaf	255x257	1	after	1.110	3fefeea600000000	unchanged serial path
+ssim-libvmaf	1280x720	32	before	25.387	3feff8d560000000	
+ssim-libvmaf	1280x720	32	after	10.825	3feff8d560000000	~= t1 (10.1)
+ssim-libvmaf	3840x2160	32	before	105.377	3feff8bb80000000	
+ssim-libvmaf	3840x2160	32	after	86.519	3feff8bb80000000	gate->serial wins even at 4K
+msssim-libvmaf	255x257	32	before	92.715	3feffd5e36d85cff	
+msssim-libvmaf	255x257	32	after	1.789	3feffd5e36d85cff	51.8x; ~= t1 (1.76)
+msssim-libvmaf	255x257	1	after	1.852	3feffd5e36d85cff	unchanged serial path
+msssim-libvmaf	1280x720	32	before	56.272	3feff7f9bd377cc2	
+msssim-libvmaf	1280x720	32	after	41.239	3feff7f9bd377cc2	~= t1 (40.7)
+msssim-libvmaf	3840x2160	32	before	227.459	3fefda29e56024be	
+msssim-libvmaf	3840x2160	32	after	282.117	3fefda29e56024be	level>=1 planes now serial
+msssim	255x257	32	before	12.384	3feffe8a023bebdf	
+msssim	255x257	32	after	0.550	3feffe8a023bebdf	22.5x
+msssim	64x64	32	before	5.227	3fefffbad40e5816	t1 was 0.0341
+msssim	64x64	32	after	0.0357	3fefffbad40e5816	146x
+msssim	3840x2160	32	before	127.918	3fefd551571469fc	
+msssim	3840x2160	32	after	72.224	3fefd551571469fc	

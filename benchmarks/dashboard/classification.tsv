@@ -1188,3 +1188,5 @@ benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.json	ignored	Native map or unt
 benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
 benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
 benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/opt_ssimulacra1_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssimulacra1-blur-simd branch; not a dashboard metric schema.
+benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/msssim-libvmaf-mt-gate branch; not a dashboard metric schema.

@@ -449,6 +449,11 @@ feature-jobs = ["cpu-metrics"]
 # selector; it is a deliberate human pin, exactly like the `hdr` version gate.
 feature-rev = ["feature-jobs"]
 
+# Opt-in AVX-512 tier for the in-tree SIMD metrics (ssimulacra1's blur
+# kernels gain a `_v4x` dispatch arm); same opt-in posture as the metric
+# crates' own `avx512` features.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
@@ -474,6 +479,10 @@ csv = { workspace = true }
 # one zenmetrics process saturates all cores natively, replacing the
 # `xargs -P` shell-level fan-out used in earlier sweeps.
 rayon = "1"
+# archmage/magetypes runtime SIMD dispatch for the in-tree ported metrics
+# (ssimulacra1's separable blur); the same pinned rev every metric crate uses.
+archmage = { workspace = true }
+magetypes = { workspace = true }
 
 # zen image decoders — all path deps to sibling worktrees so we
 # always link the in-flight local versions. User confirmed
