@@ -1,0 +1,58 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-vif-primary-panel-20261019T1404",
+  "identity": {
+    "metric": "vif",
+    "source_sha256": "ef3105597cf0ea5fe99e2eaa1de1b9abd5eb604d2251c3196db1b1e53497a813",
+    "source": "/home/lilith/tmp/portcheck-vif-primary-source-20261019T1404/vifp_mscale.m",
+    "helpers": {
+      "octave_scalar_panel.py": "ec310ca03c6050b3c373106ba79754fb29ac7624efb5aa4afd79a0ae68674907",
+      "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+      "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+      "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    "dependencies": {},
+    "origin": "https://github.com/sattarab/image-quality-tools/tree/163fff128a86260efcc962de52196c71a3d3d06e/metrix_mux/metrix/vif/vifp_release",
+    "binary_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "build_receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "octave_sha256": "66ee110ee2bc13b7a9547e1f619cd06e041269aac819b9f344992da4e79ea7f7",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "relative_bound": null,
+    "absolute_bound": 1e-09,
+    "bound_kind": "absolute",
+    "gate_source": "crates/vif/src/tests.rs:golden_scores",
+    "qualified_timing_cells": 0,
+    "map_status": "primary top-level function exposes scalar only; comparable map coverage not inferred"
+  },
+  "identity_sha256": "bbc73496dce7f478c41f92d02ebf0fecd9942d184fe83e6362847122632c816e",
+  "completion_sha256": "5c036c9547e3f36f3c800f9c2f210c2e235c96209e45b383cca0eac2b732370f",
+  "artifact_manifest_sha256": "d80a4674aabcb6beaadd924566941157b1768f6ce0bcbb71ff6615364a3bb439",
+  "wrapper_log_sha256": "ba5297b6514d4c5696a915db9af01644be43ab304b818dbbc84a6d669a9420f2",
+  "cases": 24,
+  "statuses": {
+    "numeric-finding": 22,
+    "pass": 2
+  },
+  "max_abs_delta": 4.093188010756421e-09,
+  "qualified_timing_cells": 0,
+  "shards": [
+    {
+      "path": "primary-vif-pairA.tsv",
+      "bytes": 2348,
+      "sha256": "859267310bf64893ea9787c37d30cd32105ed970f0cd62ddd856d59c23edbba6"
+    },
+    {
+      "path": "primary-vif-pairB.tsv",
+      "bytes": 2356,
+      "sha256": "449255d69e1a8683e683f5c7849f42ec1f142b137e3c6d5bf794548d84a86feb"
+    },
+    {
+      "path": "primary-vif-pairC.tsv",
+      "bytes": 2362,
+      "sha256": "cc21873284ba630d22e016d904ca396f5d0de7be835d423c8fe30fa16c2b00ed"
+    }
+  ]
+}

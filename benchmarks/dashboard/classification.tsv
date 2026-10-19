@@ -1169,3 +1169,11 @@ benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairB.tsv	ignored	Aut
 benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
 benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
 benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.meta	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.

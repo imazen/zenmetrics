@@ -1,0 +1,59 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404",
+  "identity": {
+    "metric": "msssim",
+    "source_sha256": "de1296cb93fdd5a7df23430c54333cf8b0bc97214ffab3a403d1bf3988cd587f",
+    "source": "/home/lilith/tmp/portcheck-msssim-primary-source-20261019T1402/msssim.m",
+    "helpers": {
+      "octave_scalar_panel.py": "ec310ca03c6050b3c373106ba79754fb29ac7624efb5aa4afd79a0ae68674907",
+      "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+      "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+      "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    "dependencies": {
+      "/home/lilith/tmp/portcheck-msssim-primary-source-20261019T1402/ssim_index_new.m": "ee99dd6b263c9bbb46b675657e3a12c87c8083aecfbc155d8d85a5d89fb8b8ac"
+    },
+    "origin": "https://github.com/LabForComputationalVision/MAD_Competition/tree/f67840136fb1b56227b1a7a62a36d61275f176de/msssim",
+    "binary_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "build_receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "octave_sha256": "66ee110ee2bc13b7a9547e1f619cd06e041269aac819b9f344992da4e79ea7f7",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "relative_bound": null,
+    "absolute_bound": 0.0001,
+    "bound_kind": "absolute",
+    "gate_source": "crates/msssim/src/tests.rs:golden_scores",
+    "qualified_timing_cells": 0,
+    "map_status": "primary top-level function exposes scalar only; comparable map coverage not inferred"
+  },
+  "identity_sha256": "65f98536262221946077d2f95657ec3241ba400b26da43535802bc77f1b05bda",
+  "completion_sha256": "31705db18dcca11bc06b56f5518c5a30480e422ab664ab0f3c2ae1f1c96d7f0e",
+  "artifact_manifest_sha256": "65a6c2b1151b68fd27695d54edb53191f9fd6e5f7e2db52ec3539edafcd06587",
+  "wrapper_log_sha256": "d3d044590dcfbad599213105910b2abab196d4893e2041fb57cdd394cc70cb3b",
+  "cases": 24,
+  "statuses": {
+    "pass": 24
+  },
+  "max_abs_delta": 4.752062978119476e-06,
+  "qualified_timing_cells": 0,
+  "shards": [
+    {
+      "path": "primary-msssim-pairA.tsv",
+      "bytes": 2296,
+      "sha256": "c05894880d157b7b797f7c582e33786fee3e9140ebbafd649632fbbb74870f93"
+    },
+    {
+      "path": "primary-msssim-pairB.tsv",
+      "bytes": 2302,
+      "sha256": "b3eea18e22f6adcbf02f6f3e5206ea25ff9c23f08e096758cb1cb05e41d557e8"
+    },
+    {
+      "path": "primary-msssim-pairC.tsv",
+      "bytes": 2304,
+      "sha256": "b7831c1b49275901e8601cbe3efa43c0aae7ebdb625386f47994860857c25f1f"
+    }
+  ]
+}
