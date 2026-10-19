@@ -80,3 +80,8 @@ while true
  fprintf('%s Q=%.17g\n', fields{3}, res.Q);
 end
 fclose(f); fclose(out);
+if exist('symmetric_ifft_control','file')
+ global HDRVDP_FFT_STATS;
+ fprintf('FFT_CONTROL calls,abs_defect,relative_defect,row_delta,column_delta,axis_delta:');
+ fprintf(' %.17g', HDRVDP_FFT_STATS); fprintf('\n');
+end

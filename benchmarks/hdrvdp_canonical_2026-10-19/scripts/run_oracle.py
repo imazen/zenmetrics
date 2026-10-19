@@ -33,6 +33,7 @@ meta = dict(started=datetime.now(timezone.utc).isoformat(), argv=cmd,
             driver_sha256=hashlib.sha256(script.read_bytes()).hexdigest(),
             pairs_sha256=hashlib.sha256(pairs.read_bytes()).hexdigest(),
             statistics_path=env.get('HDRVDP_STATISTICS_PATH'),
+            fft_axis=env.get('HDRVDP_FFT_AXIS'),
             baseline_commit=subprocess.check_output(['jj','log','-r','@-','--no-graph','-T','commit_id'],cwd=root,text=True).strip())
 meta_path = output.with_suffix('.meta.json')
 meta_path.write_text(json.dumps(meta, indent=2)+'\n')

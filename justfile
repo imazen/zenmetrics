@@ -1849,6 +1849,12 @@ hdrvdp-canonical-prepare-rust newdir:
 hdrvdp-canonical-controls scratch output:
     python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/summarize_controls.py '{{scratch}}' '{{output}}'
 
+hdrvdp-canonical-prepare-symmetric tree newtree:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_symmetric_control.py '{{tree}}' '{{newtree}}'
+
+hdrvdp-canonical-check-symmetric:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" octave --quiet benchmarks/hdrvdp_canonical_2026-10-19/scripts/check_symmetric_control.m
+
 # Finite Mac GPU timing policy and strict numerical refusal controls.
 iqa-finite-gpu-policy-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py
