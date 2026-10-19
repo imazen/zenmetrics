@@ -20,18 +20,21 @@ def main():
     p.add_argument('panel', type=Path)
     p.add_argument('inputs', type=Path)
     p.add_argument('output', type=Path)
-    p.add_argument('--metric', choices=['haarpsi', 'mdsi'], default='haarpsi')
+    p.add_argument('--metric', choices=['haarpsi', 'mdsi', 'msssim', 'vif'], default='haarpsi')
     a = p.parse_args()
     root = a.panel.resolve(strict=True)
     identity = json.loads((root / 'identity.json').read_text())
     complete = json.loads((root / 'completion.json').read_text())
     assert sha(a.inputs) == identity['inputs_sha256']
     inputs = json.loads(a.inputs.read_text())['pairs']
-    metrics = ['haarpsi', 'haarpsi-y'] if a.metric == 'haarpsi' else ['mdsi']
-    bound = 5e-5 if a.metric == 'haarpsi' else 1e-9
-    assert (identity['bound'] if a.metric == 'haarpsi' else identity['relative_bound']) == bound
-    expected_source = ('ef1bed2872fd1f74842afdccfd1d6b0e3a93bc5479b14bf845460f08dec8ee4a'
-                       if a.metric == 'haarpsi' else '4dff198b28e57b39b20877c7bcb75af2c6278c95f9f321362a2046ee3e37351b')
+    metrics = ['haarpsi', 'haarpsi-y'] if a.metric == 'haarpsi' else [a.metric]
+    bound = {'haarpsi':5e-5, 'mdsi':1e-9, 'msssim':1e-4, 'vif':1e-9}[a.metric]
+    bound_key = 'bound' if a.metric == 'haarpsi' else 'relative_bound' if a.metric == 'mdsi' else 'absolute_bound'
+    assert identity[bound_key] == bound
+    expected_source = {'haarpsi':'ef1bed2872fd1f74842afdccfd1d6b0e3a93bc5479b14bf845460f08dec8ee4a',
+                       'mdsi':'4dff198b28e57b39b20877c7bcb75af2c6278c95f9f321362a2046ee3e37351b',
+                       'msssim':'de1296cb93fdd5a7df23430c54333cf8b0bc97214ffab3a403d1bf3988cd587f',
+                       'vif':'ef3105597cf0ea5fe99e2eaa1de1b9abd5eb604d2251c3196db1b1e53497a813'}[a.metric]
     assert identity['source_sha256'] == expected_source
     expected = {f'{metric}-{row["pair"]}-{row["size_name"]}-t{threads}'
                 for row, metric, threads in itertools.product(inputs, metrics, identity['threads'])}
@@ -39,7 +42,8 @@ def main():
     completed = complete['cases'] if isinstance(complete['cases'], int) else len(complete['cases'])
     assert len(expected) == completed == 12 * len(metrics) * len(identity['threads']) and actual == expected
     receipts = [s for s in root.with_suffix('.log').read_text().splitlines() if s.startswith('run-heavy: done rc=')]
-    assert len(receipts) == 1 and 'rc=0 ' in receipts[0]
+    expected_rc = 1 if a.metric == 'vif' and any(r['status'] == 'numeric-finding' for r in complete['cases']) else 0
+    assert len(receipts) == 1 and f'rc={expected_rc} ' in receipts[0]
     records = collections.defaultdict(list)
     for case in sorted(expected):
         directory = root / case
@@ -60,7 +64,7 @@ def main():
             compared = max(abs(ours - value) / max(abs(value), 1e-300) for value in canonical)
             assert compared == result['max_relative_delta'] and result['relative_bound'] == bound
         else:
-            assert result['bound'] == bound
+            assert result[bound_key] == bound
         assert result['status'] == ('pass' if compared <= bound else 'numeric-finding')
         for role in ['canonical', 'rust']:
             rss = [int(s.split(':', 1)[1]) for s in (directory / (role + '-memory.txt')).read_text().splitlines()
@@ -69,7 +73,7 @@ def main():
         row = {key: result[key] for key in ['metric', 'pair', 'size', 'width', 'height', 'threads', 'ours',
                                           'max_abs_delta', 'status', 'canonical_process_rss_kbytes',
                                           'rust_process_rss_kbytes']}
-        row.update(bound=bound, bound_kind='absolute' if a.metric == 'haarpsi' else 'relative',
+        row.update(bound=bound, bound_kind='relative' if a.metric == 'mdsi' else 'absolute',
                    max_relative_delta=result.get('max_relative_delta', ''))
         row.update(canonical_first=canonical[0], canonical_warm=canonical[1],
                    panel_resource_receipt=receipts[0], qualified_ratio=False, map_status='missing')
