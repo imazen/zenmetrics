@@ -1,0 +1,29 @@
+name: Checkpoint math observations
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest, windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Record unchanged SSIMULACRA1 and FLIP fixture outputs
+        run: python benchmarks/iqa_compete_2026-10-16/checkpoint_math_observe.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: checkpoint-math-${{ matrix.os }}
+          path: |
+            ~/tmp/checkpoint-math-*/*.json
+            ~/tmp/checkpoint-math-*/*.log
+            ~/tmp/checkpoint-math-*/*.rs

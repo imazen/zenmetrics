@@ -216,3 +216,6 @@ haarpsi-primary-maps-publish panel output:
 
 haarpsi-primary-map-check python build source panel inputs output:
     '{{python}}' -B check_haarpsi_maps.py --build '{{build}}' --source '{{source}}' --panel '{{panel}}' --inputs '{{inputs}}' --output '{{output}}'
+
+checkpoint-math-observe:
+    python3 -B checkpoint_math_observe.py

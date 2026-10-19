@@ -177,6 +177,13 @@ is a CI tool, while distributed checkpoint files remain GitHub Release assets.
 The separately pinned `runner-source` checkout is excluded from this Cargo
 workspace. It keeps its own dependency lock and does not join the metric graph.
 
+The manual `Checkpoint math observations` workflow compiles the unchanged
+SSIMULACRA1 and FLIP modules in a small standalone probe on native Linux,
+macOS ARM64 and Windows runners. It retains exact fixture outputs, the sRGB
+lookup table, compiler identity and source hashes for platform diagnosis.
+Successful execution is an observation, not numerical acceptance; checkpoint
+publication still requires every existing functional and numerical test.
+
 ## Browser website
 
 The interactive viewer runs on https://zenmetrics-site.pages.dev/; its custom
