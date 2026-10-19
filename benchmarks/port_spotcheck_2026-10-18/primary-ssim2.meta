@@ -1,0 +1,17 @@
+Observed 2026-10-19 on lilith-wsl / Ryzen 9 7950X / WSL2.
+Frozen Rust source e2d414c33a6d3c7da50a818fa36e56654d3ebeef, binary b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+Canonical Cloudinary v2.1 fb5d0dbe866e5113d320666a09ddbc8d145b5fde, raw RGB adapter 9d0fc033b44580055909b52e2cabad87d2c5f6fb28c4fe970391738fe3f67ac1.
+Collection source254b0af1, artifact exporter18b8f63a, published data c1c82411. All 24 scalar observations retain UNBOUND/UNQUALIFIED status.
+Panel command (both host locks, run-heavy12G/jobs28, TMPDIR=~/tmp/portcheck-supervisor-scratch):
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just ssim2-primary-panel ~/tmp/portcheck-primary-owned-build-20261019T0955/build/iqa-ssim2-primary ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-primary-rust-20261019T1010/target/release/iqa-compete ~/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json ~/tmp/portcheck-ssim2-primary-panel-20261019T1356
+run-heavy: done rc=0 27s | peak-RSS 1.66GiB | min-avail 11941MiB | peak-load 1.72
+Publisher command (same locks/cap, jobs1):
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just native-scalar-publish ~/tmp/portcheck-ssim2-primary-panel-20261019T1356 ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-ssim2-published-20261019T1359
+run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 13958MiB | peak-load 1.60
+SHA256 external evidence (paths verified on lilith-wsl):
+f2d755fa1483ce696d1c5be9db1b086a75d98a86173db8e4698b03c9b52b54fc  /home/lilith/tmp/portcheck-ssim2-primary-panel-20261019T1356/identity.json
+cb0595c085e34f3a686fb34890256864df7d5d6e12bab5a5e1e2085d1cb61d35  /home/lilith/tmp/portcheck-ssim2-primary-panel-20261019T1356/completion.json
+588d2adb8a569a48c9c5786e59f36eb870e83e1671feb72d189e0bc71f269ae6  /home/lilith/tmp/portcheck-ssim2-primary-panel-20261019T1356/publication-files.sha256.jsonl
+128c920876703c54219d06d2b95ec8f8c53101f4bc20d89b5472f9b77d967400  /home/lilith/tmp/portcheck-ssim2-primary-panel-20261019T1356.log
+57986eb46c879a641890fe661756679541b2ad6f60d2312a9d1c1a588ec26e51  /home/lilith/tmp/portcheck-primary-owned-build-20261019T0955.log
+c52eaafbc6529fcdc15632e403fac07923cae06bc80c7ef27ead2b596aea562d  /home/lilith/tmp/portcheck-ssim2-published-20261019T1359.log

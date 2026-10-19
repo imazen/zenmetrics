@@ -1160,3 +1160,4 @@ benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairA.tsv	ignored	Pinned-prim
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairB.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairC.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2.json	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2.meta	ignored	Primary SSIMULACRA2 commands and external artifact hashes.
