@@ -1217,3 +1217,9 @@ benchmarks/iqa_changed_2026-10-19/mac/run.meta	ignored	Portable Mac scalar timin
 benchmarks/iqa_changed_2026-10-19/mac/snapshot.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
 benchmarks/iqa_changed_2026-10-19/mac/timings.csv	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
 benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.
+benchmarks/private_classical_2026-10-19/i265-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/i265-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/mac-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/mac-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/r7900x-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/r7900x-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
