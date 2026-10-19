@@ -341,3 +341,47 @@ verification receipts are retained on i265 under
 
 [The route/profile audit](IQA_VARIANT_COVERAGE_2026-10-18.md) distinguishes
 missing variants from scheduled refusals, including unpublished research routes.
+
+
+### NN engine priority, 2026-10-19
+
+The owner requested GPU before CPU on both hosts. Immutable successors consume
+remaining cells from the fifteen-hour no-8K plans, with CUDA phases before CPU
+on i265 and Metal phases before CPU on mac. Already-qualified attempts and
+exhausted budgets stay in their original outputs. A source with one failed
+attempt and a two-attempt cap receives only one successor attempt. Non-NN
+scalar priority, ingress, samples, gates, binaries and the original endpoint
+`2026-10-19T12:56:43Z` are unchanged.
+
+The ordering decision uses matched, qualified 512-square warm measurements on
+i265: sixteen models have both RTEN CPU and ORT CUDA observations at each
+worker budget. Median per-model CPU/CUDA ratio is 18.9633 for eight workers and
+118.4122 for one worker. This does not predict cold or larger-size speedups,
+and ORT CUDA is an engine identity rather than a guarantee that every graph
+node executes on GPU. The read-only comparison and source-report hashes are
+retained on i265 at
+`~/benchmark-artifacts/iqa-cpu-cuda-ordering-20261019/comparison.json`.
+
+Each successor is prepared only after acquiring the existing host heavy lock
+and stopping the previous idle coordinator. Its native endpoint guard and the
+Mac check-in graph must reference the new outputs; old service and wait records
+remain historical. The new roots use
+`~/benchmark-bundles/iqa-i265-20261019-gpu-first` and
+`~/benchmark-bundles/iqa-mac-20261019-gpu-first.noindex` respectively.
+
+Both successors were installed at verified worker boundaries. i265 service
+`iqa-scalar-9c159f1a8223712f.service` runs 920 CUDA cells before the remaining
+377 CPU cells (173 with one attempt left; 204 with two). Mac LaunchAgent
+`io.imazen.iqa-scalar.5984716e67f511af` runs 920 Metal cells before 694 CPU
+cells (two with one attempt left; 692 with two). These are initial successor
+cell counts, not additional completed coverage. Both GPU queues have recorded
+successful observations; CPU predecessor records point to their GPU outputs.
+
+The prior coordinators and endpoint guards are stopped. Replacement endpoint
+guards are `iqa-window-259c5adff3fce7d4.service` on i265 and
+`io.imazen.iqa-window.fdea41a80caf51f5` on mac. The Mac check-in plan points to
+the GPU-first frozen coordinator and a real check-in returns zero. Resolving
+commands remain the frozen `scalar_priority.py status sequence.json` and native
+service queries. Exact plan/coverage hashes, stopped-service boundary receipts,
+new native commands and checked status snapshots are retained on i265 under
+`~/benchmark-artifacts/iqa-gpu-first-20261019/{mac,i265}/`.
