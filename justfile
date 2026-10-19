@@ -1810,3 +1810,20 @@ aic-refusal-publish logs out *inputs:
 # Verify only landing navigation/layout; metric numerical checks stay separate.
 dashboard-landing-check python site chromium report:
     "{{python}}" scripts/dashboard/check_landing.py "{{site}}" --chromium "{{chromium}}" --report "{{report}}"
+
+# Independent HDR-VDP upstream research (full logs/receipts kept in caller's scratch).
+hdrvdp-canonical-oracle tree pairs output version peak bits ppd encoding matrix *options:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/run_oracle.py '{{tree}}' '{{pairs}}' '{{output}}' '{{version}}' '{{peak}}' '{{bits}}' '{{ppd}}' '{{encoding}}' '{{matrix}}' {{options}}
+
+hdrvdp-canonical-grid grid:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/grid.py '{{grid}}'
+
+hdrvdp-canonical-rust probe pairs output *options:
+    test ! -e '{{output}}'
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" RAYON_NUM_THREADS=8 '{{probe}}' '{{pairs}}' '{{output}}' {{options}} > '{{output}}.log' 2>&1
+
+hdrvdp-canonical-harness-check scratch published config:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/check_harness.py '{{scratch}}' '{{published}}' '{{config}}'
+
+hdrvdp-canonical-stratify data scores config aggregate private:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/stratify.py '{{data}}' '{{scores}}' '{{config}}' '{{aggregate}}' '{{private}}'
