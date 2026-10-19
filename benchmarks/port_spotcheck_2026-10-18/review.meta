@@ -173,3 +173,47 @@ External artifacts(SHA256):
 3ee7cf92d26aefc3ad31106d88cabfcf6069f389f97d715dcea44986cb157e11  ~/tmp/portcheck-primary-owned-build-controls-20261019T0956/results.json
 f1b4fa29553ee2d5b52aa1b232d9859b6098269d3079eb7856bd254963d90036  ~/tmp/portcheck-primary-owned-controls-20261019T0958.log
 a6717b905fa512b8ce1cb328749049aeaa4fd7f0a402ec63d7be9155f7930db7  ~/tmp/portcheck-primary-owned-controls-20261019T0958/results.json
+
+Primary Octave reference execution (2026-10-19, lilith-wsl):
+  Published adapter e2d414c33a6d; ancestry verified on origin/master.
+  Command: oracle.just octave-primary <factor-manifest> <reference.rgb> <distorted.rgb> 64 64 1 1 <fresh-evidence>.
+  Exact commands/paths for the eight serial calls are in the retained complete factor-panel log.
+  Primary author releases: FeatureSIM.m and VSI.m with only factor assignment fixed1-4.
+  Original source hashes and replacement manifests retained per case; no imazen numeric shim used.
+  Octave6.4.0/image2.12.0. Explicit FFTW1/OpenMP1/BLAS1; no claim of observed worker utilization.
+  Input reference87ea49834ed53138995f3ac6845891f7693b0e279dc8195ce63a30edb551e1c4; distortedbb6fdb0f4aa7299e311278ac892d220798068806560767bc67c43732bb1af3d6.
+  All cold/warm score strings repeat within each case; values committed in octave-primary.md.
+  Panel resource receipt:rc0,4s,peakRSS0.07GiB,minavail12852MiB,peakload3.41; both locks,run-heavy12Gjobs1,owned ext4TMPDIR.
+  Original display-inheriting VSI attempt:rc0,103s,peakRSS0.06GiB,minavail12918MiB,peakload2.85; score0.99670084799370584 on both calls.
+  The explicit-headless attempt:rc0,1s,peakRSS0.07GiB,minavail13028MiB,peakload4.42; same scalar.
+  These are diagnostic canonical executions, not Rust parity or qualified ratios; no score gate changes.
+  A help-query failure exposed absent scratch-directory creation; scratch was created and original termination workspace preserved outside repo. No own processes remain from those attempts.
+External evidence(SHA256):
+06bde297536c3dd73ec4959ae5646cab1c985cd75e9fec2b4256fa6bca0045be  ~/tmp/portcheck-octave-primary-20261019T1001-factor-panel.log
+5917b057600f47892f9c77f64e1dc75806f95f87cfd6980e03e2f738bd063d39  ~/tmp/portcheck-octave-primary-20261019T1001-vsi64-k1.log
+fd5cd31291f590c956ccd215ebccf36c180dc48b088a1e23b3f2b468a555ebec  ~/tmp/portcheck-octave-primary-20261019T1001-vsi64-k1-headless.log
+482a139b2706f19e5b868779823e2ba32fc5180eb385ad993423a0de0c1a5ee2  ~/tmp/portcheck-octave-primary-20261019T1001/VSI64-k1-headless-v2/results.json
+0b197f2de748365feee055a91abfb62b4ad15df4ff3756b63696dd0b508b0750  ~/tmp/portcheck-octave-primary-20261019T1001/VSI64-k2-headless-v2/results.json
+80d719b2725285569a87404017c477de223bac70d59c0a9b838ce9f435ed8aa1  ~/tmp/portcheck-octave-primary-20261019T1001/VSI64-k3-headless-v2/results.json
+6fb876115a7b31e8f3892f6103b76722827c3a913a7bccaf527ca08549eb87fc  ~/tmp/portcheck-octave-primary-20261019T1001/VSI64-k4-headless-v2/results.json
+7fbfc45d32be27b4e3476e3ae7407481ddfdfd9c6a0753b13fcdf7aa20bdace5  ~/tmp/portcheck-octave-primary-20261019T1001/FeatureSIM64-k1-headless-v2/results.json
+897cfab33423b0f1dcd83d9193fab2dda3e32f705569fc447791813a171b6c7e  ~/tmp/portcheck-octave-primary-20261019T1001/FeatureSIM64-k2-headless-v2/results.json
+e530e772af2c2224db8596aef61fe28c58fd94801d527673248922f3fd71147f  ~/tmp/portcheck-octave-primary-20261019T1001/FeatureSIM64-k3-headless-v2/results.json
+785bc477cb8abd440b52c598b0eaefbfe3a3b160aed02703b5b9563b1b46d718  ~/tmp/portcheck-octave-primary-20261019T1001/FeatureSIM64-k4-headless-v2/results.json
+
+Fresh Rust comparison harness build (no scoring yet):
+  Source e2d414c33a6d3c7da50a818fa36e56654d3ebeef exported to a fresh CI-pinned tree; no benchmark source adapters applied.
+  Commands: oracle.just primary-rust-freeze <fresh-snapshot> e2d414c33a6d; primary-rust-compile <snapshot>.
+  Frozen Cargo.lock resolves against23pinned siblings; exportrc0,51s,peakRSS0.15GiB,minavail12911MiB,peakload4.67.
+  Compilefeatures compete,metrics-parallel; release thinLTO; native flag variables unset.
+  First compile recipe placed --manifest-path before build and failed before compilation; corrected subcommand argument placement.
+  Correctedbuildrc0,47s,peakRSS0.88GiB,minavail11093MiB,peakload8.88; both locks+run-heavy12Gjobs8.
+  Binary/hash, source-byte checks and compiler/runtime receipts retained in build-receipt.json and sibling files below.
+  No timing or parity result inferred from successful compilation.
+External evidence(SHA256):
+7a120f144d54ef0bcf560c98f24d86932544379814e7715441d075c55679083e  ~/tmp/portcheck-primary-rust-freeze-20261019T1010.log
+733e45fe07593a93453e895b0a99f7eea98e1e2767845d857680897f03ec849f  ~/tmp/portcheck-primary-rust-build-20261019T1010.log
+17a72ff942d13fac978f80d0b20051ae24827b494c3f3083a9f075d25875a3d4  ~/tmp/portcheck-primary-rust-build-20261019T1010-r2.log
+33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd  ~/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json
+b569b0c98ea3133c7252b4b8ea6b39b7b353813df0dd5f5c412c355691424112  ~/tmp/portcheck-primary-rust-20261019T1010/rustc.txt
+3bd465ae930450e84fa774dcf411245faf4a47241fbabd15154dd68064a6e19c  ~/tmp/portcheck-primary-rust-20261019T1010/ldd.txt

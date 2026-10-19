@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Execute the primary FSIM/VSI fixed-factor references through a hash-checked headless Octave benchmark adapter (`e2d414c3`); retain diagnostic scalar results separately from Rust parity and timing qualification.
+
 - Bind an opt-in primary SSIMULACRA2 benchmark build to owned Highway source and compiler receipts (`763820ae`), preserving older executable cohorts and their stated limits.
 
 - Add opt-in primary SSIMULACRA2 raw-RGB benchmark ingress, separate first-call/warm records and official-file-CLI ingress controls (`328c3f6a`); no existing metric path or Rust numerical gate changes.

@@ -49,3 +49,14 @@ ssim2-primary-owned-ingress-check binary archive source_root evidence official h
 [positional-arguments]
 octave-primary manifest reference distorted width height threads samples evidence:
     python3 -B octave_primary.py --manifest "$1" --reference "$2" --distorted "$3" --width "$4" --height "$5" --threads "$6" --samples "$7" --evidence "$8"
+
+# Fresh CI-pinned source export. Caller supplies both locks, run-heavy and log.
+# Do not repeat export over an existing snapshot; compile it separately instead.
+[positional-arguments]
+primary-rust-freeze snapshot revision:
+    test ! -e "$1" && test ! -L "$1"
+    LOCK_SNAP_DIR="$1" bash ../../scripts/ci/lock.sh --check --rev "$2"
+
+[positional-arguments]
+primary-rust-compile snapshot:
+    env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS -u CARGO_BUILD_RUSTFLAGS CARGO_TARGET_DIR="$1/target" CARGO_PROFILE_RELEASE_LTO=thin cargo build --manifest-path "$1/work/zenmetrics/Cargo.toml" --locked --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete

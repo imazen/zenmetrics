@@ -161,6 +161,23 @@ canonical-ingress comparisons still agree with the official CLI's display.
 The runtime CMS branch, Rust comparisons and qualified ratios remain open;
 earlier executable identities retain their original limitations.
 
+## Primary MATLAB references executed through Octave
+
+The [verified fixed-factor adapter](../iqa_compete_2026-10-16/octave-primary.md)
+landed at `e2d414c3`. The primary FSIM and VSI releases now execute at factors
+1–4 on the retained 64×64 control pair. Each case selects a separately verified
+source copy, and first/warm scalar strings repeat. This establishes execution
+beyond the earlier metadata-only staging. Direct Rust parity, the requested
+size/content/thread grid and qualified ratios remain missing. An explicit
+headless environment resolves the observed startup stall; process durations
+are not used as metric speed comparisons.
+
+The [fixed-factor source audit](fixed-factor-semantics.md) records every named
+variant's current placement, including the MS-SSIM per-level-view difference
+that still requires an unmerged correction. A fresh Rust comparison harness
+now builds from the unchanged CI-pinned source, with source-byte checks and
+retained compiler/runtime receipts; compilation alone qualifies no score.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,
