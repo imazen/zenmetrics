@@ -4,38 +4,54 @@ ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	1mp	1	1	scored	0.990025872587
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	1mp	1	2	scored	0.9964703304654587	original-panel	0.9964703202418711	0.9964703202418711	0	0	1.0223587643132248e-08	1.0223587643132248e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	1mp	1	3	scored	0.9981693696863055	original-panel	0.9981762179213052	0.9981693645015213	0	0	6.848234999634606e-06	5.184784268585929e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	1mp	1	4	scored	0.9989171343228267	original-panel	0.9989171313488483	0.998917131348849	0	0	2.9739783968807387e-09	2.973977730746924e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	1mp	1	5	scored	0.9992776463074995	additional-k5-k6-panel	0.999276692390985	0.999277644382921	0	0	9.539165144456518e-07	1.9245784965704615e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	1mp	1	6	canonical-error:RuntimeError		additional-k5-k6-panel	0.9995005270116438		0	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	1mp	28	1	scored	0.9903499223614086	original-panel	0.9903498943338268	0.9903498943338268	0	0	2.802758181097431e-08	2.802758181097431e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	1mp	28	1	scored	0.9900258725874933	original-panel	0.9900258288544382	0.9900258288544382	0	0	4.3733055066219606e-08	4.3733055066219606e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	1mp	28	2	scored	0.9964703304654587	original-panel	0.9964703202418711	0.9964703202418711	0	0	1.0223587643132248e-08	1.0223587643132248e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	1mp	28	3	scored	0.9981693696863055	original-panel	0.9981762179213052	0.9981693645015213	0	0	6.848234999634606e-06	5.184784268585929e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	1mp	28	4	scored	0.9989171343228267	original-panel	0.9989171313488483	0.998917131348849	0	0	2.9739783968807387e-09	2.973977730746924e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	1mp	28	5	scored	0.9992776463074995	additional-k5-k6-panel	0.999276692390985	0.999277644382921	0	0	9.539165144456518e-07	1.9245784965704615e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	1mp	28	6	canonical-error:RuntimeError		additional-k5-k6-panel	0.9995005270116438		0	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	4k	1	1	scored	0.9896515382355838	isolated-supplement	0.9896515164040764	0.9896515164040764	0	0	2.1831507379665993e-08	2.1831507379665993e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	4k	1	1	scored	0.9893060878584692	isolated-supplement	0.9893061477129897	0.9893061477129897	0	0	5.985452056211926e-08	5.985452056211926e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	4k	1	2	scored	0.996360945509386	original-panel	0.9963612283923595	0.9963609369736152	0	0	2.828829734902172e-07	8.535770867901249e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	4k	1	3	scored	0.9981306984519384	original-panel	0.9981306937800138	0.9981306937800133	0	0	4.6719245139215104e-09	4.671925069033023e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	4k	1	4	scored	0.9988555606517583	original-panel	0.9988561842313814	0.9988555576814966	0	0	6.235796231601753e-07	2.970261703261201e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	4k	1	5	scored	0.9992270183708272	additional-k5-k6-panel	0.9992270163326579	0.9992270163326586	0	0	2.0381693000004475e-09	2.0381685228443303e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	4k	1	6	scored	0.9994482889547036	additional-k5-k6-panel	0.9994483065489909	0.9994482874950134	0	0	1.7594287249345086e-08	1.4596902575547688e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	4k	28	1	scored	0.9896515382355838	original-panel	0.9896515164040764	0.9896515164040764	0	0	2.1831507379665993e-08	2.1831507379665993e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	4k	28	1	scored	0.9893060878584692	original-panel	0.9893061477129897	0.9893061477129897	0	0	5.985452056211926e-08	5.985452056211926e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	4k	28	2	scored	0.9963609455093859	original-panel	0.9963612283923595	0.9963609369736152	0	0	2.828829736012395e-07	8.535770756878946e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	4k	28	3	scored	0.9981306984519384	original-panel	0.9981306937800138	0.9981306937800133	0	0	4.6719245139215104e-09	4.671925069033023e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	4k	28	4	scored	0.9988555606517583	original-panel	0.9988561842313814	0.9988555576814966	0	0	6.235796231601753e-07	2.970261703261201e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	4k	28	5	scored	0.9992270183708272	additional-k5-k6-panel	0.9992270163326579	0.9992270163326586	0	0	2.0381693000004475e-09	2.0381685228443303e-09	UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	4k	28	6	scored	0.9994482889547036	additional-k5-k6-panel	0.9994483065489909	0.9994482874950134	0	0	1.7594287249345086e-08	1.4596902575547688e-09	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	64	1	1	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	64	1	1	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	64	1	2	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	64	1	3	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	64	1	4	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	64	1	5	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	64	1	6	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	64	28	1	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	64	28	1	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	64	28	2	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	64	28	3	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	64	28	4	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	64	28	5	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	64	28	6	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	odd	1	1	scored	0.991315711279806	original-panel	0.9913156732468423	0.9913156732468423	0	0	3.8032963667333775e-08	3.8032963667333775e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	odd	1	1	scored	0.9909159210615847	original-panel	0.9909158812062802	0.9909158812062802	0	0	3.985530450112407e-08	3.985530450112407e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	odd	1	2	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	odd	1	3	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	odd	1	4	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	odd	1	5	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	odd	1	6	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32	ms-ssim-unrounded-y	pairA	odd	28	1	scored	0.9913157112798061	original-panel	0.9913156732468423	0.9913156732468423	0	0	3.803296377835608e-08	3.803296377835608e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa	ms-ssim-original-rounded-class	pairA	odd	28	1	scored	0.9909159210615847	original-panel	0.9909158812062802	0.9909158812062802	0	0	3.985530450112407e-08	3.985530450112407e-08	UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k2	ms-ssim-unrounded-y	pairA	odd	28	2	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k3	ms-ssim-unrounded-y	pairA	odd	28	3	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
 ms-ssim-pyiqa-f32-k4	ms-ssim-unrounded-y	pairA	odd	28	4	canonical-error:RuntimeError		original-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k5	ms-ssim-unrounded-y	pairA	odd	28	5	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False
+ms-ssim-pyiqa-f32-k6	ms-ssim-unrounded-y	pairA	odd	28	6	canonical-error:RuntimeError		additional-k5-k6-panel			1	1			UNBOUND	UNQUALIFIED	False

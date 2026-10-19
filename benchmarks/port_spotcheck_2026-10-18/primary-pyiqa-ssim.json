@@ -1,35 +1,35 @@
 {
-  "rows": 336,
+  "rows": 480,
   "outputs": [
     {
       "path": "primary-pyiqa-multiscale-pairA.tsv",
-      "sha256": "fc199cf893da533ce2590f7fb3606131dbe0870e0a6b408701dea20532c4a627",
-      "bytes": 7391
+      "sha256": "5ea1b0bb686176d870bcc03ac2153f705ef3e9391e728ca968c5430dcf1a80f0",
+      "bytes": 10149
     },
     {
       "path": "primary-pyiqa-single-pairA.tsv",
-      "sha256": "f6abf687dc046350e8bb06791525248498e6dbcae095d71c9f6a8de9cc0f7320",
-      "bytes": 14871
+      "sha256": "7b1b48647a97fff9bbaf5ee595e44a917b7077b7d5c33030a16806bed233cc75",
+      "bytes": 21363
     },
     {
       "path": "primary-pyiqa-multiscale-pairB.tsv",
-      "sha256": "c70ba4ed67a9b12618ffcf91c4687d077510a3f9d570f73ef515e06b5e1de845",
-      "bytes": 7380
+      "sha256": "d2c30b865fa67d7b5d0d2ecae8b17b88bca7cc1e74d2aa45101679bc6ceb41b0",
+      "bytes": 10129
     },
     {
       "path": "primary-pyiqa-single-pairB.tsv",
-      "sha256": "c411cb788d5faf7c726c414ee3e7bc8e6c474d7cbb61e3b92096f9d55b6571e1",
-      "bytes": 14879
+      "sha256": "3600cf2d6eb3492025bf88f7f49da0fc01f875cd4d7c67bd9e9c8045d76d6e2e",
+      "bytes": 21361
     },
     {
       "path": "primary-pyiqa-multiscale-pairC.tsv",
-      "sha256": "dd7509cf2c5972beef508478942177cc9bebb30301c57e2204c3606091932ecb",
-      "bytes": 7390
+      "sha256": "7a0a03ed01c10a0f02b7f1ee2f00465a0738b10a486f6d791a6b96d1d26de11b",
+      "bytes": 10151
     },
     {
       "path": "primary-pyiqa-single-pairC.tsv",
-      "sha256": "8c5eda524cba3e07bb44e4b20564ee2d98fb6a1548f9e3f2d6275d07321fc465",
-      "bytes": 14878
+      "sha256": "44ebbf3161a81bb63fc5ef464948ee2e4b8302f48286455cad3fc0a2f328e7bc",
+      "bytes": 21351
     }
   ],
   "artifacts": [
@@ -52,6 +52,11 @@
       "cohort": "single_scale",
       "root": "/home/lilith/tmp/portcheck-ssim-single-fixed-matrix-20261019T1243",
       "manifest_sha256": "fb4a14db6561a24de95456b393ea538b2216eb8dddaad817f9623d727fcc294b"
+    },
+    {
+      "cohort": "additional_primary",
+      "root": "/home/lilith/tmp/portcheck-pyiqa-ssim-k56-panel-20261019T1319",
+      "manifest_sha256": "3501d0288c05f6038bf05ba785b8e7973679a0f91608193bf1d7b66d676e4b85"
     }
   ],
   "max_abs_deltas": {
@@ -82,7 +87,19 @@
     "ssimc-pyiqa-f32-k4:baseline": 5.1366633502247794e-08,
     "ssimc-pyiqa-f32-k4:candidate": 5.1366633502247794e-08,
     "ms-ssim-pyiqa-f32-k4:baseline": 3.689863169686891e-05,
-    "ms-ssim-pyiqa-f32-k4:candidate": 2.973977730746924e-09
+    "ms-ssim-pyiqa-f32-k4:candidate": 2.973977730746924e-09,
+    "ssim-pyiqa-f32-k5:baseline": 3.3145366007403254e-08,
+    "ssim-pyiqa-f32-k5:candidate": 3.3145366007403254e-08,
+    "ssimc-pyiqa-f32-k5:baseline": 3.924667102417345e-08,
+    "ssimc-pyiqa-f32-k5:candidate": 3.924667102417345e-08,
+    "ms-ssim-pyiqa-f32-k5:baseline": 2.360397255163349e-05,
+    "ms-ssim-pyiqa-f32-k5:candidate": 2.0381685228443303e-09,
+    "ssim-pyiqa-f32-k6:baseline": 1.8000097412596006e-08,
+    "ssim-pyiqa-f32-k6:candidate": 1.8000097412596006e-08,
+    "ssimc-pyiqa-f32-k6:baseline": 2.267562893010222e-08,
+    "ssimc-pyiqa-f32-k6:candidate": 2.267562893010222e-08,
+    "ms-ssim-pyiqa-f32-k6:baseline": 5.80190524512858e-07,
+    "ms-ssim-pyiqa-f32-k6:candidate": 1.4596902575547688e-09
   },
   "counts": [
     {
@@ -146,6 +163,30 @@
       "cases": 12
     },
     {
+      "metric": "ms-ssim-pyiqa-f32-k5",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k5",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k6",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 18
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k6",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 6
+    },
+    {
       "metric": "ssim-pyiqa",
       "canonical_status": "scored",
       "candidate_status": "scored",
@@ -176,6 +217,24 @@
       "cases": 24
     },
     {
+      "metric": "ssim-pyiqa-f32-k5",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k6",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 6
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k6",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 18
+    },
+    {
       "metric": "ssimc-pyiqa-f32",
       "canonical_status": "scored",
       "candidate_status": "scored",
@@ -198,9 +257,27 @@
       "canonical_status": "scored",
       "candidate_status": "scored",
       "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k5",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k6",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 6
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k6",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 18
     }
   ],
-  "primary_attempts": 96,
+  "primary_attempts": 144,
   "primary_process_failures": 3,
   "supplemental_attempts": 7,
   "gate": "UNBOUND; no pass inferred",
