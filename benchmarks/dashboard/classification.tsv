@@ -1114,3 +1114,8 @@ benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairA.tsv	ignored	Compl
 benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairB.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairC.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/runner-image212.json	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairA.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairB.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairC.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201.json	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-fixed-panel.meta	ignored	Artifact, command and memory receipts for completed fixed-factor numerical panels.

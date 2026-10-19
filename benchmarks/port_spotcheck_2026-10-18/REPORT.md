@@ -203,6 +203,26 @@ are 9.231485020855246e-9 (FSIM/FSIMc, gate 5e-5) and
 only those eight input/configuration cases; it does not complete either
 method's requested grid or qualify a replacement-panel timing cell.
 
+The larger [fixed-factor numerical panels](vsi-resize-runtime.md) now complete
+all factors 1–4 × four requested sizes × three retained content pairs × thread
+budgets 1 and 28. FSIM/FSIMc passes 96/96 cases, checking both scalar columns,
+with maximum absolute difference 1.329927450832713e-6 against the unchanged
+5e-5 gate. VSI passes 96/96 with explicitly bound upstream resize M-files,
+maximum difference 3.1678478384922215e-7 against the unchanged 1e-4 gate.
+The older image-2.12 VSI cohort remains retained: 82/96 pass, 14 fail.
+All Rust thread-budget pairs are bit-identical. Raw artifacts and process
+memory/resource receipts remain bound in the two result indexes; no maps or
+qualified ratios are claimed. Unsuffixed automatic-factor cases remain missing.
+
+The owner-requested MS-SSIM correction is separately pushed and verified at
+[`970ea199`](https://github.com/imazen/zenmetrics/tree/970ea199538b6efc64eb109e4db81de90137919d)
+on unmerged `fix/ssim-pyiqa-fixed-factor`. Its ten focused tests pass.
+Across the same twelve pairs/geometries and two thread budgets, the five
+unsuffixed names produce 108 bit-identical baseline/candidate score cases and
+12 matching small-input refusals. Fixed-name behavior changes remain separate
+before/after observations; independent primary-reference comparison and
+qualified speed ratios are still missing. No metric change landed on master.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

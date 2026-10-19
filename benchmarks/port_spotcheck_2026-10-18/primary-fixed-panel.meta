@@ -1,0 +1,21 @@
+Observed 2026-10-19 on WSL2 / Ryzen9 7950X, same frozen RGB8 crops and Rust e2d414c33a6d3c7da50a818fa36e56654d3ebeef.
+System-image212 panel:192/192 attempted,178 pass14 fail; FSIM96pass,VSI82pass14fail. Source-bound image2201 two-M-file overlay:VSI96/96pass.
+Thread budgets1and28. No qualified ratios. Source cohorts remain separate. Each scalar row retains exact GNUtime process RSS and both corresponding run-heavy receipt lines.
+Publisher30b0ddd9 revalidates every retained case artifact, compares embedded vs actual Rust results and recomputes deltas/gates;3negative controls pass.
+Grouping-only re-exports retain all scalar fields and resource receipts exactly; generated files <=30000bytes each.
+SSIM candidate970ea199 source and unit receipts are distinct, remain unmerged; source below is unchanged e2 baseline.
+External evidence SHA256:
+b6b37fb782228e7aa0a137d1afce1cf86bd32d46a8ddd95b189e377151994a74  ~/tmp/portcheck-primary-panel-20261019T1055.log
+dbf774a69d1d6a423b06c0f8d72b7a171624fe217c9553db70d3a6d757e9c573  ~/tmp/portcheck-primary-panel-20261019T1055/identity.json
+d88ec2697264cd244e439b9d8eaf0e2be5e1f74038d3b262f4195b6f87791d8e  ~/tmp/portcheck-primary-panel-20261019T1055/events.jsonl
+eab00174d386ba74f5e75dcffa20af27eceba7d8693b97e09c662338bbaeed8c  ~/tmp/portcheck-primary-panel-20261019T1055/summary.json
+cc57e43a5f62feceed44895ab012eb143d6adb1c3ec7e97d5bdcbce6ec2a54f0  ~/tmp/portcheck-vsi-image2201-panel-20261019T1148.log
+4d7ae07a9863e25d517655bbdfe2ce564cf274fd232c97b10300e76893e85cfc  ~/tmp/portcheck-vsi-image2201-panel-20261019T1148/identity.json
+619e0fe6ab48debc0ddc0b7a0239974562bbf72af6e806ad0e537b32567e81be  ~/tmp/portcheck-vsi-image2201-panel-20261019T1148/events.jsonl
+6cd640b3a4aeb3450dd5af4e08d921e1621987cf1c8fd2c5f9bd97811fc33177  ~/tmp/portcheck-vsi-image2201-panel-20261019T1148/summary.json
+f0d7d6ef57192df0ce0c70962c61fcb0b9e4fb3cda7c1730f1ee7985a1423c9b  ~/tmp/portcheck-panel-summary-image212-20261019T1143-r2.log
+a73fc3f6a8aea9f16285edc44a660b5a1d27ac42bf69d5db7c53c77af139e455  ~/tmp/portcheck-panel-summary-image212-20261019T1143-r2/runner-image212.json
+bce38eaea3dcd9e048ef448032b242a49ce434d77d0b36df8480830526f75b3c  ~/tmp/portcheck-panel-summary-image2201-20261019T1152-r2.log
+c9672cc3a922993c2c5deb2c552e6b33c39a558b8151ce09bdf935b7a5a9e540  ~/tmp/portcheck-panel-summary-image2201-20261019T1152-r2/runner-image2201.json
+4580567fc7b04f940ff42da2f40fef471d2ce418108e0ffb48dab6c8677d2242  ~/tmp/portcheck-panel-summary-negative-controls-20261019T1147.log
+f988dadbfdac021072119210066c00a4d02cc193629c840ade042cea7602924e  ~/tmp/portcheck-panel-summary-negative-controls-20261019T1147/results.json
