@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import json
 from pathlib import Path
+import re
 
 FIELDS = ('metric_name width height size_name threads timing_phase cold_repeat only_mode device impl '
           'impl_binary_sha reference_sha256 distorted_sha256 median_ns mean_ns p10_ns p90_ns n '
@@ -14,6 +15,28 @@ FIELDS = ('metric_name width height size_name threads timing_phase cold_repeat o
           'gpu_finite_observation_count gpu_nonfinite_observation_count gpu_call_bit_variation_count '
           'gpu_reference_score_bits gpu_min_score_bits gpu_max_score_bits gpu_max_abs_delta_bits '
           'gpu_max_abs_delta gpu_delta_overflow gpu_max_relative_delta gpu_one_different_score_bits').split()
+
+
+def resource_evidence(log, expected_sha256, host):
+    """Only project memory measurements from the exact retained worker log."""
+    empty = dict(peak_rss_gib_rounded=None, os_time_max_rss_bytes=None,
+                 resource_summary=None, memory_evidence_status='missing log or unbound hash')
+    if not log.is_file() or expected_sha256 is None:
+        return empty
+    raw = log.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != expected_sha256:
+        return dict(empty, memory_evidence_status='log hash differs; memory not projected')
+    text = raw.decode(errors='replace')
+    summaries = [line for line in text.splitlines() if line.startswith('run-heavy: done ')]
+    if len(summaries) != 1:
+        return dict(empty, memory_evidence_status='no unique finalized wrapper receipt')
+    match = re.search(r'peak-RSS\s+([0-9.]+)\s*GiB', summaries[0])
+    exact = re.findall(r'^\s*(\d+)\s+maximum resident set size\s*$', text, re.MULTILINE) if host == 'mac' else []
+    return dict(peak_rss_gib_rounded=float(match.group(1)) if match else None,
+                peak_rss_precision_gib=0.01 if match else None,
+                os_time_max_rss_bytes=int(exact[0]) if len(exact) == 1 else None,
+                resource_summary=summaries[0], memory_evidence_status='bound worker log',
+                memory_scope='Wrapper worker scope including input/setup; not metric heap or GPU VRAM')
 
 
 def observed_attempts(path, report, cell, include_sealed):
@@ -109,6 +132,8 @@ def export(root, output, host, include_sealed=False, record_rejected_overlays=Fa
                              engine=config.get('worker_environment',{}).get('ZENMETRICS_NN_ENGINE'),
                              weights_consent=config.get('worker_environment',{}).get('ZENMETRICS_NN_ACCEPT_WEIGHTS'))
                 value.update({k:row.get(k,config.get(k)) for k in FIELDS})
+                value.update(resource_evidence(path.parent/'cells'/config['durable_cell_id']/
+                    f"attempt-{attempt['attempt']:04d}"/'worker.log', attempt.get('log_sha256'), host))
                 samples = row.get('zenbench_samples', [])
                 value['warm_rounds_clean'] = sum(s.get('gate_clean') is True for s in samples)
                 value['warm_rounds_flagged'] = sum(s.get('gate_clean') is not True for s in samples)

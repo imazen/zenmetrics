@@ -398,3 +398,9 @@ Immutable bundles and live output paths are recorded outside the repository in
 `~/benchmark-artifacts/iqa-unified-20261019/STATUS.json`. Full coverage remains
 pending while those controllers run. Previous attempts and frozen bundles are
 retained, including unsupported input-contract refusals and flagged timings.
+
+The chart exporter also projects the finalized worker-wrapper peak RSS from
+its hash-bound log. Rounded GiB retain 0.01 GiB precision; native macOS BSD
+time bytes are separate. Missing, ambiguous or changed logs produce null
+memory fields, never zeros. These include worker input/setup and are not
+metric-only heap or GPU VRAM measurements.

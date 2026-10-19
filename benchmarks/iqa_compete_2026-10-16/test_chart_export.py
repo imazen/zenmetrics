@@ -4,10 +4,20 @@ from pathlib import Path
 import tempfile
 import unittest
 import durable
-from export_chart_snapshot import export
+from export_chart_snapshot import export, resource_evidence
 
 
 class ChartExport(unittest.TestCase):
+    def test_resource_receipt_binds_hash_and_preserves_units(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            log = Path(directory)/'worker.log'
+            log.write_text('  104857600 maximum resident set size\nrun-heavy: done rc=0 peak-RSS 0.10 GiB\n')
+            measured = resource_evidence(log, durable.file_hash(log), 'mac')
+            self.assertEqual(measured['os_time_max_rss_bytes'], 104857600)
+            self.assertEqual(measured['peak_rss_gib_rounded'], 0.10)
+            self.assertIsNone(resource_evidence(log, durable.file_hash(log), 'i265')['os_time_max_rss_bytes'])
+            self.assertIsNone(resource_evidence(log, 'wrong-hash', 'mac')['peak_rss_gib_rounded'])
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(dir=Path.home()/'tmp')
         self.addCleanup(self.tmp.cleanup)
