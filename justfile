@@ -1633,6 +1633,16 @@ bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *opti
 bench-iqa-changed *options:
     just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k changed {{options}}
 
+# Compare Rust with explicit, hash-bound original/reference implementations.
+bench-iqa-canonical plan output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical.py '{{plan}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-plan +options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_comparison.py {{options}}
+
+bench-iqa-canonical-check:
+    python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_compare_canonical.py
+
 # Historical portable 5/3/1 panel: supplemental evidence, never canonical replacements.
 bench-iqa-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete --bin bench-iqa

@@ -58,105 +58,140 @@ drivers and fleet executors with pinned build identities.
 
 ## Metrics
 
-[Models & metrics explorer](https://imazen.github.io/zenmetrics/#models) · [Full cards and BibTeX](docs/MODEL_CARDS.md)
+[Models & metrics explorer](https://imazen.github.io/zenmetrics/#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)
 
-Source-linked records for each CLI metric; rows group variants only when the displayed paper, reference, terms and parity status match. Reported parity is scoped to its oracle and fixtures; a declared gate is not a measured result. Missing bibliographic fields are labelled **citation needed**. Code and checkpoint terms are separate.
+Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 
-| Metric | Family | Paper | Reference implementation | Licence | Parity status |
-| --- | --- | --- | --- | --- | --- |
-| [`afine`](docs/MODEL_CARDS.md#afine) | FR · Learned | [Toward Generalized Image Quality Assessment: Relaxing the Perfect Reference Quality Assumption](https://arxiv.org/abs/2503.11221) | https://github.com/ChrisDud0257/AFINE | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: noncommercial | Reported results |
-| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR · Learned | citation needed | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR · Learned | citation needed | pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref) | Rust: code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc; weights: nc | Declared gate |
-| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR · Learned | [ARNIQA: Learning Distortion Manifold for Image Quality Assessment](https://arxiv.org/abs/2310.14918) | https://github.com/miccunifi/ARNIQA | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR · Learned | [No-Reference Image Quality Assessment in the Spatial Domain](https://doi.org/10.1109/TIP.2012.2214050) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not recorded | Not documented |
-| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR · Classical | citation needed | libjxl butteraugli v0.9.2 / 0.9.4 | Rust: no evidence; weights: not applicable | Not documented |
-| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR · Classical | citation needed | libjxl butteraugli v0.9.2 / 0.9.4 | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`cambi`](docs/MODEL_CARDS.md#cambi) | NR · Classical | [CAMBI: Contrast-aware Multiscale Banding Index](https://arxiv.org/abs/2102.00079) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR · Classical | [CAMBI: Contrast-aware Multiscale Banding Index](https://arxiv.org/abs/2102.00079) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR · Classical | [The CIEDE2000 color-difference formula: Implementation notes, supplementary test data, and mathematical observations](https://doi.org/10.1002/col.20070) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR · Learned | [Learning Conditional Knowledge Distillation for Degraded-Reference Image Quality Assessment](https://arxiv.org/abs/2108.07948) | https://github.com/researchmm/CKDN | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: unknown | Reported results |
-| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR · Classical | [ColorVideoVDP: A visual difference predictor for image, video and display distortions](https://doi.org/10.1145/3658144) | pycvvdp v0.5.7 (PyPI) | Rust: AGPL-3.0-or-later; weights: not applicable | Reported results |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR · Classical | [ColorVideoVDP: A visual difference predictor for image, video and display distortions](https://doi.org/10.1145/3658144) | pycvvdp v0.5.7 + CPU twin | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR · Classical | [Complex Wavelet Structural Similarity: A New Image Similarity Index](https://doi.org/10.1109/TIP.2009.2025923) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR · Classical | [Complex Wavelet Structural Similarity: A New Image Similarity Index](https://doi.org/10.1109/TIP.2009.2025923) | pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref) | Rust: code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: none; weights: none | Declared gate |
-| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR · Learned | [DeepDC: Deep Distance Correlation as a Perceptual Image Quality Evaluator](https://arxiv.org/abs/2211.04927) | https://github.com/h4nwei/DeepDC | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`dists`](docs/MODEL_CARDS.md#dists) | FR · Learned | [Image Quality Assessment: Unifying Structure and Texture Similarity](https://arxiv.org/abs/2004.07728) | https://github.com/dingkeyan93/DISTS | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR · Learned | citation needed | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR · Learned | citation needed | pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref) | Rust: code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); LAPACK routines BSD-3-Clause (../../LICENSE-lapack); weights: permissive; weights: permissive | Declared gate |
-| [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR · Learned | [DreamSim: Learning New Dimensions of Human Visual Similarity using Synthetic Data](https://arxiv.org/abs/2306.09344) | https://github.com/ssundaram21/dreamsim | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: unknown | Reported results |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR · Classical | [Multiscale structural similarity for image quality assessment](https://doi.org/10.1109/ACSSC.2003.1292216) | dssim-core itself (the canonical impl) | Rust: no evidence; weights: not applicable | Reported results |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR · Classical | [Multiscale structural similarity for image quality assessment](https://doi.org/10.1109/ACSSC.2003.1292216) | dssim-core | Rust: AGPL-3.0-only OR LicenseRef-Imazen-DSSIM-Commercial; weights: not applicable | Not documented |
-| [`flip`](docs/MODEL_CARDS.md#flip), [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR · Classical | [FLIP: A Difference Evaluator for Alternating Images](https://doi.org/10.1145/3406183) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`fsim`](docs/MODEL_CARDS.md#fsim) | FR · Classical | [FSIM: A Feature Similarity Index for Image Quality Assessment](https://doi.org/10.1109/TIP.2011.2109730) | authors' FR_FSIMc.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2), [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3), [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4), [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | FR · Classical | [FSIM: A Feature Similarity Index for Image Quality Assessment](https://doi.org/10.1109/TIP.2011.2109730) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | FR · Classical | [FSIM: A Feature Similarity Index for Image Quality Assessment](https://doi.org/10.1109/TIP.2011.2109730) | authors' FR_FSIMc.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR · Classical | [Gradient Magnitude Similarity Deviation: A Highly Efficient Perceptual Image Quality Index](https://doi.org/10.1109/TIP.2013.2293423) | libgmsd de646c9a (C) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | FR · Classical | [A Haar wavelet-based perceptual similarity index for image quality assessment](https://doi.org/10.1016/j.image.2017.11.001) | authors' haarpsi.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | FR · Classical | [A Haar wavelet-based perceptual similarity index for image quality assessment](https://doi.org/10.1016/j.image.2017.11.001) | authors' haarpsi.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR · Classical | [HDR-VDP-2: a calibrated visual metric for visibility and quality predictions in all luminance conditions](https://doi.org/10.1145/1964921.1964935) | official HDR-VDP 2.2.2 MATLAB release (ISC-licensed) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR · Classical | [HDR-VDP-2: a calibrated visual metric for visibility and quality predictions in all luminance conditions](https://doi.org/10.1145/1964921.1964935) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR · Classical | [HDR-VDP-3: A multi-metric for predicting image differences, quality and contrast distortions in high dynamic range and regular content](https://arxiv.org/abs/2304.13625) | official HDR-VDP 3.0.7 MATLAB release + jpeg-ai-qaf VDP3/ numpy port @ 0628a6b (verified equal — see DIVERGENCES) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR · Classical | [HDR-VDP-3: A multi-metric for predicting image differences, quality and contrast distortions in high dynamic range and regular content](https://arxiv.org/abs/2304.13625) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR · Learned | [Blindly Assess Image Quality in the Wild Guided by a Self-Adaptive Hyper Network](https://doi.org/10.1109/CVPR42600.2020.00372) | https://github.com/SSL92/hyperIQA | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: unknown | Reported results |
-| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR · Classical | [Information Content Weighting for Perceptual Image Quality Assessment](https://doi.org/10.1109/TIP.2010.2092435) | Python-IW-SSIM f9de37c (the Python port linked from the authors' IW-SSIM page; not yet compared directly with the authors' MATLAB release) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not compared |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR · Classical | [Information Content Weighting for Perceptual Image Quality Assessment](https://doi.org/10.1109/TIP.2010.2092435) | CPU twin | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR · Classical | [Information Content Weighting for Perceptual Image Quality Assessment](https://doi.org/10.1109/TIP.2010.2092435) | jpeg-ai-qaf IW_SSIM (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 IW-SSIM column; upstream mirror [local path] @ 0628a6b | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`liqe`](docs/MODEL_CARDS.md#liqe) | NR · Learned | [Blind Image Quality Assessment via Vision-Language Correspondence: A Multitask Learning Perspective](https://arxiv.org/abs/2303.14968) | https://github.com/zwx8981/LIQE | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: unknown | Reported results |
-| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex), [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze), [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR · Learned | [The Unreasonable Effectiveness of Deep Features as a Perceptual Metric](https://arxiv.org/abs/1801.03924) | https://github.com/richzhang/PerceptualSimilarity | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`mad`](docs/MODEL_CARDS.md#mad) | FR · Classical | [Most apparent distortion: full-reference image quality assessment and the role of strategy](https://doi.org/10.1117/1.3267105) | official MATLAB release (larschandler.com) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR · Learned | [MANIQA: Multi-dimension Attention Network for No-Reference Image Quality Assessment](https://arxiv.org/abs/2204.08958) | https://github.com/IIGROUP/MANIQA | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR · Classical | [On the mDCT-PSNR image quality index](https://doi.org/10.1109/QOMEX.2009.5246978) | author's official C++ thorfdbg/mDCTpsnr (Thomas Richter; contributor Jon Sneyers) (zlib-style license), built GCC -O3 -ffast-math AVX2 + glibc libmvec | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`mdsi`](docs/MODEL_CARDS.md#mdsi) | FR · Classical | [Mean Deviation Similarity Index: Efficient and Reliable Full-Reference Image Quality Evaluator](https://doi.org/10.1109/ACCESS.2016.2604042) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd), [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR · Classical | [Gradient magnitude similarity deviation on multiple scales for color image quality assessment](https://doi.org/10.1109/ICASSP.2017.7952357) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa), [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32), [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2), [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3), [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4), [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5), [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR · Classical | [Multiscale structural similarity for image quality assessment](https://doi.org/10.1109/ACSSC.2003.1292216) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR · Classical | [Multiscale structural similarity for image quality assessment](https://doi.org/10.1109/ACSSC.2003.1292216) | authors' ssim_mscale_new.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR · Classical | [Multiscale structural similarity for image quality assessment](https://doi.org/10.1109/ACSSC.2003.1292216) | libvmaf float_ms_ssim @ f85a8536 — FFI oracle | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`musiq`](docs/MODEL_CARDS.md#musiq) | NR · Learned | [MUSIQ: Multi-scale Image Quality Transformer](https://arxiv.org/abs/2108.05997) | https://github.com/google-research/google-research/tree/master/musiq | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR · Classical | [Making a “Completely Blind” Image Quality Analyzer](https://doi.org/10.1109/LSP.2012.2227726) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not recorded | Not documented |
-| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR · Classical | [Perceptual image quality assessment using a normalized Laplacian pyramid](https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103) | Valerolaparra/NLPD_Pytorch (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR · Classical | [Perceptual image quality assessment using a normalized Laplacian pyramid](https://doi.org/10.2352/ISSN.2470-1173.2016.16.HVEI-103) | IQA_pytorch source mirrored at [local path] semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 NLPD column (n=53) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR · Learned | [From Patches to Pictures (PaQ-2-PiQ): Mapping the Perceptual Space of Picture Quality](https://arxiv.org/abs/1912.10088) | https://github.com/baidut/paq2piq | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: noncommercial | Reported results |
-| [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR · Learned | [PieAPP: Perceptual Image-Error Assessment through Pairwise Preference](https://arxiv.org/abs/1806.02067) | Official v0.1 public compute_score, release 0513613d1f575136ea52418e35f2cebc5a49f783 | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: Modified BSD-2 for Non-Commercial Use Only, UC Regents | Reported results |
-| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR · Learned | [PieAPP: Perceptual Image-Error Assessment through Pairwise Preference](https://arxiv.org/abs/1806.02067) | pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref) | Rust: code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc; weights: nc | Declared gate |
-| [`piqe`](docs/MODEL_CARDS.md#piqe) | NR · Classical | [Blind image quality evaluation using perception based features](https://doi.org/10.1109/NCC.2015.7084843) | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR · Classical | citation needed | no evidence | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR · Classical | citation needed | authors' psnrhvsm.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR · Classical | citation needed | libvmaf psnr_hvs feature @ f85a8536 — FFI oracle | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR · Classical | citation needed | authors' psnrhvsm.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`ssim`](docs/MODEL_CARDS.md#ssim), [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa), [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32), [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2), [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3), [`ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k4), [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5), [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6), [`ssimc`](docs/MODEL_CARDS.md#ssimc), [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32), [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2), [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3), [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4), [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5), [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR · Classical | [Image quality assessment: from error visibility to structural similarity](https://doi.org/10.1109/TIP.2003.819861) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR · Classical | [Image quality assessment: from error visibility to structural similarity](https://doi.org/10.1109/TIP.2003.819861) | libvmaf float_ssim @ f85a8536 — FFI oracle (vmaf-head-sys dev-dep) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR · Classical | citation needed | Cloudinary ssimulacra2 C++ (v2 lineage) | Rust: no evidence; weights: not applicable | Reported results |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR · Classical | citation needed | fast-ssim2 (CPU) + third-party crates.io ssimulacra2 for parity | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
-| [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex), [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR · Learned | [Shift-tolerant Perceptual Similarity Metric](https://arxiv.org/abs/2207.13686) | https://github.com/abhijay9/ShiftTolerant-LPIPS | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR · Learned | citation needed | https://github.com/chaofengc/IQA-PyTorch | Rust: code: PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab); weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE; weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE | Declared gate |
-| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR · Learned | citation needed | https://github.com/chaofengc/IQA-PyTorch | Rust: code: PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab); weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE; weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE | Declared gate |
-| [`vif`](docs/MODEL_CARDS.md#vif) | FR · Classical | [Image information and visual quality](https://doi.org/10.1109/TIP.2005.859378) | authors' vifp_mscale.m (MATLAB) | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR · Classical | [Image information and visual quality](https://doi.org/10.1109/TIP.2005.859378) | authors' vifvec.m + matlabPyrTools sp5Filters/buildSpyr/corrDn/vifsub_est_M/ind2wtree — the implementation behind pyiqa/IQA_pytorch VIFs and the AIC-4 VIF column | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR · Classical | citation needed | libvmaf 3.2.1 via FFI oracle | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`vsi`](docs/MODEL_CARDS.md#vsi) | FR · Classical | [VSI: A Visual Saliency-Induced Index for Perceptual Image Quality Assessment](https://doi.org/10.1109/TIP.2014.2346028) | authors' VSI.m | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Reported results |
-| [`vsi-k2`](docs/MODEL_CARDS.md#vsi-k2), [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3), [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4), [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR · Classical | [VSI: A Visual Saliency-Induced Index for Perceptual Image Quality Assessment](https://doi.org/10.1109/TIP.2014.2346028) | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live), [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR · Learned | [Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment](https://arxiv.org/abs/1612.01697) | https://github.com/dmaniry/deepIQA | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live), [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR · Learned | [Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment](https://arxiv.org/abs/1612.01697) | https://github.com/dmaniry/deepIQA | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR · Learned | [Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment](https://arxiv.org/abs/1612.01697) | pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref) | Rust: code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc; weights: nc | Declared gate |
-| [`wd`](docs/MODEL_CARDS.md#wd) | FR · Learned | [Wasserstein Distortion: Unifying Fidelity and Realism](https://arxiv.org/abs/2310.03629) | https://github.com/Orange-OpenSource/Cool-Chic/blob/main/coolchic/training/metrics/wasserstein.py | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: permissive | Reported results |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR · Classical | citation needed | no evidence | Rust: no evidence; weights: not applicable | Not documented |
-| [`zensim`](docs/MODEL_CARDS.md#zensim) | FR · Classical | citation needed | — | Rust: no evidence; weights: not applicable | Not documented |
-| [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR · Classical | citation needed | — | Rust: AGPL-3.0-only OR LicenseRef-Imazen-Commercial; weights: not applicable | Not documented |
+**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass.
+
+| Metric | Type | Canonical | Check | Rust/C |
+| --- | --- | --- | --- | ---: |
+| [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | ChrisDud0257/AFINE | prior | — |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | unrecorded | unchecked | — |
+| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('a… | gate | — |
+| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
+| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | pass | ≈0.12× |
+| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl butteraugli v0.9.2 / 0… | unchecked | — |
+| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl butteraugli v0.9.2 / 0… | unchecked | — |
+| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | unrecorded | unchecked | — |
+| [`cambi`](docs/MODEL_CARDS.md#cambi) | NR | unrecorded | unchecked | — |
+| [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR | unrecorded | unchecked | — |
+| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | unrecorded | unchecked | — |
+| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | researchmm/CKDN | prior | — |
+| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp v0.5.7 (PyPI) | prior | — |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp v0.5.7 + CPU twin | unchecked | — |
+| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | unrecorded | unchecked | — |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | pyiqa 0.1.16 create_metric('c… | gate | — |
+| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | h4nwei/DeepDC | prior | — |
+| [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | dingkeyan93/DISTS | prior | — |
+| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | unrecorded | unchecked | — |
+| [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('d… | gate | — |
+| [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | dssim-core itself (the canoni… | prior | — |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
+| [`flip`](docs/MODEL_CARDS.md#flip) | FR | unrecorded | unchecked | — |
+| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× |
+| [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | authors' FR_FSIMc.m | prior | — |
+| [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2) | FR | unrecorded | unchecked | — |
+| [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | FR | unrecorded | unchecked | — |
+| [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | FR | unrecorded | unchecked | — |
+| [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | FR | unrecorded | unchecked | — |
+| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | FR | authors' FR_FSIMc.m | unchecked | — |
+| [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR | libgmsd de646c9a (C) | prior | — |
+| [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | FR | authors' haarpsi.m | prior | — |
+| [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | FR | authors' haarpsi.m | unchecked | — |
+| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.2 MATLAB… | prior | — |
+| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | unrecorded | unchecked | — |
+| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.7 MATLAB… | prior | — |
+| [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | unrecorded | unchecked | — |
+| [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | SSL92/hyperIQA | prior | — |
+| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37c (the P… | unchecked | — |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | CPU twin | unchecked | — |
+| [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | jpeg-ai-qaf IW_SSIM (torch po… | prior | — |
+| [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | richzhang/PerceptualSimilarity | prior | — |
+| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | richzhang/PerceptualSimilarity | prior | — |
+| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | richzhang/PerceptualSimilarity | prior | — |
+| [`mad`](docs/MODEL_CARDS.md#mad) | FR | official MATLAB release (lars… | unchecked | — |
+| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | IIGROUP/MANIQA | prior | — |
+| [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR | author's official C++ thorfdb… | prior | — |
+| [`mdsi`](docs/MODEL_CARDS.md#mdsi) | FR | unrecorded | unchecked | — |
+| [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | unchecked | — |
+| [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
+| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | authors' ssim_mscale_new.m | prior | — |
+| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf float_ms_ssim @ f85a8… | prior | — |
+| [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | google-research/google-research | prior | — |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 | pass | ≈0.18× |
+| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | Valerolaparra/NLPD_Pytorch (t… | prior | — |
+| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch source mirrored a… | prior | — |
+| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
+| [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public compute_… | prior | — |
+| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('p… | gate | — |
+| [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | pass | ≈0.1× |
+| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | unrecorded | unchecked | — |
+| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | unrecorded | unchecked | — |
+| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | unrecorded | unchecked | — |
+| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | unrecorded | unchecked | — |
+| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | unrecorded | unchecked | — |
+| [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR | unrecorded | unchecked | — |
+| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | unrecorded | unchecked | — |
+| [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | unrecorded | unchecked | — |
+| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | unrecorded | unchecked | — |
+| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR | authors' psnrhvsm.m | prior | — |
+| [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf psnr_hvs feature @ f8… | prior | — |
+| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | authors' psnrhvsm.m | unchecked | — |
+| [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | unrecorded | unchecked | — |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf float_ssim @ f85a8536… | prior | — |
+| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
+| [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR | primary SSIMULACRA2 v2.1 | Δ 0 | ≈0.58× |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | fast-ssim2 (CPU) + third-part… | unchecked | — |
+| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
+| [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1 / OpenCV | Δ 3.8e-09 | — |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | abhijay9/ShiftTolerant-LPIPS | prior | — |
+| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | abhijay9/ShiftTolerant-LPIPS | prior | — |
+| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
+| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
+| [`vif`](docs/MODEL_CARDS.md#vif) | FR | authors' vifp_mscale.m (MATLAB) | prior | — |
+| [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | authors' vifvec.m + matlabPyr… | prior | — |
+| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.1 via FFI oracle | prior | — |
+| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | unrecorded | unchecked | — |
+| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | unrecorded | unchecked | — |
+| [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | unrecorded | unchecked | — |
+| [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | unrecorded | unchecked | — |
+| [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR | unrecorded | unchecked | — |
+| [`vsi`](docs/MODEL_CARDS.md#vsi) | FR | authors' VSI.m | prior | — |
+| [`vsi-k2`](docs/MODEL_CARDS.md#vsi-k2) | FR | unrecorded | unchecked | — |
+| [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3) | FR | unrecorded | unchecked | — |
+| [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | FR | unrecorded | unchecked | — |
+| [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR | unrecorded | unchecked | — |
+| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | FR/NN | dmaniry/deepIQA | prior | — |
+| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
+| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | dmaniry/deepIQA | prior | — |
+| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | dmaniry/deepIQA | prior | — |
+| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('w… | gate | — |
+| [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Cool-Chic | prior | — |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | unrecorded | unchecked | — |
+| [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | unchecked | — |
+| [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | unchecked | — |
 
 ## Datasets
 

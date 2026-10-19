@@ -183,17 +183,31 @@ def exports(items):
 
 
 def readme_section(items):
-    lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards and BibTeX](docs/MODEL_CARDS.md)',
-           '', 'Source-linked records for each CLI metric; rows group variants only when the displayed paper, reference, terms and parity status match. Reported parity is scoped to its oracle and fixtures; a declared gate is not a measured result. Missing bibliographic fields are labelled **citation needed**. Code and checkpoint terms are separate.',
-           '', '| Metric | Family | Paper | Reference implementation | Licence | Parity status |', '| --- | --- | --- | --- | --- | --- |']
-    grouped={}
+    comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
+    comparisons=json.loads(comparison_path.read_text()) if comparison_path.exists() else {}
+    lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
+           '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
+           'Code and model terms, paper citations and full reference identities remain in the linked cards.',
+           '', '**Rust/C** is Rust time divided by canonical time (lower is faster). '
+           'Approximate local comparisons are descriptive, with their input size, thread budget and source pins '
+           'in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). '
+           'A dash means no comparable measurement. “Prior” means older recorded evidence; '
+           '“gate” means a declared bound, not a measured pass.',
+           '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
-        cite=c['citation'];paper=('['+cite['title']+']('+cite['url']+')') if cite else 'citation needed'
-        ref=c['reference_implementation'];lic='Rust: '+c['rust_license']+'; weights: '+c['weights_license']
-        key=(c['kind']+' · '+c['family'],paper,ref,lic,c['parity_status'],'' if cite else c['metric'])
-        grouped.setdefault(key,[]).append(c)
-    for key,group in grouped.items():
-        values=[', '.join('[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')' for c in group),*key[:5]]
+        observation=comparisons.get(c['metric'],{})
+        ref=observation.get('canonical',c['reference_implementation'])
+        if ref.startswith('https://github.com/'):
+            ref='/'.join(ref.split('/')[3:5])
+        elif ref in ('no evidence','—'):
+            ref='unrecorded'
+        ref=ref.split(';')[0]
+        if len(ref)>32:ref=ref[:29].rstrip()+'…'
+        check=observation.get('check',{'Reported results':'prior','Declared gate':'gate'}.get(c['parity_status'],'unchecked'))
+        ratio=observation.get('ratio')
+        speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
+        metric='[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')'
+        values=[metric,c['kind']+('/NN' if c['family']=='Learned' and c['metric']!='brisque' else ''),ref,check,speed]
         lines.append('| '+' | '.join(str(v).replace('|','\\|').replace('\n',' ') for v in values)+' |')
     return '\n'.join(lines)+'\n\n'
 

@@ -528,12 +528,16 @@ emit brisque_ref.
 
 The fixed gate remains JND/1000 (JND = 15.138428). Integer squares and cubes
 use multiplication. A 400,000-case synthetic GGD/AGGD sweep matches torch's ratios
-and gamma-grid argmins exactly. The final implementation uses libm::expf and
-independently written balanced pairwise f32 summation. Maximum score error is
-0.0078125 (0.0005160707571486287 JND) on the 170 goldens and 0.01025390625
-(0.0006773428687575752 JND) on 200 additional disjoint KonJND images. One
-extra-image alpha feature changes one grid step; no golden alpha feature changes.
-No tolerance was relaxed; final scores are not bit-exact.
+and gamma-grid argmins exactly. The final implementation uses libm::expf,
+deterministic f64 fixed-lane accumulators for the map reductions, and lazy
+balanced tap trees for the resize dots. Maximum score error is 0.00830078125
+(0.0005483252 JND) on the 170 goldens against the pinned oracle environment.
+The reduction rework is measured end-to-end: all 2016 KonJND images drift
+≤ 0.01171875 vs the previous pairwise-f32 implementation (argmin grid flips
+from ~1e-8 feature ulp changes), and against a freshly installed piq-0.8.0
+oracle on all 2058 images the two implementations' error envelopes coincide
+(max 0.0943 vs 0.0947 — the offset is oracle-environment drift, not port
+error). No tolerance was relaxed; final scores are not bit-exact.
 
 Computing gamma tables with f64 libm::lgamma/exp exceeded the same image gate
 with both reducers (final golden maximum 0.0615234375, or 0.004064057212545451
@@ -3303,6 +3307,16 @@ maps). Default and the free scoring functions retain automatic
 decimation. Factor 1 disables decimation. All factors use the same reference box
 filter and sampling anchor; map geometry records the selected factor.
 
+### Fixed-factor luma-only scoring
+
+Fsim::with_downscale(Downscale::Factor(factor)).score_luma8(...) applies the
+same reference box-filter decimation to unrounded BT.601 luma, without computing
+chroma planes. It accepts strided RGB8 rows. Downscale::Auto matches the existing
+fsim_luma8 function; score_rgb8 continues to return both FSIM and FSIMc.
+
+The fixed_luma_reps example accepts prepared RGB pairs from the complexity
+fixture exporter, so counter-delta measurements exclude decoding and tiling.
+
 **Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/fsim/README.md](https://github.com/imazen/zenmetrics/blob/master/crates/fsim/README.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs) · [crates/fsim/LICENSE-kovesi](https://github.com/imazen/zenmetrics/blob/master/crates/fsim/LICENSE-kovesi)
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
@@ -4471,6 +4485,10 @@ matlabPyrTools. Full detail, including the notices that must travel with this
 code: THIRD-PARTY-NOTICES.md (THIRD-PARTY-NOTICES.md).
 
 [imazen/zenmetrics#50]: https://github.com/imazen/zenmetrics/issues/50
+
+Canonical AIC2026 configuration research, including the complete upstream
+3.0.7 crop control and the separate port comparison, is recorded in
+the 2026-10-19 research note (docs/AIC2026_CANONICAL_2026-10-19.md).
 
 **Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/hdrvdp/README.md](https://github.com/imazen/zenmetrics/blob/master/crates/hdrvdp/README.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs) · [crates/hdrvdp/LICENSE-hdrvdp-3.0.7](https://github.com/imazen/zenmetrics/blob/master/crates/hdrvdp/LICENSE-hdrvdp-3.0.7) · [crates/hdrvdp/LICENSE-matlabPyrTools](https://github.com/imazen/zenmetrics/blob/master/crates/hdrvdp/LICENSE-matlabPyrTools) · [crates/hdrvdp/LICENSE-pyPyrTools](https://github.com/imazen/zenmetrics/blob/master/crates/hdrvdp/LICENSE-pyPyrTools)
 
@@ -9002,7 +9020,7 @@ target/release/zenmetrics score --metric ssim --reference ref.png --distorted di
 
 **Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
 
-**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+**Known divergences:** [PyIQA SSIM precision conventions observed 2026-10-19](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#pyiqa-ssim-precision-conventions-observed-2026-10-19)
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim)
 
@@ -11172,6 +11190,16 @@ Optimization measurements and profiles: 2026-10-12 report (benchmarks/vif_2026-1
 This crate ports the LIVE/UT Austin VIF releases, whose copyright notice must
 appear in all copies: LICENSE-live-vif (LICENSE-live-vif). vifvec reproduces
 matlabPyrTools' sp5Filters taps (MIT): LICENSE-matlabPyrTools (LICENSE-matlabPyrTools).
+
+### Thread-order correction under review
+
+The unmerged fix/vifvec-thread-order branch keeps covariance accumulation
+in the original one-worker raster order at every worker budget. Parallel
+striped partial sums previously changed covariance and score bits. Other
+independent parallel work remains enabled. The exact covariance regression
+fails on the original path and passes on the correction; existing numerical
+expectations are unchanged. The owner must review the measured speed/memory
+tradeoff before merging and requalifying published benchmarks.
 
 **Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/vif/README.md](https://github.com/imazen/zenmetrics/blob/master/crates/vif/README.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs) · [crates/vif/LICENSE-live-vif](https://github.com/imazen/zenmetrics/blob/master/crates/vif/LICENSE-live-vif) · [crates/vif/LICENSE-matlabPyrTools](https://github.com/imazen/zenmetrics/blob/master/crates/vif/LICENSE-matlabPyrTools)
 

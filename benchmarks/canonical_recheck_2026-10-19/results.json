@@ -1,0 +1,80 @@
+{
+  "brisque": {
+    "canonical": "PIQ 0.8.0",
+    "check": "pass",
+    "ratio": 0.11907126763723552,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 0.0025634765625,
+    "absolute_bound": 0.015138428,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  },
+  "flip-v17": {
+    "canonical": "NVIDIA FLIP 1.7",
+    "check": "\u0394 0",
+    "ratio": 0.335881773407624,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 0.0,
+    "absolute_bound": null,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  },
+  "niqe": {
+    "canonical": "BasicSR 1.4.2",
+    "check": "pass",
+    "ratio": 0.1821820729695662,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 9.065496319360378e-05,
+    "absolute_bound": 0.000602329,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  },
+  "piqe": {
+    "canonical": "pypiqe 1.2",
+    "check": "pass",
+    "ratio": 0.1027578724461734,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 4.618527782440651e-14,
+    "absolute_bound": 0.012486448,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  },
+  "ssim2": {
+    "canonical": "primary SSIMULACRA2 v2.1",
+    "check": "\u0394 0",
+    "ratio": 0.584558838720874,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 0.0,
+    "absolute_bound": null,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  },
+  "ssimulacra1": {
+    "canonical": "original SSIMULACRA1 / OpenCV",
+    "check": "\u0394 3.8e-09",
+    "ratio": null,
+    "width": 512,
+    "height": 512,
+    "threads": 1,
+    "max_abs_delta": 3.826276126668582e-09,
+    "absolute_bound": null,
+    "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "qualified": false
+  }
+}
