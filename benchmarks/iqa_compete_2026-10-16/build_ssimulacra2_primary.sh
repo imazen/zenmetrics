@@ -4,7 +4,7 @@
 # Little-CMS >= 2.13 prefix, satisfying upstream's unmodified
 # "find_package(LCMS2 2.13)" requirement.
 #
-# Usage: build_ssimulacra2_primary.sh <ssim2_tarball> <lcms2_tarball> <output_dir>
+# Usage: build_ssimulacra2_primary.sh <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input]
 #   ssim2_tarball : official GitHub archive of commit fb5d0dbe
 #   lcms2_tarball : official Little-CMS lcms2.13 archive (commit ac4fe46f)
 #   output_dir    : must NOT exist — atomically reserved by this script;
@@ -32,7 +32,15 @@ LCMS2_COMMIT=ac4fe46f2b4d84bae2ed6cc77b044976282098a5
 LCMS2_URL=https://github.com/mm2/Little-CMS/archive/refs/tags/lcms2.13.tar.gz
 LCMS2_SHA=16de4bc1e83a5f8aa4e395d9734396cb6ffe7263648d35f39b0fcf933082f93b
 
-[ $# -eq 3 ] || { echo "usage: $0 <ssim2_tarball> <lcms2_tarball> <output_dir>" >&2; exit 2; }
+[ $# -eq 3 ] || [ $# -eq 4 ] || { echo "usage: $0 <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input]" >&2; exit 2; }
+build_target=ssimulacra2
+cmake_extra=()
+if [ $# -eq 4 ]; then
+  [ "$4" = rgb-input ] || { echo 'unknown adapter mode' >&2; exit 2; }
+  adapter_dir=$(dirname -- "$(realpath -e -- "$0")")
+  cmake_extra=("-DCMAKE_PROJECT_LIBJXL_INCLUDE=$adapter_dir/ssimulacra2-primary-rgb.cmake")
+  build_target=iqa-ssim2-primary
+fi
 ssim2_tgz=$(realpath -e -- "$1")
 lcms2_tgz=$(realpath -e -- "$2")
 output=$(realpath -m -s -- "$3")
@@ -73,6 +81,9 @@ export TMPDIR="$output/scratch"
 stage scratch-dir mkdir -- "$TMPDIR"
 prefix=$output/lcms2-prefix
 stage builder-receipt sha256sum -- "$(realpath -e -- "$0")"
+if [ "$build_target" = iqa-ssim2-primary ]; then
+  stage adapter-receipt sha256sum -- "$adapter_dir/ssimulacra2-primary-rgb.cmake" "$adapter_dir/ssimulacra2_primary_compute.cpp"
+fi
 
 # The pinned archives have one top-level directory; strip only that component.
 # Every command runs inside stage(), including extraction failures.
@@ -102,12 +113,12 @@ stage ssim2-cmake \
   cmake -S "$ssim2_src/src" -B "$output/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_PREFIX_PATH="$prefix" \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON "${cmake_extra[@]}"
 stage ssim2-build \
-  cmake --build "$output/build" --target ssimulacra2 \
+  cmake --build "$output/build" --target "$build_target" \
         --parallel "${CARGO_BUILD_JOBS:?}"
-stage ssim2-retain cp "$output/build/ssimulacra2" "$output/ssimulacra2"
-stage ssim2-receipt  sha256sum "$output/ssimulacra2"
+stage ssim2-retain cp "$output/build/$build_target" "$output/ssimulacra2"
+stage ssim2-receipt sha256sum "$output/ssimulacra2"
 
 # --- receipts: toolchain, cache, static-HWY identity, library paths ---
 toolchain_versions() {

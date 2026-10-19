@@ -107,3 +107,49 @@ No-argument execution prints usage and returns 1, without scoring.
 Control logs and commands live beside the build log under `controls/` and
 `configure-argv/`; `report.md` records the frozen candidate and file hashes.
 All previous source, build and control artifacts remain preserved.
+
+## Opt-in raw RGB target
+
+Append `rgb-input` to the builder's three arguments to select the benchmark
+adapter in [ssimulacra2_primary_compute.cpp](ssimulacra2_primary_compute.cpp).
+The default remains the official file-decoding CLI. A CMake project hook adds
+the adapter target and compiles the exact upstream `ssimulacra2.cc`; upstream
+source files remain unchanged. This starts a separate executable cohort.
+
+The adapter accepts the existing harness argument order:
+`ssim2 width height reference.rgb distorted.rgb threads score samples`.
+It checks positive integers, minimum 8×8 geometry, size overflow and exact
+RGB8 file lengths. File reads, raw buffers and the reusable thread runner are
+outside timing. Each timed call creates metadata and image bundles, converts
+both RGB8 inputs, calls the canonical metric and destroys per-call objects.
+Metadata declares RGB sRGB, 8-bit samples and the upstream SDR intensity of
+255. It does not pre-linearize input or substitute another color-management
+implementation. Scores retain double precision with 17 significant digits.
+
+The first measured call emits `COLD`; subsequent calls emit `SAMPLE`.
+Cold here means the first score call after file loading and runner creation,
+not process startup. The requested budget controls ingress workers; the
+upstream metric has no pool parameter and scores on the calling thread.
+`score+map` emits `UNSUPPORTED_MAP` before file reads; no map is synthesized.
+The new output and scope require explicit cohort selection by the collector.
+Source/build and refusal controls alone do not establish numerical parity or
+qualified ratios. Existing library routes and metric code are unchanged.
+
+The opt-in target built on 2026-10-19 with binary SHA256
+`2e78406631721d54524849319340ac887a34a34edce8372c653c96aaf670b399`.
+Its complete source extraction matches all 196 regular files in the pinned
+official archive. Minimum-size, odd-size and 64×64 synthetic pairs agree with
+the official CLI's eight-decimal display at ingress budgets 1 and 2; cold and
+warm score transport agrees exactly within each process. This compares two
+ingress routes to the same canonical scoring body, not Rust against C++.
+Argument, overflow, absent/truncated/oversized file and unsupported-map
+controls also pass. The map refusal succeeds with absent input paths.
+
+The repeatable [control program](check_ssimulacra2_primary.py) runs no scoring
+unless supplied `--official`. The corresponding `oracle.just` ingress recipe
+explicitly opts into both canonical binaries. Full logs and input/output
+receipts are retained under `~/tmp/portcheck-primary-rgb-controls-20261019T0951/`.
+Build receipt: `run-heavy: done rc=0 15s | peak-RSS 0.42GiB | min-avail 11281MiB | peak-load 6.43`.
+Control receipt: `run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 13180MiB | peak-load 3.72`.
+Both hold the two host heavy locks and use a 12 GiB cap. These receipts cover
+whole build/control processes, not metric-call memory or speed comparisons.

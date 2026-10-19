@@ -23,3 +23,16 @@ inventory-source-check:
 [positional-arguments]
 ssim2-primary-build ssim2_archive lcms_archive output:
     bash build_ssimulacra2_primary.sh "$1" "$2" "$3"
+
+[positional-arguments]
+ssim2-primary-rgb-build ssim2_archive lcms_archive output:
+    bash build_ssimulacra2_primary.sh "$1" "$2" "$3" rgb-input
+
+[positional-arguments]
+ssim2-primary-rgb-check binary archive source_root evidence:
+    python3 -B check_ssimulacra2_primary.py --binary "$1" --archive "$2" --source-root "$3" --evidence "$4"
+
+# Calls both canonical binaries on synthetic pixels. Requires both host heavy locks.
+[positional-arguments]
+ssim2-primary-rgb-ingress-check binary archive source_root evidence official:
+    python3 -B check_ssimulacra2_primary.py --binary "$1" --archive "$2" --source-root "$3" --evidence "$4" --official "$5"
