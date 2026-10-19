@@ -1131,3 +1131,7 @@ benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairB.tsv	ignored	Primary H
 benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairC.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
 benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.json	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
 benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.meta	ignored	Primary HaarPSI scalar experiment command and evidence metadata; no qualified timing data.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairA.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairB.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairC.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd.json	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.

@@ -1,0 +1,51 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-gmsd-primary-panel-20261019T1251-r2",
+  "identity": {
+    "build_receipt_sha256": "1c1b458415375d0d7d08967f79ad980e5779d74263b5bbc444f1f9e29d62f2cb",
+    "rust_build_receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "binaries": {
+      "gmsd-primary": "af493c45e8f6e3595830bbe45acc21352a18990fa2aec54b0f050f1131ef3bac",
+      "gmsd-primary-asan": "23d5d6619d643c3d1aa2c4297b5e8015e4d51648d05036dc1fd27a46dc73c3eb",
+      "gmsd-rust-map": "d22463d021a7f5bb304ed7af19dbd32d48f8cd00531372179017432b5fc77345"
+    },
+    "rust_cli_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "worker_sha256": "f7b8dad0438f856887076d8c6339ea7d0a85c68da8df653ad25563643c2d2251",
+    "score_relative_bound": 1e-12,
+    "mean_absolute_bound": 1e-14,
+    "map_gate": "bit-identical",
+    "gate_source": "benchmarks/gmsd_parity_2026-09-22.md and crates/gmsd/src/tests.rs",
+    "qualified_timing_cells": 0
+  },
+  "cases": 24,
+  "statuses": {
+    "pass": 18,
+    "canonical-process-failure": 6
+  },
+  "identity_sha256": "68b485a5a5b5aef8991e98bdf8cb83f44358b9419e747f52170d07ac77fc1c5d",
+  "completion_sha256": "f1ce8a66ccff27b448ac2adf16cfe6060a15676401cdd70f63d3c4ef045af1c3",
+  "artifact_manifest_sha256": "20341b0a8649a23af7068b8513eb648be005b034eb973e67175c1c504eec2e7c",
+  "wrapper_log_sha256": "c4b00df61713586558e1b6b2c5a6e287ed8e9f6e62eae9cf22c871181b2c8a12",
+  "shards": [
+    {
+      "path": "primary-gmsd-pairA.tsv",
+      "sha256": "b0992a8d54dcb0b0f65eb69b12ad6d4a301e552c748bf8662746be96519273ee",
+      "bytes": 1959
+    },
+    {
+      "path": "primary-gmsd-pairB.tsv",
+      "sha256": "16fa9c2b079f2d81c925016c6ad186fe29f22a2ddd070d6ef7a34b80f13e3719",
+      "bytes": 1941
+    },
+    {
+      "path": "primary-gmsd-pairC.tsv",
+      "sha256": "700e34308d872db2ab6582c5cf6100747dabf27965150fe4cfa2be3b9621f00e",
+      "bytes": 1943
+    }
+  ],
+  "qualified_timing_cells": 0
+}
