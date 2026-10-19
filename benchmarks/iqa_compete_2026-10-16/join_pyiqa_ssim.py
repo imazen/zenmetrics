@@ -22,8 +22,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ['primary', 'supplement', 'multiscale', 'single-scale', 'output']:
         p.add_argument('--' + name, type=Path, required=True)
+    p.add_argument('--additional-primary', type=Path)
     a = p.parse_args()
     roots = {name: getattr(a, name).resolve(strict=True) for name in ['primary', 'supplement', 'multiscale', 'single_scale']}
+    if a.additional_primary:
+        roots['additional_primary'] = a.additional_primary.resolve(strict=True)
     inputs, probes = {}, {}
     for label in ['multiscale', 'single_scale']:
         root = roots[label]
@@ -61,6 +64,20 @@ def main():
             key = (row['pair'], row['size'], row['threads'], row['factor'], row['convention'])
             assert key not in primary
             primary[key] = (row, events, 'original-panel')
+    extra_done = {'cases': []}
+    if a.additional_primary:
+        extra_root = roots['additional_primary']
+        extra_identity = json.loads((extra_root / 'identity.json').read_text())
+        assert extra_identity['factors'] == [5, 6] and extra_identity['direct_only']
+        extra_done = json.loads((extra_root / 'completion.json').read_text())
+        assert len(extra_done['cases']) == 48
+        for case in extra_done['cases']:
+            events = extra_root / case['case'] / 'canonical/events.jsonl'
+            records = [json.loads(line) for line in events.read_text().splitlines()] if events.exists() else []
+            for row in records:
+                key = (row['pair'], row['size'], row['threads'], row['factor'], row['convention'])
+                assert key not in primary and row['factor'] in [5, 6]
+                primary[key] = (row, events, 'additional-k5-k6-panel')
     supplement = json.loads((roots['supplement'] / 'completion.json').read_text())
     for case in supplement['cases']:
         directory = roots['supplement'] / (case['parent_case'] + '-' + case['convention'])
@@ -77,7 +94,7 @@ def main():
                    'ms-ssim-unrounded-y': 'ms-ssim-pyiqa-f32', 'ssim-original-rounded-class': 'ssim-pyiqa',
                    'ms-ssim-original-rounded-class': 'ms-ssim-pyiqa'}
     for (pair, size, threads), input_row in sorted(inputs.items()):
-        for factor in [1, 2, 3, 4]:
+        for factor in ([1, 2, 3, 4, 5, 6] if a.additional_primary else [1, 2, 3, 4]):
             for convention, base_name in conventions.items():
                 if factor > 1 and 'original-rounded-class' in convention:
                     continue  # No corresponding rounded fixed CLI name exists.
@@ -132,7 +149,8 @@ def main():
         artifacts.append(dict(cohort=label, root=str(root), manifest_sha256=sha(manifest)))
     index = dict(rows=sum(map(len, grouped.values())), outputs=outputs, artifacts=artifacts, max_abs_deltas=dict(maxima),
                  counts=[dict(metric=k[0], canonical_status=k[1], candidate_status=k[2], cases=v) for k, v in sorted(counts.items())],
-                 primary_attempts=96, primary_process_failures=sum(r['returncode'] != 0 for r in done['cases']),
+                 primary_attempts=len(done['cases']) + len(extra_done['cases']),
+                 primary_process_failures=sum(r['returncode'] != 0 for r in done['cases'] + extra_done['cases']),
                  supplemental_attempts=len(supplement['cases']), gate='UNBOUND; no pass inferred', qualified_timing_cells=0)
     (a.output / 'primary-pyiqa-ssim.json').write_text(json.dumps(index, indent=2) + '\n')
     print(json.dumps(index))

@@ -2,7 +2,7 @@
 """Fixed-factor oracle source patcher — scratch-copy contract.
 
 Patches the automatic downscale-factor assignment in a *verified* oracle
-source to a literal factor K in {1,2,3,4}, preserving every other byte
+source to a literal factor K (1–4; PyIQA SSIM also supports 5/6), preserving every other byte
 (including newline style and the line terminator). Emits a JSON manifest
 per patch for the integrity checker.
 
@@ -70,6 +70,7 @@ class SourceSpec:
     target: bytes
     origin: str
     runtime_contract: str = ""
+    valid_factors: tuple[int, ...] = VALID_FACTORS
 
 
 SOURCES: dict[str, SourceSpec] = {
@@ -125,6 +126,7 @@ SOURCES: dict[str, SourceSpec] = {
     ),
     "ssim-pyiqa": SourceSpec(
         name="ssim-pyiqa",
+        valid_factors=(1, 2, 3, 4, 5, 6),
         role="primary",
         relpath="pyiqa/archs/ssim_arch.py",
         sha256="a0eb8e0bedfae99d9d014371a77b7d9afb110c71a22b6cda06a4992da0d951e8",
@@ -198,8 +200,8 @@ def patch_bytes(data: bytes, spec: SourceSpec, factor: int) -> tuple[bytes, int]
     (new_bytes, byte-offset of the single replacement)."""
     # strict type: bool True and float 1.0 compare equal to 1 but would
     # inject an invalid literal token into the patched source.
-    if type(factor) is not int or factor not in VALID_FACTORS:
-        raise PatchError(f"illegal factor {factor!r}: expected an int in {VALID_FACTORS}")
+    if type(factor) is not int or factor not in spec.valid_factors:
+        raise PatchError(f"illegal factor {factor!r}: expected an int in {spec.valid_factors}")
     idx = data.find(spec.target)
     if idx < 0:
         raise PatchError(f"{spec.name}: target absent at patch time")
@@ -319,7 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--name", required=True, choices=sorted(SOURCES))
     pp.add_argument("--source-path", default=None, help="explicit input path for --name")
     pp.add_argument("--source-root", action="append", help="root dir to resolve the source under (repeatable)")
-    pp.add_argument("--factor", required=True, type=int, choices=VALID_FACTORS)
+    pp.add_argument("--factor", required=True, type=int,
+                    choices=sorted({k for spec in SOURCES.values() for k in spec.valid_factors}))
     pp.add_argument("--out", required=True, help="NEW output path (exclusive create)")
     pp.add_argument("--manifest", default=None, help="manifest path (default: <out>.manifest.json)")
     args = ap.parse_args(argv)

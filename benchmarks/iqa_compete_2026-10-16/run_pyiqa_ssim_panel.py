@@ -26,6 +26,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ['python', 'inputs', 'references', 'output']:
         p.add_argument('--' + name, required=True, type=Path)
+    p.add_argument('--factors', default='1,2,3,4')
+    p.add_argument('--direct-only', action='store_true')
     a = p.parse_args()
     # Executing the resolved target of a venv's Python symlink loses its
     # pyvenv.cfg search context. Preserve the requested launcher path.
@@ -35,7 +37,9 @@ def main():
         setattr(a, name, getattr(a, name).resolve(strict=True))
     pairs = json.loads(a.inputs.read_text())['pairs']
     references = {int(k): Path(v).resolve(strict=True) for k, v in json.loads(a.references.read_text()).items()}
-    assert set(references) == {1, 2, 3, 4}
+    factors = [int(k) for k in a.factors.split(',')]
+    assert len(factors) == len(set(factors)) and all(k in range(1, 7) for k in factors)
+    assert set(references) == set(factors)
     for k, path in references.items():
         m = check_manifest(path)
         assert m['source']['name'] == 'ssim-pyiqa' and m['patch']['factor'] == k
@@ -50,9 +54,9 @@ def main():
                 'python_launcher': str(a.python), 'python_resolved_executable': str(a.python.resolve(strict=True)),
                 'venv_config_sha256': sha(venv_config) if venv_config.exists() else None,
                 'reference_manifests': {k: sha(path) for k, path in references.items()},
-                'helpers': helpers, 'threads': [1, cap], 'factors': [1, 2, 3, 4],
+                'helpers': helpers, 'threads': [1, cap], 'factors': factors, 'direct_only': a.direct_only,
                 'qualified_timing_cells': 0}
-    cases = list(itertools.product(pairs, [1, 2, 3, 4], [1, cap]))
+    cases = list(itertools.product(pairs, factors, [1, cap]))
     identity['planned_cases'] = len(cases)
     write(root / 'identity.json', identity)
     dispositions = []
@@ -72,6 +76,8 @@ def main():
         write(directory / 'inputs.json', {'pairs': [row]})
         command = [str(a.python), '-B', str(base / 'probe_pyiqa_ssim.py'), '--manifest', str(references[k]),
                    '--inputs', str(directory / 'inputs.json'), '--output', str(directory / 'canonical'), '--threads', str(threads)]
+        if a.direct_only:
+            command.append('--direct-only')
         scorer = scoring_command(command, system='Linux', seconds=300, memory_log=directory / 'process-memory.txt')
         wrapped = ['flock', str(Path.home() / 'tmp/lilith-heavy.lock'), 'flock', str(Path.home() / 'tmp/lilith-wsl-heavy.lock'),
                    str(Path.home() / 'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', str(threads), '--', *scorer]

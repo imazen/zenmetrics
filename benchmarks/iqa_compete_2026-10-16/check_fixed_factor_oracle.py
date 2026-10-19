@@ -39,7 +39,7 @@ def verify_patch(src_data: bytes, spec: ffo.SourceSpec, factor: int,
     the target expression replaced by str(factor) at its single offset."""
     # strict type: bool/float compare equal to a valid factor but are not
     # valid literals — a manifest could carry JSON true or 1.0.
-    if type(factor) is not int or factor not in ffo.VALID_FACTORS:
+    if type(factor) is not int or factor not in spec.valid_factors:
         raise CheckError(f"illegal factor {factor!r}")
     n = src_data.count(spec.target)
     if n != 1:
@@ -93,7 +93,7 @@ def check_manifest(mpath: Path) -> dict:
         raise CheckError("replacement_bytes is not an integer literal")
     if type(m["patch"]["factor"]) is not int or m["patch"]["factor"] != rep:
         raise CheckError("factor/replacement mismatch or non-int factor")
-    if m["patch"]["factor"] not in ffo.VALID_FACTORS:
+    if m["patch"]["factor"] not in spec.valid_factors:
         raise CheckError("manifest factor outside allowed set")
     if spec.target.decode() != m["patch"]["target_bytes"]:
         raise CheckError("manifest target mismatch registry")
@@ -141,7 +141,7 @@ def selfcheck(evidence: Path, source_paths: dict[str, str],
         except ffo.PatchError as e:
             record(f"  FAIL  {name}: {e}")
             continue
-        for k in ffo.VALID_FACTORS:
+        for k in spec.valid_factors:
             out = evidence / f"{name}-k{k}{src.suffix}"
             mpath = evidence / f"{name}-k{k}.manifest.json"
             try:

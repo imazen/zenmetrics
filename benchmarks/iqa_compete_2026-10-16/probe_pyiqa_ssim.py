@@ -30,6 +30,7 @@ def main():
     p.add_argument('--threads', type=int, required=True)
     p.add_argument('--convention', choices=['ssim-unrounded-y', 'ssim-unrounded-rgb', 'ms-ssim-unrounded-y',
                    'ssim-original-rounded-class', 'ms-ssim-original-rounded-class'])
+    p.add_argument('--direct-only', action='store_true')
     a = p.parse_args()
     if a.threads <= 0:
         p.error('positive CPU thread budget required')
@@ -86,6 +87,8 @@ def main():
             'ms-ssim-original-rounded-class': lambda: primary.MS_SSIM(downsample=True)(x / 255, y / 255),
         }
         for name, call in calls.items():
+            if a.direct_only and 'original-rounded-class' in name:
+                continue
             if a.convention and a.convention != name:
                 continue
             record = {'pair': row['pair'], 'size': row['size_name'], 'width': row['width'], 'height': row['height'],
