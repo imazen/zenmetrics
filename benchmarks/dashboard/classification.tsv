@@ -1216,3 +1216,4 @@ benchmarks/iqa_changed_2026-10-19/mac/retry-no-overwrite.json	ignored	Portable M
 benchmarks/iqa_changed_2026-10-19/mac/run.meta	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
 benchmarks/iqa_changed_2026-10-19/mac/snapshot.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
 benchmarks/iqa_changed_2026-10-19/mac/timings.csv	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.

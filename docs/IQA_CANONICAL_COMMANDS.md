@@ -43,3 +43,9 @@ comparison protocol. NN campaigns require separately qualified adapters and run
 last in the current three-host program.
 
 Check command construction and admission with `just iqa-canonical-command-check`.
+
+Historical `iqa-compete-*` panel executors also carry a `-supplemental` suffix.
+Recipes named smoke, probe, control, tests or check are diagnostics; their
+intentionally short budgets are not comparison measurements. Historical recipes
+that explicitly request 8K remain supplemental and are not part of the active
+non-8K campaign. Build recipes do not themselves qualify timing observations.

@@ -1366,7 +1366,8 @@ iqa-compete-build mode="cached":
 iqa-compete-prepare binary reference distorted output:
     '{{binary}}' prepare '{{reference}}' '{{distorted}}' '{{output}}'
 
-iqa-compete-run binary pairs output sizes="cid22,2k" threads="1,20":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-run-supplemental binary pairs output sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --sizes '{{sizes}}' --threads '{{threads}}'
 
 iqa-compete-charts raw output python=(env_var_or_default("IQA_COMPETE_PYTHON", env_var("HOME") + "/tmp/iqa-compete/python-venv/bin/python")):
@@ -1379,7 +1380,8 @@ iqa-compete-smoke binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --metrics psnr,ssim2,gmsd,fsim --threads 1,20 --sizes cid22,2k
 
 # PieAPP uses its own slow-cell lane; both lanes contribute to the full inventory.
-iqa-compete-cpu-i265 binary pairs output models model_map sizes="cid22,2k" threads="1,20" batch="1100":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-cpu-i265-supplemental binary pairs output models model_map sizes="cid22,2k" threads="1,20" batch="1100":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --exclude-metrics pieapp --batch-seconds '{{batch}}'
 
 iqa-compete-libvmaf-build source output:
@@ -1397,7 +1399,8 @@ iqa-compete-model-parity reference candidate pairs output:
 iqa-compete-planes binary pairs output:
     '{{binary}}' prepare-planes '{{pairs}}' '{{output}}'
 
-iqa-compete-native engine binary rust pairs planes output sizes="cid22,2k":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-native-supplemental engine binary rust pairs planes output sizes="cid22,2k":
     python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes '{{sizes}}'
 
 iqa-compete-native-probe vmaf jxl rust pairs planes output:
@@ -1417,7 +1420,8 @@ nn-pieapp-review-weight-control python upstream checkpoint out:
 iqa-compete-collect output +ledgers:
     python3 benchmarks/iqa_compete_2026-10-16/collect.py {{ledgers}} --output '{{output}}'
 
-iqa-compete-cuda-i265 binary pairs output models model_map reference qualified mode="nn" sizes="cid22,2k":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-cuda-i265-supplemental binary pairs output models model_map reference qualified mode="nn" sizes="cid22,2k":
     bash benchmarks/iqa_compete_2026-10-16/run_cuda.sh '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' '{{sizes}}' '{{mode}}' '{{reference}}' '{{qualified}}'
 
 iqa-compete-clippy:
@@ -1429,7 +1433,8 @@ iqa-compete-model-manifest default overrides output:
 iqa-compete-python-setup output:
     bash benchmarks/iqa_compete_2026-10-16/python_setup.sh '{{output}}'
 
-iqa-compete-python package python binary pairs output reference qualified sizes="cid22,2k" threads="1,20":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-python-supplemental package python binary pairs output reference qualified sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads '{{threads}}' --sizes '{{sizes}}' --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --reference-jsonl '{{qualified}}'
 
 iqa-compete-chunk-tests:
@@ -1466,11 +1471,13 @@ iqa-compete-admission-classification-tests:
 
 
 # Shorter group budget reserves room for slow model warmup and batch overrun.
-iqa-compete-pieapp-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-pieapp-cpu-supplemental binary pairs output models model_map sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics pieapp --chunk-budget-ms 600000
 
 # Explicit metric subset for isolated admission repairs; preserves old ledgers.
-iqa-compete-selected binary pairs output metrics sizes="cid22,2k" threads="1,20" batch="1100":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-selected-supplemental binary pairs output metrics sizes="cid22,2k" threads="1,20" batch="1100":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics '{{metrics}}' --sizes '{{sizes}}' --threads '{{threads}}' --batch-seconds '{{batch}}'
 
 iqa-compete-reference-tests:
@@ -1535,7 +1542,8 @@ iqa-compete-batch-smoke binary pairs output:
 iqa-compete-controller-tests: iqa-compete-chunk-tests iqa-compete-linux-admission-tests iqa-compete-capability-tests iqa-compete-admission-classification-tests iqa-compete-reference-tests iqa-compete-parity-tests iqa-compete-ort-patch-tests iqa-compete-coverage-tests iqa-compete-dispatch-tests iqa-compete-platform-tests iqa-compete-batch-tests
 
 # Learned CPU continuation shares prior observations; classical repairs have a separate lane.
-iqa-compete-learned-cpu binary pairs output models model_map sizes="cid22,2k" threads="1,20":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-learned-cpu-supplemental binary pairs output models model_map sizes="cid22,2k" threads="1,20":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads '{{threads}}' --model-root '{{models}}' --models-json '{{model_map}}' --metrics learned --exclude-metrics pieapp --batch-seconds 1100
 
 # Audit the owner-requested 113-name inventory, independent of any old build ledger.
@@ -1578,23 +1586,28 @@ iqa-compete-collect-binary raw output binary_sha:
     python3 benchmarks/iqa_compete_2026-10-16/collect.py '{{raw}}' --output '{{output}}' --only-binary-sha '{{binary_sha}}'
 
 # Owner coverage pass: one pair per size, n=5/3/1, one bounded scope per cell.
-iqa-compete-coverage-rust binary pairs output models model_map sizes="aic-small,aic-medium,aic-large,4k,8k":
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-coverage-rust-supplemental binary pairs output models model_map sizes="aic-small,aic-medium,aic-large,4k,8k":
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --sizes '{{sizes}}' --threads 1,all --model-root '{{models}}' --models-json '{{model_map}}' --coverage-first
 
-iqa-compete-coverage-native engine binary rust pairs planes output reference:
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-coverage-native-supplemental engine binary rust pairs planes output reference:
     python3 benchmarks/iqa_compete_2026-10-16/native_run.py '{{engine}}' '{{binary}}' '{{rust}}' '{{pairs}}' '{{planes}}' '{{output}}' --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --coverage-first --reference-jsonl '{{reference}}'
 
-iqa-compete-coverage-python package python binary pairs output reference:
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-coverage-python-supplemental package python binary pairs output reference:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --threads 1,all --sizes cid22,aic-small,aic-medium,aic-large,2k,4k,8k --python-package '{{package}}' --python-executable '{{python}}' --reference-jsonl '{{reference}}' --coverage-first
 
 # Light controller orchestration; each child acquires the heavy lock per cell.
-iqa-compete-coverage-pass binary pairs output models model_map ort cuda:
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-coverage-pass-supplemental binary pairs output models model_map ort cuda:
     python3 benchmarks/iqa_compete_2026-10-16/coverage_pass.py '{{binary}}' '{{pairs}}' '{{output}}' '{{models}}' '{{model_map}}' --ort-library '{{ort}}' --cuda-libraries '{{cuda}}'
 
 iqa-compete-adopt-scope config log contention output:
     python3 benchmarks/iqa_compete_2026-10-16/adopt_scope.py '{{config}}' '{{log}}' '{{contention}}' '{{output}}'
 
-iqa-compete-coverage-competitors rust jxl pairs planes python flip_python reference vmaf_ledger output wait_pid *options:
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-coverage-competitors-supplemental rust jxl pairs planes python flip_python reference vmaf_ledger output wait_pid *options:
     python3 benchmarks/iqa_compete_2026-10-16/coverage_competitors.py '{{rust}}' '{{jxl}}' '{{pairs}}' '{{planes}}' '{{python}}' '{{flip_python}}' '{{reference}}' '{{vmaf_ledger}}' '{{output}}' --wait-pid '{{wait_pid}}' {{options}}
 
 iqa-compete-publish-binary snapshot log binary metadata:
@@ -1613,7 +1626,8 @@ iqa-compete-coverage-snapshot output:
     python3 benchmarks/iqa_compete_2026-10-16/coverage_progress.py benchmarks/iqa_compete_2026-10-16/frozen-inventory.json --baseline '{{env_var("HOME")}}/tmp/iqa-compete/refresh-accounted-first2-v1/raw.jsonl' --baseline '{{env_var("HOME")}}/tmp/iqa-compete/pieapp-cpu-accounted/i265.jsonl' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-rust-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-native-vmaf' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-competitors-v16' '{{env_var("HOME")}}/tmp/iqa-compete/coverage-butter8k-isolated-v17' --freeze-dir '{{output}}' --save '{{output}}/progress.json'
 
 # Only missing 8K Butteraugli cells; avoid co-resident score/map scorers.
-iqa-compete-butter8k-isolated binary pairs output:
+# Historical protocol; supplemental evidence only. Use bench-iqa for canonical CPU comparisons.
+iqa-compete-butter8k-isolated-supplemental binary pairs output:
     python3 benchmarks/iqa_compete_2026-10-16/run.py '{{binary}}' '{{pairs}}' '{{output}}' --host i265 --metrics butteraugli-gpu --sizes 8k --threads 1,all --gpu-runtime cuda --coverage-first --isolate-modes --batch-seconds 1100 --batch-reserve-seconds 1000
 
 iqa-compete-landing-gates output snapshot *options:
