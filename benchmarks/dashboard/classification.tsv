@@ -1197,3 +1197,4 @@ benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.json	ignored	Unmerg
 benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.meta	ignored	Unmerged SSIM before/after experiment commands and artifact hashes; no qualified timing data.
 benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fixed-look benchmark policy metadata; no measured or qualified timing results.
 benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
+benchmarks/rebenchmark_since_f7668c7/scope.json	ignored	Source-audited rerun scope; no measurements or qualification claims.

@@ -27,3 +27,5 @@ jobs:
             ~/tmp/checkpoint-math-*/*.json
             ~/tmp/checkpoint-math-*/*.log
             ~/tmp/checkpoint-math-*/*.rs
+            ~/tmp/checkpoint-math-*/Cargo.toml
+            ~/tmp/checkpoint-math-*/Cargo.lock

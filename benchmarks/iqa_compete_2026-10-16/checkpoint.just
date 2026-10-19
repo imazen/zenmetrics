@@ -15,3 +15,7 @@ portable-math stage:
 
 portable-math-remote-only stage:
     nice -n19 ionice -c3 python3 -B run_checkpoint_math.py '{{stage}}' --remote-only
+
+# Run under run-heavy and both shared heavy-job locks.
+checkpoint-integrated-check snapshot:
+    python3 -B verify_integrated_snapshot.py '{{snapshot}}'

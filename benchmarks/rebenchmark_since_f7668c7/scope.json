@@ -1,0 +1,137 @@
+{
+  "baseline": "f7668c770bd0fec89f25a119e07b9152fd46b383",
+  "audited_tree": "b216412c",
+  "scope": "existing CLI CPU metric call paths; pinned sibling revisions and resolved features included",
+  "existing_count": 23,
+  "existing": [
+    {
+      "metric": "brisque",
+      "reason": "SIMD kernels and accumulation",
+      "landing": "master"
+    },
+    {
+      "metric": "niqe",
+      "reason": "SIMD kernels and accumulation",
+      "landing": "master"
+    },
+    {
+      "metric": "piqe",
+      "reason": "SIMD kernels and accumulation",
+      "landing": "master"
+    },
+    {
+      "metric": "dssim",
+      "reason": "overlap reference and distorted image construction",
+      "landing": "master"
+    },
+    {
+      "metric": "ssim2",
+      "reason": "fast-ssim2 pinned threading gate",
+      "landing": "master"
+    },
+    {
+      "metric": "ssimulacra1",
+      "reason": "SIMD Gaussian blur, scratch reuse and channel parallelism",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "vif",
+      "reason": "retain f64 RGB luma coefficients",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "vifvec",
+      "reason": "fixed raster covariance accumulation across worker budgets",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "msssim",
+      "reason": "size-gated Rayon dispatch",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "ssim-libvmaf",
+      "reason": "size-gated Rayon dispatch",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "msssim-libvmaf",
+      "reason": "size-gated Rayon dispatch",
+      "landing": "pending integration"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k2",
+      "reason": "fixed-factor pooling at each unpooled pyramid level",
+      "landing": "master"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k3",
+      "reason": "fixed-factor pooling at each unpooled pyramid level",
+      "landing": "master"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k4",
+      "reason": "fixed-factor pooling at each unpooled pyramid level",
+      "landing": "master"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k5",
+      "reason": "fixed-factor pooling at each unpooled pyramid level",
+      "landing": "master"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k6",
+      "reason": "fixed-factor pooling at each unpooled pyramid level",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf-neg",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf-4k",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf-v1",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf-studio601",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "vmaf-neg-studio601",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    },
+    {
+      "metric": "cambi",
+      "reason": "enable VMAF crate AVX-512 tier in the CLI",
+      "landing": "master"
+    }
+  ],
+  "new_names": [
+    "proposal-butteraugli",
+    "cambi-aic2026",
+    "hdrvdp-aic2026",
+    "hdrvdp3-aic2026"
+  ],
+  "optional_controls": [
+    "fsim-y"
+  ],
+  "functional_only": [
+    "zensim-gpu"
+  ],
+  "excluded": "No learned-model or GPU-kernel changes found in this diff. FSIM luma API is additive; existing fsim-y delegates to the same Auto expression. Other AVX-512 consumer edits do not change the already-enabled CLI feature closure.",
+  "status": "scope audited; integrated verification and remote landing pending; no timing claims"
+}

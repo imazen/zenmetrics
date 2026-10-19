@@ -1,0 +1,4 @@
+proposal-butteraugli
+cambi-aic2026
+hdrvdp-aic2026
+hdrvdp3-aic2026
