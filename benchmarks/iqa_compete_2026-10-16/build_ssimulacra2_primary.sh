@@ -4,7 +4,7 @@
 # Little-CMS >= 2.13 prefix, satisfying upstream's unmodified
 # "find_package(LCMS2 2.13)" requirement.
 #
-# Usage: build_ssimulacra2_primary.sh <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input]
+# Usage: build_ssimulacra2_primary.sh <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input [hwy_tarball]]
 #   ssim2_tarball : official GitHub archive of commit fb5d0dbe
 #   lcms2_tarball : official Little-CMS lcms2.13 archive (commit ac4fe46f)
 #   output_dir    : must NOT exist — atomically reserved by this script;
@@ -31,11 +31,14 @@ SSIM2_SHA=530e9b23b5be10f5981367ba06ce804b3b536a409fcb3b510fa420170304d9c8
 LCMS2_COMMIT=ac4fe46f2b4d84bae2ed6cc77b044976282098a5
 LCMS2_URL=https://github.com/mm2/Little-CMS/archive/refs/tags/lcms2.13.tar.gz
 LCMS2_SHA=16de4bc1e83a5f8aa4e395d9734396cb6ffe7263648d35f39b0fcf933082f93b
+HWY_COMMIT=457c891775a7397bdb0376bb1031e6e027af1c48
+HWY_URL=https://github.com/google/highway/archive/$HWY_COMMIT.tar.gz
+HWY_SHA=5124b0501c98d9930dbb065bfa1a5bbbd59ce0f12facb7e1e33aaef01a5f1f1a
 
-[ $# -eq 3 ] || [ $# -eq 4 ] || { echo "usage: $0 <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input]" >&2; exit 2; }
+[ $# -ge 3 ] && [ $# -le 5 ] || { echo "usage: $0 <ssim2_tarball> <lcms2_tarball> <output_dir> [rgb-input [hwy_tarball]]" >&2; exit 2; }
 build_target=ssimulacra2
 cmake_extra=()
-if [ $# -eq 4 ]; then
+if [ $# -ge 4 ]; then
   [ "$4" = rgb-input ] || { echo 'unknown adapter mode' >&2; exit 2; }
   adapter_dir=$(dirname -- "$(realpath -e -- "$0")")
   cmake_extra=("-DCMAKE_PROJECT_LIBJXL_INCLUDE=$adapter_dir/ssimulacra2-primary-rgb.cmake")
@@ -71,6 +74,10 @@ echo "ssim2 pin  $SSIM2_URL  commit=$SSIM2_COMMIT"
 echo "lcms2 pin  $LCMS2_URL  commit=$LCMS2_COMMIT (tag lcms2.13)"
 stage hash-ssim2 check_archive ssim2 "$ssim2_tgz" "$SSIM2_SHA" "$SSIM2_URL"
 stage hash-lcms2 check_archive lcms2 "$lcms2_tgz" "$LCMS2_SHA" "$LCMS2_URL"
+if [ $# -eq 5 ]; then
+  hwy_tgz=$(realpath -e -- "$5")
+  stage hash-hwy check_archive hwy "$hwy_tgz" "$HWY_SHA" "$HWY_URL"
+fi
 
 # --- preflight: refuse any pre-existing/symlink output; reserve atomically ---
 if [ -e "$output" ] || [ -L "$output" ]; then
@@ -107,8 +114,28 @@ stage lcms2-build    make -C "$output/lcms2-build" -j"${CARGO_BUILD_JOBS:?}"
 stage lcms2-install  make -C "$output/lcms2-build" install
 stage lcms2-receipt  sha256sum "$prefix/lib/liblcms2.a"
 
+# Optional fully owned HWY source/build. Explicit cache paths prevent selecting
+# the pre-existing system archive or headers. Default three/four-arg paths stay
+# separate historical build modes with their documented provenance limitation.
+if [ $# -eq 5 ]; then
+  hwy_src=$output/src-hwy-extract
+  hwy_prefix=$output/hwy-prefix
+  stage extract-hwy extract_one "$hwy_tgz" "$hwy_src"
+  stage hwy-cmake cmake -S "$hwy_src" -B "$output/hwy-build" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_INSTALL_PREFIX="$hwy_prefix" -DCMAKE_INSTALL_LIBDIR=lib \
+    -DHWY_ENABLE_CONTRIB=OFF -DHWY_ENABLE_EXAMPLES=OFF -DHWY_ENABLE_TESTS=OFF \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+  stage hwy-build cmake --build "$output/hwy-build" --target hwy --parallel "${CARGO_BUILD_JOBS:?}"
+  stage hwy-install cmake --install "$output/hwy-build"
+  stage hwy-build-receipt sha256sum -- "$output/hwy-build/CMakeCache.txt" \
+    "$output/hwy-build/compile_commands.json" "$hwy_prefix/lib/libhwy.a" "$hwy_src/LICENSE"
+  cmake_extra+=("-DHWY_INCLUDE_DIR=$hwy_prefix/include" "-DHWY_LIBRARY=$hwy_prefix/lib/libhwy.a")
+fi
+
 # --- ssimulacra2: unmodified upstream CMake against the owned prefix ---
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
+if [ $# -eq 5 ]; then export PKG_CONFIG_PATH="$hwy_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"; fi
 stage ssim2-cmake \
   cmake -S "$ssim2_src/src" -B "$output/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
@@ -142,7 +169,13 @@ hwy_receipt() { # build-dir: hash the cache-resolved static HWY + record provena
   local lib
   lib=$(sed -n 's/^HWY_LIBRARY:FILEPATH=//p' "$1/build/CMakeCache.txt")
   echo "HWY_LIBRARY(resolved)=$lib"
-  echo "HWY provenance: pre-existing system archive; its own source/compiler UNBOUND"
+  if [ -n "${hwy_src:-}" ]; then
+    echo "HWY provenance: owned archive=$HWY_SHA commit=$HWY_COMMIT; compiler/cache receipts above"
+    test "$lib" = "$hwy_prefix/lib/libhwy.a"
+    grep -Fx "HWY_INCLUDE_DIR:PATH=$hwy_prefix/include" "$1/build/CMakeCache.txt"
+  else
+    echo "HWY provenance: pre-existing system archive; its own source/compiler UNBOUND"
+  fi
   test -f "$lib"
   sha256sum -- "$lib"
   grep -E '^HWY_(LIBRARY|INCLUDE_DIR):' "$1/build/CMakeCache.txt"

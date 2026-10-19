@@ -153,3 +153,39 @@ Build receipt: `run-heavy: done rc=0 15s | peak-RSS 0.42GiB | min-avail 11281MiB
 Control receipt: `run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 13180MiB | peak-load 3.72`.
 Both hold the two host heavy locks and use a 12 GiB cap. These receipts cover
 whole build/control processes, not metric-call memory or speed comparisons.
+
+## Owned Highway build
+
+The optional fifth argument supplies the official Highway archive. Use
+`oracle.just ssim2-primary-rgb-owned-build <ssim2-archive> <lcms-archive> <new-output> <hwy-archive>`
+under the same locks and resource wrapper. This checks the third archive before
+reserving output, builds a static Highway inside the output and selects both
+its include directory and archive explicitly in the upstream CMake cache.
+Three-argument official-CLI and four-argument RGB builds retain their separate
+pre-existing-Highway mode and its provenance limitation.
+
+[Highway 1.2.0](https://github.com/google/highway/releases/tag/1.2.0) resolves to
+[`457c891775a7397bdb0376bb1031e6e027af1c48`](https://github.com/google/highway/commit/457c891775a7397bdb0376bb1031e6e027af1c48).
+The [commit archive](https://github.com/google/highway/archive/457c891775a7397bdb0376bb1031e6e027af1c48.tar.gz)
+has SHA256 `5124b0501c98d9930dbb065bfa1a5bbbd59ce0f12facb7e1e33aaef01a5f1f1a`.
+Its BSD-3-Clause/Apache-2.0 source notices remain in the external extraction.
+Only the library is built; dependency examples and tests are outside this build.
+
+The 2026-10-19 owned build succeeds. All 232 extracted Highway files and 32
+installed headers match the pinned archive/source bytes. Both compile-command
+sets omit native-CPU flags. The upstream cache selects the owned headers and
+static library. A wrong third archive leaves the output absent; an existing
+output is refused with the retained executable unchanged.
+
+- Owned Highway archive SHA256: `6741ea1ebedf54eb59073f069d0d647630c859e1169d077e11cb27aa2ddd6218`.
+- New RGB executable SHA256: `9d0fc033b44580055909b52e2cabad87d2c5f6fb28c4fe970391738fe3f67ac1`.
+- Build: `done rc=0 17s | peak-RSS 0.42GiB | min-avail 11121MiB | peak-load 3.85`.
+- Ingress controls: `done rc=0 0s | peak-RSS 0.02GiB | min-avail 13189MiB | peak-load 3.27`.
+
+The six canonical-ingress comparisons still match the official CLI's display.
+This closes the specific static Highway source/compiler gap for the new
+executable. It does not bind earlier executables, establish the runtime CMS
+branch, compare Rust scores, or qualify a performance ratio. Complete logs,+compiler/cache hashes and dynamic library receipts are retained in
+`~/tmp/portcheck-primary-owned-build-20261019T0955.log`; controls are in
+`~/tmp/portcheck-primary-owned-controls-20261019T0955/` and
+`~/tmp/portcheck-primary-owned-build-controls-20261019T0956/`.
