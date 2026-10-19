@@ -1842,3 +1842,9 @@ hdrvdp-canonical-prepare-v306 tree newtree:
 
 hdrvdp-canonical-build-rust manifest:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" cargo build --release --manifest-path '{{manifest}}' -p vdpprobe
+
+hdrvdp-canonical-prepare-rust newdir:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_rust_probe.py '{{newdir}}'
+
+hdrvdp-canonical-controls scratch output:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/summarize_controls.py '{{scratch}}' '{{output}}'

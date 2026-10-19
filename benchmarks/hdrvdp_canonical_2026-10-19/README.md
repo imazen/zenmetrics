@@ -100,3 +100,12 @@ Runtime logs contain setup warnings and full output; no failed attempt was
 converted into a score. MATLAB itself and the authors' executable HDR-VDP
 invocations remain missing. No metric change was made and no fix branch was opened; the dataset
 configuration remains unidentified.
+
+To recreate the isolated native replay workspace, use
+`just hdrvdp-canonical-prepare-rust NEW_DIRECTORY`, then
+`just hdrvdp-canonical-build-rust NEW_DIRECTORY/Cargo.toml`. The preparation
+checks every copied runtime source hash. It leaves the shipped Cargo.lock
+and manifests untouched and omits unused test dependencies only in the
+scratch manifest. The saved replay binary is
+`~/tmp/hdrvdpcx/bin/vdpprobe` on r5900xt; its hash is in the metadata.
+The oracle wrapper requires this lane's claimed `.workongoing` file.
