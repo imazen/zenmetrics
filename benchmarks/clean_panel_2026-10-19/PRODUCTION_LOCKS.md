@@ -18,8 +18,31 @@ pinned C++ Butteraugli scalar reducer as float maximum over its diffmap and the
 per-call SetReferenceImage/CompareWith lifecycle. Selected Rust emitted column,
 baseline executable binding and numerical equivalence remain unproven. The
 replacement adapter is changing; await its final reviewed SHA/config and do not
-freeze the superseded candidate as accepted. SSIM2 remains the conditional
-512x512 one-thread single-scalar candidate with exact bound zero.
+freeze the superseded candidate as accepted. Owner selects a NEW Butteraugli cohort with explicit Rust butteraugli_max
+output, paired with the C++ max reducer. The historical unknown column is
+an excluded rejected cohort, not a prerequisite for this new one. The reviewed
+adapter content is a52d8e32e747dc9f5e4be2a6bfb8215069337aba; final published
+SHA and source equivalence are still required. The retained control binary
+is not a cohort executable.
 
 No scoring, metric build, timing acquisition or readiness follows. Generic
 59/60 remains red; the separate diagnostic proposal remains unapplied.
+
+## Actual nonmetric target evidence
+
+A fresh target-compatible build of the unchanged 241-file reviewed monitor
+source manifest completed with --locked --offline, no default features,
+lib-test only and --no-run. Binary SHA256:
+`ae9064693d3fa29e4d6566078ea121d39fa72ce08a84101e787f7b7e4a881005`.
+The exact owned nonmetric test then completed: 40 fresh decisions, one stale
+and one missing path, two publications, and five existing identity/chronology
+negative controls. Production receipts bind both pre-existing lock inodes,
+kernel flock owner, wrapper PID/start/cgroup, controller ancestry, actual
+monitor snapshots, command reap and reverse descriptor release. The new
+production_join verifier accepts these retained bytes. Independent review
+of this changed-piece wrapper integration is still required.
+
+Resource receipts: build rc0,37s,peak-RSS0.46GiB,min-avail13363MiB,
+peak-load2.96; nonmetric control rc0,3s,peak-RSS0.09GiB,
+min-avail13581MiB,peak-load3.20. These are control resources, not metric
+performance. Private target paths and raw receipts stay outside this repo.
