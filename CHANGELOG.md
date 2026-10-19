@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Record official HDR-VDP release/configuration provenance, complete upstream and native crop controls, and retained diagnostic exclusions without changing metric code or numerical gates (`f0d88493`, `cd3048e1`, `250dd244`).
+
 - Exclude proprietary, unreleased AIMOS from reproduction and implementation queues; publish the settled fixed-factor definitions separately from implementation qualification (owner clarification 2026-10-19; base `6c020575`).
 
 - Retain the complete 756-cell CLI disposition inventory and unmerged VIF thread-order correction evidence (`b0983ba2`, candidate `0281c13e`); master metric behavior is unchanged.

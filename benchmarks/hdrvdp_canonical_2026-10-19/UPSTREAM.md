@@ -68,3 +68,25 @@ feed the raw Q accumulator. The other two edits remove MATLAB's
 `ifft2(...,'symmetric')` argument while retaining `real(ifft2(...))`.
 Those FFT semantics require their own control before calling the modified
 tree an arithmetic-equivalent canonical oracle.
+
+## Other official evaluation resources checked
+
+The [JPEG AIC documentation index](https://jpeg.org/aic/documentation.html)
+links the CTC above and [WG1 N101393](http://ds.jpeg.org/documents/jpegaic/wg1n101393-110-ICQ-Overview_on_the_JPEG_AIC-3_Data_Analysis_Software.pdf),
+which describes subjective-response processing and JND scale reconstruction.
+Its documented input tables accept precomputed CVVDP/RMSE/PSNR/SSIM scores;
+it supplies no HDR-VDP call in the inspected document. The original PDF is
+retained on r5900xt at `~/tmp/hdrvdpcx/docs/aic3-software.pdf`, sha256
+`d8f2fbe8b55b3937eac90c3fd1d6764d07077bfde90bad4355654d9463a5f56a`.
+The linked [data-analysis project](https://gitlab.com/wg1/jpeg-aic/aic-3-data-analysis)
+is a separate scale-reconstruction resource.
+
+The [official example dataset site](https://aicdb.jpeg.org/) links
+[jpeg-aic/JPEG-AIC-4-datasets](https://github.com/jpeg-aic/JPEG-AIC-4-datasets).
+The inspected repository tree `56723f70180637aa9916664c018cd82b955b6b4f`
+contains only `JPEG-AIC_metric_scores.csv`,
+`JPEG_AIC_reconstructed_jnd_scores.csv` and `README.md`. It does not supply
+an executable HDR-VDP wrapper in that tree. The CTC's init/evaluation script
+interface is a submission contract, not the anchor metric invocation.
+These checks bound the search; they do not prove a wrapper was never
+published elsewhere. No email, issue, comment or author contact was made.

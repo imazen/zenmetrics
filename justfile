@@ -1827,3 +1827,18 @@ hdrvdp-canonical-harness-check scratch published config:
 
 hdrvdp-canonical-stratify data scores config aggregate private:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/stratify.py '{{data}}' '{{scores}}' '{{config}}' '{{aggregate}}' '{{private}}'
+
+hdrvdp-canonical-collect scratch published config output:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/collect.py '{{scratch}}' '{{published}}' '{{config}}' '{{output}}'
+
+hdrvdp-canonical-compare published config column scores field *reference:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/compare.py '{{published}}' '{{config}}' '{{column}}' '{{scores}}' '{{field}}' {{reference}}
+
+hdrvdp-canonical-prepare-v2 tree newtree headers:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_v2_octave.py '{{tree}}' '{{newtree}}' '{{headers}}'
+
+hdrvdp-canonical-prepare-v306 tree newtree:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_v306.py '{{tree}}' '{{newtree}}'
+
+hdrvdp-canonical-build-rust manifest:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" cargo build --release --manifest-path '{{manifest}}' -p vdpprobe
