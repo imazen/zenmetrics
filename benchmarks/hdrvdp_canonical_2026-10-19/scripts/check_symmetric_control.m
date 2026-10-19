@@ -5,6 +5,8 @@ for dims = {[3 5], [4 6], [3 6], [4 5]}
   setenv('HDRVDP_FFT_AXIS',axis{1});
   Y=symmetric_ifft_control(fft2(X));
   assert(max(abs(Y(:)-X(:))) < 1e-12);
+  setenv('HDRVDP_FFT_AUDIT','0'); Z=symmetric_ifft_control(fft2(X));
+  assert(isequal(Y,Z)); setenv('HDRVDP_FFT_AUDIT','1');
  end
 end
 % Deliberately asymmetric spectrum: positive row wins over conflicting negative.

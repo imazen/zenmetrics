@@ -3,6 +3,13 @@ function Y = symmetric_ifft_control(F)
 % MathWorks documents retention of the nonnegative-frequency half, without
 % specifying the 2-D storage axis. Measure both conventions independently.
 global HDRVDP_FFT_STATS;
+mode = getenv('HDRVDP_FFT_AXIS');
+assert(isempty(mode) || strcmp(mode,'rows') || strcmp(mode,'columns'));
+if strcmp(getenv('HDRVDP_FFT_AUDIT'),'0')
+ if strcmp(mode,'columns'), H=complete_rows(F.').';
+ else, H=complete_rows(F); end
+ Y=real(ifft2(H)); return;
+end
 R = complete_rows(F);
 C = complete_rows(F.').';
 base = real(ifft2(F));
@@ -15,7 +22,6 @@ values = [1, max(abs(F(:)-partner(:))), ...
 if isempty(HDRVDP_FFT_STATS), HDRVDP_FFT_STATS = zeros(1,6); end
 HDRVDP_FFT_STATS(1) = HDRVDP_FFT_STATS(1)+1;
 HDRVDP_FFT_STATS(2:end) = max(HDRVDP_FFT_STATS(2:end), values(2:end));
-mode = getenv('HDRVDP_FFT_AXIS');
 if strcmp(mode,'columns'), Y = yc;
 else, assert(isempty(mode) || strcmp(mode,'rows')); Y = yr; end
 end

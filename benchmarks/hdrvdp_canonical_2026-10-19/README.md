@@ -109,3 +109,8 @@ and manifests untouched and omits unused test dependencies only in the
 scratch manifest. The saved replay binary is
 `~/tmp/hdrvdpcx/bin/vdpprobe` on r5900xt; its hash is in the metadata.
 The oracle wrapper requires this lane's claimed `.workongoing` file.
+
+The subsequent [symmetric-IFFT investigation](SYMMETRIC_IFFT.md) tests the
+previously untested negative-frequency-half semantics without repeating the
+configuration grids. Its results are a separate continuation of the original
+28-attempt evidence set; every original gate and historical attempt remains.
