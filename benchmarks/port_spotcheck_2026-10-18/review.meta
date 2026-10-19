@@ -132,3 +132,22 @@ adedc3a8e1636e00f8a8692ba831fd6ef5a1b1c8f48cc871d867d06bb8920083  ~/tmp/portchec
 440f97e64e41636f62cb5365c725ffe00e899a76d954fd51c9a5e6b63c586eeb  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/independent_controls.py
 1bd079cb98e6580eb146508ac26ad0b66913cf88b0a6e1858681e5f781e6c11e  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/independent-controls.json
 ac73c77413ae7c0b7dc1a25290986b7580377e064ccfcfd55fbb8296b926ef11  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/root-controls.log
+
+Primary SSIMULACRA2 raw-RGB adapter (2026-10-19, lilith-wsl):
+  Published328c3f6aef43; ancestry verified on origin/master.
+  Benchmark-only CMake project hook; all196 extracted upstream source files match official archive.
+  Exact repeatable control command:
+  just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just ssim2-primary-rgb-ingress-check <binary> <official-archive> <extracted-source-root> <fresh-evidence> <official-file-CLI>
+  Invocation paths and both archive hashes retained in full build/control logs below.
+  Binary2e78406631721d54524849319340ac887a34a34edce8372c653c96aaf670b399.
+  Official-file-CLI f33395a90183e9494f4d50f4d292d4e0fcdde53a2339cd2713cd353ec9dd2e47.
+  Six ingress comparisons:8x8,17x19,64x64; ingress budgets1and2.
+  Both routes agree at official eight-decimal display precision; cold/warm score strings match.
+  Raw double scores92.197589733050179,85.02096149894885,82.438711306363658.
+  No Rust comparison, new parity bound, qualified timing or retroactive capture binding.
+  Build:rc0,15s,peakRSS0.42GiB,minavail11281MiB,peakload6.43; controls:rc0,0s,peakRSS0.02GiB,minavail13180MiB,peakload3.72.
+  Both host heavy locks, owned ext4 TMPDIR, run-heavy --mem12G; buildjobs8/controljobs2.
+External artifacts (SHA256):
+264ef552148bab232da3b8e3e2d53322731d9dd67c0acc65c6aca79fff0a6b60  ~/tmp/portcheck-primary-rgb-build-20261019T0948.log
+c9845fc41fd885e57dac412330429b264d05e2a3c9543653fba46ba63e37d9f0  ~/tmp/portcheck-primary-rgb-controls-20261019T0951.log
+425fe0d3e5efce25eb094599d32f192374a836f8978e5ecbb15b541ebb8f2915  ~/tmp/portcheck-primary-rgb-controls-20261019T0951/results.json

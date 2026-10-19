@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add opt-in primary SSIMULACRA2 raw-RGB benchmark ingress, separate first-call/warm records and official-file-CLI ingress controls (`328c3f6a`); no existing metric path or Rust numerical gate changes.
+
 - Add the hash-indexed 126-name canonical source census (`39c30081`, classification `c0009175`) and contained primary SSIMULACRA2 v2.1 builder (`e0b26212`); numerical and timing qualification remain open.
 
 - Add and independently review opt-in libjxl RGB-input benchmark timing scope (`62aaf7e9`), retaining default staging; matched cohort and numerical qualification remain open.

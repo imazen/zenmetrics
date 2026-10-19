@@ -142,9 +142,17 @@ required Little-CMS 2.13 dependency. Archive hash checks precede all output
 mutation; fresh-directory reservation, path quoting and stage failures have
 independent controls. A contained build succeeds, and its usage-only invocation
 returns before image reads or scoring. Static Highway source/compiler provenance
-remains unbound. A raw-RGB adapter, numerical comparisons and matched cold/warm
-measurements remain missing. Neither leaf changes an existing metric path or
+remains unbound. Rust numerical comparisons and matched cold/warm measurements
+remain missing. Neither leaf changes an existing metric path or
 qualifies a replacement-panel configuration.
+
+The opt-in primary raw-RGB adapter landed at `328c3f6a`. It compiles the
+unchanged upstream scoring body and retains first-call and warm records with
+per-call ingress and object release inside timing. Three synthetic geometries
+(8×8, 17×19, 64×64) at ingress budgets 1 and 2 match the official file CLI's
+eight-decimal score display. This verifies the two canonical ingress paths;
+it does not compare Rust to C++, bind the remaining static dependency source,
+or qualify timing ratios. Refusal and source-preservation controls pass.
 
 ## Qualification contract
 
