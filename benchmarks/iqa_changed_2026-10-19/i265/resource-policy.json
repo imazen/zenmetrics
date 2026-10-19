@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "worker_policy_prefix_counts": {
+    "run-heavy: mem-cap=16G (cgroup, hard) jobs=4/8": 324
+  },
+  "outer_launcher": {
+    "memory": "12G",
+    "jobs": 8
+  },
+  "linux_scope_relationship": "Native recipe workers enter separate systemd user scopes; the outer launcher limit is not an ancestor limit for those workers.",
+  "maximum_observed_worker_peak_rss_gib_rounded": 8.94,
+  "maximum_rss_row": {
+    "metric_name": "hdrvdp3-aic2026",
+    "size_name": "4k",
+    "threads": 8,
+    "log_sha256": "bbb3e46b89b5b37cfbf817ca9553669cd154d21475049dcbfb6e42ecf81c2f98"
+  },
+  "resolve_commands": [
+    "cat /proc/WORKER_PID/cgroup",
+    "cat /proc/COORDINATOR_PID/cgroup",
+    "systemctl --user show SCOPE -p MemoryMax"
+  ]
+}

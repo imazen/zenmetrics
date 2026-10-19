@@ -76,4 +76,7 @@ The complete matrix has 324 rows: 27 names × six geometries × two worker budge
 312 timing rows pass every required sample gate. Twelve MS-SSIM size-contract
 refusals remain explicit, with no timing qualification. No maps or 8K rows occur.
 The production scope completes rc0 in 1326 seconds, 8.94 GiB peak RSS,
-minimum available memory 18352 MiB, peak load 4.21, beneath the 12 GiB guard.
+minimum available memory 18352 MiB, peak load 4.21. The Linux recipe gives workers separate 16 GiB systemd scopes;
+the outer launcher uses 12 GiB and is not their ancestor scope. The build alone
+uses its 12 GiB scope. [Actual worker policies](i265/resource-policy.json) retain
+the resource header counts and maximum-RSS row. Timing qualification is unchanged.
