@@ -43,3 +43,34 @@ Source inspected at b0c2640917d899b78abd359b5c69cbd6efac9931:
 Separate unmerged candidate ef9763f23b1cfd429140b6dbe9be5b432f7bb538:
   summation.rs SHA2569d600b752c6860bfa2daf9d8e5dc641c9f72c355e59ac920a3d0e13a668ecb24 (LaneSums8 absent).
 No metric code reverted/edited, and no source-to-timing equivalence asserted.
+
+MAD helper tooling independent review (2026-10-19, host lilith-wsl):
+  Reviewed candidate: 070420b0a8f45abae73f070a6ef7245480487141
+  Published rebase: 64548ff67d5d79e7663125faa11831d076fc50a8
+  git merge-base --is-ancestor 64548ff67d5d79e7663125faa11831d076fc50a8 origin/master
+  Ancestry exit0; GitHub contents API bytes at that SHA match reviewed files.
+  patch_mad_helper.py SHA25609c6a33324b8d4bf430aa20237f78d675c23c11303fc9b32c958eefc2237bc9c
+  check_mad_helper_patch.py SHA2567128806fe56588b4827af04316db4c72ad3f3a74845427ff34ba7362e9fe56e5
+  mad-helper-oracle.md SHA256044724a3f5261e8d32d0b980b7abd77f8b7650ef01b095f248df3a1f8114dac5
+  Shared helper fixed_factor_oracle.py remained unchanged.
+Commands on an immutable export of the candidate:
+  python3 check_mad_helper_patch.py selfcheck --source-root <verified-source-root> --evidence <fresh-evidence-dir>
+  python3 review_cli.py
+  review_cli.py is a retained reviewer control: source==manifest refusal on an
+  owned source copy, followed by normal patch + manifest verification.
+  23/23 artifact controls pass; actual alias rc2/source unchanged/no output;
+  normal patch rc0; manifest checker rc0. No metric imported or executed.
+  Both commands use lilith-heavy then lilith-wsl-heavy locks, owned disk TMPDIR,
+  run-heavy --mem 12G --jobs 1; each rc0 0s peak-RSS0.02GiB.
+  CLI min-avail13699MiB peak-load2.04; suite min-avail13720MiB peak-load2.04.
+  These are integrity-control process receipts, not MAD memory measurements.
+External evidence on lilith-wsl:
+1f0e925594f497410074734bc4c6fffd0663f9542242fa4ac9d76f5e75fe1af8  ~/tmp/portcheck-mad-overlay-review-070420b0/review.md
+f648e2ec8cab03828cfd6b42a1fa91afec914168b22b6b1542a77c595d2bffaa  ~/tmp/portcheck-mad-overlay-review-070420b0/review_cli.py
+a14d9c9b18e9e0f555db463ba637314b38503c21f2ca7b46ffe7c5bbf884665a  ~/tmp/portcheck-mad-overlay-review-070420b0/root-cli-review.json
+ecd7fb3449eeb0dbebb75d0fca698d6a38a8a14220c6cd7645f112ddd76d8ca7  ~/tmp/portcheck-mad-overlay-review-070420b0/root-selfcheck/selfcheck.log
+eb3882ae7f4109356308300e8a2ecd5b03c26dce16ab2f8273601121d1fc0ef1  ~/tmp/portcheck-mad-overlay-review-070420b0/remote-verification.json
+48b3838c15515575282b524f66fb3add0b01ac9cd03371c387f3367bcbc5bfc5  ~/tmp/portcheck-mad-artifact-review-20261019/verification.json
+  The earlier helper artifact comparison verified 18/18 array pairs by bytes
+  and SHA256; it did not run the full metric. Original helper failure and
+  compatibility-reference roles remain explicit in mad-helper-oracle.md.

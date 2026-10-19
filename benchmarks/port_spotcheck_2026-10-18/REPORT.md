@@ -84,6 +84,24 @@ landing. Those controls verify source preservation and patch provenance. They
 execute no metric and do not qualify a fixed-factor implementation, score or
 timing cell. The corresponding metric experiments remain missing.
 
+## MAD helper source tooling
+
+The [MAD helper ownership overlay](../iqa_compete_2026-10-16/mad-helper-oracle.md)
+landed at `64548ff67d5d79e7663125faa11831d076fc50a8`. It preserves the
+original source and creates a separately labeled compatibility reference.
+The exact original helper build faults during cleanup on the tested Octave
+6.4 environment; three ownership edits retain the numeric body. The
+compatibility build completed six helper cases, with 18 output arrays
+independently verified byte-for-byte against the related in-repo MATLAB shim.
+That shim is corroborating evidence from a related port.
+
+Independent artifact controls and actual CLI alias/normal-patch checks passed.
+All three remote files match the reviewed source hashes. These checks cover
+the source patch and its provenance; full MAD scores, timing and oracle
+integration remain unqualified. The original helper artifacts are retained.
+[Repeatable artifact recipes](../iqa_compete_2026-10-16/oracle.just) cover
+both fixed-factor copies and this helper overlay. They execute no metric.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

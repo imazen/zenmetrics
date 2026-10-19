@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add and independently verify benchmark-only MAD helper ownership overlay (`64548ff6`) and repeatable artifact integrity recipes (`daa3ce8e`); no full metric or timing qualification.
+
 - Add hash-checked fixed-factor oracle source copies, exclusive artifact writes and provenance validation for MATLAB FSIM/VSI and PyIQA comparisons (`9bb02ed4`); no metric execution or existing metric-path changes.
 
 - Record canonical port-check timing exclusions and the separately tested, unmerged BRISQUE test/comment follow-up (`ef9763f2`); no existing metric path changes.
