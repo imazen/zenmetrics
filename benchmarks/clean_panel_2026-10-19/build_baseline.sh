@@ -9,6 +9,9 @@ export CARGO_INCREMENTAL=0
 bash scripts/ci/lock.sh --check
 python3 benchmarks/iqa_compete_2026-10-16/patch_model_load.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/model-preload.meta.json"
 python3 benchmarks/iqa_compete_2026-10-16/patch_luma_maps.py "$LOCK_SNAP_DIR/work/zenmetrics" "$repo" "$LOCK_SNAP_DIR/luma-maps.meta.json"
+if [[ "${CLEAN_PANEL_OBSERVER_COHORT:-0}" == 1 ]]; then
+    python3 "$repo/benchmarks/clean_panel_2026-10-19/observer_cohort.py" stage "$LOCK_SNAP_DIR"
+fi
 cd "$LOCK_SNAP_DIR/work/zenmetrics"
 export RUSTFLAGS='--cfg iqa_compete_ingress --cfg iqa_compete_cached'
 export CARGO_TARGET_DIR="$LOCK_SNAP_DIR/target"
@@ -19,3 +22,7 @@ cargo metadata --locked --format-version 1 > "$LOCK_SNAP_DIR/metadata.json"
 printf '%s\n' 'cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete' > "$LOCK_SNAP_DIR/build-command.txt"
 cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete
 sha256sum "$CARGO_TARGET_DIR/release/iqa-compete" > "$LOCK_SNAP_DIR/binary.sha256"
+
+if [[ "${CLEAN_PANEL_OBSERVER_COHORT:-0}" == 1 ]]; then
+    python3 "$repo/benchmarks/clean_panel_2026-10-19/observer_cohort.py" finish "$LOCK_SNAP_DIR"
+fi

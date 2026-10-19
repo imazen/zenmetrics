@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "source_only": true,
+  "frozen_base": "f827c5dde3b1b97222658102942706742324c200",
+  "files": [
+    {
+      "path": "crates/brisque/README.md",
+      "sha256": "1f87656e6a52f6767e84a578f04b8deb44000a5d955e704a32df8dc82cc06ec4"
+    },
+    {
+      "path": "crates/brisque/tests/golden_brisque.py",
+      "sha256": "2809fce41ef97a4078d14460e7983201192ac13f5562809c8954c79bdbf279ed"
+    },
+    {
+      "path": "crates/brisque/tests/goldens_brisque.tsv",
+      "sha256": "f96d8a0d5f4fae17cf4f0fbacd18b44c4bc8689fc7e2de24f7613738980fe6f1"
+    },
+    {
+      "path": "crates/brisque/tests/parity.rs",
+      "sha256": "cd83770c0361aec851ddbd30762c91696cac025dc56412c7449846e7207e2d1e"
+    },
+    {
+      "path": "crates/brisque/src/params.rs",
+      "sha256": "27739ecf1536fd35c3c64f2d69537f48ad3f0098d0298a9d85b1b2f0738661af"
+    },
+    {
+      "path": "crates/brisque/src/lib.rs",
+      "sha256": "2d11b727f472de035d8f36ff8b5ca080b90615f1eb4381ab8e3922e4cb0e6c3b"
+    },
+    {
+      "path": "benchmarks/nr_classic_2026-10-15/jnd.md",
+      "sha256": "f8f44864c148106a21322ef4f4e4325977fbe520f32d7eeee26700f3478395b0"
+    },
+    {
+      "path": "benchmarks/brisque_review_2026-10-15/README.md",
+      "sha256": "55b45fcf9c37e5b4e5269141a1d644f541440cef321843445f2933ab27a8aa8e"
+    },
+    {
+      "path": "benchmarks/iqa_compete_2026-10-16/libjxl_compute.cpp",
+      "sha256": "c4a2a14026e3f588c148701f88e6a82abd922adeb3d57ee56750f70b09fb3d0f"
+    }
+  ],
+  "declared_oracle": "piq-0.8.0-cpu",
+  "historical_pilot_oracle": "pyiqa-0.1.16",
+  "interchangeability_qualified": false,
+  "parity_abs_bound": 0.015138428
+}

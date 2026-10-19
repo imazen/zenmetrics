@@ -29,13 +29,13 @@ def fixture(root):
     binary=file('baseline');cell=file('cell.json',json.dumps(config));weights=file('weights')
     native=runtime_closure.closure([],runtime_closure.loader_environment())
     paths=[binary,cell,weights,sys.executable,'/usr/bin/taskset',str(HERE/'containment.py'),str(HERE/'brisque_oracle.py')]
-    contention=file('contention.py');heavy=file('heavy');paths += [contention,heavy] + [str(HERE/name) for name in ('panel.py','workload.py','runtime_closure.py','bytecode_inventory.py')]
+    contention=file('contention.py');heavy=file('heavy');paths += [contention,heavy] + [str(HERE/name) for name in ('panel.py','workload.py','runtime_closure.py','bytecode_inventory.py','nr_validation.py')]
     return dict(schema=2,metric='brisque',shape=[512,512,1,'score'],scope=dict(ours='paired-NR',canonical='paired-NR'),
         workload=work,native_closure=native,bytecode_binding=bytecode_inventory.capture([],[str(root)]),artifacts=[seal_pilot.record(p) for p in paths],
         inputs=[seal_pilot.record(p) for p in [reference,distorted]],parity_abs_bound=.001,cpu=0,
         resources_script='unused-legacy-helper',controller_python=sys.executable,taskset='/usr/bin/taskset',containment_script=str(HERE/'containment.py'),contention_script=contention,run_heavy=heavy,
         arms=dict(ours=dict(build_identity='native-build',argv=[binary,cell],protocol='iqa-row',sample_count=10),
-                  canonical=dict(build_identity='oracle-build',argv=[sys.executable,str(HERE/'brisque_oracle.py'),reference,distorted,weights],protocol='canonical-v2',adapter=workload.ADAPTER,pyiqa_version='test',version='pyiqa-test'+workload.VERSION_SUFFIX,sample_count=10)))
+                  canonical=dict(build_identity='oracle-build',argv=[sys.executable,str(HERE/'brisque_oracle.py'),reference,distorted,weights],protocol='canonical-v3',adapter=workload.ADAPTER,pyiqa_version='test',version='pyiqa-test'+workload.VERSION_SUFFIX,sample_count=10)))
 
 
 def native_row(m):
@@ -49,9 +49,9 @@ def native_text(m,row=None):
 
 def canonical_text(m):
     spec=m['arms']['canonical'];w=m['workload']
-    obs=dict(w,adapter=workload.ADAPTER,adapter_sha256=panel.digest(spec['argv'][1]),weights_sha256=panel.digest(spec['argv'][4]),input_sha256={k:panel.digest(w[k]) for k in ('reference','distorted')},sample_count=10)
+    obs=dict(w,adapter=workload.ADAPTER,adapter_sha256=panel.digest(spec['argv'][1]),weights_sha256=panel.digest(spec['argv'][4]),input_sha256={k:panel.digest(w[k]) for k in ('reference','distorted')},sample_count=10,timing_boundary=workload.BOUNDARY)
     lines=['IQA_PROCESS {"pid":101,"pgid":101}','WORKLOAD '+json.dumps(obs),'VERSION '+spec['version']]
-    lines += ['SAMPLE '+json.dumps(dict(sample_id=i,ns=10,score=1,reference_score=2)) for i in range(1,11)]
+    lines += ['SAMPLE '+json.dumps(dict(sample_id=i,ns=10,score=1,reference_score=2,nr_observed_calls=i+1,nr_results_stable=True,timing_boundary=workload.BOUNDARY)) for i in range(1,11)]
     return '\n'.join(lines)+'\n'
 
 

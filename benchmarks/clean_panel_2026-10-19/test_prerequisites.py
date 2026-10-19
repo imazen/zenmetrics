@@ -44,14 +44,16 @@ class TraceReadiness(unittest.TestCase):
     def test_attribution_requires_exact_identity_time_count_and_real_receipt(self):
         import gate_trace
         p=dict(pid=12,start_ticks=40,pgid=12,sid=12,cgroup='/fixture',ownership_basis='outside owned tree',counted=True,owned=False,cpu_ticks_before=10,cpu_ticks_after=11,interval_ns=100)
-        o=dict(snapshot_id='a',sample_monotonic_ns=100,checked_monotonic_ns=120,observation_age_ns=20,processes=[p],heavy_process_count=1)
-        v=dict(schema=1,synthetic=False,observations=[o],**{k:'a'*64 for k in ('binary_sha256','config_sha256','source_sha256','trace_sha256','outer_receipt_sha256')})
-        self.assertTrue(gate_trace.validate_attribution(v)) # Invented schema fixture only.
+        o=dict(snapshot_id='a',sample_monotonic_ns=100,processes=[p],heavy_process_count=1)
+        c=dict(check_id='check1',snapshot_id='a',snapshot_sha256=gate_trace.snapshot_hash(o),checked_monotonic_ns=120,observation_age_ns=20,heavy_process_count=1,counted_identities=[[12,40]])
+        v=dict(schema=2,synthetic=False,snapshots=[o],checks=[c],**{k:'a'*64 for k in ('binary_sha256','config_sha256','source_sha256','trace_sha256','outer_receipt_sha256')})
+        self.assertTrue(gate_trace.validate_attribution(v)['schema_valid'])
+        self.assertFalse(gate_trace.validate_attribution(v)['attribution_ready'])
         for key,value in [('observation_age_ns',21),('heavy_process_count',4)]:
-            bad=copy.deepcopy(v);bad['observations'][0][key]=value
+            bad=copy.deepcopy(v);bad['checks'][0][key]=value
             with self.assertRaises(ValueError):gate_trace.validate_attribution(bad)
         for key in ('start_ticks','cgroup','cpu_ticks_before'):
-            bad=copy.deepcopy(v);del bad['observations'][0]['processes'][0][key]
+            bad=copy.deepcopy(v);del bad['snapshots'][0]['processes'][0][key]
             with self.assertRaises(ValueError):gate_trace.validate_attribution(bad)
         v['synthetic']=True
         with self.assertRaises(ValueError):gate_trace.validate_attribution(v)
@@ -64,12 +66,14 @@ class RustRouting(unittest.TestCase):
         function=adapted[adapted.index('fn make_call('):adapted.index('\nfn main()')]
         stubs='''
 mod nr_observer;
+thread_local! { static EVENTS: std::cell::RefCell<Vec<&'static str>> = std::cell::RefCell::new(Vec::new()); }
+fn event(value: &'static str) { EVENTS.with(|e| e.borrow_mut().push(value)); }
 struct Value;
 struct Rgb8Image;
 #[derive(Clone,Copy,PartialEq)] enum MetricKind { Brisque }
 enum GpuRuntime { Cpu }
 fn parse_display(_: &str) -> Result<(), String> { Ok(()) }
-fn run_metric_display(_: MetricKind, _: &Rgb8Image, _: &Rgb8Image, _: GpuRuntime, _: Option<&()>) -> Result<Vec<(&'static str,f64)>,String> { Ok(vec![("brisque",7.0),("brisque_ref",19.0)]) }
+fn run_metric_display(_: MetricKind, _: &Rgb8Image, _: &Rgb8Image, _: GpuRuntime, _: Option<&()>) -> Result<Vec<(&'static str,f64)>,String> { event("metric"); Ok(vec![("brisque",7.0),("brisque_ref",19.0)]) }
 mod maps {
     pub type Call = Box<dyn FnMut() -> Result<f64,String>>;
     pub fn native(_: &str, _: &super::Rgb8Image, _: &super::Rgb8Image) -> Option<Call> { None }
@@ -78,13 +82,18 @@ mod maps {
 #[test] fn route() {
     static IMAGE: Rgb8Image = Rgb8Image;
     let mut call=make_call(&Value,"brisque",Some(MetricKind::Brisque),&IMAGE,&IMAGE,false).unwrap().unwrap();
+    event("clock-start");
     assert_eq!(call().unwrap(),7.0);
+    event("clock-stop");
     assert_eq!(nr_observer::result().unwrap(),(7.0,19.0,1));
+    EVENTS.with(|e| assert_eq!(*e.borrow(),vec!["clock-start","metric","validation","clock-stop"]));
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            (root/'nr_observer.rs').write_bytes(Path(__file__).with_name('nr_observer.rs').read_bytes())
+            observer=Path(__file__).with_name('nr_observer.rs').read_text()
+            self.assertEqual(observer.count('    let pair = extract(values)?;'),1)
+            (root/'nr_observer.rs').write_text(observer.replace('    let pair = extract(values)?;', '    crate::event("validation");\n    let pair = extract(values)?;'))
             (root/'test.rs').write_text(stubs+function)
             subprocess.run(['rustc','--edition=2024','--test',str(root/'test.rs'),'-o',str(root/'control')],check=True,capture_output=True)
             subprocess.run([str(root/'control')],check=True,capture_output=True)

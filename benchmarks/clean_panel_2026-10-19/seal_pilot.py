@@ -11,6 +11,7 @@ import platform
 import runtime_closure
 import workload
 import bytecode_inventory
+import observer_cohort
 from panel import digest, identity
 
 
@@ -39,7 +40,9 @@ def main():
     parser.add_argument('--distorted',type=Path,required=True)
     parser.add_argument('--weights',type=Path,required=True)
     parser.add_argument('--revision',required=True)
+    parser.add_argument('--observer-cohort',action='store_true',help='require new compiled observer receipts; never relabel a historical binary')
     args=parser.parse_args()
+    observer_receipt=observer_cohort.validate(args.build) if args.observer_cohort else None
     args.output.mkdir(parents=True,exist_ok=False)
     root=args.output.resolve()
     here=Path(__file__).resolve().parent
@@ -61,6 +64,10 @@ def main():
         dest=root/name;shutil.copy2(args.build/name,dest);receipts.append(record(dest))
     for name in ['Cargo.lock','ci/sibling-pins.tsv']:
         dest=root/Path(name).name;shutil.copy2(source/name,dest);receipts.append(record(dest))
+    if observer_receipt is not None:
+        dest=root/'nr-cohort.json';shutil.copy2(args.build/'nr-cohort.json',dest);receipts.append(record(dest))
+        for name in ['observer_cohort.py','patch_nr_result.py','nr_observer.rs']:
+            receipts.append(record(here/name))
     # The source tree hash is newly observed. Only the sealed binary is executed.
     build_identity={'revision':args.revision,'observed_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'receipts':list(receipts),'rustflags':'--cfg iqa_compete_ingress --cfg iqa_compete_cached','features':'compete,metrics-parallel,zenmetrics-cli/nr'}
     build_file=root/'baseline.json';build_file.write_text(json.dumps(build_identity,indent=2));receipts.append(record(build_file))
@@ -101,15 +108,16 @@ def main():
     containment=here/'containment.py'
     heavy=Path.home()/'work/claudehints/scripts/run-heavy'
     scope='resident RGB8 reference and distorted; separate NR scores for both; ingress+metric+result allocation timed; immutable model load and input file I/O excluded'
-    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(containment),record(heavy),record(here/'panel.py'),record(here/'workload.py'),record(here/'runtime_closure.py'),record(here/'bytecode_inventory.py'),record('/usr/bin/taskset')]
+    if observer_receipt is not None:scope+='; both clocks include paired scalar extraction, finite/bit stability checks and thread-local count/state updates'
+    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(containment),record(heavy),record(here/'panel.py'),record(here/'workload.py'),record(here/'runtime_closure.py'),record(here/'bytecode_inventory.py'),record(here/'nr_validation.py'),record('/usr/bin/taskset')]
     # Duplicate resolved library paths carry one authoritative expected hash.
     artifacts=list({r['path']:r for r in artifacts}.values())
     work=dict(metric_name='brisque',width=512,height=512,threads=1,mode='score',timing_phase='warm',reference=str(root/'reference.rgb'),distorted=str(root/'distorted.rgb'))
     pyiqa_version=next(version for name,version in packages if name.lower()=='pyiqa')
     manifest=dict(schema=2,metric='brisque',shape=[512,512,1,'score'],scope={'ours':scope,'canonical':scope},cpu=2,parity_abs_bound=15.138428/1000,
                   inputs=inputs,artifacts=artifacts,host_observation=platform.uname()._asdict(),contention_script=str(contention),containment_script=str(containment),run_heavy=str(heavy),controller_python=str(Path(sys.executable).absolute()),taskset='/usr/bin/taskset',workload=work,native_closure=native,bytecode_binding=bytecode,arms={
-                      'ours':dict(build_identity=identity(build_identity),argv=[str(baseline),str(config)],protocol='iqa-row',sample_count=10),
-                      'canonical':dict(build_identity=identity(canonical),argv=[str(args.python),str(here/'brisque_oracle.py'),str(root/'reference.rgb'),str(root/'distorted.rgb'),str(weights)],protocol='canonical-v2',adapter=workload.ADAPTER,pyiqa_version=pyiqa_version,version='pyiqa-'+pyiqa_version+workload.VERSION_SUFFIX,sample_count=10)})
+                      'ours':dict(build_identity=identity(build_identity),argv=[str(baseline),str(config)],protocol=('iqa-row-nr-v2' if observer_receipt is not None else 'iqa-row'),sample_count=10),
+                      'canonical':dict(build_identity=identity(canonical),argv=[str(args.python),str(here/'brisque_oracle.py'),str(root/'reference.rgb'),str(root/'distorted.rgb'),str(weights)],protocol='canonical-v3',adapter=workload.ADAPTER,pyiqa_version=pyiqa_version,version='pyiqa-'+pyiqa_version+workload.VERSION_SUFFIX,sample_count=10)})
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2))
     print('SEALED',root,'artifacts',len(artifacts),flush=True)
 

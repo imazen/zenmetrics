@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "mode": "synthetic-only",
+  "production_enabled": false,
+  "model_qualified": false,
+  "accepted_total": 120,
+  "accepted_per_order": 60,
+  "slots_per_order": 72,
+  "resource_rejections_per_order": 12,
+  "deadline_ns": 86400000000000,
+  "seed": 20261019,
+  "schedule": "xorshift64star-v1-low-bit;72-adjacent-AB-BA-pairs",
+  "estimator": "median-of-block-ratios-of-internal-medians",
+  "interval": "exact-binomial-median-95pct;inclusive-ties",
+  "relative_halfwidth": "0.03",
+  "crossing": "1.08-inclusive",
+  "diagnostic_permutations": 99999,
+  "order_seed": 20261020,
+  "lag_seed": 20261021,
+  "diagnostic_alpha_each": "0.025",
+  "deadline_rule": "elapsed>=cap;inflight-cleanup-before-release;no-salvage",
+  "selection_model": "unreviewed;completion-rejection-precision-screens-do-not-inherit-conditional-coverage"
+}

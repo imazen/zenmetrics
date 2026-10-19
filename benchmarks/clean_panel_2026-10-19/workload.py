@@ -4,8 +4,9 @@ import math
 from pathlib import Path
 
 FIELDS = ('metric_name', 'width', 'height', 'threads', 'mode', 'timing_phase', 'reference', 'distorted')
-ADAPTER = 'brisque-paired-nr-v2'
-VERSION_SUFFIX = ' brisque paired-NR v2'
+ADAPTER = 'brisque-paired-nr-v3'
+VERSION_SUFFIX = ' brisque paired-NR v3'
+BOUNDARY = 'paired-nr-timed-validation-v1'
 
 
 def validate_contract(m):
@@ -33,8 +34,10 @@ def validate_contract(m):
     if Path(m['containment_script']).resolve() != Path(__file__).with_name('containment.py').resolve():
         raise ValueError('unsupported containment helper')
     ours, canonical = m['arms']['ours'], m['arms']['canonical']
-    if ours['protocol'] not in ('iqa-row', 'iqa-row-nr-v1') or canonical['protocol'] != 'canonical-v2' or canonical['adapter'] != ADAPTER:
+    if ours['protocol'] not in ('iqa-row', 'iqa-row-nr-v1', 'iqa-row-nr-v2') or canonical['protocol'] not in ('canonical-v2','canonical-v3') or canonical['adapter'] != ADAPTER:
         raise ValueError('unsupported protocol/adapter')
+    if canonical['protocol']=='canonical-v3':require(str(Path(__file__).with_name('nr_validation.py').absolute()))
+    if ours['protocol']=='iqa-row-nr-v2' and canonical['protocol']!='canonical-v3':raise ValueError('unmatched observer protocols')
     if len(ours['argv']) != 2 or len(canonical['argv']) != 5:
         raise ValueError('unsupported argument shape')
     for path in ours['argv'] + canonical['argv'][:2] + canonical['argv'][4:]:
@@ -98,8 +101,8 @@ def parse(text, name, m, clean):
         score = row['score']
         # IQA_ROW.ref_score is the first distorted timing result, NOT the NR reference.
         reference_score = None
-        if spec['protocol'] == 'iqa-row-nr-v1':
-            if row.get('nr_result_schema') != 'paired-nr-v1' or row.get('nr_results_stable') is not True:
+        if spec['protocol'] in ('iqa-row-nr-v1','iqa-row-nr-v2'):
+            if row.get('nr_result_schema') != ('paired-nr-v2' if spec['protocol']=='iqa-row-nr-v2' else 'paired-nr-v1') or row.get('nr_results_stable') is not True:
                 raise ValueError('missing or unstable paired NR schema')
             nr = row.get('nr_scores', {})
             if set(nr) != {'brisque','brisque_ref'} or any(type(v) not in (int,float) or not math.isfinite(v) for v in nr.values()):
@@ -109,12 +112,15 @@ def parse(text, name, m, clean):
             if nr['brisque'] != score:
                 raise ValueError('paired NR headline disagreement')
             reference_score = nr['brisque_ref']
+            if spec['protocol']=='iqa-row-nr-v2' and (row.get('timing_boundary')!=BOUNDARY or row['nr_observed_calls']<spec['sample_count']+1):
+                raise ValueError('native timed validation boundary/count mismatch')
     else:
         observed = one_json(text, 'WORKLOAD ')
         expected = dict(w, adapter=ADAPTER, adapter_sha256=digest(spec['argv'][1]),
                         weights_sha256=digest(spec['argv'][4]),
                         input_sha256={k: digest(w[k]) for k in ('reference', 'distorted')},
                         sample_count=spec['sample_count'])
+        if spec['protocol']=='canonical-v3':expected['timing_boundary']=BOUNDARY
         if observed != expected:
             raise ValueError('canonical observed workload mismatch')
         versions = [line[8:] for line in text.splitlines() if line.startswith('VERSION ')]
@@ -123,6 +129,8 @@ def parse(text, name, m, clean):
         raw = [json.loads(line[7:]) for line in text.splitlines() if line.startswith('SAMPLE ')]
         if any(type(s['sample_id']) is not int for s in raw) or [s['sample_id'] for s in raw] != list(range(1, spec['sample_count']+1)):
             raise ValueError('duplicate/missing/out-of-order sample IDs')
+        if spec['protocol']=='canonical-v3' and any(s.get('timing_boundary')!=BOUNDARY or s.get('nr_results_stable') is not True or type(s.get('nr_observed_calls')) is not int or s['nr_observed_calls']!=s['sample_id']+1 for s in raw):
+            raise ValueError('canonical timed validation boundary/count mismatch')
         if any(type(s[k]) not in (int, float) or not math.isfinite(s[k]) for s in raw for k in ('score', 'reference_score', 'ns')):
             raise ValueError('invalid canonical sample')
         if len({s['score'] for s in raw}) != 1 or len({s['reference_score'] for s in raw}) != 1:
@@ -130,4 +138,5 @@ def parse(text, name, m, clean):
         samples = [dict(sample_id=s['sample_id'], ns=s['ns'], gate_clean=clean) for s in raw]
         score, reference_score = raw[-1]['score'], raw[-1]['reference_score']
     return dict(observed_workload=observed, observed_process=process, observed_validated=True,
-                samples=samples, score=score, reference_score=reference_score)
+                samples=samples, score=score, reference_score=reference_score,
+                timing_boundary=(row.get('timing_boundary') if name=='ours' else observed.get('timing_boundary')))

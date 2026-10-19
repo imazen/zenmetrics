@@ -74,6 +74,8 @@ def qualify_block(block, manifest):
             raise ValueError('observed workload does not match manifest')
         if arm.get('observed_validated') is not True:
             raise ValueError('unvalidated emitted workload')
+        if arm.get('timing_boundary') != workload.BOUNDARY:
+            raise ValueError('unmatched timed validation boundary')
         if arm['block_id'] != block['block_id']:
             raise ValueError('wrong block pairing')
         if arm['build_identity'] != manifest['arms'][name]['build_identity']:
