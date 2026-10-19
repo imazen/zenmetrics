@@ -130,6 +130,7 @@ def manifest(path):
         if not isinstance(cell, dict):
             raise Refusal('cell must be an object')
         config = dict(cell)
+        check_score_policy(config)
         placement = value['metadata'].get('cpu_placement')
         if placement:
             if (placement.get('policy') != 'performance' or not placement.get('cpus')
@@ -226,6 +227,65 @@ def observation():
                 unix_ns=time.time_ns())
 
 
+FINITE_GPU_POLICY = 'mac-metal-finite-logged-v1'
+
+
+def check_score_policy(config):
+    policy = config.get('gpu_score_repeatability_policy')
+    if policy is None:
+        return False
+    env = config.get('worker_environment', {})
+    if (policy != FINITE_GPU_POLICY or config.get('device') != 'metal'
+            or config.get('only_mode') != 'score' or config.get('timing_phase') != 'warm'
+            or env.get('WGPU_BACKEND') != 'metal' or env.get('ZENMETRICS_NN_ENGINE') != 'ort-webgpu'):
+        raise Refusal('finite score policy requires warm scalar Metal ORT WebGPU')
+    return True
+
+
+def finite_gpu_observations(row):
+    """Accept timing independently of score repeatability, never oracle parity."""
+    def bits(key):
+        text = row.get(key)
+        if not isinstance(text, str) or len(text) != 16:
+            raise Refusal('missing observation bits: ' + key)
+        value = struct.unpack('>d', bytes.fromhex(text))[0]
+        if not math.isfinite(value):
+            raise Refusal('nonfinite observation: ' + key)
+        return value
+    total, finite, nonfinite, varied = [row.get(k) for k in (
+        'gpu_call_observation_count', 'gpu_finite_observation_count',
+        'gpu_nonfinite_observation_count', 'gpu_call_bit_variation_count')]
+    if (any(type(v) is not int or v < 0 for v in (total, finite, nonfinite, varied))
+            or total < row['n'] or finite != total or nonfinite != 0 or varied > total):
+        raise Refusal('missing or nonfinite full-call observations')
+    samples = row.get('zenbench_samples')
+    if (not isinstance(samples, list) or len(samples) != row['n']
+            or any(s.get('gate_clean') is not True or not integer(s.get('iterations')) for s in samples)
+            or total < sum(s['iterations'] for s in samples)):
+        raise Refusal('finite policy requires complete clean timed rounds')
+    baseline = bits('gpu_reference_score_bits')
+    low, high, last = bits('gpu_min_score_bits'), bits('gpu_max_score_bits'), bits('score_bits')
+    if not low <= baseline <= high or not low <= last <= high or row.get('gpu_score_range_includes_baseline') is not True:
+        raise Refusal('incoherent finite score range')
+    if varied:
+        if not low <= bits('gpu_one_different_score_bits') <= high:
+            raise Refusal('alternate score outside range')
+    elif low != baseline or high != baseline or last != baseline:
+        raise Refusal('unrecorded score variation')
+    delta = max(abs(low - baseline), abs(high - baseline))
+    if (row.get('gpu_max_abs_delta_bits') != struct.pack('>d', delta).hex()
+            or row.get('gpu_delta_overflow') is not (not math.isfinite(delta))
+            or row.get('gpu_max_abs_delta') != (delta if math.isfinite(delta) else None)):
+        raise Refusal('incoherent absolute score delta')
+    relative = delta / abs(baseline) if baseline else math.inf
+    if row.get('gpu_max_relative_delta') != (relative if math.isfinite(relative) else None):
+        raise Refusal('incoherent relative score delta')
+    row.update(raw_status=row['status'], status='ok', gpu_score_repeatability_policy=FINITE_GPU_POLICY,
+               numerical_variation_accepted=bool(varied), score_repeatability_qualified=not bool(varied),
+               numerical_instability_flag=bool(varied),
+               numerical_qualification='Finite observations only; no native-oracle parity qualification')
+
+
 def validate_row(log, config):
     rows = []
     with Path(log).open(errors='replace') as stream:
@@ -246,12 +306,13 @@ def validate_row(log, config):
         raise Refusal('IQA_ROW identity mismatch: cpu_placement')
     if row.get('mode') != config['only_mode']:
         raise Refusal('IQA_ROW mode mismatch')
+    finite_policy = check_score_policy(config)
     status = row.get('status')
     if status in ('unsupported', 'failed'):
         if type(row.get('n')) is not int or row['n'] != 0 or any(key in row for key in ('median_ns', 'cold_elapsed_ns')):
             raise Refusal('refusal row contains timing')
         return row
-    if status != 'ok':
+    if status != 'ok' and not (finite_policy and status == 'variant_mismatch'):
         raise Refusal('unqualified IQA_ROW status: ' + str(status))
     if not integer(row.get('n')):
         raise Refusal('invalid sample count')
@@ -281,6 +342,8 @@ def validate_row(log, config):
     if 'score' in row and (type(row['score']) not in (int, float) or not math.isfinite(row['score'])
                            or struct.pack('>d', row['score']).hex() != bits.lower()):
         raise Refusal('score disagrees with score_bits')
+    if finite_policy:
+        finite_gpu_observations(row)
     return row
 
 
@@ -580,6 +643,7 @@ def report(output, configs, identity, cap, heartbeat=None):
                  qualified=all(c['status'] in ('ok', 'unsupported') for c in cells),
                  cold=[c['row'] for c in cells if c['status'] == 'ok' and c['config']['timing_phase'] == 'cold'],
                  warm=[c['row'] for c in cells if c['status'] == 'ok' and c['config']['timing_phase'] == 'warm'],
+                 numerical_instability_cells=sum(bool(c.get('row') and c['row'].get('numerical_instability_flag')) for c in cells),
                  qualification_note='Protocol checks only; advisory locks and load observations do not qualify CPU contention or same-score parity')
     atomic(output / 'report.json', value)
     return value

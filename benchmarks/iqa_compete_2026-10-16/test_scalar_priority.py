@@ -89,6 +89,38 @@ class ScalarPriorityTests(unittest.TestCase):
             coverage=json.loads((root/'retained-coverage.json').read_text())
             self.assertEqual([c['status'] for c in coverage],['disabled-by-user','disabled-by-user','pending','maps-not-scheduled'])
 
+    def test_nn_replacement_binds_pixels_and_preserves_original_lineage(self):
+        import json
+        from durable import FINITE_GPU_POLICY
+        cell = dict(metric_name='stlpips-alex', only_mode='score', width=2048, height=1080,
+                    timing_phase='warm', cold_repeat=0, threads=8, device='metal', reference='r', distorted='d',
+                    worker_environment=dict(WGPU_BACKEND='metal', ZENMETRICS_NN_ENGINE='ort-webgpu'))
+        manifest = dict(cells=[cell], input_sha256=dict(r='rhash', d='dhash'))
+        frozen = dict(manifest=manifest)
+        evidence = {'old-id':[dict(record=dict(status='failed'), path='old', sha256='hash')]}
+        captured = []
+        def freeze(source, target, selected, lineage):
+            captured.append((source, selected, lineage))
+            return dict(bundle=str(target), manifest_sha256='hash', cells=len(selected))
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root = Path(directory)
+            replacement = root/'replacement'
+            replacement.mkdir()
+            (replacement/'manifest.json').write_text(json.dumps(manifest))
+            config = dict(sources=[], nn=[dict(name='metal',bundle='old',output='old',max_attempts=2,
+                          execution_bundle=str(replacement), gpu_score_repeatability_policy=FINITE_GPU_POLICY)],
+                          disabled_geometries=[[7680,4320]],results=str(root/'results'),lock='lock')
+            with patch.object(priority,'retained',return_value=(None,frozen,[dict(cell,durable_cell_id='old-id')],evidence)), patch.object(priority,'freeze',side_effect=freeze):
+                plan = priority.prepare(config,root,[])
+            self.assertEqual(plan['phases'][0]['max_attempts'],1)
+            self.assertEqual(captured[0][1][0]['gpu_score_repeatability_policy'],FINITE_GPU_POLICY)
+            self.assertNotIn('gpu_score_repeatability_policy',captured[0][2]['cells'][0]['original_config'])
+            manifest['input_sha256']['r'] = 'different'
+            (replacement/'manifest.json').write_text(json.dumps(manifest))
+            with patch.object(priority,'retained',return_value=(None,dict(manifest=dict(cells=[cell],input_sha256=dict(r='rhash',d='dhash'))),[dict(cell,durable_cell_id='old-id')],evidence)), patch.object(priority,'freeze',side_effect=freeze):
+                with self.assertRaisesRegex(ValueError,'input differs'):
+                    priority.prepare(config,root,[])
+
     def test_execute_refuses_any_upcoming_map(self):
         import json
         with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:

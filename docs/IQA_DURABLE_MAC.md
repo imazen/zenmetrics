@@ -273,3 +273,22 @@ clean resource gate alone does not qualify score repeatability. The call
 counter spans warmup/calibration/timed calls, so the exact varying timed rounds
 are not identified. Original two-attempt caps and failed packets are retained.
 [Sealed diagnostic evidence and scope](../benchmarks/mac_validation_2026-10-18/STLPIPS_VARIATION_2026-10-19.md).
+
+### Finite Metal timing acceptance (owner direction, 2026-10-19)
+
+The opt-in `mac-metal-finite-logged-v1` policy accepts finite score variation
+for warm scalar ORT WebGPU Metal timings. It has no numerical error bound.
+Accepted rows retain their raw status, observation count, baseline, finite
+extrema, maximum absolute/relative deltas and an explicit numerical-instability
+flag. This qualifies timing only; it does not establish native-oracle parity.
+Nonfinite observations, incomplete rounds and resource-gate failures still
+refuse qualification. CPU, CUDA, spatial maps and native parity keep their
+existing numerical contracts.
+
+The new worker counts every warmup, calibration and timed result in deferred
+output destruction after the measurement clock. Baseline-inclusive extrema
+and overflow-marked deltas are logged. Historical workers recorded only the
+first alternate and final score, which cannot exclude a hidden intermediate
+nonfinite value. Their failed attempts remain unchanged. A replacement worker
+therefore requires a new binary hash, frozen bundle, protocol controls and
+successor lineage with the original remaining attempt budgets.

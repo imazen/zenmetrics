@@ -8,7 +8,12 @@ from pathlib import Path
 
 FIELDS = ('metric_name width height size_name threads timing_phase cold_repeat only_mode device impl '
           'impl_binary_sha reference_sha256 distorted_sha256 median_ns mean_ns p10_ns p90_ns n '
-          'score score_bits ref_score simd_tier input_method notes round_means_ns').split()
+          'score score_bits ref_score simd_tier input_method notes round_means_ns '
+          'raw_status gpu_score_repeatability_policy numerical_variation_accepted score_repeatability_qualified '
+          'numerical_instability_flag numerical_qualification gpu_call_observation_count '
+          'gpu_finite_observation_count gpu_nonfinite_observation_count gpu_call_bit_variation_count '
+          'gpu_reference_score_bits gpu_min_score_bits gpu_max_score_bits gpu_max_abs_delta_bits '
+          'gpu_max_abs_delta gpu_delta_overflow gpu_max_relative_delta gpu_one_different_score_bits').split()
 
 
 def export(root, output, host):

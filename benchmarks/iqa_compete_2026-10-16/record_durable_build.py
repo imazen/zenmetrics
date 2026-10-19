@@ -44,11 +44,23 @@ def main():
     overlay = json.loads(dependency_patch.read_bytes()) if dependency_patch.exists() else None
     counters_path = a.snapshot / 'mac-cpu-counters.meta.json'
     counters = json.loads(counters_path.read_bytes()) if counters_path.exists() else None
+    observations_path = a.snapshot / 'score-observations.meta.json'
+    observations = json.loads(observations_path.read_bytes()) if observations_path.exists() else None
+    if observations and observations['base_commit'] != source_commit:
+        raise ValueError('telemetry overlay base differs')
+    module = 'benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_score_observations.rs'
+    if not observations and subprocess.check_output(['git', 'ls-tree', source_commit, '--', module]):
+        sources.append(module)
     # The snapshot may have been exported again for tests. Source must still
     # agree with the recorded commit; benchmark-only engine patches have receipts.
     for name in sources:
         committed = subprocess.check_output(['git', 'show', source_commit + ':' + name])
-        verify_source_file(name, committed, tree / name, (overlay, counters))
+        verify_source_file(name, committed, tree / name, (overlay, counters, observations))
+    if observations:
+        for name, entry in observations['files'].items():
+            data = subprocess.check_output(['git', 'show', observations['source_commit'] + ':' + name])
+            if __import__('hashlib').sha256(data).hexdigest() != entry['adapted_sha256'] or sha(tree/name) != entry['adapted_sha256']:
+                raise ValueError('telemetry source differs: ' + name)
     dependency_command = ['otool', '-L', str(binary)] if platform.system() == 'Darwin' else ['ldd', str(binary)]
     value = dict(source_commit=source_commit, binary_sha256=sha(binary),
         inventory_sha256=__import__('hashlib').sha256(inventory).hexdigest(), features=a.features,
@@ -61,6 +73,8 @@ def main():
     patch = a.snapshot / 'ort-threads.meta.json'
     if patch.exists():
         value['benchmark_patch'] = json.loads(patch.read_bytes())
+    if observations:
+        value['score_observation_overlay'] = observations
     if overlay:
         value['benchmark_dependency_patch'] = overlay
     if counters:

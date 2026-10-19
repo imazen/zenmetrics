@@ -392,7 +392,7 @@ def prepare(config, root, ranking):
         phase.update(name=name, output=str(Path(config['results']) / name), max_attempts=remaining)
         (deferred if config.get('deadline_unix') and secondary else phases).append(phase)
     for original in config.get('nn', []):
-        if not config.get('disabled_geometries'):
+        if not config.get('disabled_geometries') and not original.get('execution_bundle') and not original.get('gpu_score_repeatability_policy'):
             phases.append(dict(original, manifest_sha256=sha(Path(original['bundle']) / 'manifest.json'), max_attempts=original.get('max_attempts', 2)))
             continue
         _, frozen, configs, evidence = retained(original)
@@ -414,7 +414,20 @@ def prepare(config, root, ranking):
         for remaining, entries in sorted(pending.items()):
             entries.sort(key=lambda e:(e['original_config']['width']*e['original_config']['height'], e['original_config']['metric_name'], e['original_config']['threads'], e['original_config']['timing_phase'], e['original_config']['cold_repeat']))
             name = original['name'] + '-attempts' + str(remaining)
-            phase = freeze(original['bundle'], root/name, [e['original_config'] for e in entries], dict(source=original, cells=entries))
+            execution_bundle = Path(original.get('execution_bundle', original['bundle']))
+            target_manifest = load(execution_bundle / 'manifest.json') if original.get('execution_bundle') else frozen['manifest']
+            execution = []
+            for entry in entries:
+                raw = dict(entry['original_config'])
+                for role in ('reference', 'distorted'):
+                    if original.get('execution_bundle') and target_manifest['input_sha256'][raw[role]] != frozen['manifest']['input_sha256'][raw[role]]:
+                        raise ValueError('replacement NN worker input differs')
+                if original.get('gpu_score_repeatability_policy') and raw['timing_phase'] == 'warm':
+                    raw['gpu_score_repeatability_policy'] = original['gpu_score_repeatability_policy']
+                    from durable import check_score_policy
+                    check_score_policy(raw)
+                execution.append(raw)
+            phase = freeze(execution_bundle, root/name, execution, dict(source=original, cells=entries))
             phase.update(name=name, output=str(Path(config['results'])/name), max_attempts=remaining)
             phases.append(phase)
     if not phases and not deferred and not config.get('deadline_unix'):

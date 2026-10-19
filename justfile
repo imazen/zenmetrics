@@ -1848,3 +1848,12 @@ hdrvdp-canonical-prepare-rust newdir:
 
 hdrvdp-canonical-controls scratch output:
     python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/summarize_controls.py '{{scratch}}' '{{output}}'
+
+# Finite Mac GPU timing policy and strict numerical refusal controls.
+iqa-finite-gpu-policy-tests:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py
+
+# Std-only deferred observation controls; call under the shared heavy lock.
+iqa-score-observations-tests:
+    rustc --edition=2024 -D warnings --test benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_score_observations.rs -o "$HOME/tmp/iqa-score-observations-tests"
+    "$HOME/tmp/iqa-score-observations-tests"

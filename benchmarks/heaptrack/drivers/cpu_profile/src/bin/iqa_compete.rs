@@ -21,40 +21,9 @@ use zenmetrics_cli::{
 #[allow(unexpected_cfgs)]
 const MODEL_PRELOAD_ADAPTER: bool = cfg!(iqa_compete_cached);
 
-struct ScoreObservations {
-    expected: u64,
-    last: std::sync::atomic::AtomicU64,
-    different: std::sync::atomic::AtomicU64,
-    count: std::sync::atomic::AtomicU64,
-}
-impl ScoreObservations {
-    fn new(value: f64) -> Self {
-        Self {
-            expected: value.to_bits(),
-            last: std::sync::atomic::AtomicU64::new(value.to_bits()),
-            different: std::sync::atomic::AtomicU64::new(u64::MAX),
-            count: std::sync::atomic::AtomicU64::new(0),
-        }
-    }
-}
-struct ObservedScore {
-    value: f64,
-    observations: &'static ScoreObservations,
-}
-impl Drop for ObservedScore {
-    fn drop(&mut self) {
-        use std::sync::atomic::Ordering::Relaxed;
-        let bits = self.value.to_bits();
-        self.observations.last.store(bits, Relaxed);
-        if bits != self.observations.expected {
-            self.observations.count.fetch_add(1, Relaxed);
-            let _ = self
-                .observations
-                .different
-                .compare_exchange(u64::MAX, bits, Relaxed, Relaxed);
-        }
-    }
-}
+#[path = "../iqa_compete_score_observations.rs"]
+mod iqa_compete_score_observations;
+use iqa_compete_score_observations::{ObservedScore, ScoreObservations};
 
 fn prepare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let r = decode_image_to_rgb8(Path::new(&args[2]))?;
@@ -612,6 +581,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .count
                 .load(std::sync::atomic::Ordering::Relaxed);
             row["gpu_call_bit_variation_count"] = json!(count);
+            use std::sync::atomic::Ordering::Relaxed;
+            let observation = &observations[arm];
+            let total = observation.total.load(Relaxed);
+            let nonfinite = observation.nonfinite.load(Relaxed);
+            let max_abs = f64::from_bits(observation.max_abs_delta.load(Relaxed));
+            let baseline = f64::from_bits(observation.expected);
+            let relative = max_abs / baseline.abs();
+            row["gpu_call_observation_count"] = json!(total);
+            row["gpu_nonfinite_observation_count"] = json!(nonfinite);
+            row["gpu_finite_observation_count"] = json!(total - nonfinite);
+            row["gpu_reference_score_bits"] = json!(format!("{:016x}", observation.expected));
+            row["gpu_min_score_bits"] =
+                json!(format!("{:016x}", observation.minimum.load(Relaxed)));
+            row["gpu_max_score_bits"] =
+                json!(format!("{:016x}", observation.maximum.load(Relaxed)));
+            row["gpu_max_abs_delta_bits"] = json!(format!("{:016x}", max_abs.to_bits()));
+            row["gpu_max_abs_delta"] = if max_abs.is_finite() {
+                json!(max_abs)
+            } else {
+                Value::Null
+            };
+            row["gpu_delta_overflow"] = json!(!max_abs.is_finite());
+            row["gpu_max_relative_delta"] = if baseline != 0.0 && relative.is_finite() {
+                json!(relative)
+            } else {
+                Value::Null
+            };
+            row["gpu_score_range_includes_baseline"] = json!(true);
+
             row["gpu_call_observation_scope"] = json!(
                 "Every zenbench warmup/calibration/timed result; checks run in deferred output Drop after timing"
             );
