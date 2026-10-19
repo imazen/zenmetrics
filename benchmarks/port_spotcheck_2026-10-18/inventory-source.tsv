@@ -1,0 +1,5 @@
+# shards (deterministic, registry order, each <=30000 bytes)
+shard	first_row	last_row	bytes	sha256
+inventory-source-00.tsv	vmaf	wadiqam-nr-live	28833	3bd0c5e5616d5fc9511f811c658fc22f7e6f382530cd2a2a1503c97871e6be6f
+inventory-source-01.tsv	wadiqam-nr-tid	vsi-nodownscale	28336	c8380363c60fef30b21e2b0ed7c6a2ca5c43d85aafd8950edfbd1dd6411bef30
+inventory-source-02.tsv	cw-ssim	aimos	28234	c4d75c55dba682f5e2cd7809661787aacc68a36f959bc2255d8941afb7a38aa1

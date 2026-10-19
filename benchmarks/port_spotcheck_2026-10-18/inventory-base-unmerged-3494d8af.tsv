@@ -1,0 +1,129 @@
+metric	group	canonical_implementation	canonical_version	language	oracle_runner	parity_bound	coverage
+psnr	classical	definition (RGB MSE) / scikit-image	skimage 0.26	python	python_cell(scikit-image,torchmetrics)	1e-10	covered
+psnr-y	classical	definition studio-BT.601 luma	n/a	numpy	psnr-studio601 oracle	1e-3	covered
+psnr-y601	classical	definition studio-601 Y	n/a	numpy	psnr-studio601 env=y	1e-3	covered
+psnr-y-studio601	classical	definition studio-601 Y	n/a	numpy	psnr-studio601 env=y	1e-3	covered
+psnr-cb	classical	definition studio-601 Cb 444	n/a	numpy	psnr-studio601 env=cb	1e-3	covered
+psnr-cr	classical	definition studio-601 Cr 444	n/a	numpy	psnr-studio601 env=cr	1e-3	covered
+psnr-ycbcr611	classical	definition 6:1:1 combined	n/a	numpy	psnr-studio601 env=mix	1e-3	covered
+psnr-y-libvmaf	classical	libvmaf float_psnr	3.2.0 (vmaf-head-sys 0.2.0)	C	libvmaf-compute shim	1e-10	covered
+ciede2000	classical	deltaE00 definition / scikit-image	skimage 0.26	python	skimage-ciede2000	1e-3	covered
+ssim	classical	MATLAB ssim_index.m (Wang)	metrix_mux port	octave	octave:ssim	5e-5	covered
+ssimc	classical	MATLAB per-channel ssim / scikit-image	skimage 0.26	python	python_cell(scikit-image)	7.5e-7	covered
+ssim-libvmaf	classical	libvmaf float_ssim	3.2.0	C	libvmaf-compute shim	2e-4	covered
+msssim	classical	ssim_mscale_new.m (Wang) / metrix mssim_index.m	metrix_mux	octave	octave:msssim	1e-4	covered
+msssim-libvmaf	classical	libvmaf float_ms_ssim	3.2.0	C	libvmaf-compute shim	2e-4	covered
+cw-ssim	classical	MATLAB cwssim (Wang); pyiqa substitute	pyiqa 0.1.16	python	pyiqa cw_ssim	—	covered-substitute
+cw-ssim-pyiqa	classical	pyiqa cw_ssim	0.1.16	python	pyiqa cw_ssim	—	covered
+ssim-pyiqa	classical	pyiqa ssim	0.1.16	python	pyiqa ssim	—	covered
+ssim-pyiqa-f32	classical	pyiqa ssim f32 convention / torchmetrics / piq / pytorch-msssim	multi	python	python_cell(piq,torchmetrics,pytorch-msssim)+pyiqa	7.5e-7	covered
+ssim-pyiqa-f32-k2	classical	pyiqa ssim k=2 levels	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssim-pyiqa-f32-k3	classical	pyiqa ssim k=3	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssim-pyiqa-f32-k4	classical	pyiqa ssim k=4	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssim-pyiqa-f32-k5	classical	pyiqa ssim k=5	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssim-pyiqa-f32-k6	classical	pyiqa ssim k=6	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssimc-pyiqa-f32	classical	pyiqa-convention ssim / torchmetrics / piq / pytorch-msssim	multi	python	python_cell	7.5e-7	covered
+ssimc-pyiqa-f32-k2	classical	pyiqa ssim k=2	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssimc-pyiqa-f32-k3	classical	pyiqa ssim k=3	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssimc-pyiqa-f32-k4	classical	pyiqa ssim k=4	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssimc-pyiqa-f32-k5	classical	pyiqa ssim k=5	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ssimc-pyiqa-f32-k6	classical	pyiqa ssim k=6	0.1.16	python	fixed_factor_oracle.py	7.5e-7	covered (owner FF audit 2026-10-19)
+ms-ssim-pyiqa	classical	pyiqa ms_ssim	0.1.16	python	pyiqa ms_ssim	—	covered
+ms-ssim-pyiqa-f32	classical	pyiqa ms_ssim f32 / piq / torchmetrics / pytorch-msssim	multi	python	python_cell+pyiqa	1.9e-6	covered
+ms-ssim-pyiqa-f32-k2	classical	pyiqa ms_ssim k=2	0.1.16	python	fixed_factor_oracle.py	1.9e-6	covered (owner FF audit 2026-10-19)
+ms-ssim-pyiqa-f32-k3	classical	pyiqa ms_ssim k=3	0.1.16	python	fixed_factor_oracle.py	1.9e-6	covered (owner FF audit 2026-10-19)
+ms-ssim-pyiqa-f32-k4	classical	pyiqa ms_ssim k=4	0.1.16	python	fixed_factor_oracle.py	1.9e-6	covered (owner FF audit 2026-10-19)
+ms-ssim-pyiqa-f32-k5	classical	pyiqa ms_ssim k=5	0.1.16	python	fixed_factor_oracle.py	1.9e-6	covered (owner FF audit 2026-10-19)
+ms-ssim-pyiqa-f32-k6	classical	pyiqa ms_ssim k=6	0.1.16	python	fixed_factor_oracle.py	1.9e-6	covered (owner FF audit 2026-10-19)
+ssim2	classical	libjxl ComputeSSIMULACRA2 (v2 lineage)	0.12.0	C++	iqa-jxl shim	exact/drift	covered
+ssim2-gpu	classical	libjxl SSIMULACRA2 via CPU twin	0.12.0	C++	iqa-jxl shim (GPU route: cpu twin)	—	gpu-twin (cpu oracle)
+ssimulacra1	classical	cloudinary/ssimulacra C++	HEAD staged	C++	ssimulacra-canonical shim	—	covered
+dssim	classical	dssim-core (kornelski)	3.4/3.5	Rust+C	dssim-canonical shim	upstream	covered
+dssim-gpu	classical	dssim-core via CPU twin	3.4	Rust	dssim-canonical (cpu oracle)	—	gpu-twin (cpu oracle)
+butteraugli	classical	libjxl butteraugli	0.12.0	C++	iqa-jxl shim	rel .001	covered
+butteraugli-gpu	classical	libjxl butteraugli via CPU twin	0.12.0	C++	iqa-jxl shim (cpu oracle)	—	gpu-twin (cpu oracle)
+butteraugli-original	classical	google/butteraugli	71b18b6	C++	butteraugli-orig shim	—	covered
+proposal-butteraugli	classical	in-house AIC-4 submission remap	—	—	in-house (no external canonical)	—	self
+ws-hv	classical	WS_HV.ipynb (upstream)	staged	python(cv2,pywt)	wshv oracle	—	covered
+wd	classical	Cool-Chic wasserstein distortion (wasserstein.py)	main	python	coolchic-wd	0	covered
+nlpd	classical	NLPD_Pytorch (Laparra authors)	staged	python(torch)	nlpd-ref oracle	1e-5	covered
+nlpd-iqa	classical	IQA_pytorch NLPD(channels=1)	dingkeyan93	python	nlpd-iqa oracle	1e-4	covered
+vif	classical	vifp_mscale.m (Sheikh/Bovik)	image-quality-tools	octave	libvmaf-compute + octave:vifp	5e-13	covered
+vifvec	classical	vifvec.m + matlabPyrTools	staged	octave	octave:vifvec	1e-9	covered
+gmsd	classical	libgmsd de646c9a (C); pyiqa substitute	unavailable/piq	python	piq + pyiqa gmsd	1e-14	covered-substitute
+ms-gmsd	classical	piq multi_scale_gmsd	0.8.0	python	python_cell(piq)+pyiqa	0	covered
+ms-gmsdc	classical	piq multi_scale_gmsd chroma	0.8.0	python	pyiqa ms_gmsdc	0	covered
+mdsi	classical	MDSI.m MATLAB (missing); piq substitute	0.8.0	python	python_cell(piq)+pyiqa mdsi	0	covered-substitute
+fsim	classical	FR_FSIMc.m (research-licensed, missing); piq substitute	0.8.0	python	python_cell(piq fsim)	5e-5	covered-substitute
+fsimc	classical	FR_FSIMc.m chroma (column of `fsim` metric, dual-output); piq fsim chromatic	0.8.0	python	python_cell(piq)	5e-5	covered-substitute
+fsim-y	classical	FR_FSIMc.m luma; piq substitute	0.8.0	python	python_cell(piq)	5e-5	covered-substitute
+fsim-k2	classical	FR_FSIMc.m K-fixed; piq fsim patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	5e-5	covered-substitute (owner FF audit 2026-10-19)
+fsim-k3	classical	FR_FSIMc.m K-fixed; piq fsim patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	5e-5	covered-substitute (owner FF audit 2026-10-19)
+fsim-k4	classical	FR_FSIMc.m K-fixed; piq fsim patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	5e-5	covered-substitute (owner FF audit 2026-10-19)
+fsim-nodownscale	classical	FR_FSIMc.m K-fixed; piq fsim patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	5e-5	covered-substitute (owner FF audit 2026-10-19)
+vsi	classical	VSI.m (missing); piq substitute	0.8.0	python	python_cell(piq vsi)	1e-4	covered-substitute
+vsi-k2	classical	VSI.m K-fixed; piq vsi patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	1e-4	covered-substitute (owner FF audit 2026-10-19)
+vsi-k3	classical	VSI.m K-fixed; piq vsi patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	1e-4	covered-substitute (owner FF audit 2026-10-19)
+vsi-k4	classical	VSI.m K-fixed; piq vsi patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	1e-4	covered-substitute (owner FF audit 2026-10-19)
+vsi-nodownscale	classical	VSI.m K-fixed; piq vsi patched conv2same+decimate	0.8.0 (patched)	python	fixed_factor_oracle.py	1e-4	covered-substitute (owner FF audit 2026-10-19)
+haarpsi	classical	authors' HaarPSI.m (vendored in crate)	vendored	octave	octave:haarpsi + piq	5e-5	covered
+haarpsi-y	classical	HaarPSI.m luma variant	—	octave	octave:haarpsi(gray)	5e-5	covered
+mad	classical	official MATLAB release (missing); pyiqa substitute	pyiqa 0.1.16	python	pyiqa mad	—	covered-substitute
+mdctpsnr	classical	thorfdbg/mDCTpsnr C++	staged	C++	dctpsnr binary	2e-4 dB	covered
+cvvdp	classical	pycvvdp	0.5.7	python	python_cell(cvvdp)	1e-3	covered
+cvvdp-gpu	classical	pycvvdp via CPU twin	0.5.7	python	python_cell(cvvdp)	—	gpu-twin (cpu oracle)
+hdrvdp	classical	HDR-VDP 2.2.2 MATLAB (needs nits input)	—	octave	sRGB cells: explicit refusal both sides	P_det 1e-4	refuses-srgb
+hdrvdp3	classical	HDR-VDP 3.0.7 MATLAB / VDP3 numpy port	0628a6b	python	sRGB cells: explicit refusal both sides	1e-3	refuses-srgb
+hdrvdp-aic2026	classical	VDP2 numpy port @0628a6b + our SDR config	0628a6b	python	jpegai:vdp2 oracle	1e-3	covered-indicative
+hdrvdp3-aic2026	classical	VDP3 numpy port @0628a6b (bit-faithful)	0628a6b	python	jpegai:vdp3 oracle	1e-3	covered
+flip	classical	NVlabs FLIP (flip_evaluator pkg)	staged	python	flip-eval oracle	—	covered
+flip-v17	classical	flip_evaluator v1.7 pooling	v1.7	python	python_cell(flip-evaluator)+flip-eval	1e-6	covered
+psnrhvs	classical	psnrhvsm.m MATLAB (missing, site down)	—	octave	no runnable canonical; crate Octave goldens	1e-3 dB	no-runnable-canonical
+psnrhvs-y	classical	psnrhvsm.m Y variant	—	—	no runnable canonical	1e-3 dB	no-runnable-canonical
+psnrhvs-daala	classical	libvmaf psnr_hvs (Daala/Xiph)	3.2.0	C	libvmaf-compute shim	2e-4 dB	covered
+cambi	classical	libvmaf cambi	3.2.0	C	libvmaf-compute shim	1e-4	covered
+cambi-aic2026	classical	libvmaf cambi aic ingress	3.2.0	C	libvmaf-compute shim	1e-4	covered
+vmaf	classical	libvmaf vmaf_v0.6.1	3.2.0	C	libvmaf-compute shim	.02	covered
+vmaf-neg	classical	libvmaf vmaf_v0.6.1neg	3.2.0	C	libvmaf-compute shim	.02	covered
+vmaf-4k	classical	libvmaf vmaf_4k_v0.6.1	3.2.0	C	libvmaf-compute shim(4k model)	.02	covered-needs-model-arg
+vmaf-v1	classical	libvmaf legacy v1 model/features	3.2.0	C	libvmaf-compute shim(v1)	.02	check-model-availability
+vmaf-studio601	classical	libvmaf studio-601 ingress	3.2.0	C	libvmaf-compute shim	.02	covered
+vmaf-neg-studio601	classical	libvmaf neg studio-601	3.2.0	C	libvmaf-compute shim	.02	covered
+iwssim	classical	Python-IW-SSIM	f9de37c	python	pyiwssim oracle	1e-4	covered
+iwssim-piq	classical	jpeg-ai-qaf IW_SSIM_PyTorch	0628a6b	python	jpegai:iwssim oracle	1e-4	covered
+iwssim-gpu	classical	Python-IW-SSIM via CPU twin	f9de37c	python	pyiwssim (cpu oracle)	—	gpu-twin (cpu oracle)
+brisque	classical	piq brisque (documented bound)	0.8.0	python	python_cell(piq)+pyiqa brisque	15.1e-3	covered
+niqe	classical	pyiqa niqe (MATLAB port)	0.1.16	python	pyiqa niqe	—	covered
+piqe	classical	pyiqa piqe	0.1.16	python	pyiqa piqe	—	covered
+zensim	classical	in-house ML metric	—	—	no external canonical; self-timing + regression watch	—	self
+zensim-gpu	classical	in-house	—	—	self	—	self
+ahiq	nn	AHIQ upstream (pyiqa conv)	pyiqa 0.1.16	python	pyiqa ahiq	—	covered
+ahiq-pyiqa	nn	pyiqa ahiq	0.1.16	python	pyiqa ahiq	—	covered
+arniqa	nn	ARNIQA miccunifi / pyiqa	0.1.16	python	pyiqa arniqa	—	covered
+maniqa	nn	MANIQA IIGROUP / pyiqa	0.1.16	python	pyiqa maniqa	—	covered
+liqe	nn	LIQE zwx8981 / pyiqa	0.1.16	python	pyiqa liqe	—	covered
+musiq	nn	google MUSIQ / pyiqa	0.1.16	python	pyiqa musiq	—	covered
+hyperiqa	nn	hyperIQA SSL92 / pyiqa	0.1.16	python	pyiqa hyperiqa	—	covered
+paq2piq	nn	PaQ-2-PiQ / pyiqa	0.1.16	python	pyiqa paq2piq	—	covered
+ckdn	nn	researchmm/CKDN / pyiqa	0.1.16	python	pyiqa ckdn	—	covered
+afine	nn	ChrisDud0257/AFINE	repo	python	afine oracle (pending)	—	pending-repo
+dreamsim	nn	ssundaram21/dreamsim	pip	python	dreamsim oracle	—	pending-pip
+dists	nn	DISTS_pytorch	0.1	python	python_cell(DISTS-pytorch,piq)	—	covered
+deepdc	nn	DeepDC_PyTorch	0.2	python	python_cell(DeepDC-PyTorch)	—	covered
+lpips-alex	nn	lpips 0.1.4 alex	0.1.4	python	python_cell(lpips)	—	covered
+lpips-vgg	nn	lpips 0.1.4 vgg	0.1.4	python	python_cell(lpips,piq)	—	covered
+lpips-squeeze	nn	lpips 0.1.4 squeeze	0.1.4	python	python_cell(lpips)	—	covered
+stlpips-alex	nn	stlpips_pytorch	0.0.2	python	python_cell(stlpips-pytorch)	—	covered
+stlpips-vgg	nn	stlpips_pytorch	0.0.2	python	python_cell(stlpips-pytorch)	—	covered
+dmm	nn	pyiqa dmm (known divergence in crate card)	0.1.16	python	pyiqa dmm	—	covered-known-divergence
+dmm-pyiqa	nn	pyiqa dmm	0.1.16	python	pyiqa dmm	—	covered-known-divergence
+topiq-fr	nn	TOPIQ official / pyiqa	0.1.16	python	pyiqa topiq_fr	—	covered
+topiq-fr-pipal	nn	TOPIQ pipal / pyiqa	0.1.16	python	pyiqa topiq_fr_pipal	—	covered
+wadiqam-fr-live	nn	dmaniry/deepIQA chainer; pyiqa port	51dece99	python	pyiqa wadiqam_fr	—	covered-substitute
+wadiqam-fr-tid	nn	dmaniry/deepIQA chainer	51dece99	python	pyiqa wadiqam_fr	—	covered-substitute
+wadiqam-nr-live	nn	dmaniry/deepIQA chainer	51dece99	python	pyiqa wadiqam_nr	—	covered-substitute
+wadiqam-nr-tid	nn	dmaniry/deepIQA chainer	51dece99	python	pyiqa wadiqam_nr	—	covered-substitute
+wadiqam-pyiqa	nn	pyiqa wadiqam	0.1.16	python	pyiqa wadiqam_fr	—	covered
+pieapp	nn	SKIPPED per brief	—	—	SKIPPED	—	skipped
+pieapp-pyiqa	nn	SKIPPED per brief	—	—	SKIPPED	—	skipped
+aimos	—	excluded (proprietary, unreleased) — owner clarification 2026-10-19; not in CLI inventory, no canonical, no spot-check	—	—	—	—	excluded

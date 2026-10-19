@@ -1,0 +1,151 @@
+{
+  "base_table": {
+    "file": "inventory-base-unmerged-3494d8af.tsv (committed evidence copy)",
+    "revision": "3494d8af34839c21ff0b97f787ffd15c8a4d4ac3 (UNMERGED lane \u2014 NOT ancestor of master)",
+    "sha256": "0382d8a90f273a59a21295b5c9dbc0c52379b0d9936ab4faf7367bec65421878",
+    "source": "benchmarks/port_spotcheck_2026-10-18/inventory.tsv",
+    "status": "unmerged source snapshot, not master coverage"
+  },
+  "crosscheck": {
+    "result": "name-set EQUAL (126)",
+    "retained_list_metrics": "~/tmp/portcheck/cli-metrics.txt",
+    "sha256": "e729cec8161671d82f2692bf0db19484efb1dc7451a2259c5131375285ab0453"
+  },
+  "gate_doc": "docs/METRIC_PROVENANCE.md @27350d07f2c3692a9d0665a81a3d0beffaa8c0e1 (tolerance table ~:103-126); see gate_sources for crate tests/README",
+  "gate_sources": [
+    {
+      "path": "docs/METRIC_PROVENANCE.md",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/mad-iqa/src/tests.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/vif/src/tests.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/msssim/src/tests.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/brisque/README.md",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/brisque/tests/parity.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/brisque/src/lib.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/niqe/tests/parity.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/niqe/src/lib.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/piqe/README.md",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/piqe/tests/parity.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/piqe/src/lib.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/gmsd/src/tests.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/iwssim/README.md",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/zenmetrics-nn/README.md",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    },
+    {
+      "path": "crates/zenmetrics-nn/tests/parity.rs",
+      "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1"
+    }
+  ],
+  "generated_by": "benchmarks/port_spotcheck_2026-10-18/make_inventory_source.py (committed)",
+  "harness_refs": {
+    "canonical_run.py @3494d8af blob": "0675a14f\u2026",
+    "note": "unmerged lane; configured bounds are harness defaults, not documented gates",
+    "oracle_drivers.py @3494d8af blob": "0e99966b\u2026"
+  },
+  "no_metric_calls": true,
+  "reconciliation": {
+    "cli_names": 126,
+    "data_rows": 124,
+    "excluded_cli_records": [
+      "pieapp",
+      "pieapp-pyiqa"
+    ],
+    "excluded_non_cli_records": [
+      "aimos"
+    ],
+    "extra_outputs_not_names": [
+      "fsimc"
+    ],
+    "missing": [],
+    "raw_split": {
+      "LumaIngress (mod.rs:1363+)": [
+        "house",
+        "yuv601-studio"
+      ],
+      "MetricKind (mod.rs:97-1362)": 126,
+      "ZensimFeatureRegime/other": [
+        "v2-ab",
+        "folded720append",
+        "folded720append2",
+        "folded720append2carriers",
+        "folded720append2pools"
+      ]
+    },
+    "raw_value_enum_names_in_file": 133,
+    "total_rows": 127
+  },
+  "registry": {
+    "block": "pub enum MetricKind, mod.rs:97-1362",
+    "file": "crates/zenmetrics-cli/src/metrics/mod.rs",
+    "names": 126,
+    "revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1",
+    "sha256": "c8f1a2cc4c289102939082ab754f352131676edcf0306b7c083c2b42baa3149a"
+  },
+  "schema": "inventory-source/4",
+  "shard_cap_bytes": 30000,
+  "shard_fill_target": 29000,
+  "shards": {
+    "inventory-source-00.tsv": {
+      "bytes": 28833,
+      "first_row": "vmaf",
+      "last_row": "wadiqam-nr-live",
+      "sha256": "3bd0c5e5616d5fc9511f811c658fc22f7e6f382530cd2a2a1503c97871e6be6f"
+    },
+    "inventory-source-01.tsv": {
+      "bytes": 28336,
+      "first_row": "wadiqam-nr-tid",
+      "last_row": "vsi-nodownscale",
+      "sha256": "c8380363c60fef30b21e2b0ed7c6a2ca5c43d85aafd8950edfbd1dd6411bef30"
+    },
+    "inventory-source-02.tsv": {
+      "bytes": 28234,
+      "first_row": "cw-ssim",
+      "last_row": "aimos",
+      "sha256": "c4d75c55dba682f5e2cd7809661787aacc68a36f959bc2255d8941afb7a38aa1"
+    }
+  },
+  "source_revision": "27350d07f2c3692a9d0665a81a3d0beffaa8c0e1",
+  "timing_qualification": "0/19"
+}
