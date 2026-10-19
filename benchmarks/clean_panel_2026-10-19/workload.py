@@ -33,7 +33,7 @@ def validate_contract(m):
     if Path(m['containment_script']).resolve() != Path(__file__).with_name('containment.py').resolve():
         raise ValueError('unsupported containment helper')
     ours, canonical = m['arms']['ours'], m['arms']['canonical']
-    if ours['protocol'] != 'iqa-row' or canonical['protocol'] != 'canonical-v2' or canonical['adapter'] != ADAPTER:
+    if ours['protocol'] not in ('iqa-row', 'iqa-row-nr-v1') or canonical['protocol'] != 'canonical-v2' or canonical['adapter'] != ADAPTER:
         raise ValueError('unsupported protocol/adapter')
     if len(ours['argv']) != 2 or len(canonical['argv']) != 5:
         raise ValueError('unsupported argument shape')
@@ -98,6 +98,17 @@ def parse(text, name, m, clean):
         score = row['score']
         # IQA_ROW.ref_score is the first distorted timing result, NOT the NR reference.
         reference_score = None
+        if spec['protocol'] == 'iqa-row-nr-v1':
+            if row.get('nr_result_schema') != 'paired-nr-v1' or row.get('nr_results_stable') is not True:
+                raise ValueError('missing or unstable paired NR schema')
+            nr = row.get('nr_scores', {})
+            if set(nr) != {'brisque','brisque_ref'} or any(type(v) not in (int,float) or not math.isfinite(v) for v in nr.values()):
+                raise ValueError('invalid paired NR output')
+            if type(row.get('nr_observed_calls')) is not int or row['nr_observed_calls'] < 1:
+                raise ValueError('missing paired NR observations')
+            if nr['brisque'] != score:
+                raise ValueError('paired NR headline disagreement')
+            reference_score = nr['brisque_ref']
     else:
         observed = one_json(text, 'WORKLOAD ')
         expected = dict(w, adapter=ADAPTER, adapter_sha256=digest(spec['argv'][1]),

@@ -1900,3 +1900,11 @@ clean-panel-check:
 # Negative control only: run acceptance assertions against an exported old candidate.
 clean-panel-before-check historical_directory:
     TMPDIR="$HOME/tmp" python3 benchmarks/clean_panel_2026-10-19/baseline_regressions.py {{historical_directory}}
+
+# Synthetic extraction only: no metric graph, scorer or timing run.
+clean-panel-nr-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    directory=$(mktemp -d "$HOME/tmp/clean-panel-nr-control.XXXXXX")
+    rustc --edition=2024 --test benchmarks/clean_panel_2026-10-19/nr_observer.rs -o "$directory/control"
+    "$directory/control"

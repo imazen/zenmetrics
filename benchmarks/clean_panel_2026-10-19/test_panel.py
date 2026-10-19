@@ -9,7 +9,7 @@ class Qualification(unittest.TestCase):
         self.m.update(schema=2,workload=dict(metric_name='brisque',width=512,height=512,threads=1,mode='score',timing_phase='warm',reference='reference',distorted='distorted'))
         self.b = {'block_id':'a','manifest_sha256':panel.identity(self.m),'arms':[]}
         for name,time in [('ours',20),('canonical',10)]:
-            self.b['arms'].append(dict(arm=name,block_id='a',build_identity=self.m['arms'][name]['build_identity'],input_identity=panel.identity(self.m['inputs']),scope=self.m['scope'][name],exit_code=0,contaminated=False,samples=[dict(ns=time,gate_clean=True)],score=1.0,observed_validated=True,observed_workload=copy.deepcopy(self.m['workload'])))
+            self.b['arms'].append(dict(arm=name,block_id='a',build_identity=self.m['arms'][name]['build_identity'],input_identity=panel.identity(self.m['inputs']),scope=self.m['scope'][name],exit_code=0,contaminated=False,samples=[dict(ns=time,gate_clean=True)],score=1.0,reference_score=2.0,observed_validated=True,observed_workload=copy.deepcopy(self.m['workload'])))
 
     def test_actual_block(self):
         self.assertEqual(panel.qualify_block(self.b,self.m),2)

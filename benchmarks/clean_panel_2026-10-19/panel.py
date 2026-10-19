@@ -67,6 +67,7 @@ def qualify_block(block, manifest):
         raise ValueError('missing or duplicate arm')
     values = {}
     scores = {}
+    references = {}
     for arm in block['arms']:
         name = arm['arm']
         if any(arm.get('observed_workload', {}).get(k) != manifest['workload'][k] for k in workload.FIELDS):
@@ -92,8 +93,14 @@ def qualify_block(block, manifest):
             raise ValueError('invalid score')
         values[name] = statistics.median(times)
         scores[name] = arm['score']
+        reference = arm.get('reference_score')
+        if type(reference) not in (int,float) or not math.isfinite(reference):
+            raise ValueError('missing or invalid actual NR reference score')
+        references[name] = reference
     if abs(scores['ours'] - scores['canonical']) > manifest['parity_abs_bound']:
         raise ValueError('parity failure')
+    if abs(references['ours'] - references['canonical']) > manifest['parity_abs_bound']:
+        raise ValueError('reference parity failure')
     return values['ours'] / values['canonical']
 
 
