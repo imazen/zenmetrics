@@ -154,7 +154,7 @@ impl core::error::Error for Error {}
 
 /// MATLAB `rgb2gray` luma coefficients (`0.2989 0.5870 0.1140`) — the
 /// conversion the reference pipeline applies to colour input.
-const LUMA_COEF: [f32; 3] = [0.2989, 0.5870, 0.1140];
+const LUMA_COEF: [f64; 3] = [0.2989, 0.5870, 0.1140];
 
 fn check_plane(buf: &[f32], w: usize, h: usize, stride: usize) -> Result<(), Error> {
     let needed = if h == 0 { 0 } else { stride * (h - 1) + w };
@@ -609,14 +609,14 @@ impl Inputs {
                 .zip(ds.as_chunks::<3>().0.iter())
             {
                 r.push(
-                    LUMA_COEF[0] as f64 * pr as f64
-                        + LUMA_COEF[1] as f64 * pg as f64
-                        + LUMA_COEF[2] as f64 * pb as f64,
+                    LUMA_COEF[0] * pr as f64
+                        + LUMA_COEF[1] * pg as f64
+                        + LUMA_COEF[2] * pb as f64,
                 );
                 d.push(
-                    LUMA_COEF[0] as f64 * dr as f64
-                        + LUMA_COEF[1] as f64 * dg as f64
-                        + LUMA_COEF[2] as f64 * db as f64,
+                    LUMA_COEF[0] * dr as f64
+                        + LUMA_COEF[1] * dg as f64
+                        + LUMA_COEF[2] * db as f64,
                 );
             }
         }
