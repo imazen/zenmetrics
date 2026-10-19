@@ -82,3 +82,18 @@ Semantics note (from `fixed-factor-current-source.md`): Zenmetrics'
 k3/k4 are shifted −1. The patched-oracle experiments target k4 for the
 interior-alignment diagnostic and odd-dimension k2 for ceil/floor tail
 behavior; all outcomes are measured, none presumed.
+
+## Repeatable artifact checks
+
+The benchmark [oracle.just](oracle.just) keeps the integrity commands available
+without running a metric. Pass a fresh evidence directory and the source
+arguments documented above:
+
+```sh
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just fixed-factor-selfcheck <new-evidence-dir> --source-root <source-root>
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just fixed-factor-check <manifest>
+```
+
+Run the integrity suite under the host's normal resource wrapper and heavy-job
+locks. These recipes cover artifact integrity; they do not establish score or
+timing parity.
