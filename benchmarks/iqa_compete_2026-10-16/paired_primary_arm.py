@@ -25,11 +25,13 @@ def main():
     p.add_argument('--arm', choices=['canonical', 'rust'], required=True)
     p.add_argument('--metric', choices=['haarpsi', 'haarpsi-y'], required=True)
     p.add_argument('--phase', choices=['cold', 'warm'], required=True)
+    p.add_argument('--canonical-samples', type=int, default=10)
     for name in ['reference', 'distorted', 'source', 'binary', 'receipt', 'output']:
         p.add_argument('--' + name, type=Path, required=True)
     for name in ['width', 'height', 'threads']:
         p.add_argument('--' + name, type=int, required=True)
     a = p.parse_args()
+    assert 1 <= a.canonical_samples <= 1000
     assert min(a.width, a.height, a.threads) > 0 and sha(a.source) == SOURCE_SHA
     receipt = json.loads(a.receipt.read_text())
     assert receipt['source_revision'] == 'e2d414c33a6d3c7da50a818fa36e56654d3ebeef'
@@ -62,7 +64,7 @@ f=fopen({quoted(paths['reference'])},'rb');assert(f>=0);[r,n]=fread(f,Inf,'*uint
 f=fopen({quoted(paths['distorted'])},'rb');assert(f>=0);[d,n]=fread(f,Inf,'*uint8');assert(n=={a.width*a.height*3});assert(fclose(f)==0);
 r0=permute(reshape(r,[3,{a.width},{a.height}]),[3,2,1]);
 d0=permute(reshape(d,[3,{a.width},{a.height}]),[3,2,1]);clear r d;
-for call=0:{10 if a.phase == 'warm' else 0}
+for call=0:{a.canonical_samples if a.phase == 'warm' else 0}
  clock=tic();
  r=r0;d=d0;
  {convert}
@@ -88,12 +90,15 @@ end
         assert len(timings) == (1 if a.phase == 'cold' else 10)
     else:
         selected = [s.split() for s in lines if s.startswith('COLD ' if a.phase == 'cold' else 'SAMPLE ')]
-        assert len(selected) == (1 if a.phase == 'cold' else 10)
+        assert len(selected) == (1 if a.phase == 'cold' else a.canonical_samples)
         timings = [float(s[1]) for s in selected]
         scores = [float(s[2]) for s in selected]
+        all_scores = [float(s.split()[2]) for s in lines if s.startswith(('COLD ', 'SAMPLE '))]
+        assert all(struct.pack('>d', v) == struct.pack('>d', all_scores[0]) for v in all_scores)
     assert all(t > 0 for t in timings)
     assert sha(a.source) == SOURCE_SHA and input_hashes == {name: sha(path) for name, path in paths.items()}
     record = dict(arm=a.arm, metric=a.metric, phase=a.phase, threads=a.threads, input_hashes=input_hashes,
+                  canonical_samples=a.canonical_samples,
                   scores=scores, timings_ns=timings, command=command, process_rss_kbytes=process_max_rss(root / 'process-memory.txt'),
                   source_sha256=SOURCE_SHA, rust_binary_sha256=receipt['binary_sha256'])
     (root / 'arm.json').write_text(json.dumps(record, indent=2) + '\n')

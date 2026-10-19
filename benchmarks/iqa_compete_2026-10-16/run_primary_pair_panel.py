@@ -40,15 +40,19 @@ def main():
                     blocks=plan['blocks'], cases=len(plan['cases']), mode='iterate',
                     interval='pointwise Student-t on whole-block log ratios; timing quantization/systematic error unbounded',
                     qualified_timing_cells=0)
+    identity['per_case_blocks'] = {case['id']: int(case['fields'].get('paired_blocks', plan['blocks'])) for case in plan['cases']}
     (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     outcomes = []
     for case in plan['cases']:
         assert sha(a.plan) == identity['plan_sha256'] and sha(a.zenbench) == identity['zenbench_sha256']
         directory = root / case['id']
         directory.mkdir()
+        case_plan = dict(plan, cases=[case], blocks=identity['per_case_blocks'][case['id']])
+        case_plan_path = directory / 'plan.json'
+        case_plan_path.write_text(json.dumps(case_plan, indent=2) + '\n')
         command = ['flock', str(Path.home() / 'tmp/lilith-heavy.lock'), 'flock', str(Path.home() / 'tmp/lilith-wsl-heavy.lock'),
                    str(Path.home() / 'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', case['fields']['threads'],
-                   '--', str(a.zenbench), 'pair', str(a.plan), '--case', case['id'], '--output', str(directory / 'attempt')]
+                   '--', str(a.zenbench), 'pair', str(case_plan_path), '--output', str(directory / 'attempt')]
         with (directory / 'wrapper.log').open('x') as log:
             result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
         packet_path = directory / 'attempt/packet.json.gz'
@@ -58,7 +62,7 @@ def main():
             outcome['packet_sha256'] = sha(packet_path)
             summaries = {s['arm']: s for s in packet['summaries']}
             assert packet['mode'] == 'iterate'
-            if packet['complete'] and result.returncode == 0 and summaries['rust']['complete_blocks'] == plan['blocks']:
+            if packet['complete'] and result.returncode == 0 and summaries['rust']['complete_blocks'] == case_plan['blocks']:
                 fields = case['fields']
                 records = []
                 for arm in ['rust', '__aa']:
