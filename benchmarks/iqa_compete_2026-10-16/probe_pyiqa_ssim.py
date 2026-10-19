@@ -28,6 +28,8 @@ def main():
     for name in ['manifest', 'inputs', 'output']:
         p.add_argument('--' + name, required=True, type=Path)
     p.add_argument('--threads', type=int, required=True)
+    p.add_argument('--convention', choices=['ssim-unrounded-y', 'ssim-unrounded-rgb', 'ms-ssim-unrounded-y',
+                   'ssim-original-rounded-class', 'ms-ssim-original-rounded-class'])
     a = p.parse_args()
     if a.threads <= 0:
         p.error('positive CPU thread budget required')
@@ -60,6 +62,9 @@ def main():
         path = Path(inspect.getsourcefile(function)).resolve(strict=True)
         bindings[name] = {'path': str(path), 'sha256': sha(path)}
     rows = []
+    (root / 'identity.json').write_text(json.dumps(dict(manifest_sha256=sha(a.manifest),
+        input_manifest_sha256=sha(a.inputs), bindings=bindings, torch_version=torch.__version__,
+        numpy_version=np.__version__, threads=a.threads), indent=2) + '\n')
     for row in inputs:
         tensors = []
         for role in ['reference', 'distorted']:
@@ -81,12 +86,20 @@ def main():
             'ms-ssim-original-rounded-class': lambda: primary.MS_SSIM(downsample=True)(x / 255, y / 255),
         }
         for name, call in calls.items():
+            if a.convention and a.convention != name:
+                continue
             record = {'pair': row['pair'], 'size': row['size_name'], 'width': row['width'], 'height': row['height'],
                       'convention': name, 'factor': manifest['patch']['factor'], 'threads': a.threads,
                       'reference_sha256': row['reference_sha256'], 'distorted_sha256': row['distorted_sha256']}
             try:
                 with torch.inference_mode():
-                    values = [float(call().item()) for _ in range(2)]
+                    values = []
+                    for index in range(2):
+                        value = float(call().item())
+                        values.append(value)
+                        with (root / 'calls.jsonl').open('a') as stream:
+                            stream.write(json.dumps(dict(record, call=index, value=value,
+                                score_bits=struct.pack('>d', value).hex())) + '\n')
                 bits = [struct.pack('>d', value).hex() for value in values]
                 assert bits[0] == bits[1], 'canonical score changed on repetition'
                 record.update(status='scored', values=values, score_bits=bits)

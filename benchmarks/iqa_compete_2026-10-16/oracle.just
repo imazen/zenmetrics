@@ -120,3 +120,9 @@ ssim-candidate-publish input output:
 ssim-single-fixed-compare baseline candidate inputs output:
     nice -n19 ionice -c3 python3 -B compare_ssim_candidate.py --baseline '{{baseline}}' --candidate '{{candidate}}' --inputs '{{inputs}}' --output '{{output}}' --single-scale-fixed
 
+pyiqa-ssim-supplement panel python references output:
+    nice -n19 ionice -c3 python3 -B supplement_pyiqa_ssim.py --panel '{{panel}}' --python '{{python}}' --references '{{references}}' --output '{{output}}'
+
+pyiqa-ssim-join primary supplement multiscale single_scale output:
+    python3 -B join_pyiqa_ssim.py --primary '{{primary}}' --supplement '{{supplement}}' --multiscale '{{multiscale}}' --single-scale '{{single_scale}}' --output '{{output}}'
+
