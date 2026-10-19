@@ -1,0 +1,9 @@
+cell	before_ms	after_ms	canonical_ms	before_ratio	after_ratio	score_bits
+photo 64x64 t1	0.280	0.260	~0.1*	~2.8*	~2.6*	identical
+photo 64x64 t32	5.100	3.111	~0.1*	~51*	~31*	identical
+photo 255x257 t1	2.188	1.633	~0.55*	~4.0*	~3.0*	identical
+photo 255x257 t32	4.366	3.883	~0.55*	~7.9*	~7.1*	identical
+photo 1280x720 t1	33.295	32.293	14.1*	2.36*	2.29*	identical
+photo 1280x720 t32	13.917	13.577	9.7*	1.43*	1.40*	identical
+photo 3840x2160 t1	308.2	274.1	—	—	—	identical
+photo 3840x2160 t32	91.2	81.8	—	—	—	identical

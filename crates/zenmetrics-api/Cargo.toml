@@ -107,7 +107,7 @@ cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
 # `--no-default-features --features cpu-metrics` build (CI cpu job, phase 5)
 # self-sufficient instead of accidentally relying on a GPU crate being on.
 cpu-cvvdp = ["dep:cvvdp", "cvvdp?/std"]
-cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
+cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck", "dep:rayon"]
 cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 # `zensim/custom-profiles` unlocks `ZensimProfile::Custom` + `ProfileParams::
 # builder()`, the supported extension point the `zensim_profile` module uses to
@@ -190,6 +190,9 @@ hdrvdp      = { workspace = true, optional = true, features = ["avx512", "parall
 imgref      = { workspace = true, optional = true }
 rgb         = { workspace = true, optional = true }
 bytemuck    = { workspace = true, optional = true }
+# `cpu-dssim` overlaps the reference/distorted `create_image_rgb` builds
+# (`rayon::join` is sequential in-place on a 1-thread pool).
+rayon       = { version = "1.10", optional = true }
 
 # Re-exported pixel slice for the umbrella `compute_pixels` path.
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }

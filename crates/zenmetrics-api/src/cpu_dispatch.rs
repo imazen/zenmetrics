@@ -1470,8 +1470,15 @@ fn compute_dssim(
     d: &[u8],
 ) -> Result<Score> {
     check_srgb_len("dssim", width, height, r, d)?;
-    let ref_img = make_dssim_image(dssim, r, width as usize, height as usize)?;
-    let dist_img = make_dssim_image(dssim, d, width as usize, height as usize)?;
+    // The two `create_image_rgb` builds (sRGB→Lab + multi-scale pyramid) are
+    // independent and each internally parallelizes poorly in ramp/drain, so
+    // overlap them. `rayon::join` runs both closures on the calling thread
+    // when the pool has one thread — the serial path is identical work.
+    let (ref_img, dist_img) = rayon::join(
+        || make_dssim_image(dssim, r, width as usize, height as usize),
+        || make_dssim_image(dssim, d, width as usize, height as usize),
+    );
+    let (ref_img, dist_img) = (ref_img?, dist_img?);
     let (score, _maps) = dssim.compare(&ref_img, dist_img);
     Ok(Score {
         value: f64::from(score),

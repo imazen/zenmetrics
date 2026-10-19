@@ -1084,3 +1084,4 @@ benchmarks/aic_refusals_2026-10-18/vif-branch-comparison.tsv	ignored	Unmerged VI
 benchmarks/aic_refusals_2026-10-18/vif-covariance-retally.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
 benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
 benchmarks/opt_ssim2_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssim2-par-gate branch; not a dashboard metric schema.
+benchmarks/opt_dssim_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/dssim-join-create branch; not a dashboard metric schema.
