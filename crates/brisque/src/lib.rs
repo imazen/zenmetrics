@@ -61,11 +61,12 @@ use alloc::vec::Vec;
 use za::zenpixels::PixelDescriptor;
 use zenmetrics_abstractions as za;
 
+mod kernels;
 mod params;
 mod summation;
 
 use params::{ETA_FACTOR, KERNEL49, R_AGGD, R_GGD, RHO, SV, SV_COEF};
-use summation::{inner_mean, inner_sum, outer_sum};
+use summation::{LaneSums8, inner_sum};
 
 /// Output revision of [`Brisque`] on the generic surface; bump when any
 /// output can change.
@@ -198,28 +199,17 @@ fn gam_grid() -> Vec<f32> {
     g
 }
 
-/// 7×7 zero-pad conv — sequential row-major FMA chain (torch conv2d).
-fn conv7(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> Vec<f32> {
-    let mut out = vec![0f32; w * h];
-    for r in 0..h {
-        for c in 0..w {
-            let mut acc = 0f32;
-            for i in 0..7i64 {
-                let yy = r as i64 + i - 3;
-                for j in 0..7i64 {
-                    let xx = c as i64 + j - 3;
-                    let xv = if yy >= 0 && yy < h as i64 && xx >= 0 && xx < w as i64 {
-                        x[yy as usize * w + xx as usize]
-                    } else {
-                        0.0
-                    };
-                    acc = fma(k[(i * 7 + j) as usize], xv, acc);
-                }
-            }
-            out[r * w + c] = acc;
-        }
-    }
-    out
+/// Both MSCN 7×7 convs (x and x²), sequential row-major FMA chains
+/// (torch conv2d). SIMD tiers keep the identical per-output FMA order on
+/// a 3-px zero-padded copy (padded zeros contribute the same `k·0`
+/// products the scalar bounds check selected), so every tier is
+/// bitwise-identical to the scalar chain.
+fn conv7_both(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> (Vec<f32>, Vec<f32>) {
+    let (xp, pw) = kernels::pad3(x, w, h);
+    let mut mu = vec![0f32; w * h];
+    let mut std_c = vec![0f32; w * h];
+    kernels::conv7_pair(&xp, pw, w, k, &mut mu, &mut std_c);
+    (mu, std_c)
 }
 
 /// `_ggd_parameters` → (gam index, sigma). `x` is the MSCN map
@@ -227,15 +217,41 @@ fn conv7(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> Vec<f32> {
 // `!(x > y)` is deliberate: the oracle's checks must also fire on NaN.
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn ggd_params(x: &[f32]) -> Result<(usize, f32), ()> {
-    let x2: Vec<f32> = x.iter().map(|&v| v * v).collect();
-    let sigma_sq = inner_mean(&x2);
+    // One pass: E[x²] and E[|x|] in f64 fixed-lane sums — the same
+    // quantities the f32 pairwise `inner_mean` produced, near-exact.
+    let mut sx2 = LaneSums8::new();
+    let mut sabs = LaneSums8::new();
+    let n_e = x.len();
+    let mut i = 0usize;
+    while i + 8 <= n_e {
+        let mut b = [0f64; 8];
+        let mut m = [0f64; 8];
+        for j in 0..8 {
+            let v = x[i + j] as f64;
+            b[j] = v * v;
+            m[j] = v.abs();
+        }
+        for j in 0..8 {
+            sx2.0[j] += b[j];
+            sabs.0[j] += m[j];
+        }
+        i += 8;
+    }
+    while i < n_e {
+        let v = x[i] as f64;
+        sx2.add(i, v * v);
+        sabs.add(i, v.abs());
+        i += 1;
+    }
+    let n = x.len() as f64;
+    let sigma_sq = (sx2.total() / n) as f32;
     let sigma = sqrt32(sigma_sq);
     // torch.isclose(sigma, 0) with default atol=1e-8 — oracle asserts
     // 'non zero variance' when this holds.
     if !(sigma.abs() > 1e-8 + 1e-5 * 0.0) {
         return Err(());
     }
-    let e = inner_mean(&x.iter().map(|v| v.abs()).collect::<Vec<_>>());
+    let e = (sabs.total() / n) as f32;
     let (rho, best) = ggd_ratio_argmin(sigma_sq, e);
     if !rho.is_finite() {
         return Err(());
@@ -243,23 +259,82 @@ fn ggd_params(x: &[f32]) -> Result<(usize, f32), ()> {
     Ok((best, sigma))
 }
 
-/// `_aggd_parameters` → (gam index, left_sigma, right_sigma) or Err on
-/// the oracle's assert paths.
+/// `_aggd_parameters` on `nr · roll(nr, dy, dx)` — product values are
+/// computed inside the single stats pass (no rolled/prod copies), each
+/// sum accumulated in f64 fixed lanes. Same quantities, same order on
+/// every backend.
 // `!(x > y)` is deliberate: the oracle's checks must also fire on NaN.
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
-fn aggd_params(x: &[f32]) -> Result<(usize, f32, f32), ()> {
-    let n = x.len();
-    let mut mask_l = alloc::vec![false; n];
-    let mut mask_r = alloc::vec![false; n];
+fn aggd_params(nr: &[f32], w: usize, h: usize, dy: i64, dx: i64) -> Result<(usize, f32, f32), ()> {
+    let mut sl = LaneSums8::new();
+    let mut sr = LaneSums8::new();
+    let mut sabs = LaneSums8::new();
+    let mut sx2 = LaneSums8::new();
     let mut count_l = 0usize;
     let mut count_r = 0usize;
-    for (i, &v) in x.iter().enumerate() {
-        if v < 0.0 {
-            mask_l[i] = true;
-            count_l += 1;
-        } else if v > 0.0 {
-            mask_r[i] = true;
-            count_r += 1;
+    // sx = (c − dx) mod w = (c + base_off) mod w — one conditional wrap.
+    let base_off = (w as i64 - dx).rem_euclid(w as i64) as usize;
+    for r in 0..h {
+        let sy = (r as i64 - dy).rem_euclid(h as i64) as usize;
+        let row = &nr[r * w..r * w + w];
+        let sh = &nr[sy * w..sy * w + w];
+        let i0 = r * w;
+        let mut c = 0usize;
+        // head: until absolute index i is 8-aligned
+        while c < w && (i0 + c) & 7 != 0 {
+            let mut s = c + base_off;
+            if s >= w {
+                s -= w;
+            }
+            accum(
+                &mut sl,
+                &mut sr,
+                &mut sabs,
+                &mut sx2,
+                &mut count_l,
+                &mut count_r,
+                i0 + c,
+                row[c] * sh[s],
+            );
+            c += 1;
+        }
+        // aligned 8-blocks: element i0+c+j → accumulator lane j
+        while c + 8 <= w {
+            let mut v = [0f32; 8];
+            for j in 0..8 {
+                let mut s = c + j + base_off;
+                if s >= w {
+                    s -= w;
+                }
+                v[j] = row[c + j] * sh[s];
+            }
+            accum8(
+                &mut sl,
+                &mut sr,
+                &mut sabs,
+                &mut sx2,
+                &mut count_l,
+                &mut count_r,
+                &v,
+            );
+            c += 8;
+        }
+        while c < w {
+            let mut s = c + base_off;
+            if s >= w {
+                s -= w;
+            }
+            accum(
+                &mut sl,
+                &mut sr,
+                &mut sabs,
+                &mut sx2,
+                &mut count_l,
+                &mut count_r,
+                i0 + c,
+                row[c] * sh[s],
+            );
+            c += 1;
         }
     }
     let cl = count_l as f32;
@@ -268,34 +343,82 @@ fn aggd_params(x: &[f32]) -> Result<(usize, f32, f32), ()> {
         return Err(());
     }
     // (x*mask).pow(2).sum / count → sqrt
-    let sl2: Vec<f32> = x
-        .iter()
-        .zip(&mask_l)
-        .map(|(&v, &m)| {
-            let p = if m { v } else { 0.0 };
-            p * p
-        })
-        .collect();
-    let left_sigma = sqrt32(inner_sum(&sl2) / cl);
-    let sr2: Vec<f32> = x
-        .iter()
-        .zip(&mask_r)
-        .map(|(&v, &m)| {
-            let p = if m { v } else { 0.0 };
-            p * p
-        })
-        .collect();
-    let right_sigma = sqrt32(inner_sum(&sr2) / cr);
+    let left_sigma = sqrt32((sl.total() / count_l as f64) as f32);
+    let right_sigma = sqrt32((sr.total() / count_r as f64) as f32);
     if !(left_sigma > 0.0) || !(right_sigma > 0.0) {
         return Err(());
     }
-    let absm = inner_mean(&x.iter().map(|v| v.abs()).collect::<Vec<_>>());
-    let x2m = inner_mean(&x.iter().map(|&v| v * v).collect::<Vec<_>>());
+    let n = (w * h) as f64;
+    let absm = (sabs.total() / n) as f32;
+    let x2m = (sx2.total() / n) as f32;
     let (ratio, best) = aggd_ratio_argmin(left_sigma, right_sigma, absm, x2m);
     if !ratio.is_finite() {
         return Err(());
     }
     Ok((best, left_sigma, right_sigma))
+}
+
+/// One product element of the AGGD pass (unaligned head/tail): sign-masked
+/// squared sums (negatives → sl, positives → sr — the `if m {v} else {0}`
+/// masked squares contribute nothing, including no `+0.0` reassociation),
+/// |v|, v² and the side counts.
+#[inline(always)]
+fn accum(
+    sl: &mut LaneSums8,
+    sr: &mut LaneSums8,
+    sabs: &mut LaneSums8,
+    sx2: &mut LaneSums8,
+    count_l: &mut usize,
+    count_r: &mut usize,
+    i: usize,
+    v: f32,
+) {
+    let v64 = v as f64;
+    if v < 0.0 {
+        sl.add(i, v64 * v64);
+        *count_l += 1;
+    } else if v > 0.0 {
+        sr.add(i, v64 * v64);
+        *count_r += 1;
+    }
+    sabs.add(i, v64.abs());
+    sx2.add(i, v64 * v64);
+}
+
+/// Eight aligned product elements — v[j] maps to lane j. Masked sides
+/// contribute `+0.0` (an exact no-op on non-negative accumulators), so the
+/// unconditional adds are branchless and vectorize cleanly.
+#[inline(always)]
+fn accum8(
+    sl: &mut LaneSums8,
+    sr: &mut LaneSums8,
+    sabs: &mut LaneSums8,
+    sx2: &mut LaneSums8,
+    count_l: &mut usize,
+    count_r: &mut usize,
+    v: &[f32; 8],
+) {
+    let mut neg = [0f64; 8];
+    let mut pos = [0f64; 8];
+    let mut ab = [0f64; 8];
+    let mut sq = [0f64; 8];
+    for j in 0..8 {
+        let x = v[j] as f64;
+        let m = if x < 0.0 { x } else { 0.0 };
+        neg[j] = m * m;
+        let p = if x > 0.0 { x } else { 0.0 };
+        pos[j] = p * p;
+        ab[j] = x.abs();
+        sq[j] = x * x;
+    }
+    for j in 0..8 {
+        sl.0[j] += neg[j];
+        sr.0[j] += pos[j];
+        sabs.0[j] += ab[j];
+        sx2.0[j] += sq[j];
+        *count_l += (v[j] < 0.0) as usize;
+        *count_r += (v[j] > 0.0) as usize;
+    }
 }
 
 fn first_argmin(table: &[f32], value: f32) -> usize {
@@ -326,38 +449,17 @@ pub(crate) fn aggd_ratio_argmin(left: f32, right: f32, absm: f32, x2m: f32) -> (
     (ratio, first_argmin(&R_AGGD, ratio))
 }
 
-/// `torch.roll` shifts `(dy, dx)` on the last two dims (wrap-around).
-fn roll(x: &[f32], w: usize, h: usize, dy: i64, dx: i64) -> Vec<f32> {
-    let mut out = vec![0f32; w * h];
-    for r in 0..h {
-        for c in 0..w {
-            let sy = ((r as i64 - dy).rem_euclid(h as i64)) as usize;
-            let sx = ((c as i64 - dx).rem_euclid(w as i64)) as usize;
-            out[r * w + c] = x[sy * w + sx];
-        }
-    }
-    out
-}
-
 /// `_natural_scene_statistics` → 18 features, or Err on oracle asserts.
 fn nss(x: &[f32], w: usize, h: usize, gam: &[f32]) -> Result<[f32; 18], ()> {
-    let mu = conv7(x, w, h, &KERNEL49);
-    let x2: Vec<f32> = x.iter().map(|&v| v * v).collect();
-    let std_c = conv7(&x2, w, h, &KERNEL49);
+    let (mu, std_c) = conv7_both(x, w, h, &KERNEL49);
     let mut feats = [0f32; 18];
-    let mut nr = vec![0f32; w * h];
-    for i in 0..w * h {
-        let std = sqrt32((std_c[i] - mu[i] * mu[i]).abs());
-        nr[i] = (x[i] - mu[i]) / (std + 1.0);
-    }
+    let nr = kernels::normalize(x, &mu, &std_c, w * h);
     let (ai, sigma) = ggd_params(&nr)?;
     feats[0] = gam[ai];
     feats[1] = sigma * sigma;
     let shifts = [(0i64, 1i64), (1, 0), (1, 1), (-1, 1)];
     for (s, &(dy, dx)) in shifts.iter().enumerate() {
-        let sh = roll(&nr, w, h, dy, dx);
-        let prod: Vec<f32> = nr.iter().zip(&sh).map(|(&a, &b)| a * b).collect();
-        let (ai, ls, rs) = aggd_params(&prod)?;
+        let (ai, ls, rs) = aggd_params(&nr, w, h, dy, dx)?;
         // eta = (rs - ls)·exp(lg(2/α) − (lg(1/α)+lg(3/α))/2); the exp
         // factor is a fixed function of the gam-grid index.
         let eta = (rs - ls) * ETA_FACTOR[ai];
@@ -422,10 +524,11 @@ fn resize_1d(
             weight[idx * out_size + i] = cubic_weight(bpos);
         }
     }
-    let colsum = outer_sum(&weight, ks, out_size);
-    for idx in 0..ks {
-        for i in 0..out_size {
-            weight[idx * out_size + i] /= colsum[i];
+    // outer_sum's column tree, evaluated lazily per output column.
+    for i in 0..out_size {
+        let colsum = kernels::tap_tree(0, ks, &|idx| weight[idx * out_size + i]);
+        for idx in 0..ks {
+            weight[idx * out_size + i] /= colsum;
         }
     }
     // get_padding: shift base so taps fit, pad the remainder.
@@ -460,55 +563,47 @@ fn resize_1d(
             xpad[r * pw..r * pw + pw].copy_from_slice(&x[src * w..src * w + w]);
         }
     } else {
+        // Interior columns copy straight; only the pad_pre left and
+        // pad_post right edge columns reflect (same values, less work).
         for r in 0..ph {
-            for c in 0..pw {
-                let src = if c < pad_pre {
-                    pad_pre - 1 - c
-                } else if c >= pad_pre + w {
-                    2 * w + pad_pre - 1 - c
-                } else {
-                    c - pad_pre
-                };
-                xpad[r * pw + c] = x[r * w + src];
+            let src = &x[r * w..r * w + w];
+            let dst = &mut xpad[r * pw..r * pw + pw];
+            dst[pad_pre..pad_pre + w].copy_from_slice(src);
+            for c in 0..pad_pre {
+                dst[c] = src[pad_pre - 1 - c];
+            }
+            for c in 0..pad_post {
+                dst[pad_pre + w + c] = src[w - 1 - c];
             }
         }
     }
 
-    // sample*weight then sum(dim=1): outer-sum over ks taps per output.
+    // Each output is `outer_sum`'s column tree over tap products, evaluated
+    // lazily (no prod materialization; identical combine order).
     let n_out = out_w * out_h;
-    let mut prod = vec![0f32; ks * n_out];
+    let mut out = vec![0f32; n_out];
     if vertical {
         for i in 0..out_size {
-            for idx in 0..ks {
-                let row = (base[i] + idx as i64) as usize;
-                for c in 0..w {
-                    prod[idx * n_out + i * w + c] = xpad[row * w + c] * weight[idx * out_size + i];
-                }
-            }
+            let row = &mut out[i * w..i * w + w];
+            kernels::vres_row_dispatch(&xpad, w, base[i] as usize, &weight, out_size, ks, i, row);
         }
     } else {
         for r in 0..h {
             for i in 0..out_size {
-                for idx in 0..ks {
-                    prod[idx * n_out + r * out_size + i] =
-                        xpad[r * pw + (base[i] + idx as i64) as usize] * weight[idx * out_size + i];
-                }
+                let leaf = |idx: usize| {
+                    xpad[r * pw + (base[i] + idx as i64) as usize] * weight[idx * out_size + i]
+                };
+                // ks=10 tree unrolled — same `tap_tree` combine order.
+                out[r * out_size + i] = if ks == 10 {
+                    ((leaf(0) + leaf(1)) + (leaf(2) + (leaf(3) + leaf(4))))
+                        + ((leaf(5) + leaf(6)) + (leaf(7) + (leaf(8) + leaf(9))))
+                } else {
+                    kernels::tap_tree(0, ks, &leaf)
+                };
             }
         }
     }
-    let out = outer_sum(&prod, ks, n_out);
-    // out is column-major over (ks, n_out) → out[j] is output j.
-    let mut reshaped = vec![0f32; n_out];
-    if vertical {
-        for i in 0..out_size {
-            for c in 0..w {
-                reshaped[i * w + c] = out[i * w + c];
-            }
-        }
-    } else {
-        reshaped.copy_from_slice(&out);
-    }
-    (reshaped, out_w, out_h)
+    (out, out_w, out_h)
 }
 
 /// `imresize(x, sizes=(h/2, w/2))` — height pass then width pass.
@@ -519,24 +614,9 @@ fn imresize_half(x: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize) {
     (out, w2, h_b)
 }
 
-/// piq `rgb2yiq` Y row: `round(fma(B,.114, f32(.299R + .587G)))`,
-/// ties-to-even (bitwise-verified over all u8 triples).
-#[inline]
-fn to_y(r: u8, g: u8, b: u8) -> f32 {
-    let m01 = r as f32 * 0.299 + g as f32 * 0.587;
-    rint32(fma(b as f32, 0.114, m01))
-}
-
 fn gray(image: &za::Image<'_>) -> za::MetricResult<(Vec<f32>, usize, usize)> {
     if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
-        let mut y = Vec::with_capacity(w * h);
-        for r in 0..h {
-            let row = &px[r * stride..r * stride + w * 3];
-            for c in 0..w {
-                y.push(to_y(row[c * 3], row[c * 3 + 1], row[c * 3 + 2]));
-            }
-        }
-        return Ok((y, w, h));
+        return Ok((kernels::luma_plane(px, w, h, stride), w, h));
     }
     if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::GRAY8) {
         let mut y = Vec::with_capacity(w * h);

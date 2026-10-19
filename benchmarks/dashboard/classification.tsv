@@ -118,6 +118,8 @@ benchmarks/brisque_review_2026-10-15/multiply-summary.json	ignored	Historical ex
 benchmarks/brisque_review_2026-10-15/oracle_environment.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/brisque_review_2026-10-15/table-storage-summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/brisque_review_2026-10-15/validation.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/brisque_simd_2026-10-19/drift_vs_previous_2016.tsv	ignored	Optimization-lane old-vs-new score drift inventory for the brisque SIMD rework; summarized in benchmarks/brisque_simd_2026-10-19/README.md.
+benchmarks/brisque_simd_2026-10-19/golden_panel_scores.tsv	ignored	Optimization-lane golden-panel rescore for the brisque SIMD rework; summarized in benchmarks/brisque_simd_2026-10-19/README.md.
 benchmarks/browser_nn_2026-10-17/native-rten.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
 benchmarks/browser_nn_2026-10-17/parity-i265-rtx4080.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
 benchmarks/browser_nn_2026-10-17/parity-i265-swiftshader.json	ignored	Browser WebGPU/onnxruntime-web NN parity and timing receipts; awaiting a reviewed dashboard adapter.
