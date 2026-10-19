@@ -5,6 +5,7 @@ A screening panel can inform search but only all 61 printed matches qualify.
 import csv
 import json
 import math
+import re
 from pathlib import Path
 import statistics as st
 import sys
@@ -12,7 +13,7 @@ import sys
 scratch, published, config, output = map(Path, sys.argv[1:])
 pub={r['distorted']:r for r in csv.DictReader(published.open())}
 cfg=json.loads(config.read_text())['mappings']
-fields=['trial','version','peak','bits','ppd','encoding','matrix','options','n','rc','median_raw','max_raw','median_jnd','max_jnd','spearman','exact_printed','qualification','tree_sha256','driver_sha256','scores_sha256','command']
+fields=['trial','version','release','peak','black','reflection','eotf','precision','bits','ppd','encoding','matrix','task','age','age_effects','emission','surround','mtf','peak_sensitivity','options','n','rc','median_raw','max_raw','median_jnd','max_jnd','spearman','exact_printed','qualification','tree_sha256','driver_sha256','scores_sha256','command']
 def corr(a,b):
     a=[x-st.mean(a) for x in a];b=[x-st.mean(b) for x in b]
     return sum(x*y for x,y in zip(a,b))/math.sqrt(sum(x*x for x in a)*sum(x*x for x in b))
@@ -27,6 +28,11 @@ with output.open('w') as f:
             i=cmd.index('--quiet');args=cmd[i+2:]
         tree,pairs,scores,version,peak,bits,ppd,enc,matrix,*opts=args
         row=dict(trial=p.stem.removesuffix('.meta'),version=version,peak=peak,bits=bits,ppd=ppd,encoding=enc,matrix=matrix,options=','.join(opts),n=0,rc=m.get('returncode','running'),qualification='failed-or-incomplete',tree_sha256=m['source_tree_sha256'],driver_sha256=m['driver_sha256'],scores_sha256=m.get('output_sha256',''),command=' '.join(cmd))
+        option_map=dict(x.split('=',1) for x in opts)
+        match=re.search(r'ver\s*=\s*([0-9.]+)', (Path(tree)/'hdrvdp_version.m').read_text())
+        release={'2.22':'2.2.2','2.21':'2.2.1','3.06':'3.0.6','3.07':'3.0.7'}[match.group(1).rstrip('.')]
+        default_emission=('ccfl-lcd' if enc!='luminance' else 'd65') if version=='2' else ('oled' if enc=='XYZ' else 'led-lcd-srgb')
+        row.update(release=release,black=float(peak)/1000 if matrix=='gog' else (1 if matrix=='display' else 0),reflection=0,eotf='gamma2.2' if matrix=='gog' else 'sRGB',precision='f32-transfer' if matrix=='single' else 'f64',task='quality' if version=='3' else 'Q',age='24' if version=='3' else 'not-applicable',age_effects='aesl,aod,slum' if version=='3' else 'not-applicable',emission=option_map.get('rgb_display',default_emission),surround=option_map.get('surround_l','1e-5') if version=='2' else option_map.get('surround','none'),mtf=option_map.get('do_mtf','1') if version=='2' else option_map.get('mtf','hdrvdp'),peak_sensitivity=option_map.get('peak_sensitivity','2.4') if version=='2' else 'not-applicable')
         data=list(csv.DictReader(open(scores),delimiter='\t')) if Path(scores).exists() else []
         if data:
             assert len({r['distorted'] for r in data}) == len(data), 'duplicate scored names'

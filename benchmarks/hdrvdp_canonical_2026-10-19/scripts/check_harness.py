@@ -30,4 +30,9 @@ with tempfile.TemporaryDirectory(prefix='hdrvdp-harness-',dir=Path.home()/'tmp')
     assert rows['hdr2-203-screen6']['qualification']=='screening-only'
     assert rows['hdr3-200-10bit']['rc']=='1'
     assert rows['hdr3-200-10bit']['qualification']=='failed-or-incomplete'
-print('PASS: incomplete/duplicate refusal; independent mixed-attempt rows; failed attempts retained')
+failed=scratch/'hdr3-200-10bit.meta.json'
+original=failed.read_bytes();m=json.loads(original);i=m['argv'].index('--quiet')
+result=subprocess.run([sys.executable,str(scripts/'run_oracle.py'),*m['argv'][i+2:]],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+assert result.returncode!=0,'existing failed attempt was overwritten'
+assert failed.read_bytes()==original,'failed receipt changed'
+print('PASS: incomplete/duplicate refusal; independent mixed-attempt rows; failed attempts retained and immutable')

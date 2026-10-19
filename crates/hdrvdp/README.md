@@ -181,3 +181,7 @@ documented at the site. The steerable pyramid (chunk 2) comes from the MIT
 code: [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 [imazen/zenmetrics#50]: https://github.com/imazen/zenmetrics/issues/50
+
+Canonical AIC2026 configuration research, including the complete upstream
+3.0.7 crop control and the separate port comparison, is recorded in
+[the 2026-10-19 research note](docs/AIC2026_CANONICAL_2026-10-19.md).

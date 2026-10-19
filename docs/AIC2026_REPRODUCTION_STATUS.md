@@ -141,3 +141,17 @@ crop PNGs are byte-identical to the DaRUS `PTC-crops-all/` members. 27 of the
 The native proposal-Butteraugli panel has median 3.06732e-7 site-JND, above
 the requested 3.2e-8 gate. The 9,618-row mapping of published columns must
 not be presented as 9,618 independently computed native scores.
+
+### Additional HDR-VDP canonical-configuration evidence (2026-10-19)
+
+The [successor research](../benchmarks/hdrvdp_canonical_2026-10-19/README.md)
+has rerun the complete 61-pair upstream 3.0.7 closest route: median
+0.0013356867286653529/max0.012807267024098623 site-JND, with 0/61 exact
+six-decimal matches. Upstream and the retained Rust Q values differ by at
+most 4.973799150320701e-14. The fresh Rust replay matches those retained
+native values exactly. This separates the configuration residual from port
+arithmetic. The retained HDR2 Octave baseline also replays exactly.
+The [written CTC evidence](../benchmarks/hdrvdp_canonical_2026-10-19/UPSTREAM.md)
+specifies 203 cd/m² for SDR HDR-VDP, distinct from the AIC2026 paper's
+200-nit CVVDP statement. The exact HDR dataset calls remain unconfirmed;
+all original gates remain in force.
