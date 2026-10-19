@@ -1958,3 +1958,11 @@ sums while the one-worker path uses one raster-order accumulation. A correction
 must remain on an unmerged fix bookmark under the owner rule; no metric path
 was changed by the inventory. See
 [the retained repeat panel](benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv).
+
+
+The VIF correction is now qualified on unmerged `fix/vifvec-thread-order`
+(source 0281c13e). Its exact regression fails before/passes after; 22 tests,
+doctests, strict clippy and no-default-feature compilation pass. The measured
+1024-square/4K one/eight-worker scores now match the original one-worker bits.
+Master remains unchanged. Before/after timings, RSS and the affected-loop
+retally are in `benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta`.

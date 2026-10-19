@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Retain the complete 756-cell CLI disposition inventory and unmerged VIF thread-order correction evidence (`b0983ba2`, candidate `0281c13e`); master metric behavior is unchanged.
+
 - AIC benchmark driver preserves explicit refusals and supports portable hardware counters (`fbad263a`); retain strict HDR2 controls, qualified r5900xt runtime supplements and unmerged FSIM branch comparisons.
 
 ### Fixed

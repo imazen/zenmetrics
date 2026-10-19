@@ -164,3 +164,16 @@ This is a separate numerical finding, not a failed execution. The one/eight
 thread covariance paths sum in different orders; any correction must remain
 on an unmerged correctness branch. Repeat-panel resource: rc0 4s,
 peak-RSS0.58GiB, min-avail51921MiB, peak-load1.24.
+
+### Unmerged VIF thread-order correction
+
+`fix/vifvec-thread-order` retains the original one-worker covariance order
+at every worker budget. The exact covariance regression fails before and
+passes after; all 22 crate tests, doctests, strict clippy and no-default-feature
+compilation pass. The corrected one/eight-worker scores exactly match the
+historical one-worker scores at both measured sizes. No master metric path
+changed. Full before/after values, timing ratios and OS peak RSS are in
+`vif-branch-comparison.tsv`; `vif-thread-order.meta` binds source, binaries,
+commands and resource receipts. The source-loop retally separately records
+removed partial-merge additions, which the inherited core model omitted.
+The owner must decide whether to merge and requalify published benchmarks.
