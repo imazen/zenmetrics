@@ -29,7 +29,9 @@
 //!   2^24 u8 triples. GRAY8 input is the plane verbatim.
 //! - The 7×7 Gaussian `mu`/`std` convolutions are zero-padded sequential
 //!   row-major FMA chains (torch conv2d's order).
-//! - Reductions use independently written balanced pairwise f32 summation.
+//! - Map reductions use deterministic f64 fixed-lane accumulators (element
+//!   `i` → lane `i & 7`, identical order on every backend); the resize dots
+//!   keep the balanced pairwise f32 tap tree, evaluated lazily.
 //! - Every `lgamma`/`exp` table in the pipeline is a fixed function of
 //!   the 9801-entry `gam` grid, so the oracle-computed values are
 //!   embedded verbatim (`R_GGD`, `R_AGGD`, `ETA_FACTOR`, `KERNEL49` in

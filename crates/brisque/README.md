@@ -67,12 +67,16 @@ emit `brisque_ref`.
 
 The fixed gate remains `JND/1000` (`JND = 15.138428`). Integer squares and cubes
 use multiplication. A 400,000-case synthetic GGD/AGGD sweep matches torch's ratios
-and gamma-grid argmins exactly. The final implementation uses `libm::expf` and
-independently written balanced pairwise f32 summation. Maximum score error is
-0.0078125 (0.0005160707571486287 JND) on the 170 goldens and 0.01025390625
-(0.0006773428687575752 JND) on 200 additional disjoint KonJND images. One
-extra-image alpha feature changes one grid step; no golden alpha feature changes.
-No tolerance was relaxed; final scores are not bit-exact.
+and gamma-grid argmins exactly. The final implementation uses `libm::expf`,
+deterministic f64 fixed-lane accumulators for the map reductions, and lazy
+balanced tap trees for the resize dots. Maximum score error is 0.00830078125
+(0.0005483252 JND) on the 170 goldens against the pinned oracle environment.
+The reduction rework is measured end-to-end: all 2016 KonJND images drift
+≤ 0.01171875 vs the previous pairwise-f32 implementation (argmin grid flips
+from ~1e-8 feature ulp changes), and against a freshly installed piq-0.8.0
+oracle on all 2058 images the two implementations' error envelopes coincide
+(max 0.0943 vs 0.0947 — the offset is oracle-environment drift, not port
+error). No tolerance was relaxed; final scores are not bit-exact.
 
 Computing gamma tables with f64 `libm::lgamma`/`exp` exceeded the same image gate
 with both reducers (final golden maximum 0.0615234375, or 0.004064057212545451
