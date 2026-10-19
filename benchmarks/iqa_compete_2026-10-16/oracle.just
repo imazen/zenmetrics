@@ -156,7 +156,7 @@ gmsd-primary-build archive rust_build output:
 gmsd-primary-panel build rust_build inputs output:
     python3 -B run_gmsd_primary.py --build '{{build}}' --rust-build '{{rust_build}}' --inputs '{{inputs}}' --output '{{output}}'
 
-haarpsi-pair-prepare inputs source rust_build output blocks +options:
+haarpsi-pair-prepare inputs source rust_build output blocks *options:
     python3 -B prepare_haarpsi_pair.py --inputs '{{inputs}}' --source '{{source}}' --rust-build '{{rust_build}}' --output '{{output}}' --blocks '{{blocks}}' {{options}}
 
 zenbench-pair-build manifest target:
@@ -164,4 +164,37 @@ zenbench-pair-build manifest target:
 
 primary-pair-run zenbench plan output:
     '{{zenbench}}' pair '{{plan}}' --output '{{output}}'
+
+gmsd-primary-publish panel output:
+    python3 -B publish_gmsd_panel.py '{{panel}}' '{{output}}'
+
+primary-pair-panel python zenbench plan output regressions:
+    nice -n19 ionice -c3 '{{python}}' -B run_primary_pair_panel.py --zenbench '{{zenbench}}' --plan '{{plan}}' --output '{{output}}' --regressions '{{regressions}}'
+
+mdsi-primary-panel source inputs binary receipt output:
+    python3 -B octave_scalar_panel.py --source '{{source}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
+
+mdsi-primary-publish panel inputs output:
+    python3 -B publish_haarpsi_panel.py '{{panel}}' '{{inputs}}' '{{output}}' --metric mdsi
+
+
+ssim-single-fixed-compare baseline candidate inputs output:
+    nice -n19 ionice -c3 python3 -B compare_ssim_candidate.py --baseline '{{baseline}}' --candidate '{{candidate}}' --inputs '{{inputs}}' --output '{{output}}' --single-scale-fixed
+
+pyiqa-ssim-panel python inputs references output:
+    nice -n19 ionice -c3 python3 -B run_pyiqa_ssim_panel.py --python '{{python}}' --inputs '{{inputs}}' --references '{{references}}' --output '{{output}}'
+
+pyiqa-ssim-supplement panel python references output:
+    nice -n19 ionice -c3 python3 -B supplement_pyiqa_ssim.py --panel '{{panel}}' --python '{{python}}' --references '{{references}}' --output '{{output}}'
+
+pyiqa-ssim-join primary supplement multiscale single_scale output:
+    python3 -B join_pyiqa_ssim.py --primary '{{primary}}' --supplement '{{supplement}}' --multiscale '{{multiscale}}' --single-scale '{{single_scale}}' --output '{{output}}'
+pyiqa-ssim-k56-panel python inputs references output:
+    nice -n19 ionice -c3 python3 -B run_pyiqa_ssim_panel.py --python '{{python}}' --inputs '{{inputs}}' --references '{{references}}' --output '{{output}}' --factors 5,6 --direct-only
+
+primary-profile-flags panel output *options:
+    nice -n19 ionice -c3 python3 -B profile_primary_flags.py --panel '{{panel}}' --output '{{output}}' {{options}}
+
+pyiqa-ssim-full-join primary supplement multiscale single_scale additional output:
+    python3 -B join_pyiqa_ssim.py --primary '{{primary}}' --supplement '{{supplement}}' --multiscale '{{multiscale}}' --single-scale '{{single_scale}}' --additional-primary '{{additional}}' --output '{{output}}'
 
