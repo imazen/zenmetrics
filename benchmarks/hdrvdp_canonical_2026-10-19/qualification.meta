@@ -1,0 +1,38 @@
+date=2026-10-19
+host=r5900xt
+purpose=canonical configuration research; no metric implementation change
+source_base=f5090db1ebc3eb6d07d8b7f90d9d4961e20ec8e5
+harness_commits=cd3048e1fa58b8e551d1137260ae20f4678853f0,250dd244e6c0b6ef80b64d92ce13eaac6e63d529,26458ea9a746da5d5c4b39e6cab9b4c8429e1e7b
+exact_gate=all 61 published raw Q values equal at six decimal places
+oracle_attempts=28 (3 complete 61-pair controls, 22 six-pair diagnostic screens, 3 failed setup executions)
+exact_reproductions=0
+fitted_corrections=none
+metric_code_changes=none
+email_or_author_contact=none
+raw_root=~/tmp/hdrvdpcx/ on r5900xt
+raw_manifest=evidence.sha256 (scoring-evidence snapshot; later publication logs are separate)
+raw_manifest_sha256=65b6a4b5bcf60259714d84911ea4d847cdd61c942788da79165deb9eeedc4e04
+pairs_sha256=9a017bcaa1b9ffc127a3daea1cc854a303708bd2091f4ba45ef78c9f2bbf82fa
+published_subset_sha256=fc30508ae397f615193555b7aeaf820c0dde5e02a2f2ede8032b4d3819ce9e29
+site_config_sha256=fd2ef91a38b400c0012f38145be92f8bbc289e83f85ef1f54701a5767d5a5447
+image_hashes=crop_img_sha256.txt (122 original crop PNGs; predecessor fa16af42)
+probe_sha256=c6e7d6547e177b9238851e7494e613e5da78b7677eac00adc4a6308b67ca6130
+probe_lock_sha256=c6e95f66cb5087a87b31e329e8fa7b94b20fea42867b408458ce3a4f00a47f5f
+hdrvdp_runtime_source_manifest_sha256=0030752cb77f103833c27b17aaebcd28b902006ca2eb0461484c7ffaf0fa900b
+zenmetrics-abstractions_runtime_source_manifest_sha256=08fce11a321717c02d894e9f59b80c4a26d59e01e67a1cce4c40733a25aa3bf4
+probe_manifest=isolated scratch build; runtime source copied unchanged, unused dev dependencies omitted
+probe_replay=just hdrvdp-canonical-rust PROBE PAIRS NEW_OUTPUT eotf=srgb peak=200 black=0 amb=0 rho=0 ppd=37.842505866 bits=10 enc=xyz v=3
+v2_replay=just hdrvdp-canonical-rust PROBE PAIRS NEW_OUTPUT eotf=srgb peak=200 black=0 amb=0 rho=0 ppd=37.84 bits=0 enc=rgb709 v=2
+oracle_command=just hdrvdp-canonical-oracle TREE PAIRS NEW_OUTPUT VERSION PEAK BITS PPD ENCODING MATRIX [OPTION=VALUE ...]
+full_commands_and_tree_hashes=hdrvdp2_trials.tsv,hdrvdp3_trials.tsv; per-attempt .meta.json in raw_root
+octave=11.1.0; image=2.20.0; extracted statistics=1.8.2
+numpy=2.5.2; Pillow=12.3.0
+geomean_sha256=c7c9ca1b48148e6d4785767d05e1b017b18c0fe84b59a4fea4aec9c001d1775c
+rgb2xyz_sha256=05ff070da138046639ecfd4349bbf3f365600f7a825c9ca741c3d45101f07bba
+MATLAB_limit=no executable found in checked local/dev locations; symmetric-IFFT runtime semantics remain unqualified
+HDR3_61_resource=run-heavy: done rc=0 292s | peak-RSS 0.57GiB | min-avail 50028MiB | peak-load 5.13
+HDR2_retained_resource=run-heavy: done rc=0 264s | peak-RSS 0.52GiB | min-avail 50270MiB | peak-load 2.41
+HDR2_mex_resource=run-heavy: done rc=0 275s | peak-RSS 0.47GiB | min-avail 50294MiB | peak-load 3.08
+rust3_resource=run-heavy: done rc=0 40s | peak-RSS 1.17GiB | min-avail 49696MiB | peak-load 4.29
+rust2_resource=run-heavy: done rc=0 28s | peak-RSS 0.38GiB | min-avail 50596MiB | peak-load 3.67
+stratify_resource=run-heavy: done rc=0 4s | peak-RSS 0.28GiB | min-avail 50837MiB | peak-load 3.52
