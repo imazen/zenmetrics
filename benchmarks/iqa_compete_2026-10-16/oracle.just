@@ -204,3 +204,6 @@ pyiqa-ssim-precision python joined inputs output:
 
 primary-pair-prefix-publish panel output profiles:
     python3 -B publish_primary_pair_prefix.py '{{panel}}' '{{output}}' --profiles '{{profiles}}'
+
+ssim2-primary-panel canonical inputs binary receipt output:
+    python3 -B ssim2_primary_panel.py --canonical '{{canonical}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
