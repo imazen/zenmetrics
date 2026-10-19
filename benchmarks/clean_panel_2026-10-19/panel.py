@@ -72,7 +72,7 @@ def qualify_block(block, manifest):
         times = [s['ns'] for s in arm['samples']]
         if any(not math.isfinite(v) or v <= 0 for v in times):
             raise ValueError('invalid time')
-        if not math.isfinite(arm['score']):
+        if not isinstance(arm['score'], (int, float)) or not math.isfinite(arm['score']):
             raise ValueError('invalid score')
         values[name] = statistics.median(times)
         scores[name] = arm['score']
@@ -118,6 +118,7 @@ def run_arm(name, manifest, block_id, directory):
     contention = directory / (name + '.contention.json')
     command = [sys.executable, manifest['contention_script'], str(contention), str(log), '--',
                manifest['run_heavy'], '--mem', '12G', '--jobs', '1', '--',
+               sys.executable, manifest['resources_script'], 'timeout', '120',
                'taskset', '-c', str(manifest['cpu']), *spec['argv']]
     env = os.environ.copy()
     env.update({k: '1' for k in ('RAYON_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','RTEN_NUM_THREADS')})
@@ -127,7 +128,7 @@ def run_arm(name, manifest, block_id, directory):
         code = subprocess.run(command, env=env, stdout=output, stderr=subprocess.STDOUT).returncode
     text = log.read_text()
     accounting = json.loads(contention.read_text()) if contention.exists() else {}
-    samples, score = [], float('nan')
+    samples, score = [], None
     if spec['protocol'] == 'iqa-row':
         rows = [json.loads(l[8:]) for l in text.splitlines() if l.startswith('IQA_ROW ')]
         if len(rows) == 1 and rows[0].get('status') == 'ok':
@@ -154,11 +155,15 @@ def acquire(manifest, output, count):
     output.mkdir(parents=True, exist_ok=False)
     (output/'manifest.json').write_text(json.dumps(manifest, indent=2))
     blocks = []
-    # Parent alone owns BOTH locks. Direct scorer children never reacquire either.
-    with (Path.home()/'tmp/lilith-heavy.lock').open('a') as first, (Path.home()/'tmp/lilith-wsl-heavy.lock').open('a') as second:
-        fcntl.flock(first, fcntl.LOCK_EX)
-        fcntl.flock(second, fcntl.LOCK_EX)
-        for index in range(count):
+    # One bounded block per lock hold. No sleep-for-quiet loop under the locks.
+    for index in range(count):
+        if (output/'STOP').exists():
+            break
+        with (Path.home()/'tmp/lilith-heavy.lock').open('a') as first, (Path.home()/'tmp/lilith-wsl-heavy.lock').open('a') as second:
+            fcntl.flock(first, fcntl.LOCK_EX)
+            fcntl.flock(second, fcntl.LOCK_EX)
+            if (output/'STOP').exists():
+                break
             verify(manifest)
             block_id = str(uuid.uuid4())
             directory = output/block_id
@@ -168,7 +173,6 @@ def acquire(manifest, output, count):
             (directory/'started.json').write_text(json.dumps(block))
             for name in order:
                 block['arms'].append(run_arm(name,manifest,block_id,directory))
-            # No changed artifact may produce an accepted receipt.
             try:
                 verify(manifest)
             except ValueError as error:
@@ -177,9 +181,12 @@ def acquire(manifest, output, count):
                     arm['contaminated'] = True
             (directory/'block.json').write_text(json.dumps(block,indent=2))
             blocks.append(block)
-            result = summarize(blocks,manifest)
-            (output/'summary.json').write_text(json.dumps(result,indent=2))
-            print(json.dumps(result),flush=True)
+        # Expensive statistical processing is outside the acquisition boundary.
+        result = summarize(blocks,manifest)
+        (output/'summary.json').write_text(json.dumps(result,indent=2))
+        print(json.dumps(result),flush=True)
+    if (output/'STOP').exists():
+        (output/'cancelled.json').write_text(json.dumps({'completed_blocks':len(blocks)}))
     return blocks
 
 

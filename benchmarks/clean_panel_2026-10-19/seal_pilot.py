@@ -52,7 +52,7 @@ def main():
         if dest.stat().st_size!=512*512*3:raise ValueError('wrong input dimensions')
         inputs.append(record(dest))
     inventory=root/'sources.json'
-    inventory.write_text(json.dumps(source_inventory(args.build/'work'),sort_keys=True))
+    inventory.write_text(json.dumps(source_inventory(args.build),sort_keys=True))
     receipts=[record(inventory),record(baseline),record(weights)]
     for name in ['rustc.txt','cargo.txt','features.txt','metadata.json','build-command.txt','model-preload.meta.json','luma-maps.meta.json']:
         dest=root/name;shutil.copy2(args.build/name,dest);receipts.append(record(dest))
@@ -86,13 +86,15 @@ def main():
     config=root/'cell.json'
     config.write_text(json.dumps(dict(width=512,height=512,reference=str(root/'reference.rgb'),distorted=str(root/'distorted.rgb'),metric_name='brisque',only_mode='score',timing_phase='warm',locked_process_accounting=True,threads=1,chunk_budget_ms=60000)))
     contention=source/'benchmarks/iqa_compete_2026-10-16/contention.py'
+    resources=contention.parent/'resources.py'
+    supervision=contention.parent/'supervision.py'
     heavy=Path.home()/'work/claudehints/scripts/run-heavy'
     scope='resident RGB8 reference and distorted; separate NR scores for both; ingress+metric+result allocation timed; immutable model load and input file I/O excluded'
-    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(heavy),record(here/'panel.py')]
+    artifacts=receipts+environment+[record(canonical_file),record(config),record(contention),record(resources),record(supervision),record(heavy),record(here/'panel.py')]
     # Duplicate resolved library paths carry one authoritative expected hash.
     artifacts=list({r['path']:r for r in artifacts}.values())
     manifest=dict(schema=1,metric='brisque',shape=[512,512,1,'score'],scope={'ours':scope,'canonical':scope},cpu=2,parity_abs_bound=15.138428/1000,
-                  inputs=inputs,artifacts=artifacts,host_observation=platform.uname()._asdict(),contention_script=str(contention),run_heavy=str(heavy),arms={
+                  inputs=inputs,artifacts=artifacts,host_observation=platform.uname()._asdict(),contention_script=str(contention),resources_script=str(resources),run_heavy=str(heavy),arms={
                       'ours':dict(build_identity=identity(build_identity),argv=[str(baseline),str(config)],protocol='iqa-row',sample_count=10),
                       'canonical':dict(build_identity=identity(canonical),argv=[str(args.python),str(here/'brisque_oracle.py'),str(root/'reference.rgb'),str(root/'distorted.rgb'),str(weights)],protocol='canonical-samples',sample_count=10)})
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2))

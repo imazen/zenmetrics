@@ -1,8 +1,8 @@
 # Explicit paired timing pilot
 
 This replaces sample-index pairing with an explicitly identified acquisition block.
-Each block holds both host admission locks, then runs one Rust arm and one canonical
-arm. Order alternates by block. Each arm retains all ten internal observations;
+Each bounded block holds both host admission locks, then runs one Rust arm and one canonical
+arm, releases the locks, and checks an output-directory STOP file before the next block. Order alternates by block. Each arm retains all ten internal observations;
 the block ratio is the Rust median divided by the canonical median. The estimator
 is the median of these independent block ratios. Inner samples are never paired.
 
