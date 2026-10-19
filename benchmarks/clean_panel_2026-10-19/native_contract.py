@@ -10,8 +10,11 @@ ROUTES={
         scope='planes + f64 sRGB LUT + ButteraugliInterface inside canonical call; Rust f32 LUT/planes/compute/max inside call',
         blockers=['new source/binary/features binding','f64 versus f32 ingress numeric parity','exact original configuration/version']),
     'butteraugli':dict(engine='libjxl-0.12.0',canonical_metric='butteraugli',absolute_bound=0.,relative_bound=.001,
-        scope='canonical BufferToImageBundle x2, metadata/pool/comparator outside; Rust resident-RGB ingress inside',
-        blockers=['unmatched ingress/lifecycle','ComputeScore norm versus Rust max unverified','new source/binary/features binding']),
+        scope='historical staged scope: canonical BufferToImageBundle x2, metadata/pool/comparator outside; Rust resident-RGB ingress inside',
+        canonical_reducer='pinned butteraugli.cc:1954-1964 float retval=0 maximum over diffmap',
+        canonical_lifecycle='ComputeScoreImpl calls SetReferenceImage then CompareWith on every call',
+        replacement_adapter='await final reviewed SHA/config; 9781254b is superseded, not accepted',
+        blockers=['unmatched ingress/lifecycle','selected Rust emitted column/baseline executable binding and numerical equivalence unproven','new source/binary/features binding']),
     'ssim2':dict(engine='libjxl-0.12.0',canonical_metric='ssim2',absolute_bound=0.,relative_bound=0.,
         scope='canonical BufferToImageBundle x2 and bundle lifetime outside; Rust resident-RGB ingress inside',
         blockers=['unmatched ingress/lifecycle','new source/binary/features binding','exact numerical parity'])}

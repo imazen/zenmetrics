@@ -1,7 +1,7 @@
 """Owned nonmetric runtime control for an isolated instrumented zenbench test binary."""
 import argparse,copy,fcntl,hashlib,json,os,select,subprocess,sys,time
 from pathlib import Path
-import admission_receipt,gate_trace,monitor_join
+import admission_receipt,gate_trace,monitor_join,production_locks
 
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def verify_outer(value,outer):
@@ -17,6 +17,8 @@ def run(binary,source,out,lock_paths=None):
     binary=binary.resolve();config={'test':'monitor_overlay::controls::owned_nonmetric_monitor','gate':'unmodified GateConfig::default','source':str(source),'diagnostic_only':True,'clock':'child Instant origin bracketed by parent launch/READY monotonic interval','locks':'caller-selected existing admission locks' if lock_paths else 'two owned fixture flocks; enclosing run-heavy/dev-heavy admission retained separately'}
     (out/'config.json').write_text(json.dumps(config,indent=2))
     descriptors=[];busy=None;child=None;outer={}
+    production=os.environ.get('CLEAN_PANEL_PRODUCTION_RECEIPT')
+    if production:outer['production_before']=production_locks.witness(production)
     try:
         paths=lock_paths or [out/'primary.lock',out/'secondary.lock']
         for path in paths:
@@ -37,12 +39,12 @@ def run(binary,source,out,lock_paths=None):
         busy=subprocess.Popen([sys.executable,'-c','while True: pass'])
         outer['rival']=admission_receipt.process_identity(busy.pid)
         args=[str(binary),'--exact',config['test'],'--nocapture','--test-threads=1']
-        env=os.environ.copy();env['CLEAN_PANEL_TRACE']=str(out/'trace.jsonl');env['ZENBENCH_LAUNCHER_PIDS']=str(os.getpid())
+        env=os.environ.copy();env['CLEAN_PANEL_TRACE']=str(out/'trace.jsonl');env['ZENBENCH_LAUNCHER_PIDS']=','.join(filter(None,[env.get('ZENBENCH_LAUNCHER_PIDS',''),str(os.getpid())]))
         outer['build_receipt_sha256']=sha(source.with_name('build-receipt.json'))
         outer['binary_sha256']=sha(binary)
         outer['controller_sha256']=sha(__file__)
-        outer['controller_modules']={str(Path(m.__file__).resolve()):sha(m.__file__) for m in (admission_receipt,gate_trace,monitor_join)}
-        outer['controller_bytecode']={str(Path(m.__cached__).resolve()):sha(m.__cached__) for m in (admission_receipt,gate_trace,monitor_join) if getattr(m,'__cached__',None) and Path(m.__cached__).is_file()}
+        outer['controller_modules']={str(Path(m.__file__).resolve()):sha(m.__file__) for m in (admission_receipt,gate_trace,monitor_join,production_locks)}
+        outer['controller_bytecode']={str(Path(m.__cached__).resolve()):sha(m.__cached__) for m in (admission_receipt,gate_trace,monitor_join,production_locks) if getattr(m,'__cached__',None) and Path(m.__cached__).is_file()}
         outer['python_executable_sha256']=sha(sys.executable)
         outer['launch_before_ns']=time.monotonic_ns()
         with (out/'stderr.log').open('w') as err:
@@ -70,6 +72,7 @@ def run(binary,source,out,lock_paths=None):
         for proc in (child,busy):
             if proc is not None and proc.poll() is None:
                 proc.kill();proc.wait(timeout=5)
+        if production:outer['production_after']=production_locks.witness(production)
         outer['finally_ns']=time.monotonic_ns()
         (out/'outer.json').write_text(json.dumps(outer,indent=2))
         for fd,_ in reversed(descriptors):fd.close()
