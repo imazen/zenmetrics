@@ -363,3 +363,14 @@ Empty acceptance still grants nothing; unknown explicit names refuse.
 The native consent gate, metric code, binaries, weights and numerical/resource
 gates are unchanged. The corrected campaign uses the existing binaries with
 explicit names, and preserves the original missing-consent packets.
+
+### Updated chart evidence, 2026-10-19
+
+The [October 19 chart snapshot](../benchmarks/iqa_chart_snapshot_2026-10-19/README.md)
+adds the later NN, finite Metal and consent-corrected observations. Schema 2 can
+include completed sealed attempts before a running phase rewrites its report;
+seals, experiment/cell identity, config/intent/log hashes and qualified rows are
+verified without recovery or mutation. It retains source report and extra
+result hashes, numerical-instability flags, native error text, engine and
+explicit weight-consent names. Counts remain attempt counts, not distinct
+coverage. The October 18 snapshot remains unchanged.

@@ -1968,3 +1968,11 @@ iqa-portable-collect-check:
 # Caller holds the same host benchmark lock; one unchanged-config scope per flagged row.
 iqa-portable-retry-flagged parent output wrapper:
     python3 benchmarks/iqa_compete_2026-10-16/retry_portable_flagged.py '{{parent}}' '{{output}}' '{{wrapper}}'
+
+# Include sealed completed attempts while a phase report still lists them pending.
+iqa-chart-export-live root output host *options:
+    python3 benchmarks/iqa_compete_2026-10-16/export_chart_snapshot.py '{{root}}' '{{output}}' --host '{{host}}' --sealed-attempts {{options}}
+
+iqa-chart-export-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_chart_export.py
+
