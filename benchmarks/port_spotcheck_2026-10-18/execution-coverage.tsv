@@ -3,7 +3,7 @@ vmaf	classical	0	24	0	0	missing	missing	0	48	0
 vmaf-neg	classical	0	24	0	0	missing	missing	0	48	0	
 vmaf-4k	classical	0	24	0	0	missing	missing	0	48	0	
 cambi	classical	0	24	0	0	missing	missing	0	48	0	
-msssim	classical	0	24	0	0	missing	missing	0	48	0	
+msssim	classical	24	24	24	0	scalar-pass	missing	0	48	0	primary-msssim.json
 ssim	classical	0	24	0	0	missing	missing	0	48	0	
 ssimc	classical	0	24	0	0	missing	missing	0	48	0	
 vsi	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-automatic.json
@@ -74,7 +74,7 @@ ssimulacra1	classical	0	24	0	0	missing	missing	0	48	0
 dssim	classical	0	24	0	0	missing	missing	0	48	0	
 dssim-gpu	classical	0	24	0	0	missing	missing	0	48	0	
 mdctpsnr	classical	0	24	0	0	missing	missing	0	48	0	
-vif	classical	0	24	0	0	missing	missing	0	48	0	
+vif	classical	24	24	2	0	finding	missing	0	48	0	primary-vif.json
 vifvec	classical	0	24	0	0	missing	missing	0	48	0	
 haarpsi-y	classical	24	24	24	0	scalar-pass	missing	12	48	0	primary-haarpsi.json
 fsim-y	classical	0	24	0	0	missing	missing	0	48	0	

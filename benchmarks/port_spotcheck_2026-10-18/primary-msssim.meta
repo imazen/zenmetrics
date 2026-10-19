@@ -1,0 +1,16 @@
+Observed 2026-10-19 UTC on lilith-wsl, Ryzen 9 7950X, WSL2.
+Scalar adapter: 0628a938; artifact exporter: 38b74376; published data: 23be24ea (verified remote master).
+Frozen Rust revision e2d414c33a6d3c7da50a818fa36e56654d3ebeef; executable b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+Primary source: https://github.com/LabForComputationalVision/MAD_Competition/tree/f67840136fb1b56227b1a7a62a36d61275f176de/msssim
+Whole-grid command (both heavy locks; run-heavy --mem 12G --jobs 28; full log below):
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just classical-octave-scalar-panel msssim /home/lilith/tmp/portcheck-msssim-primary-source-20261019T1402/msssim.m /home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json /home/lilith/tmp/portcheck-primary-rust-20261019T1010/target/release/iqa-compete /home/lilith/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404
+Artifact-only export command (nice/ionice; no metric execution):
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just classical-octave-scalar-publish msssim /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404 /home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json /home/lilith/tmp/portcheck-msssim-published-direct-20261019T1446
+No timing ratios qualified. Both per-process maximum RSS values are retained in every small shard.
+run-heavy: done rc=0 44s | peak-RSS 0.93GiB | min-avail 12865MiB | peak-load 2.34
+de1296cb93fdd5a7df23430c54333cf8b0bc97214ffab3a403d1bf3988cd587f  /home/lilith/tmp/portcheck-msssim-primary-source-20261019T1402/msssim.m
+ee99dd6b263c9bbb46b675657e3a12c87c8083aecfbc155d8d85a5d89fb8b8ac  /home/lilith/tmp/portcheck-msssim-primary-source-20261019T1402/ssim_index_new.m
+65f98536262221946077d2f95657ec3241ba400b26da43535802bc77f1b05bda  /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404/identity.json
+31705db18dcca11bc06b56f5518c5a30480e422ab664ab0f3c2ae1f1c96d7f0e  /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404/completion.json
+65a6c2b1151b68fd27695d54edb53191f9fd6e5f7e2db52ec3539edafcd06587  /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404/publication-files.sha256.jsonl
+d3d044590dcfbad599213105910b2abab196d4893e2041fb57cdd394cc70cb3b  /home/lilith/tmp/portcheck-msssim-primary-panel-20261019T1404.log

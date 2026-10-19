@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Retain primary Wang MS-SSIM passes and the VIFp RGB precision finding (`0628a938`, `38b74376`, `23be24ea`); preserve numerical gates and keep the candidate correction unmerged.
+
 - Apply user-authorized external PyIQA SSIM bounds with explicit boundary/error controls (`6e8eb91c`); retain original observations and all existing Rust golden assertions.
 
 - Retain all twenty primary SSIM routes and selected-case precision diagnostics (`b912f26c`, `13e94b12`, `e8867651`), plus 25 complete exploratory HaarPSI paired cases and their profiles (`0babd331`, `cf2e0d46`); no new numerical acceptance bounds.

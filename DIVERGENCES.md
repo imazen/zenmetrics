@@ -819,3 +819,14 @@ has 390 candidate scalar passes and 90 matching size refusals; the baseline
 has twelve numerical misses and six refusal mismatches. The original boundless
 tables and all existing Rust golden expectations remain unchanged. Map and
 timing qualification remain open.
+
+## Primary VIFp RGB precision finding, 2026-10-19
+
+The [full frozen VIFp scalar grid](benchmarks/port_spotcheck_2026-10-18/primary-vif.md)
+returns scores in all 24 cases, with 22 differences above the existing 1e-9
+absolute gate. Largest |delta| is 4.093188010756421e-9 on the 1024-squared photo
+pair, at both thread budgets. A private f32 luma coefficient array promoted
+into the f64 pipeline is the candidate explanation; the f64 correction is
+being evaluated on unmerged `fix/vif-rgb-luma-precision`. It is not yet a
+verified fix. The primary source and every original numerical gate remain
+unchanged; `vifvec` behavior is a separate required before/after control.

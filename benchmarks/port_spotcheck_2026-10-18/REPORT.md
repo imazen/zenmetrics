@@ -25,6 +25,12 @@ The 19 configurations are `brisque`, `butteraugli`, `butteraugli-original`,
 
 ## Parity findings
 
+The [VIFp RGB grid](primary-vif.md) has 22 numerical findings out of 24
+completed cases against its unchanged 1e-9 absolute bound. Maximum difference
+is 4.093188010756421e-9. The candidate private f64 luma-coefficient correction
+remains unmerged and unqualified; regression and `vifvec` controls are pending.
+
+
 The initial [64×64 S67/CCM15 photo crop](vsi-photo-finding.md) fails against
 the image-2.12.0 reference runner:
 Rust `vsi` and `vsi-nodownscale` return 0.9567964257437082 versus
@@ -346,3 +352,9 @@ failed timeout attempts remain available. Existing Rust golden tests are unchang
 The [full SSIM index](primary-pyiqa-ssim.json),
 [precision controls](primary-pyiqa-ssim-precision.json), and
 [command/source receipts](primary-pyiqa-ssim.meta) distinguish these cohorts.
+
+The [Wang MS-SSIM grid](primary-msssim.md) passes all 24 scalar cases under
+its unchanged 1e-4 absolute bound (maximum difference 4.752062978119476e-6).
+At 64 squared the caller selects the documented adaptive three-level policy;
+the original default five-level refusal remains logged. Internal map comparison
+and paired timing remain open. This is separate from the Metrix alternative.

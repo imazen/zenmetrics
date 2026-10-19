@@ -561,6 +561,15 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **VIFp RGB luma precision, found 2026-10-19:** the frozen e2d414c3
+  `vif` route misses the unchanged 1e-9 author-reference gate in 22/24 raw
+  size/content/thread cases (largest difference 4.093188010756421e-9).
+  Its private luma coefficient array is f32 before promotion into the f64
+  pipeline. A correction is under independent evaluation on unmerged
+  `fix/vif-rgb-luma-precision`; do not treat it as qualified or merged.
+  `vifvec` is separate and must retain its scores/refusals.
+  [Original measurements and limits](benchmarks/port_spotcheck_2026-10-18/primary-vif.md).
+
 - **VSI reference resize mismatch (2026-10-19), locally explained.** At
   source `e2d414c3`, `vsi` and `vsi-nodownscale` return 0.9567964257437082
   for a retained 64×64 S67/CCM15 crop; original author `VSI.m` returns

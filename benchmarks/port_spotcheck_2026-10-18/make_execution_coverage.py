@@ -32,6 +32,9 @@ def main():
                   ('approved-pyiqa-ssim.json', None)]
     if (base / 'primary-ssim2.json').exists():
         selections.append(('primary-ssim2.json', None))
+    for metric in ['msssim', 'vif']:
+        if (base / f'primary-{metric}.json').exists():
+            selections.append((f'primary-{metric}.json', None))
     for index_name, family in selections:
         path = base / index_name
         index = json.loads(path.read_text()); manifests[index_name] = sha(path)

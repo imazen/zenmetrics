@@ -1,14 +1,15 @@
 {
   "inventory_rows": 127,
   "included": 124,
-  "scalar_observed_names": 35,
+  "scalar_observed_names": 37,
   "qualified_timing_cells": 0,
   "status_counts": {
-    "missing": 89,
-    "scalar-pass": 24,
+    "missing": 87,
+    "scalar-pass": 25,
     "finding:canonical-odd-ASAN": 1,
     "excluded:owner": 2,
     "unbound": 1,
+    "finding": 1,
     "scalar-pass-with-size-refusals": 9,
     "excluded:proprietary-unreleased": 1
   },
@@ -20,9 +21,11 @@
     "primary-mdsi.json": "bd04f227e10b68c5e532ab0d8cd8b90fce7d74c1339dd5051e29770e0a7c2897",
     "primary-haarpsi.json": "5b9c3b173c97371fe9c9a43ca7182b698083f44b7f8ea0903c6fb81ea397a5fb",
     "approved-pyiqa-ssim.json": "64d37e39e5a1054b92d1ac92cb72890812f6001ee13b3b8495820e62d55f283c",
-    "primary-ssim2.json": "311ccf74792ac1e3edab81e8c8fbb053a40044630324bc0de33324eac779e3fe"
+    "primary-ssim2.json": "311ccf74792ac1e3edab81e8c8fbb053a40044630324bc0de33324eac779e3fe",
+    "primary-msssim.json": "cba07eebf5dbb4611d4163bec7487433a5975ce205012ad6ce53717d48089d78",
+    "primary-vif.json": "61da8b7b891b28364cfccc2579be693602bc9da5546d4646793736ee77a1c603"
   },
   "timing_prefix_sha256": "c9a214005adaa8ed5f34b922c4e452690aabdb0d92e19c57ec5d857dd893d113",
-  "coverage_sha256": "16c58dc0e0aeb5f1c5491a75905f9e589457906e8891ce89e075f44fc084f768",
-  "coverage_bytes": 8369
+  "coverage_sha256": "911e0eb2fc65cb909f316be72bd9c986f95ff802271a80ddab5bacdd38c45785",
+  "coverage_bytes": 8411
 }
