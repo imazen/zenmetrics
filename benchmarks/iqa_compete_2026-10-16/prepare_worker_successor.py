@@ -24,6 +24,9 @@ def main():
     if hashlib.sha256(inventory).hexdigest() != build['inventory_sha256']:
         raise ValueError('replacement inventory differs from receipt')
     manifest = json.loads((a.source/'manifest.json').read_bytes())
+    if (any(c.get('worker_environment', {}).get('ZENMETRICS_NN_ENGINE') == 'ort-webgpu' for c in manifest['cells'])
+            and 'zenmetrics-cli/nn-webgpu' not in build['features'].split(',')):
+        raise ValueError('replacement receipt lacks requested ORT WebGPU feature')
     names = {r['metric_name'] for r in json.loads(inventory) if r['compiled']}
     if any(c['metric_name'] not in names for c in manifest['cells']):
         raise ValueError('replacement lacks requested routes')

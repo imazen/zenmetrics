@@ -28,6 +28,12 @@ if [ "$mode" != durable ]; then export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg
 if [ "$mode" = cached ]; then RUSTFLAGS+=" --cfg iqa_compete_cached"; fi
 features=compete,compete-nn,metrics-parallel
 if [ "${IQA_DVIFMISH:-0}" = 1 ]; then features+=,compete-dvifmish; fi
+# Neural Metal uses its own feature, independent of classical GPU kernels.
+case "${IQA_NN_ENGINE:-}" in
+  ort-webgpu) features+=,zenmetrics-cli/nn-webgpu ;;
+  ""|rten|ort-cuda) ;;
+  *) echo "unknown IQA_NN_ENGINE" >&2; exit 2 ;;
+esac
 if [ "${IQA_GPU_RUNTIME:-}" = cuda ]; then features+=,study-gpu-cuda; fi
 if [ "${IQA_GPU_RUNTIME:-}" = wgpu ]; then features+=,study-gpu-wgpu; fi
 action=${2:-build}
