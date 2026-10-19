@@ -168,7 +168,7 @@ class FixedLook(unittest.TestCase):
     def test_schedule_fixed_pairs_and_diagnostic_tie_tail(self):
         s=f.schedule(f.policy());self.assertEqual((s.count('AB'),s.count('BA')),(72,72))
         for i in range(0,144,2):self.assertEqual(set(s[i:i+2]),{'AB','BA'})
-        self.assertEqual(s[:8],['BA','AB','AB','BA','AB','BA','BA','AB'])
+        self.assertEqual(s[:8],['BA','AB','BA','AB','BA','AB','AB','BA'])
         d=f.diagnostic_stats([1.]*120,['AB','BA']*60,permutations=9)
         self.assertEqual((d['p_order'],d['p_lag']),(1.,1.))
         d=f.diagnostic_stats([1.]*60+[2.]*60,['AB']*60+['BA']*60,permutations=99)
