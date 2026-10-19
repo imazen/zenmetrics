@@ -1896,3 +1896,7 @@ iqa-worker-successor source binary build output:
 # Independent block acquisition controls; no metric benchmark is launched.
 clean-panel-check:
     TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/clean_panel_2026-10-19 -p 'test_*.py'
+
+# Negative control only: run acceptance assertions against an exported old candidate.
+clean-panel-before-check historical_directory:
+    TMPDIR="$HOME/tmp" python3 benchmarks/clean_panel_2026-10-19/baseline_regressions.py {{historical_directory}}

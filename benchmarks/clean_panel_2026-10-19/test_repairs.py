@@ -32,13 +32,13 @@ def fixture(root):
     return dict(schema=2,metric='brisque',shape=[512,512,1,'score'],scope=dict(ours='paired-NR',canonical='paired-NR'),
         workload=work,native_closure=native,artifacts=[seal_pilot.record(p) for p in paths],
         inputs=[seal_pilot.record(p) for p in [reference,distorted]],parity_abs_bound=.001,cpu=0,
-        controller_python=sys.executable,taskset='/usr/bin/taskset',containment_script=str(HERE/'containment.py'),contention_script=contention,run_heavy=heavy,
+        resources_script='unused-legacy-helper',controller_python=sys.executable,taskset='/usr/bin/taskset',containment_script=str(HERE/'containment.py'),contention_script=contention,run_heavy=heavy,
         arms=dict(ours=dict(build_identity='native-build',argv=[binary,cell],protocol='iqa-row',sample_count=10),
                   canonical=dict(build_identity='oracle-build',argv=[sys.executable,str(HERE/'brisque_oracle.py'),reference,distorted,weights],protocol='canonical-v2',adapter=workload.ADAPTER,pyiqa_version='test',version='pyiqa-test'+workload.VERSION_SUFFIX,sample_count=10)))
 
 
 def native_row(m):
-    return dict(m['workload'],status='ok',only_mode='score',locked_process_accounting=True,n=10,score=1,
+    return dict(m['workload'],declared_columns=['brisque','brisque_ref'],headline_declared_column='brisque',status='ok',only_mode='score',locked_process_accounting=True,n=10,score=1,
         zenbench_samples=[dict(execution_order=[0],elapsed_ns=[20],iterations=1,gate_clean=True) for _ in range(10)])
 
 
@@ -58,13 +58,13 @@ class ParserRepairs(unittest.TestCase):
     def test_actual_run_arm_parser_rejects_wrong_native_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);m=fixture(root)
-            for key,value in [('metric_name','butteraugli'),('width',64),('height',64),('threads',8),('mode','score+map'),('only_mode','score+map'),('timing_phase','cold'),('reference','wrong'),('distorted','wrong')]:
+            for key,value in [('metric_name','butteraugli'),('width',64),('height',64),('threads',8),('mode','score+map'),('only_mode','score+map'),('timing_phase','cold'),('reference','wrong'),('distorted','wrong'),('headline_declared_column','brisque_ref'),('rayon_threads_observed',8),('input_sha256',{}),('impl_binary_sha','wrong')]:
                 with self.subTest(key=key):
                     out=root/key;out.mkdir();row=native_row(m);row[key]=value
                     def emit(command,output,env,receipt):
                         (out/'ours.contention.json').write_text('{"contaminated":false}')
                         output.write(native_text(m,row));return 0
-                    with patch.object(containment,'execute',side_effect=emit):
+                    with patch.object(containment,'execute',side_effect=emit), patch.object(panel.subprocess,'run',side_effect=lambda command,**kw: subprocess.CompletedProcess(command,emit(command,kw['stdout'],kw.get('env'),None))):
                         with self.assertRaises(ValueError):panel.run_arm('ours',m,'block',out)
             result=workload.parse(native_text(m),'ours',m,True)
             self.assertTrue(result['observed_validated'])
@@ -241,3 +241,87 @@ class OwnedContainment(unittest.TestCase):
                 containment.execute([sys.executable,str(script),str(pidfile)],log,os.environ.copy(),root/'receipt.json',timeout=2,grace=.2)
             self.assertFalse(Path('/proc/'+pidfile.read_text()).exists())
             self.assertEqual(json.loads((root/'receipt.json').read_text())['remaining'],{})
+
+class ExecutionBoundary(unittest.TestCase):
+    def test_valid_emitted_rows_and_forged_process_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);m=fixture(root)
+            for name,text,pid in [('ours',native_text(m),100),('canonical',canonical_text(m),101)]:
+                for forged in (False,True):
+                    out=root/(name+str(forged));out.mkdir()
+                    def emit(command,output,env,receipt):
+                        output.write(text)
+                        (out/(name+'.contention.json')).write_text('{"contaminated":false}')
+                        containment.write(receipt,dict(status='empty',remaining={},owned=[dict(pid=pid+(1 if forged else 0),pgid=pid,start=123,exe=str(Path(m['arms'][name]['argv'][0]).resolve()))]))
+                        return 0
+                    with patch.object(containment,'execute',side_effect=emit):
+                        if forged:
+                            with self.assertRaises(ValueError):panel.run_arm(name,m,'block',out)
+                        else:
+                            result=panel.run_arm(name,m,'block',out)
+                            self.assertTrue(result['observed_validated'])
+                            self.assertEqual(result['observed_process']['start'],123)
+                    self.assertTrue((out/(name+'.execution.json')).exists())
+
+    def test_real_parser_failure_retains_raw_exit_and_terminal_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp);(home/'tmp').mkdir();m=fixture(home)
+            def emit(command,output,env,receipt):
+                output.write('IQA_PROCESS {"pid":100,"pgid":100}\nIQA_ROW {malformed\n')
+                (receipt.parent/'ours.contention.json').write_text('{"contaminated":false}')
+                containment.write(receipt,dict(status='empty',remaining={},owned=[]));return 17
+            with patch.object(panel.Path,'home',return_value=home),patch.object(containment,'execute',side_effect=emit):
+                blocks=panel.acquire(m,home/'out',1)
+            block=blocks[0];out=home/'out'/block['block_id']
+            self.assertEqual(block['error']['type'],'JSONDecodeError')
+            self.assertEqual(block['arm_states'],dict(ours='failed',canonical='not-started'))
+            self.assertEqual(json.loads((out/'ours.execution.json').read_text())['exit_code'],17)
+            self.assertIn('ours.log',[f['path'] for f in block['attempt_files']])
+
+    def test_owned_timeout_is_empty_while_both_locks_still_held(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp);(home/'tmp').mkdir();m=fixture(home)
+            pidfile=home/'pid';script=home/'child.py'
+            script.write_text('import os,signal,time,sys\npid=os.fork()\nif pid==0:\n signal.signal(signal.SIGTERM,signal.SIG_IGN)\n open(sys.argv[1],"w").write(str(os.getpid()))\n time.sleep(30)\nelse:\n time.sleep(30)\n')
+            def arm(name,manifest,bid,out):
+                with (out/'owned.log').open('w') as log:
+                    code=containment.execute([sys.executable,str(script),str(pidfile)],log,os.environ.copy(),out/'owned.containment.json',timeout=.3,grace=.2)
+                self.assertEqual(code,124)
+                self.assertFalse(Path('/proc/'+pidfile.read_text()).exists())
+                for lock in ('lilith-heavy.lock','lilith-wsl-heavy.lock'):
+                    with (home/'tmp'/lock).open('a') as fd:
+                        with self.assertRaises(BlockingIOError):fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                raise TimeoutError('owned timeout fully contained')
+            with patch.object(panel.Path,'home',return_value=home),patch.object(panel,'run_arm',side_effect=arm):
+                blocks=panel.acquire(m,home/'out',1)
+            self.assertEqual(blocks[0]['error']['type'],'TimeoutError')
+            for lock in ('lilith-heavy.lock','lilith-wsl-heavy.lock'):
+                with (home/'tmp'/lock).open('a') as fd:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+
+    def test_real_missing_executable_preserves_containment_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with (root/'log').open('w') as log:
+                with self.assertRaises(RuntimeError):containment.execute([str(root/'absent')],log,os.environ.copy(),root/'containment.json',timeout=.2,grace=.1)
+            result=json.loads((root/'containment.json').read_text())
+            self.assertEqual(result['status'],'empty');self.assertEqual(result['remaining'],{})
+            self.assertEqual(result['error']['type'],'FileNotFoundError')
+
+class RealElfClosure(unittest.TestCase):
+    def test_transitive_elf_mutation_and_loader_search_change(self):
+        # Three tiny owned libraries, never loaded as metric/scorer code.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/'leaf.c').write_text('int leaf(void) { return 1; }\n')
+            (root/'middle.c').write_text('extern int leaf(void); int middle(void) { return leaf(); }\n')
+            (root/'root.c').write_text('extern int middle(void); int top(void) { return middle(); }\n')
+            for name,dependency in [('leaf',None),('middle','leaf'),('root','middle')]:
+                command=['/usr/bin/cc','-shared','-fPIC',str(root/(name+'.c')),'-o',str(root/('lib'+name+'.so')),'-Wl,-rpath,$ORIGIN','-L'+str(root)]
+                if dependency:command.append('-l'+dependency)
+                subprocess.run(command,check=True,capture_output=True)
+            binding=runtime_closure.closure([root/'libroot.so'],runtime_closure.loader_environment())
+            self.assertIn(str(root/'libleaf.so'),[r['resolved'] for r in binding['files']])
+            runtime_closure.verify(binding)
+            with (root/'libleaf.so').open('ab') as f:f.write(b'owned mutation control')
+            with self.assertRaises(ValueError):runtime_closure.verify(binding)

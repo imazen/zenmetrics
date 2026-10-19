@@ -78,13 +78,21 @@ def parse(text, name, m, clean):
                 raise ValueError('observed workload mismatch: ' + key)
         if row.get('only_mode') != 'score' or row.get('locked_process_accounting') is not True:
             raise ValueError('native mode/accounting mismatch')
+        if row.get('declared_columns') != ['brisque','brisque_ref'] or row.get('headline_declared_column') != 'brisque':
+            raise ValueError('native output column mismatch')
+        if row.get('rayon_threads_observed',1) != 1:
+            raise ValueError('native observed worker count mismatch')
+        if 'input_sha256' in row and row['input_sha256'] != {k:digest(w[k]) for k in ('reference','distorted')}:
+            raise ValueError('native emitted input hashes mismatch')
+        if 'impl_binary_sha' in row and row['impl_binary_sha'] != digest(spec['argv'][0]):
+            raise ValueError('native emitted executable hash mismatch')
         observed = {key: row[key] for key in FIELDS}
         raw = row['zenbench_samples']
         if row.get('n') != spec['sample_count'] or len(raw) != spec['sample_count']:
             raise ValueError('native sample count mismatch')
         samples = []
         for i, sample in enumerate(raw, 1):
-            if sample['execution_order'] != [0] or len(sample['elapsed_ns']) != 1 or type(sample['iterations']) is not int or sample['iterations'] <= 0:
+            if sample['execution_order'] != [0] or len(sample['elapsed_ns']) != 1 or type(sample['elapsed_ns'][0]) is not int or sample['elapsed_ns'][0] <= 0 or type(sample['iterations']) is not int or sample['iterations'] <= 0 or type(sample['gate_clean']) is not bool:
                 raise ValueError('native sample arm/order mismatch')
             samples.append(dict(sample_id=i, ns=sample['elapsed_ns'][0]/sample['iterations'], gate_clean=sample['gate_clean']))
         score = row['score']
@@ -102,9 +110,9 @@ def parse(text, name, m, clean):
         if versions != [spec['version']]:
             raise ValueError('canonical VERSION mismatch')
         raw = [json.loads(line[7:]) for line in text.splitlines() if line.startswith('SAMPLE ')]
-        if [s['sample_id'] for s in raw] != list(range(1, spec['sample_count']+1)):
+        if any(type(s['sample_id']) is not int for s in raw) or [s['sample_id'] for s in raw] != list(range(1, spec['sample_count']+1)):
             raise ValueError('duplicate/missing/out-of-order sample IDs')
-        if any(not isinstance(s[k], (int, float)) or not math.isfinite(s[k]) for s in raw for k in ('score', 'reference_score', 'ns')):
+        if any(type(s[k]) not in (int, float) or not math.isfinite(s[k]) for s in raw for k in ('score', 'reference_score', 'ns')):
             raise ValueError('invalid canonical sample')
         if len({s['score'] for s in raw}) != 1 or len({s['reference_score'] for s in raw}) != 1:
             raise ValueError('canonical score changed across samples')

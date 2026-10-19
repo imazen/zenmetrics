@@ -1,5 +1,9 @@
 # Explicit paired timing pilot
 
+**Review disposition:** `bb796cb3` must not land or expand. The
+[repair contract and retained limits](REPAIR.md) cover the local replacement
+candidate; independent re-review is required. The original pilot stays rejected.
+
 This replaces sample-index pairing with an explicitly identified acquisition block.
 Each bounded block holds both host admission locks, then runs one Rust arm and one canonical
 arm, releases the locks, and checks an output-directory STOP file before the next block. Order alternates by block. Each arm retains all ten internal observations;

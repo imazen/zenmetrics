@@ -86,7 +86,7 @@ def qualify_block(block, manifest):
         times = [s['ns'] for s in arm['samples']]
         if any(not math.isfinite(v) or v <= 0 for v in times):
             raise ValueError('invalid time')
-        if not isinstance(arm['score'], (int, float)) or not math.isfinite(arm['score']):
+        if type(arm['score']) not in (int, float) or not math.isfinite(arm['score']):
             raise ValueError('invalid score')
         values[name] = statistics.median(times)
         scores[name] = arm['score']
