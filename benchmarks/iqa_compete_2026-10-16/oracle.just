@@ -94,3 +94,8 @@ octave-panel-resume inputs references rust_build output threads:
 [positional-arguments]
 oracle-memory-timeout-check evidence:
     python3 -B check_oracle_memory_timeout.py "$1"
+
+# The comparison controller supplies both locks and a resource wrapper per group.
+[positional-arguments]
+ssim-candidate-compare baseline candidate inputs output:
+    nice -n 19 ionice -c 3 python3 -B compare_ssim_candidate.py --baseline "$1" --candidate "$2" --inputs "$3" --output "$4"
