@@ -1,0 +1,12 @@
+host: lilith-wsl; observed 2026-10-19 UTC
+policy/classifier commit: 6e8eb91cf672 (verified origin/master)
+command: nice -n19 ionice -c3 python3 -B benchmarks/iqa_compete_2026-10-16/qualify_pyiqa_ssim.py benchmarks/port_spotcheck_2026-10-18 /home/lilith/tmp/portcheck-pyiqa-approved-20261019T1440
+scope: retained-data classification only; no metric execution or timing/memory claim.
+authorization: user delegated reasonable PyIQA SSIM external-bound selection on 2026-10-19.
+bounds: inclusive absolute 1e-6 for eighteen unrounded/direct/fixed routes; 5e-5 for two original rounded classes.
+controls: nextafter below/at/above each bound, NaN/infinity rejection; explicit matching canonical/Rust 11x11 window errors.
+outputs: six approved-pyiqa TSV shards and approved-pyiqa-ssim.json bind original index and source hashes.
+raw verification list: /home/lilith/tmp/portcheck-pyiqa-approved-20261019T1440/checked-error-artifacts.json; hash in index.
+original observations: primary-pyiqa-ssim.json and all six primary-pyiqa shards unchanged.
+result: candidate 390 scalar passes + 90 matching size refusals; baseline 378 passes + 12 numeric misses + 84 matching refusals + 6 refusal mismatches.
+limits: existing Rust golden assertions unchanged; maps and qualified timing missing; SSIMULACRA2 outside this policy.

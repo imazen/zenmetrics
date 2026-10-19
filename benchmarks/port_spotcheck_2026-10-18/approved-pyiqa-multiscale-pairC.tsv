@@ -1,0 +1,57 @@
+metric	pair	size	threads	canonical	baseline	candidate	baseline_abs_delta	candidate_abs_delta	bound	baseline_status	candidate_status	qualified_ratio
+ms-ssim-pyiqa-f32	pairC	1mp	1	0.9768098736382015	0.9768098627153976	0.9768098627153976	1.0922803883595122e-08	1.0922803883595122e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	1mp	1	0.976701604442847	0.9767022085467779	0.9767022085467779	6.04103930879063e-07	6.04103930879063e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	1mp	1	0.9950524672565748	0.9950524649382698	0.9950524649382698	2.3183049924213606e-09	2.3183049924213606e-09	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k3	pairC	1mp	1	0.9979929951649051	0.9979303792350532	0.9979929942545167	6.261592985190578e-05	9.103884313077515e-10	1e-06	fail	pass	False
+ms-ssim-pyiqa-f32-k4	pairC	1mp	1	0.9992237273433248	0.9992237269961016	0.9992237269961015	3.472231391299374e-10	3.4722325015223987e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k5	pairC	1mp	1	0.9994519782952594	0.9994516874613025	0.9994519780642774	2.9083395691742453e-07	2.3098201129556628e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k6	pairC	1mp	1		0.9996848770989035				1e-06	refusal-mismatch	matching-size-refusal	False
+ms-ssim-pyiqa-f32	pairC	1mp	28	0.9768098736382015	0.9768098627153976	0.9768098627153976	1.0922803883595122e-08	1.0922803883595122e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	1mp	28	0.976701604442847	0.9767022085467779	0.9767022085467779	6.04103930879063e-07	6.04103930879063e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	1mp	28	0.9950524672565748	0.9950524649382698	0.9950524649382698	2.3183049924213606e-09	2.3183049924213606e-09	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k3	pairC	1mp	28	0.9979929951649051	0.9979303792350532	0.9979929942545167	6.261592985190578e-05	9.103884313077515e-10	1e-06	fail	pass	False
+ms-ssim-pyiqa-f32-k4	pairC	1mp	28	0.9992237273433248	0.9992237269961016	0.9992237269961015	3.472231391299374e-10	3.4722325015223987e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k5	pairC	1mp	28	0.9994519782952594	0.9994516874613025	0.9994519780642774	2.9083395691742453e-07	2.3098201129556628e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k6	pairC	1mp	28		0.9996848770989035				1e-06	refusal-mismatch	matching-size-refusal	False
+ms-ssim-pyiqa-f32	pairC	4k	1	0.9778484214288143	0.9778484106722294	0.9778484106722294	1.0756584956084225e-08	1.0756584956084225e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	4k	1	0.9777426595781139	0.9777427911051053	0.9777427911051053	1.3152699140928092e-07	1.3152699140928092e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	4k	1	0.9953778506687777	0.9953778261922361	0.9953778484365698	2.4476541571338828e-08	2.2322078629954945e-09	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k3	pairC	4k	1	0.9981525550880943	0.9981525542097099	0.99815255420971	8.783843652437895e-10	8.78384254221487e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k4	pairC	4k	1	0.9992998128072167	0.9992997608356534	0.999299812482853	5.197156327518826e-08	3.2436364705290543e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k5	pairC	4k	1	0.9995007448054818	0.9995007445901168	0.9995007445901166	2.1536494809737405e-10	2.1536517014197898e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k6	pairC	4k	1	0.9997228052195993	0.9997228126385935	0.9997228051025006	7.41899419676173e-09	1.1709877512089406e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32	pairC	4k	28	0.9778484214288143	0.9778484106722294	0.9778484106722294	1.0756584956084225e-08	1.0756584956084225e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	4k	28	0.9777426595781138	0.9777427911051053	0.9777427911051053	1.3152699152030323e-07	1.3152699152030323e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	4k	28	0.9953778506687777	0.9953778261922361	0.9953778484365698	2.4476541571338828e-08	2.2322078629954945e-09	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k3	pairC	4k	28	0.9981525550880943	0.9981525542097099	0.99815255420971	8.783843652437895e-10	8.78384254221487e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k4	pairC	4k	28	0.9992998128072167	0.9992997608356534	0.999299812482853	5.197156327518826e-08	3.2436364705290543e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k5	pairC	4k	28	0.9995007448054818	0.9995007445901168	0.9995007445901166	2.1536494809737405e-10	2.1536517014197898e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32-k6	pairC	4k	28	0.9997228052195992	0.9997228126385935	0.9997228051025006	7.4189943077840326e-09	1.170986640985916e-10	1e-06	pass	pass	False
+ms-ssim-pyiqa-f32	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa	pairC	64	1						5e-05	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k2	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k3	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k4	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k5	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k6	pairC	64	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa	pairC	64	28						5e-05	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k2	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k3	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k4	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k5	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k6	pairC	64	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32	pairC	odd	1	0.9778458097633622	0.9778457965922394	0.9778457965922394	1.3171122859034767e-08	1.3171122859034767e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	odd	1	0.9777475615372645	0.9777473286399846	0.9777473286399846	2.3289727990594145e-07	2.3289727990594145e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	odd	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k3	pairC	odd	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k4	pairC	odd	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k5	pairC	odd	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k6	pairC	odd	1						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32	pairC	odd	28	0.9778458097633622	0.9778457965922394	0.9778457965922394	1.3171122859034767e-08	1.3171122859034767e-08	1e-06	pass	pass	False
+ms-ssim-pyiqa	pairC	odd	28	0.9777475615372645	0.9777473286399846	0.9777473286399846	2.3289727990594145e-07	2.3289727990594145e-07	5e-05	pass	pass	False
+ms-ssim-pyiqa-f32-k2	pairC	odd	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k3	pairC	odd	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k4	pairC	odd	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k5	pairC	odd	28						1e-06	matching-size-refusal	matching-size-refusal	False
+ms-ssim-pyiqa-f32-k6	pairC	odd	28						1e-06	matching-size-refusal	matching-size-refusal	False

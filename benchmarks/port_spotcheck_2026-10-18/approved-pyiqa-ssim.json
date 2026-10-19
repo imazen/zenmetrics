@@ -1,0 +1,80 @@
+{
+  "rows": 480,
+  "source_index": {
+    "path": "/home/lilith/work/zen/zenmetrics/benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.json",
+    "sha256": "ab7518d22cc883e350374026a722ed8d43d0a5d044945c194826134a05c058cb"
+  },
+  "policy": "User-authorized 2026-10-19: 1e-6 unrounded/direct/fixed; 5e-5 original rounded classes; absolute inclusive",
+  "policy_source_sha256": "a14e2fec262fea07d6aede8026bf933eacf6db10c6b7111ec19ae3990c126110",
+  "classifier_source_sha256": "8979eb96de5b927fa9d6eb26c91b79f4a106aec5e084e43b3daf575321bb49e3",
+  "outputs": [
+    {
+      "path": "approved-pyiqa-multiscale-pairA.tsv",
+      "sha256": "a49bc2483b0e1d9dc8d305b9dbf5ff864bac58fc3a86322be009ef3e1bc4e209",
+      "bytes": 7238
+    },
+    {
+      "path": "approved-pyiqa-single-pairA.tsv",
+      "sha256": "cde121185493b4e23a99815ece11d006839b2d55689f5ecaf5629d781b95ac71",
+      "bytes": 15795
+    },
+    {
+      "path": "approved-pyiqa-multiscale-pairB.tsv",
+      "sha256": "406c87fee0025dc264458704cb906ec21a0e0ac444953013fcffdda3836bb50a",
+      "bytes": 7223
+    },
+    {
+      "path": "approved-pyiqa-single-pairB.tsv",
+      "sha256": "08ab0dbfc6bd71007cf2b7ac861dfb46db2bc17425981511bf8abae64005ac6e",
+      "bytes": 15793
+    },
+    {
+      "path": "approved-pyiqa-multiscale-pairC.tsv",
+      "sha256": "4d44291bb8138e0d14994226d403dcfcf357953effa77ee172a8a1bdd6aad1fa",
+      "bytes": 7245
+    },
+    {
+      "path": "approved-pyiqa-single-pairC.tsv",
+      "sha256": "073cd0e56454831c496b6affb51ad097fe72ff18f39387bfd9c660b12ff49950",
+      "bytes": 15783
+    }
+  ],
+  "counts": [
+    {
+      "arm": "baseline",
+      "status": "fail",
+      "rows": 12
+    },
+    {
+      "arm": "baseline",
+      "status": "matching-size-refusal",
+      "rows": 84
+    },
+    {
+      "arm": "baseline",
+      "status": "pass",
+      "rows": 378
+    },
+    {
+      "arm": "baseline",
+      "status": "refusal-mismatch",
+      "rows": 6
+    },
+    {
+      "arm": "candidate",
+      "status": "matching-size-refusal",
+      "rows": 90
+    },
+    {
+      "arm": "candidate",
+      "status": "pass",
+      "rows": 390
+    }
+  ],
+  "qualified_timing_cells": 0,
+  "same_implementation_golden_tests": "unchanged",
+  "checked_error_artifacts": {
+    "path": "/home/lilith/tmp/portcheck-pyiqa-approved-20261019T1440/checked-error-artifacts.json",
+    "sha256": "fe49051d8549547585ae46dbbbb27e81dbcc8455ecd8af4cd8e4a2531fe50f3e"
+  }
+}
