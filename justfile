@@ -1623,9 +1623,10 @@ iqa-compete-landing-gates output snapshot *options:
 dashboard-regenerate:
     python3 scripts/dashboard/regenerate.py
 
-# Rust-only CPU path. Advanced GPU/NN/Python experiments are explicit opt-ins below.
+# Rust-only CPU path, including classical NR (BRISQUE/NIQE/PIQE).
+# Advanced GPU/NN/Python experiments are explicit opt-ins below.
 bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
-    cargo build --locked --release -p cpu-profile --features compete,metrics-parallel --bin iqa-compete --bin bench-iqa
+    cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete --bin bench-iqa
     '{{env_var_or_default("CARGO_TARGET_DIR","target")}}/release/bench-iqa{{if os() == "windows" { ".exe" } else { "" }}}' '{{sizes}}' '{{metrics}}' {{options}}
 
 bench-iqa-advanced sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
@@ -1636,10 +1637,10 @@ bench-iqa-check:
 
 # Optional adapter contract checks; no external checkout or C++ source required.
 bench-iqa-identity-check:
-    just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel --bin bench-iqa executable_identity
+    just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin bench-iqa executable_identity
 
 bench-iqa-optional-check:
-    just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel --bin bench-iqa optional_dvifm
+    just snap-cargo @ test -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin bench-iqa optional_dvifm
 
 # IQA method-complexity tallies: evaluator tests and schema validation (docs/IQA_COMPLEXITY.md).
 complexity-check:
