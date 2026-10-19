@@ -71,3 +71,11 @@ spotcheck-raw-prepare plan output:
 
 spotcheck-raw-check:
     python3 -B -m unittest -v test_spotcheck_raw
+
+[positional-arguments]
+octave-primary-memory manifest reference distorted width height threads samples evidence:
+    python3 -B octave_primary.py --manifest "$1" --reference "$2" --distorted "$3" --width "$4" --height "$5" --threads "$6" --samples "$7" --evidence "$8" --measure-memory
+
+[positional-arguments]
+octave-rust-parity-memory binary build_receipt canonical manifest reference distorted threads evidence:
+    python3 -B probe_octave_parity.py --binary "$1" --build-receipt "$2" --canonical "$3" --manifest "$4" --reference "$5" --distorted "$6" --threads "$7" --evidence "$8" --measure-memory

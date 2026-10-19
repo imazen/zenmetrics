@@ -32,6 +32,14 @@ def quoted(value):
     return "'" + text.replace("'", "''") + "'"
 
 
+def process_max_rss(path):
+    rows = [line.split(':', 1)[1].strip() for line in path.read_text().splitlines()
+            if line.strip().startswith('Maximum resident set size (kbytes):')]
+    if len(rows) != 1 or int(rows[0]) <= 0:
+        raise ValueError('missing or invalid GNU time peak-RSS receipt')
+    return int(rows[0])
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--manifest', required=True, type=Path)
@@ -44,6 +52,7 @@ def main():
     p.add_argument('--evidence', required=True, type=Path)
     p.add_argument('--octave', default='octave-cli')
     p.add_argument('--timeout', type=float, default=300)
+    p.add_argument('--measure-memory', action='store_true', help='retain /usr/bin/time -v process peak RSS')
     a = p.parse_args()
     if min(a.width, a.height, a.threads, a.samples) <= 0 or a.timeout <= 0:
         p.error('dimensions, threads, samples and timeout must be positive')
@@ -108,13 +117,18 @@ end
         env.pop(key, None)
     for key in ['OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'BLIS_NUM_THREADS']:
         env[key] = str(a.threads)
+    if a.measure_memory:
+        env['LC_ALL'] = 'C'
     command = [str(executable), '--no-gui', '--no-window-system', '--no-history', '--no-init-file', '--quiet', str(entry)]
+    if a.measure_memory:
+        command = ['/usr/bin/time', '-v', '-o', str(evidence / 'process-memory.txt'), *command]
     record = {'command': command, 'manifest_sha256': sha(a.manifest),
               'source_sha256': source_before, 'input_sha256': before,
               'width': a.width, 'height': a.height, 'threads_requested': a.threads,
               'executable_sha256': sha(executable), 'adapter_sha256': sha(Path(__file__)),
               'headless': {'no_window_system': True, 'display_environment_removed': True},
               'environment': {k: env[k] for k in env if k.endswith('NUM_THREADS')},
+              'memory_tool_locale': env.get('LC_ALL') if a.measure_memory else None,
               'qualification': 'diagnostic canonical execution; no Rust comparison or qualified ratio'}
     (evidence / 'attempt.json').write_text(json.dumps(record, indent=2) + '\n')
     with (evidence / 'stdout.log').open('w') as stdout, (evidence / 'stderr.log').open('w') as stderr:
@@ -142,6 +156,12 @@ end
                              'sha256': sha(resolved) if resolved.is_absolute() else None,
                              'kind': 'file' if resolved.is_absolute() else 'compiled builtin'})
     record['direct_function_bindings'] = bindings
+    record['stdout_sha256'] = sha(evidence / 'stdout.log')
+    record['stderr_sha256'] = sha(evidence / 'stderr.log')
+    record['entry_sha256'] = sha(entry)
+    if a.measure_memory:
+        record['process_memory_sha256'] = sha(evidence / 'process-memory.txt')
+        record['process_max_rss_kbytes'] = process_max_rss(evidence / 'process-memory.txt')
     record['score_rows'] = [{'phase': row[0], 'score_strings': row[2:],
                              'all_finite': all(math.isfinite(float(v)) for v in row[2:])}
                             for row in rows]

@@ -88,3 +88,10 @@ The whole serialized probe panel reports
 Run `oracle.just octave-rust-parity` with the eight explicit arguments listed
 by `just --show`; preserve full output under both locks and the resource wrapper.
 Full matrix, map coverage where available and qualified speed ratios remain missing.
+
+The subsequent [real-photo crop failure](../port_spotcheck_2026-10-18/vsi-photo-finding.md)
+shows why those synthetic passes are partial: the unchanged VSI gate fails on
+that different input, including the unmodified primary reference and base Rust
+route. The optional `--measure-memory` flag retains GNU time process peak RSS
+for each canonical/Rust child; explicit `oracle.just` memory recipes enable it.
+These process peaks do not supply matched speed measurements.

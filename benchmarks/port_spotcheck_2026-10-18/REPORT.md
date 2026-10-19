@@ -23,6 +23,16 @@ The 19 configurations are `brisque`, `butteraugli`, `butteraugli-original`,
 `cambi`, `cambi-aic2026`, `psnr-y-libvmaf`, `vmaf`, `vmaf-4k`, `vmaf-neg`,
 `vmaf-neg-studio601`, `vmaf-studio601`, and `vmaf-v1`.
 
+## Parity failures
+
+The [64×64 S67/CCM15 photo crop](vsi-photo-finding.md) fails VSI parity:
+Rust `vsi` and `vsi-nodownscale` return 0.9567964257437082 versus
+0.94679144074028154 from the unmodified primary reference. The absolute
+difference, 0.010004985003426614, exceeds the unchanged 1e-4 bound.
+Independent pixel-ingress and original-source controls reproduce the failure.
+Cause and affected extent remain unresolved; no metric code changed.
+This does not invalidate the different synthetic input's partial passes.
+
 ## Why the replacement panel remains unqualified
 
 The local October 19 port-check remeasurement batches pooled samples from

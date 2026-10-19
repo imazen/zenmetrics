@@ -561,6 +561,13 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **VSI real-photo crop parity failure (2026-10-19), unresolved.** At
+  source `e2d414c3`, `vsi` and `vsi-nodownscale` return 0.9567964257437082
+  for a retained 64×64 S67/CCM15 crop; original author `VSI.m` returns
+  0.94679144074028154. Absolute difference 0.010004985003426614 exceeds
+  the unchanged 1e-4 bound. Independent PPM/raw ingress and original-source
+  controls reproduce it. Details: `benchmarks/port_spotcheck_2026-10-18/vsi-photo-finding.md`.
+
 - **2026-10-18 — Linux durable benchmark scope placement and ORT budgets.**
   A user scope's `AllowedCPUs` property can be present while the kernel
   cpuset remains unrestricted when the controller is not delegated. Each

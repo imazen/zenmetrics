@@ -363,6 +363,13 @@ primitives but its own sp0 pyramid (`spyr0`), spectral path, and f64 FFT.
 
 ### `vsi` — vs `VSI.m`
 
+- **OPEN, measured 2026-10-19** — a 64×64 S67/CCM15 photo crop gives
+  Rust `vsi`/`vsi-nodownscale` 0.9567964257437082 versus original author
+  `VSI.m` 0.94679144074028154 through Octave 6.4.0/image 2.12.0.
+  Absolute difference 0.010004985003426614 exceeds the unchanged 1e-4 gate.
+  Independent PPM/raw ingress equality and the unmodified primary source
+  reproduce it. Cause and extent remain unresolved; the earlier fourteen
+  goldens do not cover this case. [Inputs, source and receipts](benchmarks/port_spotcheck_2026-10-18/vsi-photo-finding.md).
 - **RESOLVED** — `imresize` bilinear-shrink semantics: Octave applies
   **symmetric whole-point padding** and normalizes by the *full* kernel
   sum — not drop-and-renormalize. `conv_interp_vec` was ported

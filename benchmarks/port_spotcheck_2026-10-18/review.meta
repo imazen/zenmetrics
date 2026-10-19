@@ -258,3 +258,25 @@ External artifacts(SHA256):
 83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712  ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json
 8b8fb34199cdbcf5c5f06701006caab20f8885709b58a8494d13fbd7616b76e6  ~/tmp/portcheck-primary-grid-20261019T1020-prepare.log
 87a1b419d96ca47c4bc67ee86f53f1046e0a3989afd3bea000ab3514128ad4af  ~/tmp/portcheck-primary-raw-controls-20261019T1022.log
+
+Verified VSI real-photo crop failure and memory receipts:
+  64x64 pairA S67/CCM15 center crop; input hashes f682e292a598fa00b40ac14dcfb7aced34923a2db7f11c81480f72246ac579aa / 2b5079a0f6573a58d9072c73626f511023347ac07e95544c09f2e49c12de8837.
+  Primary original VSI.m SHA5939b9053966f58377e08052b5e2d0e0e3f954040fe732625591363285433954; exact factor1copy also tested.
+  Canonical0.94679144074028154 vs unchanged Rust0.9567964257437082, delta0.010004985003426614, bound1e-4 FAIL.
+  Both base vsi and vsi-nodownscale reproduce; Rust bits3fee9e1389aff725. No numerical gate or metric path changes.
+  Independent original-source test asserts raw reshape==imread(PPM) exactly for both images and reproduces the same scalar through both routes.
+  New optional measure-memory recipes run GNUtime-v with LC_ALL=C, retaining measured per-process peak RSS and hash.
+  Canonical69508kbytes; Rust8956kbytes. These are whole-process peaks, not metric allocations or timing ratios.
+  Failed comparison wrapperrc1,1s,peakRSS0.07GiB,minavail12782MiB,peakload1.71; independent-control wrapperrc0,1s,peakRSS0.07GiB,minavail13070MiB,peakload1.36.
+  Both heavy locks,run-heavy12Gjobs1,owned ext4TMPDIR; complete argv in logs and records below.
+  Cause/extent unresolved; corresponding source finding recorded in DIVERGENCES.md and project Known Bugs.
+External artifacts(SHA256):
+d3385f04bde60bac882e2f95c3180706d23b7fe94739edd5f534e779d8232937  ~/tmp/portcheck-primary-memory-control-20261019T1025.log
+c3509ab7cf999d83ba750227a42db20c782531d3a523a86d78c131b38f5b95d4  ~/tmp/portcheck-primary-memory-control-20261019T1025/canonical/results.json
+b4baf5d118cebe6ae2f3b1cc3145f29703a365b67141575eadac45745dc901d0  ~/tmp/portcheck-primary-memory-control-20261019T1025/canonical/process-memory.txt
+4912d07efbc20effa3941da262ee9d701f1eec0ded36df96dea96a8d804ecc76  ~/tmp/portcheck-primary-memory-control-20261019T1025/rust/results.json
+7b5ef8a073c052ba8f6e3d40d3fb44edb74290469e4345ad67ac7a5b15b31a85  ~/tmp/portcheck-primary-memory-control-20261019T1025/rust/process-memory.txt
+d4562635e87587f1861c0b63b04f2c162e884b09e5a7ac953472107273c07198  ~/tmp/portcheck-vsi-photo-independent-20261019T1027.log
+4b89f2162d541409ba9b9eaac22318e891f57fb13b7390b491ca5045146c8d1c  ~/tmp/portcheck-vsi-photo-independent-20261019T1027/oracle_entry.m
+3c794f10a177c4eff7dd55f136a366021cd72fe34cdea055ab56fcbbbdddfc66  ~/tmp/portcheck-vsi-photo-independent-20261019T1027/rust-base.json
+118c0fc37354dbc210cb7643e68592fa207d97cd8a4f1884686222eb78e02c1b  ~/tmp/portcheck-vsi-photo-independent-20261019T1027/results.json

@@ -13,7 +13,7 @@ import struct
 import subprocess
 
 from check_fixed_factor_oracle import check_manifest
-from octave_primary import sha
+from octave_primary import process_max_rss, sha
 
 
 def main():
@@ -21,6 +21,7 @@ def main():
     for key in ['binary', 'build-receipt', 'canonical', 'manifest', 'reference', 'distorted', 'evidence']:
         p.add_argument('--' + key, type=Path, required=True)
     p.add_argument('--threads', type=int, required=True)
+    p.add_argument('--measure-memory', action='store_true', help='retain /usr/bin/time -v Rust process peak RSS')
     a = p.parse_args()
     if a.threads <= 0:
         p.error('positive thread budget required')
@@ -53,6 +54,8 @@ def main():
     env = os.environ.copy()
     for key in ['RAYON_NUM_THREADS', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS']:
         env[key] = str(a.threads)
+    if a.measure_memory:
+        env['LC_ALL'] = 'C'
     inventory_run = subprocess.run([str(a.binary), 'inventory'], capture_output=True, text=True, check=True, env=env, timeout=30)
     (evidence / 'inventory.json').write_text(inventory_run.stdout)
     inventory = json.loads(inventory_run.stdout)
@@ -67,6 +70,8 @@ def main():
     config_path = evidence / 'config.json'
     config_path.write_text(json.dumps(config, indent=2) + '\n')
     command = [str(a.binary), str(config_path)]
+    if a.measure_memory:
+        command = ['/usr/bin/time', '-v', '-o', str(evidence / 'process-memory.txt'), *command]
     with (evidence / 'stdout.log').open('w') as stdout, (evidence / 'stderr.log').open('w') as stderr:
         run = subprocess.run(command, env=env, stdout=stdout, stderr=stderr, timeout=120)
     if run.returncode:
@@ -97,6 +102,9 @@ def main():
               'pass': all(row['pass'] for row in compared),
               'maps': 'not compared: selected primary functions expose scalar outputs',
               'timing': 'not acquired; native and canonical warmup clocks do not supply paired ratios'}
+    if a.measure_memory:
+        result['process_memory_sha256'] = sha(evidence / 'process-memory.txt')
+        result['process_max_rss_kbytes'] = process_max_rss(evidence / 'process-memory.txt')
     (evidence / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))
     if not result['pass']:
