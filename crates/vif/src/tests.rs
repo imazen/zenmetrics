@@ -339,3 +339,34 @@ fn vifvec_block_terms_fold_to_the_score() {
         );
     }
 }
+
+/// Original LIVE vifp_mscale.m (sha256 ef3105597cf0ea5fe99e2eaa1de1b9abd5eb604d2251c3196db1b1e53497a813),
+/// Octave 6.4, double 0.2989/0.5870/0.1140 luma. Procedural control zero
+/// from benchmarks/iqa_compete_2026-10-16/prepare_vif_luma_controls.py.
+/// Promoting f32 coefficients instead gives 0.7120196377747934, outside
+/// the existing 1e-9 author-reference gate. Exercise packed and strided RGB.
+#[test]
+fn rgb_luma_coefficients_keep_double_precision() {
+    let (w, h) = (64, 64);
+    for stride in [w * 3, w * 3 + 11] {
+        let mut r = alloc::vec![255u8; stride * h];
+        let mut d = alloc::vec![0u8; stride * h];
+        for y in 0..h {
+            for x in 0..w {
+                for c in 0..3 {
+                    let value =
+                        80 + (x * (17 + 3 * c) + y * (29 + 5 * c) + c * 41 + x * y * 3) % 96;
+                    r[y * stride + x * 3 + c] = value as u8;
+                    d[y * stride + x * 3 + c] =
+                        (value as i32 + (((x / 8 + y / 8 + c) % 5) as i32 - 2) * 4) as u8;
+                }
+            }
+        }
+        let score = vif_rgb8(&r, &d, w, h, stride).unwrap();
+        let expected = 0.7120196424083051;
+        assert!(
+            (score - expected).abs() < 1e-9,
+            "stride {stride}: {score} vs primary {expected}"
+        );
+    }
+}
