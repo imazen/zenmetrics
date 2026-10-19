@@ -385,8 +385,13 @@ the cold clock. Portable 5/3-round observations remain supplemental. A changed
 worker/source remains a separate series; preparing a bundle does not establish
 compatibility with previous implementations or numerical oracle parity.
 
-The i265 and Mac four-scope SSIMULACRA2 controls passed before their full
-89-route campaigns started. The r7900x campaign contains 95 compiled non-NN
+The i265 four-scope SSIMULACRA2 control passed. Mac’s initial four
+rows had controller status `ok`, but its eight-worker warm scope contained
+four flagged rounds. That is a strict qualification failure. The original
+Mac campaign and binary remain preserved; `rebuild_canonical_mac.py` stops
+its coordinator at the shared-lock boundary, rebuilds in a new snapshot
+with the existing private cumulative-counter correction, and requires all
+control rounds clean before installing a successor. No thresholds change. The r7900x campaign contains 95 compiled non-NN
 routes, including six private DVIF variants. All use the existing durable
 controller and per-host shared locks with 12G/8-job wrappers; i265 retains
 checked zenbench performance-core placement. Mac's wrapper is a monitored

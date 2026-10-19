@@ -1,8 +1,20 @@
 import unittest
 from prepare_canonical_cpu import cells, SIZES
+from rebuild_canonical_mac import checked_control
 
 
 class CanonicalCpu(unittest.TestCase):
+    def test_control_status_ok_does_not_accept_flagged_rounds(self):
+        report = dict(complete=True, cells=[dict(status='ok',
+            config=dict(threads=t, timing_phase=phase),
+            row=dict(score_bits='3ff0000000000000', n=10,
+                zenbench_samples=[dict(gate_clean=True) for _ in range(10)]))
+            for t in (1, 8) for phase in ('cold', 'warm')])
+        checked_control(report)
+        report['cells'][-1]['row']['zenbench_samples'][0]['gate_clean'] = False
+        with self.assertRaisesRegex(ValueError, 'flagged'):
+            checked_control(report)
+
     def test_full_scalar_protocol(self):
         pairs = {s: dict(width=512, height=512, method='fixture') for s in SIZES}
         rows = cells(['psnr', 'dvifmish-port-min-v0.2'], pairs)

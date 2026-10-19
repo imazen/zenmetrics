@@ -90,6 +90,9 @@ def main():
     patch = a.snapshot.parent / 'dvifmish-patch-v2.json'
     if patch.exists():
         build['private_dependency_patch'] = json.loads(patch.read_bytes())
+    counters = a.snapshot / 'mac-cpu-counters.meta.json'
+    if counters.exists():
+        build['zenbench_private_correction'] = json.loads(counters.read_bytes())
     (a.output / 'build.json').write_text(json.dumps(build, indent=2) + '\n')
     hashes = {str(f.relative_to(a.output)): sha(f) for f in (a.output / 'inputs').glob('*')}
     manifest = dict(schema=1, binary='bin/iqa-compete', binary_sha256=sha(a.binary),
