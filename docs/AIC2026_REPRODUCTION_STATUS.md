@@ -163,3 +163,11 @@ Q changes versus the original Octave adapter are at most 9.947598300641403e-14.
 This adaptation does not explain the HDR2 column residual. Actual MATLAB
 runtime identity and the executable dataset calls remain unqualified; no
 metric implementation or original acceptance gate changed.
+
+The [decoded-pixel/spectral continuation](../benchmarks/hdrvdp_canonical_2026-10-19/STAGE_CONTROLS.md)
+finds exact 122-image RGB8 decoding parity across the tested paths. Replacing
+upstream HDR2 spectral mixing with native coefficients changes its 61 scores
+by at most 7.105427357601002e-14 Q. The modeled modern cubic/spline control
+still has median 0.026448804274338045 Q error and 0/61 exact matches. These
+controls explain neither the published-column gap nor the separate native
+HDR2 residual. Original gates, implementation and qualification labels remain.
