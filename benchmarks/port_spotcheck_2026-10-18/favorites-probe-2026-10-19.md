@@ -1,5 +1,13 @@
 # Twenty-minute favorite-metric probe — 2026-10-19
 
+## VMAF AVX-512 correction
+
+The frozen Rust executable used here predates the AVX-512 feature propagation
+fix. Its cpu-profile VMAF dependency did not enable `avx512`, and no Cargo
+manifest at that revision enabled VMAF's AVX-512 feature. The roughly 2x gap
+therefore does **not** establish a remaining gap in the fixed revision on a
+7950X. See [the corrected rerun record](vmaf-avx512-rerun-2026-10-19.md).
+
 ## Owner-approved tolerance update (after the probe)
 
 The owner requested changing the two comparison tolerances. The live probe
