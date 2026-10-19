@@ -54,10 +54,12 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=afine as for ckdn.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/afine/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/afine/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric afine --reference ref.png --distorted dist.png
 ```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=afine. Consent is not implied by building the CLI.
 
 **Weights:**
 
@@ -143,7 +145,7 @@ weights state no licence, so ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric ahiq --reference ref.png --distorted dist.png
 ```
@@ -182,6 +184,97 @@ target/release/zenmetrics score --metric ahiq --reference ref.png --distorted di
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ahiq) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ahiq) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ahiq)
+
+## ahiq-pyiqa
+
+FR · Learned · CPU · Declared gate
+
+**Paper: citation needed.**
+
+**Recorded paper:** Lao, Gong, Shi, Yang, Wu, Wang, Xia, Yang. Attentions Help CNNs See Better: Attention-based Hybrid Image Quality Assessment Network. CVPRW 2022
+
+**Reference implementation:** pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref)
+
+**Reference identity:** pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref)
+
+**Reference code license:** PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)
+
+**Rust license:** code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc
+
+**Weights license:** nc
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** higher-is-better
+
+**Cli contract:** AHIQ as pyiqa scores it (20 uniform crops, timm 1.0.30 backbones,
+epoch-33 head; the AIC2026 AHIQ column, higher is better). Needs
+feature pyiqa-ports and ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq_pyiqa.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/ahiq-pyiqa/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric ahiq-pyiqa --reference ref.png --distorted dist.png
+```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq_pyiqa. Consent is not implied by building the CLI.
+
+**Weights:**
+
+```json
+{
+  "licence_class": "nc",
+  "checkpoint": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/AHIQ_vit_p8_epoch33-da3ea303.pth",
+  "sha256": "da3ea303b365ef71f4bbe41eba56f0ab3371c697d9c959649904dc9dd0a08b85",
+  "backbones": "timm vit_base_patch8_224.augreg2_in21k_ft_in1k and resnet50.a1_in1k (Apache-2.0 via timm)",
+  "consent": "AhiqPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq_pyiqa"
+}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "normalisation": "v / 255, ImageNet mean/std inside the trunk graph",
+  "crops": "uniform_crop(224, 20): rows i < 4, cols j < 5 of a 5x5 grid, origin (istep_h, jstep_w)",
+  "min_size": 1
+}
+```
+
+**Parity:**
+
+```json
+{
+  "oracle": "pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref)",
+  "goldens": "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)",
+  "jnd": 0.043353,
+  "tolerance_jnd": 0.001,
+  "measured_ladder": "rten 5.1e-8 (1.2e-6 JND), ort-cuda 4.0e-7 (9.3e-6 JND); ort-cpu on 3 of the 15 pairs (64x64, 840x944, 2048x1536: AHIQ costs 20 crops x 2 images whatever the size, and ort-cpu runs > 65 s per score here, so the full ladder does not fit one heavy-lock hold) 4.0e-7 (9.1e-6 JND)",
+  "measured_aic2026_61": "ort-cuda 5.2e-7 (1.2e-5 JND); pyiqa vs the published column: median 2.5e-6, max 1.0e-5",
+  "warm_reference": "caches the 20 crops' deform offsets and reduced reference features (~8.5 MB); bit-identical to cold",
+  "recorded_source_comments": "1 JND: pooled median |score(pair) - score(ref, ref)| over the 1,008 KonJND-1k pairs, scored by this\nport on ort-cuda (pyiqa needs ~80 s per pair on CPU): JPEG 0.037184, BPG 0.050104.\nperf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;\nbenchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}."
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/ahiq-pyiqa/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/ahiq-pyiqa/card.toml)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ahiq-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ahiq-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ahiq-pyiqa)
 
 ## arniqa
 
@@ -232,7 +325,7 @@ ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/arniqa/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/arniqa/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric arniqa --reference ref.png --distorted dist.png
 ```
@@ -327,7 +420,7 @@ and brisque_ref (reference). Needs nr.
 ```sh
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
-cargo build --release -p zenmetrics-cli
+cargo build --release -p zenmetrics-cli --features nr
 target/release/zenmetrics score --metric brisque --reference ref.png --distorted dist.png
 ```
 
@@ -881,6 +974,92 @@ target/release/zenmetrics score --metric cambi --reference ref.png --distorted d
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cambi) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cambi) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cambi)
 
+## cambi-aic2026
+
+NR · Classical · CPU · Not documented
+
+**Paper:** [CAMBI: Contrast-aware Multiscale Banding Index](https://arxiv.org/abs/2102.00079). Tandon, Pulkit; Afonso, Mariana; Sole, Joel; Krasula, Lukáš. arXiv preprint. 2021.
+
+```bibtex
+@misc{CAMBI2021,
+  title = {CAMBI: Contrast-aware Multiscale Banding Index},
+  author = {Tandon, Pulkit and Afonso, Mariana and Sole, Joel and Krasula, Lukáš},
+  year = {2021},
+  note = {arXiv preprint},
+  url = {https://arxiv.org/abs/2102.00079},
+  eprint = {2102.00079},
+  archivePrefix = {arXiv}
+}
+```
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** not recorded
+
+**Cli contract:** CAMBI with the AIC2026 swscale-compatible integer luma ingress.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric cambi-aic2026 --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8; distorted image only",
+  "resize": "crop to even width and height",
+  "luma": "t=(8414R+16519G+3208B+(32<<14)+(1<<8))>>9; Y=(t+32)>>6",
+  "kernel": "CAMBI 8-bit luma; existing defaults",
+  "source": "crates/zenmetrics-cli/src/metrics/vmaf.rs"
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-cli/src/metrics/vmaf.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/vmaf.rs) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cambi-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cambi-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cambi-aic2026)
+
 ## ciede2000
 
 FR · Classical · CPU · Not documented
@@ -1012,7 +1191,7 @@ it is a sigmoid quality score, not a distance. As lpips-alex.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/ckdn/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/ckdn/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric ckdn --reference ref.png --distorted dist.png
 ```
@@ -1979,6 +2158,100 @@ target/release/zenmetrics score --metric cw-ssim --reference ref.png --distorted
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cw-ssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cw-ssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cw-ssim)
 
+## cw-ssim-pyiqa
+
+FR · Classical · CPU · Declared gate
+
+**Paper:** [Complex Wavelet Structural Similarity: A New Image Similarity Index](https://doi.org/10.1109/TIP.2009.2025923). M.P. Sampat; Zhou Wang; S. Gupta; A.C. Bovik; M.K. Markey. IEEE Transactions on Image Processing. 2009.
+
+```bibtex
+@misc{CWSSIM2009,
+  title = {Complex Wavelet Structural Similarity: A New Image Similarity Index},
+  author = {M.P. Sampat and Zhou Wang and S. Gupta and A.C. Bovik and M.K. Markey},
+  year = {2009},
+  note = {IEEE Transactions on Image Processing},
+  url = {https://doi.org/10.1109/TIP.2009.2025923},
+  doi = {10.1109/TIP.2009.2025923}
+}
+```
+
+**Recorded paper:** Sampat, Wang, Gupta, Bovik, Markey. Complex Wavelet Structural Similarity: A New Image Similarity Index. IEEE TIP 2009
+
+**Reference implementation:** pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref)
+
+**Reference identity:** pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref)
+
+**Reference code license:** PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)
+
+**Rust license:** code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: none
+
+**Weights license:** none
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** higher-is-better
+
+**Cli contract:** CW-SSIM as pyiqa computes it (coarsest of 4 levels, 8 orientations,
+f32 masks; the AIC2026 CW-SSIM column, higher is better, ≥ 64²).
+Needs feature pyiqa-ports; no model files.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features pyiqa-ports
+target/release/zenmetrics score --metric cw-ssim-pyiqa --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{
+  "licence_class": "none"
+}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "luma": "YIQ Y with f32 weights (0.299, 0.587, 0.114) on f32 v/255 widened to f64, x255, round half to even",
+  "pyramid": "SCFpyr height 4, 8 orientations; only the coarsest oriented level is scored, every FFT mask rounded to f32 as pyiqa does",
+  "min_size": 64
+}
+```
+
+**Parity:**
+
+```json
+{
+  "oracle": "pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref)",
+  "goldens": "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)",
+  "jnd": 0.004347,
+  "tolerance_jnd": 0.001,
+  "measured_ladder": "1.3e-15 (3.1e-13 JND)",
+  "measured_aic2026_61": "2.3e-15 (5.4e-13 JND); pyiqa vs the published column: max 2.2e-16",
+  "warm_reference": "caches the size plan (masks, Gaussian) and the reference's bands; bit-identical to cold",
+  "recorded_source_comments": "1 JND: pooled median |1 - score| over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.003649, BPG 0.005758).\nperf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;\nbenchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}."
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/cw-ssim-pyiqa/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/cw-ssim-pyiqa/card.toml)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cw-ssim-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cw-ssim-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cw-ssim-pyiqa)
+
 ## deepdc
 
 FR · Learned · CPU · Reported results
@@ -2025,7 +2298,7 @@ is better. As lpips-alex.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/deepdc/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/deepdc/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric deepdc --reference ref.png --distorted dist.png
 ```
@@ -2117,7 +2390,7 @@ As lpips-alex.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/dists/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/dists/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric dists --reference ref.png --distorted dist.png
 ```
@@ -2200,7 +2473,7 @@ Needs feature nn; its only weights are torchvision VGG16
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric dmm --reference ref.png --distorted dist.png
 ```
@@ -2239,6 +2512,93 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dmm) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dmm) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dmm)
+
+## dmm-pyiqa
+
+FR · Learned · CPU · Declared gate
+
+**Paper: citation needed.**
+
+**Recorded paper:** Chen, Zhu, Zhu, Wang, Pan, Wang. Debiased Mapping for Full-Reference Image Quality Assessment. IEEE TMM 2025
+
+**Reference implementation:** pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref)
+
+**Reference identity:** pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref)
+
+**Reference code license:** PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); LAPACK routines BSD-3-Clause (../../LICENSE-lapack)
+
+**Rust license:** code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); LAPACK routines BSD-3-Clause (../../LICENSE-lapack); weights: permissive
+
+**Weights license:** permissive
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** lower-is-better
+
+**Cli contract:** DMM as pyiqa scores it (square bilinear resize; close to the AIC2026
+DMM column, lower is better, ≥ 128²). Needs feature
+pyiqa-ports; torchvision VGG16 weights, no consent gate.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/dmm-pyiqa/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric dmm-pyiqa --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{
+  "licence_class": "permissive",
+  "checkpoint": "https://download.pytorch.org/models/vgg16-397923af.pth"
+}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "resize": "min(h,w) > 128: F.interpolate bilinear (align_corners False, no antialias) to a SQUARE tar x tar, tar = max(floor(min/48)32, 128). zenmetrics-nn's dmm keeps the aspect ratio (PIL short-side resize): that is the convention difference behind the AIC2026 column.",
+  "min_size": 128
+}
+```
+
+**Parity:**
+
+```json
+{
+  "oracle": "pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref)",
+  "goldens": "goldens_ladder.tsv (common/ladder.py; pyiqa refuses the three 64x64 pairs: nan)",
+  "jnd": 0.178438,
+  "tolerance_jnd": 0.001,
+  "measured_ladder_rten": "12 pairs scored, 3 refused (64x64, as pyiqa); worst 1.26e-2 (0.071 JND) at 2207_256x256; 256x256 pairs 4.5e-3..1.26e-2, larger sizes 3e-5..1.9e-3: does not meet 1e-3 JND",
+  "measured_aic2026_61_rten": "median 2.17e-4, p90 1.36e-3, max 1.94e-3 (0.011 JND): does not meet 1e-3 JND",
+  "measured_vs_published_column": "port median 8.77e-3 / max 0.115, Spearman 0.9975; pyiqa CPU itself median 9.05e-3 / max 0.114; zenmetrics-nn dmm median 0.075",
+  "blocker": "SVD solver basis. models/dmm-pyiqa/solver_spread.py, 6 AIC2026 pairs, pyiqa's own taps: torch.svd (MKL) vs SciPy gesdd f32 differ by up to 2.4e-4 (1.3e-3 JND), vs gesvd f32 by up to 5.7e-3 (0.032 JND), vs torch f64 by up to 1.5e-4. On the three 256x256 ladder pairs (160x160 after the resize, 4 patches per relu4_3 channel) the spread is larger: gesdd vs MKL up to 4.3e-3, f64 vs MKL up to 2.4e-2, gesvd up to 0.37; the port deltas there (4.5e-3, 1.26e-2, 7.2e-3) lie inside the f64-vs-MKL spread. The port's residual on those pairs (<= 2.1e-4) lies inside the gesdd-vs-MKL spread. wt consumes the singular basis inside degenerate clusters (see zenmetrics-nn models/dmm/card.toml).",
+  "warm_reference": "caches every reference patch SVD; the cold path streams them; bit-identical",
+  "recorded_source_comments": "1 JND: pooled median score over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.145006, BPG 0.225096).\nperf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;\nbenchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}."
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/dmm-pyiqa/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/dmm-pyiqa/card.toml)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dmm-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dmm-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dmm-pyiqa)
 
 ## dreamsim
 
@@ -2288,10 +2648,12 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=dreamsim.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/dreamsim/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/dreamsim/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric dreamsim --reference ref.png --distorted dist.png
 ```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=dreamsim. Consent is not implied by building the CLI.
 
 **Weights:**
 
@@ -2982,7 +3344,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** FSIM/FSIMc with fixed factor 2.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 2. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -3003,7 +3365,13 @@ target/release/zenmetrics score --metric fsim-k2 --reference ref.png --distorted
 
 ```json
 {
-  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)"
+  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)",
+  "fixed_factor_contract": {
+    "kernel_size": 2,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 2.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -3063,7 +3431,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** FSIM/FSIMc with fixed factor 3.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 3. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -3084,7 +3452,13 @@ target/release/zenmetrics score --metric fsim-k3 --reference ref.png --distorted
 
 ```json
 {
-  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)"
+  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)",
+  "fixed_factor_contract": {
+    "kernel_size": 3,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 3.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -3144,7 +3518,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** FSIM/FSIMc with fixed factor 4.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 4. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -3165,7 +3539,13 @@ target/release/zenmetrics score --metric fsim-k4 --reference ref.png --distorted
 
 ```json
 {
-  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)"
+  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)",
+  "fixed_factor_contract": {
+    "kernel_size": 4,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 4.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -3225,7 +3605,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** FSIM/FSIMc with fixed factor 1.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 1. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -3246,7 +3626,13 @@ target/release/zenmetrics score --metric fsim-nodownscale --reference ref.png --
 
 ```json
 {
-  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)"
+  "convention": "sRGB8 (FSIMc chroma terms) / luma (-y)",
+  "fixed_factor_contract": {
+    "kernel_size": 1,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 1.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -4092,6 +4478,107 @@ code: THIRD-PARTY-NOTICES.md (THIRD-PARTY-NOTICES.md).
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp)
 
+## hdrvdp-aic2026
+
+FR · Classical · CPU · Not documented
+
+**Paper:** [HDR-VDP-2: a calibrated visual metric for visibility and quality predictions in all luminance conditions](https://doi.org/10.1145/1964921.1964935). Rafat Mantiuk; Kil Joong Kim; Allan G. Rempel; Wolfgang Heidrich. ACM SIGGRAPH 2011 papers. 2011.
+
+```bibtex
+@misc{HDRVDP22011,
+  title = {HDR-VDP-2: a calibrated visual metric for visibility and quality predictions in all luminance conditions},
+  author = {Rafat Mantiuk and Kil Joong Kim and Allan G. Rempel and Wolfgang Heidrich},
+  year = {2011},
+  note = {ACM SIGGRAPH 2011 papers},
+  url = {https://doi.org/10.1145/1964921.1964935},
+  doi = {10.1145/1964921.1964935}
+}
+```
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** JOD / P_det / Q
+
+**Direction:** not recorded
+
+**Cli contract:** HDR-VDP 2 res.Q with unrounded sRGB at 200 nits and 37.84 ppd.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric hdrvdp-aic2026 --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8; f64 conversion to absolute nits",
+  "sdr_peak_nits": 200,
+  "ppd": 37.84,
+  "code_bits_before_srgb_eotf": 0,
+  "code_rounding": "nearest, ties away from zero when enabled",
+  "encoding": "RGB BT.709",
+  "xyz_matrix": null,
+  "task": "quality",
+  "emission": "HDR-VDP 2 RGB BT.709 reference defaults",
+  "age": "reference defaults",
+  "surround": "reference defaults",
+  "overrides": [
+    "--hdrvdp-sdr-peak",
+    "--hdrvdp-sdr-ppd",
+    "--hdrvdp-sdr-code-bits"
+  ],
+  "v2_strict_arithmetic": "--hdrvdp-sdr-strict; default false",
+  "outputs": [
+    "hdrvdp_aic2026_q"
+  ],
+  "source": "crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs"
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp-aic2026)
+
 ## hdrvdp3
 
 FR · Classical · CPU · Reported results
@@ -4184,6 +4671,125 @@ target/release/zenmetrics score --metric hdrvdp3 --reference ref.png --distorted
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp3)
 
+## hdrvdp3-aic2026
+
+FR · Classical · CPU · Not documented
+
+**Paper:** [HDR-VDP-3: A multi-metric for predicting image differences, quality and contrast distortions in high dynamic range and regular content](https://arxiv.org/abs/2304.13625). Mantiuk, Rafal K.; Hammou, Dounia; Hanji, Param. arXiv preprint. 2023 (arXiv submission year; publication venue may be later).
+
+```bibtex
+@misc{HDRVDP32023,
+  title = {HDR-VDP-3: A multi-metric for predicting image differences, quality and contrast distortions in high dynamic range and regular content},
+  author = {Mantiuk, Rafal K. and Hammou, Dounia and Hanji, Param},
+  year = {2023},
+  note = {arXiv preprint},
+  url = {https://arxiv.org/abs/2304.13625},
+  eprint = {2304.13625},
+  archivePrefix = {arXiv}
+}
+```
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** q_jod 0–10 (10 = identical) + P_map
+
+**Direction:** not recorded
+
+**Cli contract:** HDR-VDP 3 res.Q and Q_JOD with 200-nit sRGB to XYZ, OLED, 37.842505866 ppd.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric hdrvdp3-aic2026 --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8; f64 conversion to absolute nits",
+  "sdr_peak_nits": 200,
+  "ppd": 37.842505866,
+  "code_bits_before_srgb_eotf": 10,
+  "code_rounding": "nearest, ties away from zero when enabled",
+  "encoding": "D65 XYZ from linear sRGB",
+  "xyz_matrix": [
+    [
+      0.4124564,
+      0.3575761,
+      0.1804375
+    ],
+    [
+      0.2126729,
+      0.7151522,
+      0.072175
+    ],
+    [
+      0.0193339,
+      0.119192,
+      0.9503041
+    ]
+  ],
+  "task": "quality",
+  "emission": "OLED",
+  "age": 24,
+  "surround": "none",
+  "overrides": [
+    "--hdrvdp-sdr-peak",
+    "--hdrvdp-sdr-ppd",
+    "--hdrvdp-sdr-code-bits"
+  ],
+  "v2_strict_arithmetic": "--hdrvdp-sdr-strict; default false",
+  "outputs": [
+    "hdrvdp3_aic2026_q",
+    "hdrvdp3_aic2026_jod"
+  ],
+  "source": "crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs"
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp3-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp3-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp3-aic2026)
+
 ## hyperiqa
 
 NR · Learned · CPU · Reported results
@@ -4234,10 +4840,12 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/hyperiqa/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/hyperiqa/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric hyperiqa --reference ref.png --distorted dist.png
 ```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=hyperiqa. Consent is not implied by building the CLI.
 
 **Weights:**
 
@@ -4664,10 +5272,12 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=liqe.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/liqe/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/liqe/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric liqe --reference ref.png --distorted dist.png
 ```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=liqe. Consent is not implied by building the CLI.
 
 **Weights:**
 
@@ -4759,7 +5369,7 @@ ZENMETRICS_NN_MODEL_DIR (see crates/zenmetrics-nn).
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric lpips-alex --reference ref.png --distorted dist.png
 ```
@@ -4854,7 +5464,7 @@ FR · Learned · CPU · Reported results
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric lpips-squeeze --reference ref.png --distorted dist.png
 ```
@@ -4949,7 +5559,7 @@ FR · Learned · CPU · Reported results
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/lpips/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric lpips-vgg --reference ref.png --distorted dist.png
 ```
@@ -5138,7 +5748,7 @@ for ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/maniqa/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/maniqa/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric maniqa --reference ref.png --distorted dist.png
 ```
@@ -5800,7 +6410,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k2 convention.
+**Cli contract:** Set downsample=True and kernel_size=2. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -5821,7 +6431,14 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k2 --reference ref.pn
 
 ```json
 {
-  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k2 convention."
+  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k2 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 2,
+    "definition": "Set downsample=True and kernel_size=2.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -5881,7 +6498,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k3 convention.
+**Cli contract:** Set downsample=True and kernel_size=3. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -5902,7 +6519,14 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k3 --reference ref.pn
 
 ```json
 {
-  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k3 convention."
+  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k3 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 3,
+    "definition": "Set downsample=True and kernel_size=3.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -5962,7 +6586,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k4 convention.
+**Cli contract:** Set downsample=True and kernel_size=4. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -5983,7 +6607,14 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k4 --reference ref.pn
 
 ```json
 {
-  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k4 convention."
+  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k4 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 4,
+    "definition": "Set downsample=True and kernel_size=4.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -6043,7 +6674,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k5 convention.
+**Cli contract:** Set downsample=True and kernel_size=5. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -6064,7 +6695,14 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k5 --reference ref.pn
 
 ```json
 {
-  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k5 convention."
+  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k5 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 5,
+    "definition": "Set downsample=True and kernel_size=5.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -6124,7 +6762,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ms-ssim-pyiqa-f32-k6 convention.
+**Cli contract:** Set downsample=True and kernel_size=6. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -6145,7 +6783,14 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k6 --reference ref.pn
 
 ```json
 {
-  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k6 convention."
+  "cli_contract": "AIC2026 ms-ssim-pyiqa-f32-k6 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 6,
+    "definition": "Set downsample=True and kernel_size=6.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -6446,7 +7091,7 @@ ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/musiq/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/musiq/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric musiq --reference ref.png --distorted dist.png
 ```
@@ -6542,7 +7187,7 @@ through PairedNoReference: emits niqe (distorted) and niqe_ref
 ```sh
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
-cargo build --release -p zenmetrics-cli
+cargo build --release -p zenmetrics-cli --features nr
 target/release/zenmetrics score --metric niqe --reference ref.png --distorted dist.png
 ```
 
@@ -6881,10 +7526,12 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/paq2piq/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/paq2piq/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric paq2piq --reference ref.png --distorted dist.png
 ```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=paq2piq. Consent is not implied by building the CLI.
 
 **Weights:**
 
@@ -6975,7 +7622,7 @@ FR · Learned · CPU · Reported results
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/pieapp/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/pieapp/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric pieapp --reference ref.png --distorted dist.png
 ```
@@ -7067,6 +7714,111 @@ target/release/zenmetrics score --metric pieapp --reference ref.png --distorted 
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=pieapp) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=pieapp) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=pieapp)
 
+## pieapp-pyiqa
+
+FR · Learned · CPU · Declared gate
+
+**Paper:** [PieAPP: Perceptual Image-Error Assessment through Pairwise Preference](https://arxiv.org/abs/1806.02067). Prashnani, Ekta; Cai, Hong; Mostofi, Yasamin; Sen, Pradeep. CVPR 2018. 2018 (arXiv submission year; publication venue may be later).
+
+```bibtex
+@misc{pieapp2018,
+  title = {PieAPP: Perceptual Image-Error Assessment through Pairwise Preference},
+  author = {Prashnani, Ekta and Cai, Hong and Mostofi, Yasamin and Sen, Pradeep},
+  year = {2018},
+  note = {CVPR 2018},
+  url = {https://arxiv.org/abs/1806.02067},
+  eprint = {1806.02067},
+  archivePrefix = {arXiv}
+}
+```
+
+**Recorded paper:** Prashnani, Cai, Mostofi, Sen. PieAPP: Perceptual Image-Error Assessment through Pairwise Preference. CVPR 2018
+
+**Reference implementation:** pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref)
+
+**Reference identity:** pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref)
+
+**Reference code license:** PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)
+
+**Rust license:** code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc
+
+**Weights license:** nc
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** Learned error; card and provenance (../crates/zenmetrics-nn/models/pieapp/PROVENANCE.md); demo CLI sampling differs
+
+**Direction:** lower-is-better
+
+**Cli contract:** PieAPP as pyiqa scores it (64×64 patches at stride 27; the AIC2026
+PieAPP column, lower is better, ≥ 64²). Reads zenmetrics-nn's
+pieapp.onnx. Needs feature pyiqa-ports and
+ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp_pyiqa.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/pieapp-pyiqa/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric pieapp-pyiqa --reference ref.png --distorted dist.png
+```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp_pyiqa. Consent is not implied by building the CLI.
+
+**Weights:**
+
+```json
+{
+  "licence_class": "nc",
+  "checkpoint": "PieAPPv0.1 (pyiqa: https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/PieAPPv0.1-0937b014.pth; official: https://web.ece.ucsb.edu/~ekta/projects/PieAPPv0.1/weights/PieAPPv0.1.pth)",
+  "sha256": "0937b01480c7a637ae3018af755faa8ecde4788b52bb246b7ae62cf96fb6baf0",
+  "terms_url": "https://github.com/prashnani/PerceptualImageError/blob/master/LICENSE.txt",
+  "consent": "PieAppPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=pieapp_pyiqa"
+}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "graph": "zenmetrics-nn's pieapp.onnx unchanged (crates/zenmetrics-nn/models/pieapp/export.py): reference, distorted [n,3,64,64] RGB in [0,1] -> [n,2] = error, weight + 1e-6",
+  "patches": "64x64 at stride 27, no padding: origins 0, 27, ... <= d - 64",
+  "min_size": 64
+}
+```
+
+**Parity:**
+
+```json
+{
+  "oracle": "pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref)",
+  "goldens": "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)",
+  "jnd": 0.514383,
+  "tolerance_jnd": 0.001,
+  "measured_ladder": "rten 1.19e-6 (2.3e-6 JND), ort-cpu 7.2e-7 (1.4e-6 JND), ort-cuda 4.8e-7 (9.3e-7 JND)",
+  "measured_aic2026_61": "ort-cuda 3.5e-7 (6.8e-7 JND); pyiqa vs the published column: median 2.3e-5, max 1.9e-4",
+  "goldens_note": "pyiqa runs all patches of an image in one batch (> 14 GiB at 2048x1536); goldens.py with PIQA_FEATURE_CHUNK=256 runs compute_features 256 patches at a time. Chunked and unchunked goldens are bit-identical on the four pairs both computed (64x64 .. 1024x1024).",
+  "warm_reference": "keeps the reference's planar copy only (the network runs both patches of every pair); bit-identical to cold",
+  "recorded_source_comments": "1 JND: pooled median score over the 1,008 KonJND-1k pairs, pyiqa CPU (JPEG 0.517011, BPG 0.509688).\nperf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;\nbenchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}."
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/pieapp-pyiqa/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/pieapp-pyiqa/card.toml)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=pieapp-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=pieapp-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=pieapp-pyiqa)
+
 ## piqe
 
 NR · Classical · CPU · Not documented
@@ -7112,7 +7864,7 @@ emits piqe (distorted) and piqe_ref (reference). Needs nr.
 ```sh
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
-cargo build --release -p zenmetrics-cli
+cargo build --release -p zenmetrics-cli --features nr
 target/release/zenmetrics score --metric piqe --reference ref.png --distorted dist.png
 ```
 
@@ -7214,6 +7966,79 @@ $ZENMETRICS_NR_GOLDEN_ROOT (default [local path]).
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=piqe) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=piqe) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=piqe)
+
+## proposal-butteraugli
+
+FR · Classical · CPU · Not documented
+
+**Paper: citation needed.**
+
+**Recorded paper:** no evidence
+
+**Reference implementation:** no evidence
+
+**Reference identity:** no evidence
+
+**Reference code license:** not recorded
+
+**Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
+
+**Weights license:** not applicable
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** not recorded
+
+**Cli contract:** AIC2026 two-segment calibration of the libjxl Butteraugli 3-norm.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli
+target/release/zenmetrics score --metric proposal-butteraugli --reference ref.png --distorted dist.png
+```
+
+**Weights:**
+
+```json
+{}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "native_output": "butteraugli pnorm3, existing CPU defaults",
+  "output_map": "max(0.00459792N, 2.0938201N - 1.1033102)",
+  "source": "crates/zenmetrics-cli/src/metrics/mod.rs"
+}
+```
+
+**Parity:**
+
+```json
+{
+  "reported": "no evidence",
+  "oracle": "no evidence"
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=proposal-butteraugli) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=proposal-butteraugli) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=proposal-butteraugli)
 
 ## psnr
 
@@ -8468,7 +9293,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssim-pyiqa-f32-k2 convention.
+**Cli contract:** Set downsample=True and kernel_size=2. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -8489,7 +9314,14 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k2 --reference ref.png -
 
 ```json
 {
-  "cli_contract": "AIC2026 ssim-pyiqa-f32-k2 convention."
+  "cli_contract": "AIC2026 ssim-pyiqa-f32-k2 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 2,
+    "definition": "Set downsample=True and kernel_size=2.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -8549,7 +9381,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssim-pyiqa-f32-k3 convention.
+**Cli contract:** Set downsample=True and kernel_size=3. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -8570,7 +9402,14 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k3 --reference ref.png -
 
 ```json
 {
-  "cli_contract": "AIC2026 ssim-pyiqa-f32-k3 convention."
+  "cli_contract": "AIC2026 ssim-pyiqa-f32-k3 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 3,
+    "definition": "Set downsample=True and kernel_size=3.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -8630,7 +9469,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssim-pyiqa-f32-k4 convention.
+**Cli contract:** Set downsample=True and kernel_size=4. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -8651,7 +9490,14 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k4 --reference ref.png -
 
 ```json
 {
-  "cli_contract": "AIC2026 ssim-pyiqa-f32-k4 convention."
+  "cli_contract": "AIC2026 ssim-pyiqa-f32-k4 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 4,
+    "definition": "Set downsample=True and kernel_size=4.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -8711,7 +9557,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssim-pyiqa-f32-k5 convention.
+**Cli contract:** Set downsample=True and kernel_size=5. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -8732,7 +9578,14 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k5 --reference ref.png -
 
 ```json
 {
-  "cli_contract": "AIC2026 ssim-pyiqa-f32-k5 convention."
+  "cli_contract": "AIC2026 ssim-pyiqa-f32-k5 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 5,
+    "definition": "Set downsample=True and kernel_size=5.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -8792,7 +9645,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssim-pyiqa-f32-k6 convention.
+**Cli contract:** Set downsample=True and kernel_size=6. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -8813,7 +9666,14 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k6 --reference ref.png -
 
 ```json
 {
-  "cli_contract": "AIC2026 ssim-pyiqa-f32-k6 convention."
+  "cli_contract": "AIC2026 ssim-pyiqa-f32-k6 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 6,
+    "definition": "Set downsample=True and kernel_size=6.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9283,7 +10143,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssimc-pyiqa-f32-k2 convention.
+**Cli contract:** Set downsample=True and kernel_size=2. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -9304,7 +10164,14 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k2 --reference ref.png 
 
 ```json
 {
-  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k2 convention."
+  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k2 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 2,
+    "definition": "Set downsample=True and kernel_size=2.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9364,7 +10231,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssimc-pyiqa-f32-k3 convention.
+**Cli contract:** Set downsample=True and kernel_size=3. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -9385,7 +10252,14 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k3 --reference ref.png 
 
 ```json
 {
-  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k3 convention."
+  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k3 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 3,
+    "definition": "Set downsample=True and kernel_size=3.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9445,7 +10319,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssimc-pyiqa-f32-k4 convention.
+**Cli contract:** Set downsample=True and kernel_size=4. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -9466,7 +10340,14 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k4 --reference ref.png 
 
 ```json
 {
-  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k4 convention."
+  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k4 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 4,
+    "definition": "Set downsample=True and kernel_size=4.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9526,7 +10407,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssimc-pyiqa-f32-k5 convention.
+**Cli contract:** Set downsample=True and kernel_size=5. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -9547,7 +10428,14 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k5 --reference ref.png 
 
 ```json
 {
-  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k5 convention."
+  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k5 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 5,
+    "definition": "Set downsample=True and kernel_size=5.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9607,7 +10495,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** AIC2026 ssimc-pyiqa-f32-k6 convention.
+**Cli contract:** Set downsample=True and kernel_size=6. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -9628,7 +10516,14 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k6 --reference ref.png 
 
 ```json
 {
-  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k6 convention."
+  "cli_contract": "AIC2026 ssimc-pyiqa-f32-k6 convention.",
+  "fixed_factor_contract": {
+    "kernel_size": 6,
+    "definition": "Set downsample=True and kernel_size=6.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately.",
+    "downsample": true
+  }
 }
 ```
 
@@ -9768,7 +10663,7 @@ shift-tolerant); lower is better. As lpips-alex.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric stlpips-alex --reference ref.png --distorted dist.png
 ```
@@ -9859,7 +10754,7 @@ FR · Learned · CPU · Reported results
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/stlpips/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric stlpips-vgg --reference ref.png --distorted dist.png
 ```
@@ -9908,27 +10803,27 @@ target/release/zenmetrics score --metric stlpips-vgg --reference ref.png --disto
 
 ## topiq-fr
 
-FR · Classical · CPU · Not documented
+FR · Learned · CPU · Declared gate
 
 **Paper: citation needed.**
 
-**Recorded paper:** no evidence
+**Recorded paper:** Chen, Mo, Hou, Wu, Liao, Sun, Yan, Lin. TOPIQ: A Top-down Approach from Semantics to Distortions for Image Quality Assessment. IEEE TIP 2024
 
-**Reference implementation:** no evidence
+**Reference implementation:** https://github.com/chaofengc/IQA-PyTorch
 
-**Reference identity:** no evidence
+**Reference identity:** pyiqa 0.1.16 (torch 2.14.1+cpu)
 
-**Reference code license:** not recorded
+**Reference code license:** PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab)
 
-**Rust license:** no evidence
+**Rust license:** code: PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab); weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE
 
-**Weights license:** not applicable
+**Weights license:** https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE
 
 **Display:** No display requirement in CLI mapping; see input convention
 
 **Output range:** not recorded
 
-**Direction:** not recorded
+**Direction:** higher-is-closer
 
 **Cli contract:** TOPIQ-FR, KADID-10k checkpoint (pyiqa topiq_fr; the AIC2026 TOPIQ
 column): CFANet on ResNet50, no resize, higher is better. Needs
@@ -9940,23 +10835,36 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr.
 ```sh
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
-cargo build --release -p zenmetrics-cli
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/topiq/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric topiq-fr --reference ref.png --distorted dist.png
 ```
 
-No-reference: the score describes the distorted image; the CLI still takes both paths.
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr. Consent is not implied by building the CLI.
 
 **Weights:**
 
 ```json
-{}
+{
+  "licence_class": "nc",
+  "terms": "https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE",
+  "topiq_fr": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_kadid_res50-2c4cc61d.pth",
+  "topiq_fr_sha256": "2c4cc61d1377b16d3ae85e19b7c0bb46ab70f285aada61a42692ef7908765c5e",
+  "topiq_fr_pipal": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_pipal_res50-69bbe5ba.pth",
+  "topiq_fr_pipal_sha256": "69bbe5ba7a5a890343a717fa88ae422ed2c440f1821f99f038a73eaef7d532d3"
+}
 ```
 
 **Inputs:**
 
 ```json
 {
-  "cli_contract": "TOPIQ-FR, KADID-10k checkpoint (pyiqa topiq_fr; the AIC2026 TOPIQ\ncolumn): CFANet on ResNet50, no resize, higher is better. Needs\nfeature pyiqa-ports; code and weights are non-commercial, so\nZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr."
+  "format": "packed sRGB8 (8-bit PNG, as PIL convert('RGB'))",
+  "normalisation": "v / 255 in Rust (engine::rgb8_to_planar_01); ImageNet mean/std inside the trunk graph",
+  "resize": "none (pyiqa topiq_fr: num_crop=1, no test-time resize); cost grows with the head's attention token count",
+  "min_size": 1,
+  "max_pixels": 8388608
 }
 ```
 
@@ -9964,18 +10872,32 @@ No-reference: the score describes the distorted image; the CLI still takes both 
 
 ```json
 {
-  "reported": "no evidence",
-  "oracle": "no evidence"
+  "oracle": "pyiqa 0.1.16 on CPU, fp32: metric(dist_path, ref_path)",
+  "pairs": "82 gate pairs: 61 AIC2026 crop pairs (images not distributed) + 21 ladder pairs (3 images at 64, 256, 1024 and 2048x1536, 6 aspect-ratio crops, 3 identical pairs)",
+  "tolerance_jnd": 0.001,
+  "jnd_topiq_fr": 0.030642,
+  "jnd_topiq_fr_pipal": 0.072797,
+  "results_topiq_fr": "worst |d| rten 5.96e-7, ort-cpu 4.17e-7, ort-cuda 9.54e-7 (at most 3.1e-5 JND); warm == cold bitwise on every engine",
+  "results_topiq_fr_pipal": "worst |d| rten 7.15e-7, ort-cpu 5.96e-7, ort-cuda 3.58e-7 (at most 9.8e-6 JND); warm == cold bitwise on every engine",
+  "konjnd_notes": "topiq_fr scores the distorted image above its own identical-pair score in 77 of 1,008 KonJND pairs; topiq_fr_pipal in 0. Per-codec median JND: topiq_fr JPEG 0.0407, BPG 0.0206; topiq_fr_pipal JPEG 0.0802, BPG 0.0673."
 }
 ```
 
 **Conventions:**
 
 ```json
-{}
+{
+  "aic4": {
+    "columns": [
+      "TOPIQ",
+      "TOPIQ-PIPAL"
+    ],
+    "results": "this port vs the published columns, 61 crop pairs, all three engines: TOPIQ median |d| 3.5e-5, max 2.73e-4, Spearman 1.0000; TOPIQ-PIPAL median 2.4e-5, max 1.54e-4, Spearman 1.0000. pyiqa 0.1.16 itself on the same pairs: 3.6e-5 / 2.7e-4 and 2.4e-5 / 1.5e-4, so the residual is the published run's, not the port's."
+  }
+}
 ```
 
-**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/topiq/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/topiq/card.toml)
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
@@ -9983,27 +10905,27 @@ No-reference: the score describes the distorted image; the CLI still takes both 
 
 ## topiq-fr-pipal
 
-FR · Classical · CPU · Not documented
+FR · Learned · CPU · Declared gate
 
 **Paper: citation needed.**
 
-**Recorded paper:** no evidence
+**Recorded paper:** Chen, Mo, Hou, Wu, Liao, Sun, Yan, Lin. TOPIQ: A Top-down Approach from Semantics to Distortions for Image Quality Assessment. IEEE TIP 2024
 
-**Reference implementation:** no evidence
+**Reference implementation:** https://github.com/chaofengc/IQA-PyTorch
 
-**Reference identity:** no evidence
+**Reference identity:** pyiqa 0.1.16 (torch 2.14.1+cpu)
 
-**Reference code license:** not recorded
+**Reference code license:** PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab)
 
-**Rust license:** no evidence
+**Rust license:** code: PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab); weights: https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE
 
-**Weights license:** not applicable
+**Weights license:** https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE
 
 **Display:** No display requirement in CLI mapping; see input convention
 
 **Output range:** not recorded
 
-**Direction:** not recorded
+**Direction:** higher-is-closer
 
 **Cli contract:** TOPIQ-FR, PIPAL checkpoint (pyiqa topiq_fr-pipal; AIC2026
 TOPIQ-PIPAL). As topiq-fr, with
@@ -10014,23 +10936,36 @@ ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal.
 ```sh
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
-cargo build --release -p zenmetrics-cli
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/topiq/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric topiq-fr-pipal --reference ref.png --distorted dist.png
 ```
 
-No-reference: the score describes the distorted image; the CLI still takes both paths.
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal. Consent is not implied by building the CLI.
 
 **Weights:**
 
 ```json
-{}
+{
+  "licence_class": "nc",
+  "terms": "https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE",
+  "topiq_fr": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_kadid_res50-2c4cc61d.pth",
+  "topiq_fr_sha256": "2c4cc61d1377b16d3ae85e19b7c0bb46ab70f285aada61a42692ef7908765c5e",
+  "topiq_fr_pipal": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/cfanet_fr_pipal_res50-69bbe5ba.pth",
+  "topiq_fr_pipal_sha256": "69bbe5ba7a5a890343a717fa88ae422ed2c440f1821f99f038a73eaef7d532d3"
+}
 ```
 
 **Inputs:**
 
 ```json
 {
-  "cli_contract": "TOPIQ-FR, PIPAL checkpoint (pyiqa topiq_fr-pipal; AIC2026\nTOPIQ-PIPAL). As topiq-fr, with\nZENMETRICS_NN_ACCEPT_WEIGHTS=topiq_fr_pipal."
+  "format": "packed sRGB8 (8-bit PNG, as PIL convert('RGB'))",
+  "normalisation": "v / 255 in Rust (engine::rgb8_to_planar_01); ImageNet mean/std inside the trunk graph",
+  "resize": "none (pyiqa topiq_fr: num_crop=1, no test-time resize); cost grows with the head's attention token count",
+  "min_size": 1,
+  "max_pixels": 8388608
 }
 ```
 
@@ -10038,18 +10973,32 @@ No-reference: the score describes the distorted image; the CLI still takes both 
 
 ```json
 {
-  "reported": "no evidence",
-  "oracle": "no evidence"
+  "oracle": "pyiqa 0.1.16 on CPU, fp32: metric(dist_path, ref_path)",
+  "pairs": "82 gate pairs: 61 AIC2026 crop pairs (images not distributed) + 21 ladder pairs (3 images at 64, 256, 1024 and 2048x1536, 6 aspect-ratio crops, 3 identical pairs)",
+  "tolerance_jnd": 0.001,
+  "jnd_topiq_fr": 0.030642,
+  "jnd_topiq_fr_pipal": 0.072797,
+  "results_topiq_fr": "worst |d| rten 5.96e-7, ort-cpu 4.17e-7, ort-cuda 9.54e-7 (at most 3.1e-5 JND); warm == cold bitwise on every engine",
+  "results_topiq_fr_pipal": "worst |d| rten 7.15e-7, ort-cpu 5.96e-7, ort-cuda 3.58e-7 (at most 9.8e-6 JND); warm == cold bitwise on every engine",
+  "konjnd_notes": "topiq_fr scores the distorted image above its own identical-pair score in 77 of 1,008 KonJND pairs; topiq_fr_pipal in 0. Per-codec median JND: topiq_fr JPEG 0.0407, BPG 0.0206; topiq_fr_pipal JPEG 0.0802, BPG 0.0673."
 }
 ```
 
 **Conventions:**
 
 ```json
-{}
+{
+  "aic4": {
+    "columns": [
+      "TOPIQ",
+      "TOPIQ-PIPAL"
+    ],
+    "results": "this port vs the published columns, 61 crop pairs, all three engines: TOPIQ median |d| 3.5e-5, max 2.73e-4, Spearman 1.0000; TOPIQ-PIPAL median 2.4e-5, max 1.54e-4, Spearman 1.0000. pyiqa 0.1.16 itself on the same pairs: 3.6e-5 / 2.7e-4 and 2.4e-5 / 1.5e-4, so the residual is the published run's, not the port's."
+  }
+}
 ```
 
-**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/topiq/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/topiq/card.toml)
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
@@ -10920,7 +11869,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** VSI with fixed factor 2.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 2. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -10941,7 +11890,13 @@ target/release/zenmetrics score --metric vsi-k2 --reference ref.png --distorted 
 
 ```json
 {
-  "convention": "sRGB8 (SDSP colour saliency)"
+  "convention": "sRGB8 (SDSP colour saliency)",
+  "fixed_factor_contract": {
+    "kernel_size": 2,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 2.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -11001,7 +11956,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** VSI with fixed factor 3.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 3. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -11022,7 +11977,13 @@ target/release/zenmetrics score --metric vsi-k3 --reference ref.png --distorted 
 
 ```json
 {
-  "convention": "sRGB8 (SDSP colour saliency)"
+  "convention": "sRGB8 (SDSP colour saliency)",
+  "fixed_factor_contract": {
+    "kernel_size": 3,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 3.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -11082,7 +12043,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** VSI with fixed factor 4.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 4. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -11103,7 +12064,13 @@ target/release/zenmetrics score --metric vsi-k4 --reference ref.png --distorted 
 
 ```json
 {
-  "convention": "sRGB8 (SDSP colour saliency)"
+  "convention": "sRGB8 (SDSP colour saliency)",
+  "fixed_factor_contract": {
+    "kernel_size": 4,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 4.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -11163,7 +12130,7 @@ FR · Classical · CPU · Not documented
 
 **Direction:** not recorded
 
-**Cli contract:** VSI with fixed factor 1.
+**Cli contract:** Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 1. All other pipeline steps remain unchanged. Settled definition, 2026-10-19; branch and implementation verification tracked separately.
 
 **Reproduce from the CLI:**
 
@@ -11184,7 +12151,13 @@ target/release/zenmetrics score --metric vsi-nodownscale --reference ref.png --d
 
 ```json
 {
-  "convention": "sRGB8 (SDSP colour saliency)"
+  "convention": "sRGB8 (SDSP colour saliency)",
+  "fixed_factor_contract": {
+    "kernel_size": 1,
+    "definition": "Replace only kernel_size = max(1, round(min(H,W)/256)) with kernel_size = 1.",
+    "other_pipeline_steps": "unchanged",
+    "qualification": "Settled definition, 2026-10-19; branch and implementation verification tracked separately."
+  }
 }
 ```
 
@@ -11260,7 +12233,7 @@ ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric wadiqam-fr-live --reference ref.png --distorted dist.png
 ```
@@ -11356,7 +12329,7 @@ median 12.5, range 9.7..20.6). Emits wadiqam_fr_tid.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric wadiqam-fr-tid --reference ref.png --distorted dist.png
 ```
@@ -11455,7 +12428,7 @@ for ZENMETRICS_NN_MODEL_DIR/ZENMETRICS_NN_ENGINE.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric wadiqam-nr-live --reference ref.png --distorted dist.png
 ```
@@ -11552,7 +12525,7 @@ q95..q3 ladder). Emits wadiqam_nr_tid and wadiqam_nr_tid_ref.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/wadiqam/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric wadiqam-nr-tid --reference ref.png --distorted dist.png
 ```
@@ -11602,6 +12575,109 @@ target/release/zenmetrics score --metric wadiqam-nr-tid --reference ref.png --di
 
 [Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-nr-tid) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-nr-tid) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-nr-tid)
 
+## wadiqam-pyiqa
+
+FR · Learned · CPU · Declared gate
+
+**Paper:** [Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment](https://arxiv.org/abs/1612.01697). Bosse, Sebastian; Maniry, Dominique; Müller, Klaus-Robert; Wiegand, Thomas; Samek, Wojciech. IEEE TIP 2018. 2016 (arXiv submission year; publication venue may be later).
+
+```bibtex
+@misc{wadiqam2016,
+  title = {Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment},
+  author = {Bosse, Sebastian and Maniry, Dominique and Müller, Klaus-Robert and Wiegand, Thomas and Samek, Wojciech},
+  year = {2016},
+  note = {IEEE TIP 2018},
+  url = {https://arxiv.org/abs/1612.01697},
+  eprint = {1612.01697},
+  archivePrefix = {arXiv}
+}
+```
+
+**Recorded paper:** Bosse, Maniry, Mueller, Wiegand, Samek. Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment. IEEE TIP 2018
+
+**Reference implementation:** pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref)
+
+**Reference identity:** pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref)
+
+**Reference code license:** PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab)
+
+**Rust license:** code: PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); weights: nc
+
+**Weights license:** nc
+
+**Display:** No display requirement in CLI mapping; see input convention
+
+**Output range:** not recorded
+
+**Direction:** higher-is-better
+
+**Cli contract:** WaDIQaM-FR as pyiqa scores it (KADID checkpoint, pyiqa's 32×32 patch
+grid; the AIC2026 WaDIQaM column, higher is better). Needs
+feature pyiqa-ports and ZENMETRICS_NN_ACCEPT_WEIGHTS=wadiqam_pyiqa.
+
+**Reproduce from the CLI:**
+
+```sh
+git clone https://github.com/imazen/zenmetrics && cd zenmetrics
+bash scripts/ci/clone-siblings.sh
+cargo build --release -p zenmetrics-cli --features pyiqa-ports,nn
+# export the model once (see crates/zenmetrics-pyiqa-ports/models/wadiqam-pyiqa/card.toml for weight terms and export command)
+export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
+target/release/zenmetrics score --metric wadiqam-pyiqa --reference ref.png --distorted dist.png
+```
+
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=wadiqam_pyiqa. Consent is not implied by building the CLI.
+
+**Weights:**
+
+```json
+{
+  "licence_class": "nc",
+  "checkpoint": "https://huggingface.co/chaofengc/IQA-PyTorch-Weights/resolve/main/WaDIQaM-kadid-f7541ea5.pth",
+  "sha256": "f7541ea5dd4d742559e689889a0f3035bdff22fc444e5602a3082ed426ef20a8",
+  "trained_on": "KADID-10k",
+  "consent": "WadiqamPyiqa::WEIGHTS; ZENMETRICS_NN_ACCEPT_WEIGHTS=wadiqam_pyiqa"
+}
+```
+
+**Inputs:**
+
+```json
+{
+  "format": "packed sRGB8",
+  "normalisation": "v / 255 (ToTensor), no mean/std",
+  "patches": "32x32 at stride 32, origins range(0, d-32, 32) per axis: a side that is a multiple of 32 drops its last full patch (deepIQA keeps it)",
+  "min_size": 33
+}
+```
+
+**Parity:**
+
+```json
+{
+  "oracle": "pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref)",
+  "goldens": "goldens_ladder.tsv (common/ladder.py, 15 pairs 64x64..2048x1536)",
+  "jnd": 0.009666,
+  "tolerance_jnd": 0.001,
+  "measured_ladder": "rten 5.7e-8 (5.9e-6 JND), ort-cpu 1.10e-7 (1.1e-5 JND), ort-cuda 3.4e-8 (3.5e-6 JND)",
+  "measured_aic2026_61": "rten 1.19e-8, ort-cpu 1.27e-8, ort-cuda 2.59e-8 (<= 2.7e-6 JND); pyiqa vs the published column: median 1.7e-6, max 1.2e-5",
+  "warm_reference": "caches the reference's patch features; bit-identical to cold on every pair",
+  "recorded_source_comments": "1 JND: pooled median |score(pair) - score(ref, ref)| over the 1,008 KonJND-1k pairs, pyiqa CPU\n(JPEG 0.008107, BPG 0.011477; distorted below its identical-pair score in 1006 of 1008).\nperf_deltas.py, i265 (Core Ultra 7 265K), rten, 1024x1024 ladder pair, cold evaluate per call;\nbenchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.{tsv,meta}."
+}
+```
+
+**Conventions:**
+
+```json
+{}
+```
+
+**Sources:** [crates/zenmetrics-pyiqa-ports/models/wadiqam-pyiqa/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-pyiqa-ports/models/wadiqam-pyiqa/card.toml)
+
+**Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
+
+[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-pyiqa)
+
 ## wd
 
 FR · Learned · CPU · Reported results
@@ -11647,7 +12723,7 @@ Raw sRGB VGG16 pre-pool features; lower is closer. Emits five columns.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/wd/card.toml for weight terms)
+# export the model once (see crates/zenmetrics-nn/models/wd/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric wd --reference ref.png --distorted dist.png
 ```

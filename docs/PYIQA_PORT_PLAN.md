@@ -271,7 +271,6 @@ writing:
 | AIC-4 classical | PSNR-YCbCr611, CIEDE2000, SSIMc; VMAF/VMAF-neg on studio-601 (`vmaf-studio601`, `vmaf-neg-studio601`) | zenmetrics-cli | landed on master 2026-10-15 (`b85c6f9c`, `99f93098`, `49fff3bc`, `613226a8`); 61-pair max \|Δ\| 3.5e-3 dB, 3.0e-4, 7.5e-7, 0.075 / 0.12 |
 | AIC-4 classical | PSNR-Cb, PSNR-Cr | zenmetrics-cli | opencode lane `aic-classic` |
 | AIC-4 classical | FLIP, CW-SSIM; FSIM/FSIMc/VSI `-kN`/`-nodownscale`; SSIM/SSIMc/MS-SSIM pyiqa convention with `-f32`/`-kN` | zenmetrics-cli, fsim, vsi | codex lane `aic-variants` (branch `aic-variants`, PR when done: new public API in fsim/vsi) |
-| AIC-4 unidentified | AIMOS | — | not identified anywhere public; ask the dataset contacts |
 | NR | PIQE (used before, via PU21, `benchmarks/pu_integrated_upiq_2026-06-09.md`), NIQE, BRISQUE | Rust ports, LIVE data with notice | after AIC-4 |
 | NR | MUSIQ, ARNIQA, MANIQA, LIQE | zenmetrics-nn | permissive; shape is `NoReferenceMetric`, run in pair tools through `PairedNoReference` (`<key>` on the distorted image, `<key>_ref` on the reference) |
 | NR | TOPIQ-NR, CLIP-IQA+, QualiCLIP | zenmetrics-nn | NC weights: opt-in |
@@ -330,3 +329,7 @@ Checklist for each new model: `crates/zenmetrics-nn/ADDING_MODELS.md`.
    basis of a commercial software or hardware product without first obtaining
    permission" ([licence report](PYIQA_UPSTREAM_LICENSES_2026-10-15.md) §3): ask the
    authors for permission or get counsel's view.
+
+### Excluded metric (owner clarification, 2026-10-19)
+
+AIMOS is excluded (proprietary, unreleased). It is a proprietary Cloudinary metric that was never publicly described or released. It is not an implementation/reproduction task or a question for the dataset authors.

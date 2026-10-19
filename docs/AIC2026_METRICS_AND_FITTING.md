@@ -254,7 +254,7 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `SSIMULACRA2` | "SSIMULACRA v2.1" | `ssim2` → sibling `fast-ssim2` | current lineage; JND delta ≤0.004 |
 | `GMSD` | standard GMSD | `gmsd` | exact |
 | `HaarPSI` | HaarPSI | `haarpsi` | reproduction-grade |
-| `VSI` | VSI, `k3`/`k4` weight variants in fit set | `vsi` (plus `vsi-k2/k3/k4/nodownscale`) | our port = paper weights; the site fit used the k3 values, and the published full-res CSV columns are the automatic factor (our auto-factor ports match them) |
+| `VSI` | VSI, fixed `kernel_size` variants in fit set | `vsi` (plus `vsi-k2/k3/k4/nodownscale`) | our port = paper weights; the site fit used the k3 values, and the published full-res CSV columns are the automatic factor (our auto-factor ports match them) |
 | `FSIM`/`FSIMc` | FSIM/FSIMc, `k4` variant in fit | `fsim`, `fsimc` | acceptable; JPG-16 tail 0.3 JND |
 | `DSSIM` | dssim-core ^3.4 | `dssim` | exact |
 | `IW-SSIM` | jpeg-ai-qaf `IW_SSIM` (Jack-guo torch port) on **unrounded** 0–255 Y (`0.299/0.587/0.114`, kornia-matrix YUV) | `iwssim-piq` | ✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); `iwssim` keeps the Python-IW-SSIM rounded-BT.601 oracle convention |
@@ -290,10 +290,14 @@ pyiqa-convention ports behind `pyiqa-ports` (non-commercial code terms).
 All pass the original 1e-3 JND oracle gate. `dmm-pyiqa` implements the
 square-resize convention but fails that gate (worst 0.071 JND, SVD).
 IDFIQA and learned MSSWD are ported privately; only aggregate results are public.
-AIMOS remains unidentified after 16 of 34 NR candidates; best Spearman 0.82.
+AIMOS is excluded (proprietary, unreleased): a proprietary Cloudinary metric never publicly described or released. It is outside implementation and reproduction scope, with no author-question task.
 Fixed-factor FSIM/FSIMc/VSI and f32 SSIM-family variants are implemented,
 counted and timed; published parity is unverifiable without per-image values.
 Haar experiments and VQMT PSNR-HVS variants still lack those values.
+
+### Settled fixed-factor contract (2026-10-19)
+
+FSIM/FSIMc and VSI `-kN` replace only `kernel_size = max(1, round(min(H,W)/256))` with `kernel_size = k`. The pyiqa SSIM-family `-kN` variants set `downsample=True` and `kernel_size=k`. All other pipeline steps remain unchanged. These definitions are settled; branch and implementation qualification belong to the separate verification lane. This docs/site update does not establish new native or published-column parity.
 
 ## Method / reproduction
 

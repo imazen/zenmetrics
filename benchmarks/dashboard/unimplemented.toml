@@ -75,11 +75,12 @@ status = "not reproduced in zenmetrics"
 source = "docs/AIC2026_METRICS_AND_FITTING.md:263"
 
 [[method]]
-name = "AIMOS"
-status = "not identified publicly"
-source = "docs/PYIQA_PORT_PLAN.md:268"
-
-[[method]]
 name = "TReS, CNNIQA, IQT, MA-CLIP, MetaIQA"
 status = "not planned (licence or distribution terms)"
 source = "docs/PYIQA_PORT_PLAN.md:246"
+
+# Excluded entries are outside the implementation-task list.
+[[excluded]]
+name = "AIMOS"
+status = "excluded (proprietary, unreleased)"
+source = "docs/AIC2026_REPRODUCTION_STATUS.md:93"

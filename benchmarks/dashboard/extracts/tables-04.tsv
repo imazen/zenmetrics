@@ -305,13 +305,13 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	20	status	implemented
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	20	note	aggregates only; Spearman 0.9999; see AIC2026_REPRODUCTION_STATUS.md
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	name	AIMOS
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	in CSV?	site+dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	zenmetrics metric	missing
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	zenmetrics metric	excluded (proprietary, unreleased)
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	median |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	max |Δ|	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	note	unidentified
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	status	excluded (proprietary, unreleased)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	3	21	note	Proprietary Cloudinary metric, never publicly described or released; outside implementation/reproduction scope.
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	0	name	proposal-Butteraugli
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	0	in CSV?	site+dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	0	zenmetrics metric	butteraugli (butteraugli_pnorm3), affine only
@@ -398,6 +398,3 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	zenmetrics metric	missing in zenmetrics; dvifmish port-2d-v0.2 has the same name
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	4	9	status	missing

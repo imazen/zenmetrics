@@ -13,6 +13,7 @@ import re
 import tomllib
 from catalog import ROOT, rows as catalog_rows, md_tables, plain, function, model_paths
 import repro
+from aic_semantics import fixed_factor_contract, description as variant_description
 
 SITE='https://imazen.github.io/zenmetrics/'
 REPO='https://github.com/imazen/zenmetrics/blob/master/'
@@ -112,6 +113,8 @@ def cards():
         inputs=model.get('input',{}) or ({'convention':plain(entry[5])} if len(entry)>5 else {'cli_contract':contracts.get(metric,MISSING)})
         explicit=explicit_aic_inputs(metric)
         if explicit:inputs=explicit
+        variant_contract=fixed_factor_contract(metric)
+        if variant_contract:inputs=dict(inputs,fixed_factor_contract=variant_contract)
         output=plain(entry[6]) if len(entry)>6 else MISSING
         code=model.get('code',{});weights=model.get('weights',{})
         reference=code.get('upstream',parity.get('oracle',row['reference']))
@@ -156,7 +159,7 @@ def cards():
              weights_license=weights.get('terms',weights.get('licence_class',MISSING if model or metric in ['brisque','niqe'] else 'not applicable')),
              weights=weights,license_evidence=licenses,
              inputs=inputs,display='Required: consult explicit viewing contract' if row['needs_display']=='true' else 'No display requirement in CLI mapping; see input convention',
-             output_range=output,direction=model.get('direction',row['direction'] or MISSING),cli_contract=contracts.get(metric,MISSING),
+             output_range=output,direction=model.get('direction',row['direction'] or MISSING),cli_contract=variant_description(metric) or contracts.get(metric,MISSING),
              parity_status=status,parity=parity or {'reported':row['parity'],'oracle':row['reference']},
              evidence=list(dict.fromkeys(evidence+(['crates/zenmetrics-cli/src/metrics/mod.rs'] if not model else []))),
              divergences=related,conventions={k:model[k] for k in ['aic4','oracle_convention','convention'] if k in model},

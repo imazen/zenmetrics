@@ -46,9 +46,7 @@ re-measured: CLI needs HDR sources).
 
 1. **Fixed downscale factor + unrounded-input options** (implemented; comparison values still missing):
    FSIM/FSIMc/VSI `-k2/-k3/-k4/-nodownscale` (12), SSIM-pyiqa-f32-k2…k6 and SSIMc-pyiqa-f32-k2…k6 (10),
-   pyiqa-VSI-f32, pyiqa-SSIM-f32, pyiqa-SSIMc-f32, pyiqa-MS-SSIM-f32(-k2…k6). Implemented as fixed-factor CLI variants; published values unavailable. Historical design required an override in
-   `fsim`/`vsi` (both compute `max(1, round(min/256))` internally) and a luma SSIM without downscale
-   (SSIM-pyiqa is now implemented as a base metric).
+   pyiqa-VSI-f32, pyiqa-SSIM-f32, pyiqa-SSIMc-f32, pyiqa-MS-SSIM-f32(-k2…k6). Variant routes exist; published values remain unavailable. The fixed-factor contract is settled below; branch/implementation qualification is tracked separately.
 2. **DVIFM** (13 entries: 9 site names + 4 screenshot aliases): proposal-DVIFM, -0.2, -0.2-use_chroma,
    -2d, -min, -min-v0.2, -2d-v0.2, -lap-v0.2, -lap-v0.3. dvifmish (dev `~/work/dvifmish`, publish=false)
    already ports the author's v0.2/v0.3 builds; the later 61-pair comparison finds no published-column match. See AIC2026_REPRODUCTION_STATUS.md.
@@ -64,19 +62,11 @@ re-measured: CLI needs HDR sources).
    CAMBI (`vmaf::cambi_v1_from_luma` exists) as CLI columns.
 8. **PSNR-HVS-vqmt / -M-vqmt** (2, excluded, no values).
 9. **Singles**: Butteraugli-original (≠ libjxl: Pearson 0.87 vs our max), SSIMULACRA1, WS-HV
-   (unidentified), CW-SSIM, FLIP, proposal-IDFIQA, AIMOS (unidentified).
+   (unidentified), CW-SSIM, FLIP, proposal-IDFIQA. AIMOS is excluded (proprietary, unreleased).
 
 ## Findings worth acting on
 
-- **kN = fixed downscale factor N; nodownscale = factor 1; f32 = no u8 rounding.** Evidence: (a) the
-  site maps for FSIM, FSIMc and VSI equal their `-k3` maps to 7 digits, so the fit used the k3 values;
-  (b) those base maps fit the cropped 840×944 set (automatic factor 3) far better than full-res values
-  (RMS vs JND_CVVDP over 9,618 rows: FSIM 0.91 vs 1.38, VSI 0.98 vs 1.33; other metrics equal);
-  (c) the published full-res FSIM/VSI columns are the automatic factor (our auto-factor ports match them);
-  (d) SSIM*-f32-kN: our numpy values after an N×N downscale put map_kN within +0.01…+0.19 JND (median)
-  of the base map; without the downscale the bias is +1.3…+10.5 JND (`variant_test.tsv`). The resampling
-  kernel (box, bicubic, Lanczos) cannot be told apart this way. SSIM-pyiqa base uses rounded luma
-  (matches to 3.9e-6; unrounded is off by up to 7e-4), so "f32" means unrounded.
+- **Fixed-factor definition settled by the owner, 2026-10-19.** FSIM/FSIMc and VSI `-kN` replace only `kernel_size = max(1, round(min(H,W)/256))` with `kernel_size = k`. The pyiqa SSIM-family `-kN` variants set `downsample=True` and `kernel_size=k`. Other steps are unchanged. Branch/implementation qualification is tracked separately; this historical audit does not establish it. The `f32` label means unrounded input. Per-image values for the experimental variants remain unavailable.
 - **Stale DeepDC numbers:** `~/tmp/nn-phase0/aic/deepdc.tsv` (ort-cuda, full res) was scored before the
   ImageNet-normalised re-export and is off by up to 0.10. Rescored here on rten: max 3.0e-5.
 - **CLI `vmaf` ingress:** it feeds studio BT.709 Y; the crate fed studio-601 Y matches the dataset
@@ -199,7 +189,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 | A-FINE | site+dataset | missing |  |  |  |  | missing | queued in PYIQA_PORT_PLAN.md |
 | DreamSim | site+dataset | dreamsim | 61 |  | 6.1e-7 |  | reproduced | AIC2026_METRICS_AND_FITTING.md; Pillow bicubic 224 square |
 | MSSWD | site+dataset | private port | 61 | 4.1e-6 | 2.4e-4 |  | implemented | aggregates only; Spearman 0.9999; see AIC2026_REPRODUCTION_STATUS.md |
-| AIMOS | site+dataset | missing |  |  |  |  | missing | unidentified |
+| AIMOS | site+dataset | excluded (proprietary, unreleased) |  |  |  |  | excluded (proprietary, unreleased) | Proprietary Cloudinary metric, never publicly described or released; outside implementation/reproduction scope. |
 
 ## AIC-4 proposals
 

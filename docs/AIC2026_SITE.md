@@ -109,8 +109,14 @@ for every pyiqa CLI name. Metric arithmetic and parity limits are unchanged.
 
 ### Exact ingress declarations
 
-The fixed-factor SSIM family reads colour, multiscale, rounding and factor
-flags directly from the current CLI dispatch. Its `f32` suffix means
+The settled fixed-factor definition replaces only FSIM/FSIMc/VSI
+`kernel_size = max(1, round(min(H,W)/256))` with `kernel_size=k`. Pyiqa
+SSIM-family `-kN` variants set `downsample=True` and `kernel_size=k`; other
+steps are unchanged. Branch and implementation verification belongs to
+portcheck2 and is separate from this docs/site update.
+
+Recorded SSIM colour, multiscale, rounding and factor flags come from the
+CLI dispatch; they do not qualify the settled definition. Its `f32` suffix means
 unrounded input: the native kernel actually accumulates in f64. Complete box
 blocks are averaged from the top-left; incomplete bottom/right blocks are
 dropped. Historical tally assumptions are labelled separately from current
@@ -171,3 +177,10 @@ Generic `butteraugli` benchmark rows report the headline max output of a shared
 call. They are not independently measured pnorm3 timings. The screenshot coverage
 label retains this distinction; the explicit proposal route has its own scoped
 r5900xt supplement.
+
+### AIMOS exclusion (owner clarification, 2026-10-19)
+
+AIMOS is excluded (proprietary, unreleased). The proprietary Cloudinary metric
+was never publicly described or released. It is absent from implementation,
+reproduction and author-question queues. Public projections contain only this
+exclusion status, with no private probe measurements.

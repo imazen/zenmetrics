@@ -61,6 +61,35 @@ class AIC2026(unittest.TestCase):
         self.assertEqual(mapping['map']['VMAF'],'vmaf-studio601')
         self.assertEqual(mapping['map']['VMAF-neg'],'vmaf-neg-studio601')
 
+    def test_owner_exclusion_is_outside_tasks_and_comparisons(self):
+        from build import unimplemented_methods
+        import tomllib
+        row=next(r for r in aic2026.reproduction_rows([], 'a'*40) if r['column']=='AIMOS')
+        self.assertFalse(row['in_scope'])
+        self.assertEqual(row['status'],'excluded (proprietary, unreleased)')
+        for field in ('n','median','maximum','max_jnd'):
+            self.assertEqual(row[field],'')
+        for term in ('probe','Spearman','hyperiqa'):
+            self.assertNotIn(term,json.dumps(row))
+        self.assertNotIn('AIMOS',{r['name'] for r in unimplemented_methods()})
+        exclusions=tomllib.loads((ROOT/'benchmarks/dashboard/unimplemented.toml').read_text())['excluded']
+        self.assertEqual(exclusions[0]['status'],row['status'])
+
+    def test_settled_semantics_are_separate_from_qualification(self):
+        from aic_semantics import fixed_factor_contract
+        by_name={c['metric']:c for c in cards()}
+        for name,size in [('fsim-k2',2),('fsimc-k3',3),('vsi-k4',4),('ssim-pyiqa-f32-k6',6)]:
+            contract=fixed_factor_contract(name)
+            self.assertEqual(contract['kernel_size'],size)
+            self.assertEqual(contract['other_pipeline_steps'],'unchanged')
+            self.assertIn('verification tracked separately',contract['qualification'])
+            if name in by_name:
+                self.assertEqual(by_name[name]['inputs']['fixed_factor_contract'],contract)
+        contract=aic2026.ssim_dispatch_inputs()['ssim-pyiqa-f32-k6']['fixed_factor_contract']
+        self.assertIs(contract['downsample'],True)
+        self.assertIn('downsample=True',contract['definition'])
+        self.assertIsNone(fixed_factor_contract('ssim-pyiqa'))
+
     def test_external_resources_fail_but_citation_navigation_passes(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);p=root/'index.html'

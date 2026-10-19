@@ -20,7 +20,7 @@
       "aggregate_record_git_blob": "626500c97404ec636b90abc385e9f65eef57e887"
     }
   ],
-  "aimos": "Unidentified: 16 of 34 no-reference candidates scored, no match. Best hyperiqa ratio, Spearman 0.82.",
+  "aimos": "excluded (proprietary, unreleased)",
   "data_terms": "The AIC2026 DaRUS dataset listing (DOI 10.18419/DARUS-6156), checked 2026-10-18, states CC BY-SA 4.0. The new AIC2026 pages publish aggregate comparisons only. Current subjective-score version, uncertainty and permission to publish derived charts are requested from the authors; no AIC2026 per-image metric or human labels are exported by this section.",
   "data_terms_url": "https://doi.org/10.18419/DARUS-6156"
 }

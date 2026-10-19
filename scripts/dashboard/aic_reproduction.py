@@ -4,6 +4,7 @@ import json
 import re
 
 from catalog import ROOT, md_tables, plain, rows as catalog_rows
+from aic_semantics import description as variant_description
 
 INVENTORY = 'benchmarks/dashboard/aic2026/columns.tsv'
 LEDGER = 'docs/AIC2026_METRICS_AND_FITTING.md'
@@ -47,7 +48,7 @@ def rows(cards, commit):
         implementation = mapping.get(key, ours) or (key.lower() if key.lower() in cli_names else '')
         row = dict(column=name, availability=entry['availability'], implementation=implementation or 'not identified',
                    n='', median='', maximum='', max_jnd='', status='current comparison not recorded',
-                   note=qualification, evidence=LEDGER, comparison_scope='Current naming and qualification ledger')
+                   note=qualification, evidence=LEDGER, comparison_scope='Current naming and qualification ledger',in_scope=True)
         if key in reproduced or (key.startswith('PSNR-HVS') and 'Daala' in identified):
             row['status'] = 'reproduced; stated residual'
         elif implementation:
@@ -78,13 +79,16 @@ def rows(cards, commit):
         variants = re.findall(r'(?:ssimc?|ms-ssim|fsimc?|vsi)(?:-pyiqa)?(?:-f32)?(?:-k[2-6]|-nodownscale)?', key.lower())
         if entry['availability'] == 'neither' and variants:
             row.update(implementation=implementation or ', '.join(variants), status='implemented; published values unavailable',
-                       note='Fixed-factor/f32 implementations exist; the authors have not published the per-image values needed for column parity.', evidence=STATUS)
+                       note='Variant routes exist; the authors have not published the per-image values needed for column parity. '+variant_description(variants[0]), evidence=STATUS)
         if key.startswith(('HaarXYB', 'HaarY-', 'HaarYCoCg')):
             row.update(implementation='unidentified experiment', status='MISSING: identity and published values',
                        note='Completed method search identifies 0 of 11 variants; no candidate fit qualified.',
                        evidence='benchmarks/dashboard/aic2026/haar-search.json')
         elif key == 'AIMOS':
-            row.update(status='MISSING: unidentified', note='16 of 34 NR candidates scored; no match; best hyperiqa ratio Spearman 0.82.', evidence=STATUS)
+            row.update(implementation='excluded (proprietary, unreleased)',status='excluded (proprietary, unreleased)',
+                       note='Proprietary Cloudinary metric, never publicly described or released. Outside implementation and reproduction scope; no author-question task.',
+                       evidence=STATUS,comparison_scope='Excluded; no comparison or implementation task',in_scope=False,
+                       n='',median='',maximum='',max_jnd='')
         elif '-vqmt' in key:
             row.update(status='MISSING: published values', note='MSU VQMT convention; per-image values unavailable.', evidence=STATUS)
         elif key.startswith('proposal-DVIFM'):
@@ -143,5 +147,5 @@ def rows(cards, commit):
             row.update(implementation=mapping[key], n=measured['n'], median=measured['med_abs'], maximum=measured['max_abs'], max_jnd=measured['max_jnd'],
                        status=status, note=note+' Median site-JND '+measured['med_jnd']+'; Spearman '+measured['spearman']+'.',
                        evidence='benchmarks/aic_refusals_2026-10-18/README.md', comparison_scope='Native port versus published, 61 crops')
-    result.sort(key=lambda r:(0 if r['status'].startswith('MISSING') else 1 if 'unmatched' in r['status'] or 'fails' in r['status'] or r['status']=='unreproduced' else 2,r['column']))
+    result.sort(key=lambda r:(3 if not r['in_scope'] else 0 if r['status'].startswith('MISSING') else 1 if 'unmatched' in r['status'] or 'fails' in r['status'] or r['status']=='unreproduced' else 2,r['column']))
     return result

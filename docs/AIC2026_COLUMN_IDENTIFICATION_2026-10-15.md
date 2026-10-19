@@ -25,7 +25,7 @@ and `MS-SSIM` rows are the libvmaf versions.
 | `MS-SSIM-pyiqa` | MS-SSIM (Wang, Simoncelli, Bovik 2003) on the same luma: 5 scales, weights [0.0448, 0.2856, 0.3001, 0.2363, 0.1333], cs clipped at 0, 2×2 average pooling between scales (zero-padded when odd), product combination | measured on 3 pairs to 2e-7 | higher | from the paper with those conventions |
 | `CW-SSIM` | complex-wavelet SSIM (Wang & Simoncelli, ICASSP 2005; Sampat et al., TIP 2009) on the same luma, complex steerable pyramid, 4 levels × 8 orientations, 7×7 window, scored at one coarse level | inferred from the site's grouping and its range; not recomputed | higher | needs an oracle: fit conventions against the 61-pair AIC subset |
 | `MSSWD` | learned MS-SWD (He et al., ECCV 2024, [arXiv:2407.10181](https://arxiv.org/abs/2407.10181)); images resized to a 256 px short side | measured privately: median 4.1e-6, max 2.4e-4, Spearman 0.9999 | lower | private port, aggregates only; the official repo ([real-hjq/MS-SWD](https://github.com/real-hjq/MS-SWD)) has no licence file and the learned weights are distributed by pyiqa (noncommercial) |
-| `AIMOS` | **not identified** (16 of 34 NR candidates tested; best hyperiqa ratio Spearman 0.82) | not in the paper, dataset docs, CTC, Call for Proposals, JPEG AIC white paper or pyiqa; no web match | higher (config) | none until identified. Measured: range 0.184–0.894, median 0.679, never near 1 even at the mildest level, strongest correlations with full-reference fidelity metrics (VIF +0.886, PieAPP −0.883): inferred to be a full-reference predicted-MOS model |
+| `AIMOS` | excluded (proprietary, unreleased) | Owner clarification, 2026-10-19: proprietary Cloudinary metric, never publicly described or released | outside scope | No implementation, reproduction or author-question task |
 | `proposal-IDFIQA` | one of the four AIC-4 proposals (inferred from the `proposal-` prefix and the [109th meeting report](https://records.sigmm.org/?p=14852)); the AIC-4 notes in [`AIC2026_METRICS_AND_FITTING.md`](AIC2026_METRICS_AND_FITTING.md) attribute it to Khakpour, Yademellat & Mansouri (ICCKE 2025) | private port: median 4.2e-6, max 3.33e-4 JND, Spearman 1.0 | lower (config) | private aggregates only; request upstream code licence |
 
 Measured CSV ranges (9,618 rows): `WD_s1` 0.048–9.55 (median 1.43), `WD_s2` 0.034–8.10 (1.17),
@@ -34,12 +34,12 @@ Measured CSV ranges (9,618 rows): `WD_s1` 0.048–9.55 (median 1.43), `WD_s2` 0.
 `SSIMc` 0.550–0.9984; `MS-SSIM-pyiqa` 0.909–0.9997; `CW-SSIM` 0.647–0.99999 (median 0.9937);
 `MSSWD` 0.0045–1.44 (median 0.044); `proposal-IDFIQA` 0.0014–4.69 (median 0.44).
 
-All columns here are full-reference except possibly `AIMOS`.
+AIMOS is excluded from implementation and reproduction scope. The other identified columns here are full-reference.
 
 Licences read from LICENSE files on 2026-10-15: google/codex Apache-2.0; Cool-Chic
 BSD-3-Clause; real-hjq/MS-SWD none. The SSIM-family conventions above are facts about the
 published numbers; implementations here are written from the original papers, not from pyiqa
 (PolyForm Noncommercial).
 
-Open: ask the dataset contacts (README) what `AIMOS` is and which WD code computed `WD_s*`.
+Open: ask the dataset contacts (README) which WD code computed `WD_s*`.
 Nobody has been contacted.

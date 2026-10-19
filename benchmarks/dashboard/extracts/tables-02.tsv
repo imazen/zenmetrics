@@ -125,7 +125,7 @@ docs/AIC2026_METRICS_AND_FITTING.md	4	17	Actual implementation (identified)	Haar
 docs/AIC2026_METRICS_AND_FITTING.md	4	17	Ours	haarpsi
 docs/AIC2026_METRICS_AND_FITTING.md	4	17	Qualification	reproduction-grade
 docs/AIC2026_METRICS_AND_FITTING.md	4	18	AIC-4 column	VSI
-docs/AIC2026_METRICS_AND_FITTING.md	4	18	Actual implementation (identified)	VSI, k3/k4 weight variants in fit set
+docs/AIC2026_METRICS_AND_FITTING.md	4	18	Actual implementation (identified)	VSI, fixed kernel_size variants in fit set
 docs/AIC2026_METRICS_AND_FITTING.md	4	18	Ours	vsi (plus vsi-k2/k3/k4/nodownscale)
 docs/AIC2026_METRICS_AND_FITTING.md	4	18	Qualification	our port = paper weights; the site fit used the k3 values, and the published full-res CSV columns are the automatic factor (our auto-factor ports match them)
 docs/AIC2026_METRICS_AND_FITTING.md	4	19	AIC-4 column	FSIM/FSIMc

@@ -21,7 +21,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `A-FINE` | `afine` (upstream-verified `afine_all`) | not reproduced. No pyiqa release scores these 840×944 crops as given (0.1.15 and 0.1.16 assert H and W divisible by 32). Upstream and pyiqa inference across crop/pad/resize to a multiple of 32, tiling, every output term, input scaling and normalisation variants, CPU and CUDA: best Spearman 0.94 (fidelity term), best median 0.11 site-JND. On near-lossless pairs the column implies a raw fidelity ≈ 0.097 where every variant gives ≈ 0.015 (2026-10-17) | which A-FINE entry point and output, how inputs were brought to a multiple of 32, which checkpoint | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [afine_aic_2026-10-16](../benchmarks/afine_aic_2026-10-16/README.md), [afine_aic_probe](../benchmarks/afine_aic_probe/README.md) |
 | `WD_s1`–`WD_s5` | `wd` (`wd_s1`–`wd_s5`, Cool-Chic convention) | not reproduced. A 4,480-row grid over the Cool-Chic and google/codex conventions (input normalisation, squared or √ distance, variance floor, σ rescale, VGG taps, pixels as a layer, image pyramid, log2σ 0–6) reaches Spearman 0.98–0.99 with a near-constant scale (published/ours ≈ 0.25), but the best log2σ does not follow the column index (s1→1, s2→3, s3→4, s4→5, s5→6); best median 0.13–0.20 site-JND (2026-10-17) | which implementation, layers, normalisation and pyramid, and how the five columns map to σ | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [wd_port_2026-10-16](../benchmarks/wd_port_2026-10-16/README.md) |
 | `proposal-IDFIQA` | private `idfiqa` port | median 4.2e-6, max 3.33e-4 JND, Spearman 1.0 on rten; native oracle 1e-3 JND gate passes on rten, ORT CPU and CUDA | upstream code licence; no code or weights published | aggregate card verified 2026-10-18 |
-| FSIM/FSIMc/VSI fixed-factor and SSIM-family f32 variants | `fsim-k2/k3/k4/nodownscale` (both FSIM outputs), `vsi-k*`, `ssim-pyiqa-f32-k2`–`k6`, `ssimc-pyiqa-f32-k2`–`k6`, `ms-ssim-pyiqa-f32-k2`–`k6` | implemented, counted and timed; published parity unverifiable because no per-image values are available | per-image values and published base downscale factors | [CLI](../crates/zenmetrics-cli/src/metrics/mod.rs), [counts and timings](../benchmarks/iqa_complexity_2026-10-17/README.md) |
+| FSIM/FSIMc/VSI fixed-factor and SSIM-family f32 variants | `fsim-k2/k3/k4/nodownscale` (both FSIM outputs), `vsi-k*`, `ssim-pyiqa-f32-k2`–`k6`, `ssimc-pyiqa-f32-k2`–`k6`, `ms-ssim-pyiqa-f32-k2`–`k6` | implemented, counted and timed; published parity unverifiable because no per-image values are available | per-image values for the fixed-factor variants | [CLI](../crates/zenmetrics-cli/src/metrics/mod.rs), [counts and timings](../benchmarks/iqa_complexity_2026-10-17/README.md) |
 
 ## Identified by configuration search (ports need the option exposed)
 
@@ -62,8 +62,7 @@ See [the port receipt](../crates/zenmetrics-pyiqa-ports/README.md).
 
 Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6, Spearman 1.0000):
 `DISTS`, `DeepDC`, `LPIPS-alex`, `LPIPS-VGG`, `STLPIPS`, `STLPIPS-VGG`, `SSIM-pyiqa`,
-`MS-SSIM-pyiqa`, `NLPD`, `VSI`, `GMSD`, `VIF`, `PSNR`, `SSIMc`. pyiqa's `mad` is not
-`AIMOS` (Spearman −0.83).
+`MS-SSIM-pyiqa`, `NLPD`, `VSI`, `GMSD`, `VIF`, `PSNR`, `SSIMc`.
 
 ## Close but not exact (minor; ask only if convenient)
 
@@ -71,21 +70,32 @@ Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6,
 |---|---|---|---|
 | `SSIMULACRA1` | `ssimulacra1` | native max 1.9e-5 | exact published convention |
 | `WS-HV` | `ws-hv` | native max 0.021 | exact published convention |
-| `FSIM`, `FSIMc` | `fsim-y`, `fsim` | one JPEG tail pair at 0.3 JND | downscale factor used |
+| `FSIM`, `FSIMc` | `fsim-y`, `fsim` | one JPEG tail pair at 0.3 JND | corresponding fixed-factor per-image values; semantics settled below |
 | `CKDN` | `ckdn` | median 4.0e-5, max 1.4e-4 (0.026 JND) | resize implementation (pyiqa defaults give the same residual). The published column itself shows no agreement with the AIC2026 subjective JND (within-source Spearman −0.005); our port reproduces it, so that is a property of the method on this data, not of the port |
 | `NLPD` | `nlpd-iqa` | median 2.6e-3, 2.6 % relative (f32 order and bilinear edges) | none needed |
 | `PSNR-Cb`, `PSNR-Cr` | `psnr-cb`, `psnr-cr` | max 1.7e-2 / 5.7e-2 dB | chroma conversion details |
 | `PSNR-YCbCr611` | `psnr-ycbcr611` | max 3.5e-3 dB | none needed |
 
+## Settled fixed-factor semantics (owner clarification, 2026-10-19)
+
+- FSIM/FSIMc and VSI `-kN` replace only `kernel_size = max(1, round(min(H,W)/256))` with `kernel_size = k`; every other pipeline step is unchanged.
+- The pyiqa SSIM-family `-kN` variants set `downsample=True` and `kernel_size=k`; every other pipeline step is unchanged.
+- These are the settled definitions. Branch and implementation qualification belong to the separate verification lane; this docs/site update changes no metric implementation or numerical gate. Published-column parity still needs the corresponding per-image values.
+
 ## Not yet compared against the published column
 
 None: every implemented column has been compared (2026-10-17).
+
+## Excluded from reproduction and implementation
+
+| Column | Status | Reason |
+|---|---|---|
+| `AIMOS` | excluded (proprietary, unreleased) | Proprietary Cloudinary metric, never publicly described or released. No implementation, reproduction or author-question task. |
 
 ## Not implemented: what we would need
 
 | Column | Reason | What to ask |
 |---|---|---|
-| `AIMOS` | still unidentified: private probe scored 16 of 34 no-reference metrics with no match (best hyperiqa ratio, Spearman 0.82) | what AIMOS is, and its reference |
 | `HaarXYB-*`, `HaarY-*`, `HaarYCoCg-* deltaL1248` (site-only names) | unidentified; no per-image values in any CSV and listed as excluded in the site config, yet the authors' rank-distribution figure (792 five-source subsets) shows six of them taking the top six ranks. Per the 2026-10-09 AHG discussion these are experimental metrics tuned on this data, to be ignored | what they are (colour space, masking, "deltaL1248"), and the code or per-image values |
 | `PSNR-HVS-vqmt`, `PSNR-HVS-M-vqmt` (site-only names) | MSU VQMT implementation; the site config has a fitted JND map for both, so values exist, but none are published | the per-image values |
 
