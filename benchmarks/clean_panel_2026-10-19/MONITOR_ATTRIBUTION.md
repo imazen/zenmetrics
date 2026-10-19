@@ -1,5 +1,8 @@
 # Isolated monitor attribution control
 
+Historical initial control; the changed-piece repair and current limits are in
+[MONITOR_REPAIR.md](MONITOR_REPAIR.md).
+
 ## Existing BRISQUE implementation distinction
 
 Commit b52fadb6e996e89b3d28fa1bcb45c2070afcf9cd changes existing BRISQUE code,

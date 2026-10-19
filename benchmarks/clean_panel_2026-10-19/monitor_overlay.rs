@@ -42,11 +42,30 @@ pub(crate) fn snapshot(before: (u64,BTreeMap<u32,Value>),sys: &sysinfo::System,o
     let value=json!({"snapshot_id":format!("s{}",NEXT.fetch_add(1,Ordering::SeqCst)),"sample_monotonic_ns":t,"counter_interval_start_ns":before.0,"processes":rows,"heavy_process_count":count,"identity_errors":errors,"counter_scope":"proc interval brackets refresh; not sysinfo internal CPU denominator"});
     emit("snapshot",&value);value
 }
-pub(crate) fn check(snapshot: &Value) {
+thread_local! {
+    static READ: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
+    static ENTRY: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+pub(crate) fn stamp(time: Instant) -> u64 { time.duration_since(*CLOCK.get_or_init(Instant::now)).as_nanos().try_into().unwrap() }
+pub(crate) fn publication(snapshot: &Value,time: Instant) {
+    emit("publication",&json!({"snapshot_id":snapshot["snapshot_id"],"publication_monotonic_ns":stamp(time)}));
+}
+pub(crate) fn begin() { ENTRY.with(|t|t.set(now()));READ.with(|r|*r.borrow_mut()=None); }
+pub(crate) fn read(snapshot: Option<&Value>,publication: Option<Instant>,observed: Instant,age: Option<std::time::Duration>,status: &str) {
+    READ.with(|r|*r.borrow_mut()=Some(json!({"snapshot_id":snapshot.map(|s|s["snapshot_id"].clone()),"publication_monotonic_ns":publication.map(stamp),"observed_monotonic_ns":stamp(observed),"age_ns":age.map(|a|a.as_nanos().min(u64::MAX as u128) as u64),"status":status})));
+}
+pub(crate) fn check(snapshot: &Value) -> String {
     use sha2::{Digest,Sha256};
     let t=now();let bytes=serde_json::to_vec(snapshot).unwrap();
     let ids:Vec<_>=snapshot["processes"].as_array().unwrap().iter().filter(|p|p["counted"]==true).map(|p|json!([p["pid"],p["start_ticks"]])).collect();
-    emit("check",&json!({"check_id":format!("c{}",NEXT.fetch_add(1,Ordering::SeqCst)),"snapshot_id":snapshot["snapshot_id"],"snapshot_sha256":Sha256::digest(bytes).iter().map(|b|format!("{b:02x}")).collect::<String>(),"checked_monotonic_ns":t,"observation_age_ns":t-snapshot["sample_monotonic_ns"].as_u64().unwrap(),"heavy_process_count":snapshot["heavy_process_count"],"counted_identities":ids}));
+    let id=format!("c{}",NEXT.fetch_add(1,Ordering::SeqCst));
+    emit("check",&json!({"check_id":id,"snapshot_id":snapshot["snapshot_id"],"snapshot_sha256":Sha256::digest(bytes).iter().map(|b|format!("{b:02x}")).collect::<String>(),"checked_monotonic_ns":t,"observation_age_ns":t-snapshot["sample_monotonic_ns"].as_u64().unwrap(),"heavy_process_count":snapshot["heavy_process_count"],"counted_identities":ids,"age_scope":"hook minus refresh sample; not gate cached age"}));
+    id
+}
+pub(crate) fn gate(state: Option<&crate::platform::SystemState>,age: Option<u64>,clean: Option<bool>,reason: Option<String>) {
+    let check_id=state.map(|s|check(&s.attribution));
+    let fields=state.map(|s|json!({"cpu_load":s.cpu_load,"available_ram_bytes":s.available_ram_bytes,"total_ram_bytes":s.total_ram_bytes,"cpu_temp_c":s.cpu_temp_c,"heavy_process_count":s.heavy_process_count}));
+    emit("gate",&json!({"gate_id":format!("g{}",NEXT.fetch_add(1,Ordering::SeqCst)),"entry_monotonic_ns":ENTRY.with(|t|t.get()),"hook_monotonic_ns":now(),"read":READ.with(|r|r.borrow().clone()),"gate_observation_age_ns":age,"status":if clean.is_some(){"decision"}else{"unknown"},"clean":clean,"reason":reason,"state":fields,"check_id":check_id}));
 }
 
 #[cfg(test)]
@@ -57,10 +76,17 @@ mod controls {
         let _=super::now();
         println!("MONITOR_READY");std::io::Write::flush(&mut std::io::stdout()).unwrap();
         let mut input=String::new();std::io::stdin().lock().read_line(&mut input).unwrap();assert_eq!(input.trim(),"GO");
-        // Actual cached monitor and ResourceGate path, no benchmark/scorer.
         let mut gate=crate::gate::ResourceGate::new(crate::gate::GateConfig::default());
         gate.start_monitoring();
-        for _ in 0..40 {gate.check_and_record_status();std::thread::sleep(std::time::Duration::from_millis(5));}
+        for _ in 0..40 {assert!(gate.check_and_record_status().is_some());std::thread::sleep(std::time::Duration::from_millis(5));}
+        // Stop this owned sampler; retain its final real publication and wait
+        // for normal stale-age logic. No timestamp rewriting or forced refresh.
+        gate.control_stop_sampler();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        assert!(gate.check_and_record_status().is_none());
+        // Explicit test-only missing-cache injection exercises the real branch.
+        gate.control_clear_cache();
+        assert!(gate.check_and_record_status().is_none());
         drop(gate);
     }
 }

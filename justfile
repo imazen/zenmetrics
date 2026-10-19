@@ -1915,3 +1915,7 @@ clean-panel-monitor-build directory:
 
 clean-panel-monitor-control binary source_manifest output:
     python3 benchmarks/clean_panel_2026-10-19/monitor_control.py {{binary}} {{source_manifest}} {{output}}
+
+# Focused repair controls; retained generic diagnostic failure remains unchanged.
+clean-panel-monitor-repair-check current output retained_author retained_reviewer:
+    python3 benchmarks/clean_panel_2026-10-19/monitor_repair_controls.py {{current}} {{output}} {{retained_author}} {{retained_reviewer}}
