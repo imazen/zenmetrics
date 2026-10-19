@@ -561,6 +561,28 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **Checkpoint portability gates fail on the frozen 53f6d26d source (2026-10-19).**
+  [Run 39275363269](https://github.com/imazen/zenmetrics/actions/runs/39275363269)
+  fails the common BMP alpha tests on all seven native configurations; the
+  owner-approved test correction is included in the integration. macOS ARM64
+  additionally fails SSIMULACRA1 and FLIP numerical pins; Windows x64 fails the
+  FLIP-v17 pin (observed 0.07714098691940308, expected 0.07714099436998367 with
+  unchanged 1e-9 allowance). The native math observation workflow records the
+  same fixture outputs without accepting new values or bounds.
+  The browser job refuses `ms-ssim-pyiqa-f32-k6` at the 1024 fixture: its fifth
+  scoring view is 10×10, below the unchanged 11×11 requirement. A prepared test
+  patch retains that refusal and adds a 1152 success fixture; approval is pending.
+  These are checkpoint-publication blockers, independent of the 23-name rerun
+  scope in `benchmarks/rebenchmark_since_f7668c7/README.md`.
+
+- **MS-SSIM libvmaf threading gate needs a 4K regression recheck (2026-10-19).**
+  The unmerged gate experiment records 227.459 ms before and 282.117 ms after
+  at 3840×2160 / 32 threads, with identical score bits. Small-image improvements
+  do not establish a win at this size. The integration retains the experiment
+  and includes this name in the minimal rerun list; the current combined tree
+  has not yet been timed. See `benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv`
+  and `benchmarks/rebenchmark_since_f7668c7/README.md`.
+
 - **Checkpoint at `53f6d26d` fails BMP alpha-policy tests; macOS also fails two numerical pins (2026-10-19).** The full CLI checkpoint profile exposes two old BMP tests that assume implicit alpha dropping, while the current decoder defaults to `RequireOpaque`. Linux x64 WGPU/CUDA, Linux ARM64 and macOS ARM64 reproduce those failures. On macOS ARM64, `ssimulacra1::oracle_tests::original_author_synthetic_pin` also exceeds its unchanged `1e-12` allowance, and `flip_and_cw_ssim_match_pinned_reference_values` reports FLIP-v17 `0.07714100182056427` versus pinned `0.07714099436998367` under the unchanged `1e-9` bound. Those numerical differences are not yet attributed. Checkpoint publication remains blocked; no tag or gate adjustment has been made. Run: https://github.com/imazen/zenmetrics/actions/runs/39275363269
 
 - **HaarPSI native map has nonfinite mismatches on a retained illustration pair (2026-10-19).** At 3840×2160, 41 positions at each of 1/28 threads return Rust NaN against a finite weighted mean of the original primary similarity/weight arrays. The primary's weight sums at those positions are between `2.1316282072803006e-14` and `3.410605131648481e-13`; the cause of Rust's NaNs is not established. Scalar results retain their earlier values and the existing scalar gate. Maps have no assigned external bound. Evidence and exact input/source bindings: [map observations](benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.md).

@@ -609,14 +609,10 @@ impl Inputs {
                 .zip(ds.as_chunks::<3>().0.iter())
             {
                 r.push(
-                    LUMA_COEF[0] * pr as f64
-                        + LUMA_COEF[1] * pg as f64
-                        + LUMA_COEF[2] * pb as f64,
+                    LUMA_COEF[0] * pr as f64 + LUMA_COEF[1] * pg as f64 + LUMA_COEF[2] * pb as f64,
                 );
                 d.push(
-                    LUMA_COEF[0] * dr as f64
-                        + LUMA_COEF[1] * dg as f64
-                        + LUMA_COEF[2] * db as f64,
+                    LUMA_COEF[0] * dr as f64 + LUMA_COEF[1] * dg as f64 + LUMA_COEF[2] * db as f64,
                 );
             }
         }

@@ -7,117 +7,117 @@
     {
       "metric": "brisque",
       "reason": "SIMD kernels and accumulation",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "niqe",
       "reason": "SIMD kernels and accumulation",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "piqe",
       "reason": "SIMD kernels and accumulation",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "dssim",
       "reason": "overlap reference and distorted image construction",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ssim2",
       "reason": "fast-ssim2 pinned threading gate",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ssimulacra1",
       "reason": "SIMD Gaussian blur, scratch reuse and channel parallelism",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "vif",
       "reason": "retain f64 RGB luma coefficients",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "vifvec",
       "reason": "fixed raster covariance accumulation across worker budgets",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "msssim",
       "reason": "size-gated Rayon dispatch",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "ssim-libvmaf",
       "reason": "size-gated Rayon dispatch",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "msssim-libvmaf",
       "reason": "size-gated Rayon dispatch",
-      "landing": "pending integration"
+      "landing": "included in combined candidate b216412c"
     },
     {
       "metric": "ms-ssim-pyiqa-f32-k2",
       "reason": "fixed-factor pooling at each unpooled pyramid level",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ms-ssim-pyiqa-f32-k3",
       "reason": "fixed-factor pooling at each unpooled pyramid level",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ms-ssim-pyiqa-f32-k4",
       "reason": "fixed-factor pooling at each unpooled pyramid level",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ms-ssim-pyiqa-f32-k5",
       "reason": "fixed-factor pooling at each unpooled pyramid level",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "ms-ssim-pyiqa-f32-k6",
       "reason": "fixed-factor pooling at each unpooled pyramid level",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf-neg",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf-4k",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf-v1",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf-studio601",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "vmaf-neg-studio601",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     },
     {
       "metric": "cambi",
       "reason": "enable VMAF crate AVX-512 tier in the CLI",
-      "landing": "master"
+      "landing": "master at 7ed7b106"
     }
   ],
   "new_names": [
@@ -133,5 +133,5 @@
     "zensim-gpu"
   ],
   "excluded": "No learned-model or GPU-kernel changes found in this diff. FSIM luma API is additive; existing fsim-y delegates to the same Auto expression. Other AVX-512 consumer edits do not change the already-enabled CLI feature closure.",
-  "status": "scope audited; integrated verification and remote landing pending; no timing claims"
+  "status": "scope audited at b216412c; verification and remote landing are recorded separately; no timing claims"
 }

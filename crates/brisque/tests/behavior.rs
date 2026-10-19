@@ -145,7 +145,11 @@ fn gray8_strided_equals_packed_bit_for_bit() {
     assert_eq!(a.len(), b.len());
     for ((ka, va), (kb, vb)) in a.iter().zip(b.iter()) {
         assert_eq!(ka, kb);
-        assert_eq!(va.to_bits(), vb.to_bits(), "{ka} differs strided GRAY8 vs packed");
+        assert_eq!(
+            va.to_bits(),
+            vb.to_bits(),
+            "{ka} differs strided GRAY8 vs packed"
+        );
     }
 }
 
@@ -171,7 +175,11 @@ fn gray8_matches_rgb8_neutral_bit_for_bit() {
     assert_eq!(a.len(), b.len());
     for ((ka, va), (kb, vb)) in a.iter().zip(b.iter()) {
         assert_eq!(ka, kb);
-        assert_eq!(va.to_bits(), vb.to_bits(), "{ka} differs RGB8-neutral vs GRAY8");
+        assert_eq!(
+            va.to_bits(),
+            vb.to_bits(),
+            "{ka} differs RGB8-neutral vs GRAY8"
+        );
     }
 }
 

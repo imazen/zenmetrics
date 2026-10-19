@@ -49,7 +49,12 @@ def main():
         receipt['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         run([str(binary), 'inventory'], tree)
         run(['python3', '-B', 'benchmarks/iqa_compete_2026-10-16/checkpoint_math_observe.py'], tree)
+        run(['npm', 'ci', '--no-audit', '--no-fund'], tree / 'crates/zenfleet-dash/web')
+        run(['npm', 'run', 'build'], tree / 'crates/zenfleet-dash/web')
         receipt['outcome'] = 'pass'
+    except BaseException:
+        receipt['outcome'] = 'failed'
+        raise
     finally:
         (output / 'verification.json').write_text(json.dumps(receipt, indent=2)+'\n')
 
