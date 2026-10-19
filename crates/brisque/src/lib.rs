@@ -65,7 +65,7 @@ mod params;
 mod summation;
 
 use params::{ETA_FACTOR, KERNEL49, R_AGGD, R_GGD, RHO, SV, SV_COEF};
-use summation::{inner_mean, inner_sum, outer_sum};
+use summation::{SUM_ABS, SUM_NEG2, SUM_POS2, SUM_SQ, inner_sum, outer_sum, quad_sums};
 
 /// Output revision of [`Brisque`] on the generic surface; bump when any
 /// output can change.
@@ -198,11 +198,75 @@ fn gam_grid() -> Vec<f32> {
     g
 }
 
+/// End column covered by [`conv7_core`]: 8-lane blocks start at `c = 3`
+/// and step while `c + 11 <= w` (the rightmost tap reads `x[c + 10]`).
+/// Returns 0 when no block fits — every pixel takes the scalar chain.
+fn conv7_simd_col_end(w: usize) -> usize {
+    if w >= 14 { 3 + 8 * ((w - 14) / 8 + 1) } else { 0 }
+}
+
+/// Interior of the 7×7 conv, 8 output columns per lane group.
+///
+/// Each lane runs the identical sequential 49-tap FMA chain as the
+/// scalar path for its own output column — one fused rounding per tap
+/// through `mul_add_portable` — so results are bit-identical on every
+/// tier (the scalar tier emulates the same lanes). Rows outside
+/// `[3, h-3)` and columns outside `[3, conv7_simd_col_end(w))` are left
+/// for the scalar border code in [`conv7`].
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn conv7_core(
+    token: Token,
+    x: &[f32],
+    w: usize,
+    h: usize,
+    k: &[f32; 49],
+    out: &mut [f32],
+) {
+    let kv: [f32x8; 49] = core::array::from_fn(|t| f32x8::splat_t(token, k[t]));
+    let zero = f32x8::zero_t(token);
+    for r in 0..h {
+        let mut c = 3;
+        while c + 11 <= w {
+            let mut acc = zero;
+            let mut t = 0;
+            for i in 0..7 {
+                // `yy = r + i - 3` is uniform across lanes: out-of-range
+                // rows contribute `k * 0` in the scalar chain — a zero
+                // tap-vector keeps every lane's chain identical.
+                let yy = r.wrapping_sub(3).wrapping_add(i);
+                let row = if yy < h { &x[yy * w..] } else { &[] };
+                for j in 0..7 {
+                    let xv = if row.is_empty() {
+                        zero
+                    } else {
+                        f32x8::from_slice_t(token, &row[c - 3 + j..c - 3 + j + 8])
+                    };
+                    acc = kv[t].mul_add_portable(xv, acc);
+                    t += 1;
+                }
+            }
+            out[r * w + c..r * w + c + 8].copy_from_slice(&acc.to_array());
+            c += 8;
+        }
+    }
+}
+
 /// 7×7 zero-pad conv — sequential row-major FMA chain (torch conv2d).
+/// Lane groups cover `[3, conv7_simd_col_end(w))` on every row (out-of-
+/// range rows contribute zero tap-vectors, identical to the scalar
+/// chain's `k*0`); only the left/right edge columns keep the scalar
+/// chain.
 fn conv7(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> Vec<f32> {
     let mut out = vec![0f32; w * h];
+    let col_end = conv7_simd_col_end(w);
+    if col_end > 0 {
+        archmage::attuned!(
+            conv7_core(x, w, h, k, &mut out),
+            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+        );
+    }
     for r in 0..h {
-        for c in 0..w {
+        for c in (0..3.min(w)).chain(col_end.max(3).min(w)..w) {
             let mut acc = 0f32;
             for i in 0..7i64 {
                 let yy = r as i64 + i - 3;
@@ -227,15 +291,17 @@ fn conv7(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> Vec<f32> {
 // `!(x > y)` is deliberate: the oracle's checks must also fire on NaN.
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn ggd_params(x: &[f32]) -> Result<(usize, f32), ()> {
-    let x2: Vec<f32> = x.iter().map(|&v| v * v).collect();
-    let sigma_sq = inner_mean(&x2);
+    // One tree walk covers the |x| and x² reductions (lanes 2/3); each
+    // lane's association equals the scalar `inner_mean` tree.
+    let q = quad_sums(x);
+    let sigma_sq = q[SUM_SQ] / x.len() as f32;
     let sigma = sqrt32(sigma_sq);
     // torch.isclose(sigma, 0) with default atol=1e-8 — oracle asserts
     // 'non zero variance' when this holds.
     if !(sigma.abs() > 1e-8 + 1e-5 * 0.0) {
         return Err(());
     }
-    let e = inner_mean(&x.iter().map(|v| v.abs()).collect::<Vec<_>>());
+    let e = q[SUM_ABS] / x.len() as f32;
     let (rho, best) = ggd_ratio_argmin(sigma_sq, e);
     if !rho.is_finite() {
         return Err(());
@@ -249,16 +315,12 @@ fn ggd_params(x: &[f32]) -> Result<(usize, f32), ()> {
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn aggd_params(x: &[f32]) -> Result<(usize, f32, f32), ()> {
     let n = x.len();
-    let mut mask_l = alloc::vec![false; n];
-    let mut mask_r = alloc::vec![false; n];
     let mut count_l = 0usize;
     let mut count_r = 0usize;
-    for (i, &v) in x.iter().enumerate() {
+    for &v in x {
         if v < 0.0 {
-            mask_l[i] = true;
             count_l += 1;
         } else if v > 0.0 {
-            mask_r[i] = true;
             count_r += 1;
         }
     }
@@ -267,30 +329,19 @@ fn aggd_params(x: &[f32]) -> Result<(usize, f32, f32), ()> {
     if !(cl > 0.0) || !(cr > 0.0) {
         return Err(());
     }
-    // (x*mask).pow(2).sum / count → sqrt
-    let sl2: Vec<f32> = x
-        .iter()
-        .zip(&mask_l)
-        .map(|(&v, &m)| {
-            let p = if m { v } else { 0.0 };
-            p * p
-        })
-        .collect();
-    let left_sigma = sqrt32(inner_sum(&sl2) / cl);
-    let sr2: Vec<f32> = x
-        .iter()
-        .zip(&mask_r)
-        .map(|(&v, &m)| {
-            let p = if m { v } else { 0.0 };
-            p * p
-        })
-        .collect();
-    let right_sigma = sqrt32(inner_sum(&sr2) / cr);
+    // (x*mask).pow(2).sum / count → sqrt. One tree walk covers all four
+    // reductions — lane order [neg², pos², |x|, x²] — each lane's
+    // association equals the scalar `inner_sum`/`inner_mean` tree over
+    // its materialized array.
+    let q = quad_sums(x);
+    let n_f32 = n as f32;
+    let left_sigma = sqrt32(q[SUM_NEG2] / cl);
+    let right_sigma = sqrt32(q[SUM_POS2] / cr);
     if !(left_sigma > 0.0) || !(right_sigma > 0.0) {
         return Err(());
     }
-    let absm = inner_mean(&x.iter().map(|v| v.abs()).collect::<Vec<_>>());
-    let x2m = inner_mean(&x.iter().map(|&v| v * v).collect::<Vec<_>>());
+    let absm = q[SUM_ABS] / n_f32;
+    let x2m = q[SUM_SQ] / n_f32;
     let (ratio, best) = aggd_ratio_argmin(left_sigma, right_sigma, absm, x2m);
     if !ratio.is_finite() {
         return Err(());
@@ -327,16 +378,49 @@ pub(crate) fn aggd_ratio_argmin(left: f32, right: f32, absm: f32, x2m: f32) -> (
 }
 
 /// `torch.roll` shifts `(dy, dx)` on the last two dims (wrap-around).
+/// Each output row is the source row `sy` rotated by `dx` — two
+/// contiguous copies instead of per-element modulo indexing.
 fn roll(x: &[f32], w: usize, h: usize, dy: i64, dx: i64) -> Vec<f32> {
     let mut out = vec![0f32; w * h];
+    let dyu = dy.rem_euclid(h as i64) as usize;
+    let dxu = dx.rem_euclid(w as i64) as usize;
     for r in 0..h {
-        for c in 0..w {
-            let sy = ((r as i64 - dy).rem_euclid(h as i64)) as usize;
-            let sx = ((c as i64 - dx).rem_euclid(w as i64)) as usize;
-            out[r * w + c] = x[sy * w + sx];
-        }
+        let sy = (r + h - dyu) % h;
+        let src = &x[sy * w..sy * w + w];
+        let dst = &mut out[r * w..r * w + w];
+        dst[..dxu].copy_from_slice(&src[w - dxu..]);
+        dst[dxu..].copy_from_slice(&src[..w - dxu]);
     }
     out
+}
+
+/// MSCN normalize: `nr = (x - mu) / (sqrt(|std_c - mu²|) + 1)`.
+/// Every op is elementwise and correctly rounded (sub/mul/abs/sqrt/add/
+/// div are each IEEE-exact), so lane order is irrelevant and the result
+/// is bit-identical to the scalar loop.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn mscn_core(
+    token: Token,
+    x: &[f32],
+    mu: &[f32],
+    std_c: &[f32],
+    nr: &mut [f32],
+) {
+    let one = f32x8::splat_t(token, 1.0);
+    let n = x.len();
+    let full = n & !7;
+    for i in (0..full).step_by(8) {
+        let xv = f32x8::from_slice_t(token, &x[i..i + 8]);
+        let mv = f32x8::from_slice_t(token, &mu[i..i + 8]);
+        let cv = f32x8::from_slice_t(token, &std_c[i..i + 8]);
+        let std = (cv - mv * mv).abs().sqrt();
+        let v = (xv - mv) / (std + one);
+        nr[i..i + 8].copy_from_slice(&v.to_array());
+    }
+    for i in full..n {
+        let std = sqrt32((std_c[i] - mu[i] * mu[i]).abs());
+        nr[i] = (x[i] - mu[i]) / (std + 1.0);
+    }
 }
 
 /// `_natural_scene_statistics` → 18 features, or Err on oracle asserts.
@@ -346,10 +430,10 @@ fn nss(x: &[f32], w: usize, h: usize, gam: &[f32]) -> Result<[f32; 18], ()> {
     let std_c = conv7(&x2, w, h, &KERNEL49);
     let mut feats = [0f32; 18];
     let mut nr = vec![0f32; w * h];
-    for i in 0..w * h {
-        let std = sqrt32((std_c[i] - mu[i] * mu[i]).abs());
-        nr[i] = (x[i] - mu[i]) / (std + 1.0);
-    }
+    archmage::attuned!(
+        mscn_core(x, &mu, &std_c, &mut nr),
+        [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+    );
     let (ai, sigma) = ggd_params(&nr)?;
     feats[0] = gam[ai];
     feats[1] = sigma * sigma;
@@ -461,15 +545,14 @@ fn resize_1d(
         }
     } else {
         for r in 0..ph {
-            for c in 0..pw {
-                let src = if c < pad_pre {
-                    pad_pre - 1 - c
-                } else if c >= pad_pre + w {
-                    2 * w + pad_pre - 1 - c
-                } else {
-                    c - pad_pre
-                };
-                xpad[r * pw + c] = x[r * w + src];
+            // Interior: contiguous copy of the source row.
+            xpad[r * pw + pad_pre..r * pw + pad_pre + w]
+                .copy_from_slice(&x[r * w..r * w + w]);
+            for c in 0..pad_pre {
+                xpad[r * pw + c] = x[r * w + pad_pre - 1 - c];
+            }
+            for c in pad_pre + w..pw {
+                xpad[r * pw + c] = x[r * w + 2 * w + pad_pre - 1 - c];
             }
         }
     }
@@ -527,14 +610,46 @@ fn to_y(r: u8, g: u8, b: u8) -> f32 {
     rint32(fma(b as f32, 0.114, m01))
 }
 
+/// piq `rgb2yiq` Y for one row of packed RGB8:
+/// `round_ties_even(fma(B,.114, .299R + .587G))` — u8→f32 converts are
+/// lane gathers, the arithmetic keeps the scalar op order (two muls,
+/// one add, one fused fma, ties-even round) → bit-identical.
+#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
+fn gray_row_core(token: Token, row: &[u8], w: usize, y: &mut [f32]) {
+    let c299 = f32x8::splat_t(token, 0.299);
+    let c587 = f32x8::splat_t(token, 0.587);
+    let c114 = f32x8::splat_t(token, 0.114);
+    let full = w & !7;
+    for c in (0..full).step_by(8) {
+        let rv = f32x8::from_array_t(
+            token,
+            core::array::from_fn(|l| row[(c + l) * 3] as f32),
+        );
+        let gv = f32x8::from_array_t(
+            token,
+            core::array::from_fn(|l| row[(c + l) * 3 + 1] as f32),
+        );
+        let bv = f32x8::from_array_t(
+            token,
+            core::array::from_fn(|l| row[(c + l) * 3 + 2] as f32),
+        );
+        let v = c114.mul_add_portable(bv, c299 * rv + c587 * gv).round();
+        y[c..c + 8].copy_from_slice(&v.to_array());
+    }
+    for c in full..w {
+        y[c] = to_y(row[c * 3], row[c * 3 + 1], row[c * 3 + 2]);
+    }
+}
+
 fn gray(image: &za::Image<'_>) -> za::MetricResult<(Vec<f32>, usize, usize)> {
     if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
-        let mut y = Vec::with_capacity(w * h);
+        let mut y = vec![0f32; w * h];
         for r in 0..h {
             let row = &px[r * stride..r * stride + w * 3];
-            for c in 0..w {
-                y.push(to_y(row[c * 3], row[c * 3 + 1], row[c * 3 + 2]));
-            }
+            archmage::attuned!(
+                gray_row_core(row, w, &mut y[r * w..r * w + w]),
+                [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+            );
         }
         return Ok((y, w, h));
     }
@@ -739,6 +854,216 @@ impl za::NoReferenceMetric for Brisque {
             return degenerate("non-finite score");
         }
         Ok(Box::new(za::ScalarEval::single("brisque", score as f64)))
+    }
+}
+
+#[cfg(test)]
+mod conv7_tests {
+    use super::*;
+
+    /// The original scalar implementation, kept as the semantic
+    /// reference: the interior may now be filled through lane groups,
+    /// but every output pixel must equal this bit-for-bit.
+    fn ref_conv7(x: &[f32], w: usize, h: usize, k: &[f32; 49]) -> Vec<f32> {
+        let mut out = vec![0f32; w * h];
+        for r in 0..h {
+            for c in 0..w {
+                let mut acc = 0f32;
+                for i in 0..7i64 {
+                    let yy = r as i64 + i - 3;
+                    for j in 0..7i64 {
+                        let xx = c as i64 + j - 3;
+                        let xv = if yy >= 0 && yy < h as i64 && xx >= 0 && xx < w as i64 {
+                            x[yy as usize * w + xx as usize]
+                        } else {
+                            0.0
+                        };
+                        acc = fma(k[(i * 7 + j) as usize], xv, acc);
+                    }
+                }
+                out[r * w + c] = acc;
+            }
+        }
+        out
+    }
+
+    /// Deterministic texture covering a wide value range (xorshift64).
+    fn genimg(w: usize, h: usize, seed: u64) -> Vec<f32> {
+        let mut s = seed;
+        (0..w * h)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                (s as f32 / u64::MAX as f32) * 2.0 - 1.0
+            })
+            .collect()
+    }
+
+    #[test]
+    fn conv7_matches_scalar_reference_bit_for_bit() {
+        // Sizes exercise every coverage shape: w<14 fits no lane group,
+        // w=14 fits exactly one, ragged widths leave mid-row tails, and
+        // h<7 forces the all-scalar border path on every row.
+        let k: [f32; 49] = core::array::from_fn(|i| ((i * 37 % 13) as f32 - 6.0) / 7.0);
+        for &(w, h) in &[
+            (5, 5),
+            (8, 8),
+            (13, 9),
+            (14, 14),
+            (15, 15),
+            (22, 16),
+            (33, 17),
+            (64, 48),
+            (255, 129),
+            (64, 6),
+        ] {
+            let x = genimg(w, h, 0x9e3779b97f4a7c15 ^ (w as u64) << 32 ^ h as u64);
+            let got = conv7(&x, w, h, &k);
+            let want = ref_conv7(&x, w, h, &k);
+            for (i, (g, e)) in got.iter().zip(&want).enumerate() {
+                assert_eq!(g.to_bits(), e.to_bits(), "conv7 {w}x{h} pixel {i} differs");
+            }
+        }
+    }
+
+    /// `gray`'s SIMD row must match `to_y` element-for-element on every
+    /// dispatch tier.
+    #[cfg(all(feature = "_dev", target_arch = "x86_64"))]
+    #[test]
+    fn gray_row_tiers_match_to_y() {
+        use archmage::SimdToken;
+        let w = 61usize; // exercises the w%8 scalar tail
+        let mut s = 0x853c49e6748fea9bu64;
+        let row: Vec<u8> = (0..w * 3)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                (s >> 33) as u8
+            })
+            .collect();
+        let want: Vec<f32> = (0..w)
+            .map(|c| to_y(row[c * 3], row[c * 3 + 1], row[c * 3 + 2]))
+            .collect();
+        let mut scalar = vec![f32::NAN; w];
+        gray_row_core_scalar_t(archmage::ScalarToken, &row, w, &mut scalar);
+        if let Some(t) = archmage::X64V3Token::summon() {
+            let mut v3 = vec![f32::NAN; w];
+            gray_row_core_v3_t(t, &row, w, &mut v3);
+            for c in 0..w {
+                assert_eq!(v3[c].to_bits(), want[c].to_bits(), "v3 gray {c} differs");
+            }
+        }
+        for c in 0..w {
+            assert_eq!(scalar[c].to_bits(), want[c].to_bits(), "scalar gray {c} differs");
+        }
+    }
+
+    /// Every dispatch tier must produce the identical interior: each
+    /// lane runs the same fixed-order FMA chain as the scalar loop.
+    #[cfg(all(feature = "_dev", target_arch = "x86_64"))]
+    #[test]
+    fn conv7_kernel_tiers_identical() {
+        use archmage::SimdToken;
+        let (w, h) = (37usize, 29usize);
+        let x = genimg(w, h, 0xdeadbeefcafebabe);
+        let k: [f32; 49] = core::array::from_fn(|i| ((i * 11 % 7) as f32 - 3.0) / 5.0);
+        let mut scalar = vec![f32::NAN; w * h];
+        conv7_core_scalar_t(archmage::ScalarToken, &x, w, h, &k, &mut scalar);
+        if let Some(t) = archmage::X64V3Token::summon() {
+            let mut v3 = vec![f32::NAN; w * h];
+            conv7_core_v3_t(t, &x, w, h, &k, &mut v3);
+            for (i, (a, b)) in scalar.iter().zip(&v3).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "v3 interior pixel {i} differs");
+            }
+        }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            let mut v4 = vec![f32::NAN; w * h];
+            conv7_core_v4x_t(t, &x, w, h, &k, &mut v4);
+            for (i, (a, b)) in scalar.iter().zip(&v4).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "v4x interior pixel {i} differs");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod summation_tests {
+    use super::*;
+
+    /// Pre-SIMD scalar `outer_sum` — per-column balanced tree, kept as
+    /// the semantic reference for the lane-per-column kernel.
+    fn ref_outer_sum(values: &[f32], rows: usize, columns: usize) -> Vec<f32> {
+        fn column(values: &[f32], stride: usize, index: usize, first: usize, end: usize) -> f32 {
+            match end - first {
+                0 => 0.0,
+                1 => values[first * stride + index],
+                n => {
+                    let middle = first + n / 2;
+                    column(values, stride, index, first, middle)
+                        + column(values, stride, index, middle, end)
+                }
+            }
+        }
+        (0..columns)
+            .map(|i| column(values, columns, i, 0, rows))
+            .collect()
+    }
+
+    fn genimg(n: usize, seed: u64) -> Vec<f32> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                (s as f32 / u64::MAX as f32) * 4.0 - 2.0
+            })
+            .collect()
+    }
+
+    #[test]
+    fn outer_sum_matches_column_reference_bit_for_bit() {
+        // rows mirror the resize kernel sizes (4..~20); column counts
+        // cover full groups, tails, and fewer than 8.
+        for &(rows, columns) in &[(6, 3), (6, 512), (9, 37), (11, 1024), (1, 8), (2, 13)] {
+            let v = genimg(rows * columns, 0x243f6a8885a308d3 ^ (rows as u64) << 16 ^ columns as u64);
+            let got = outer_sum(&v, rows, columns);
+            let want = ref_outer_sum(&v, rows, columns);
+            for (i, (g, e)) in got.iter().zip(&want).enumerate() {
+                assert_eq!(
+                    g.to_bits(),
+                    e.to_bits(),
+                    "outer_sum {rows}x{columns} column {i} differs"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quad_sums_match_scalar_trees_bit_for_bit() {
+        for &n in &[0usize, 1, 7, 8, 9, 33, 36, 255, 1024, 4099] {
+            let x = genimg(n, 0x452821e638d01377 ^ n as u64);
+            let q = quad_sums(&x);
+            let tree = |f: &dyn Fn(f32) -> f32| inner_sum(&x.iter().map(|&v| f(v)).collect::<Vec<_>>());
+            let want = [
+                tree(&|v| {
+                    let p = if v < 0.0 { v } else { 0.0 };
+                    p * p
+                }),
+                tree(&|v| {
+                    let p = if v > 0.0 { v } else { 0.0 };
+                    p * p
+                }),
+                tree(&|v| v.abs()),
+                tree(&|v| v * v),
+            ];
+            for (k, (g, e)) in q.iter().zip(&want).enumerate() {
+                assert_eq!(g.to_bits(), e.to_bits(), "quad_sums n={n} lane {k} differs");
+            }
+        }
     }
 }
 

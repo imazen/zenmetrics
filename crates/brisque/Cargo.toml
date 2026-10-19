@@ -22,10 +22,16 @@ workspace = true
 default = ["std"]
 # Use the standard library. Off -> core + alloc only.
 std = ["zenmetrics-abstractions/std"]
+# Dev-only: exposes per-tier entry points for the dispatch-parity tests.
+_dev = ["archmage/testable_dispatch"]
+# Opt-in AVX-512 `v4x` tier, like crates/fsim and crates/gmsd.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
+archmage = { workspace = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-features = false }
 libm = { version = "0.2.16", default-features = false }
+magetypes = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

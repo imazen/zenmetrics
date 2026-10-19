@@ -636,7 +636,7 @@ zenmetrics-abstractions = { path = "../zenmetrics-abstractions", optional = true
 zenmetrics-pyiqa-ports = { path = "../zenmetrics-pyiqa-ports", optional = true }
 piqe = { workspace = true, optional = true, features = ["std"] }
 niqe = { workspace = true, optional = true, features = ["std"] }
-brisque = { workspace = true, optional = true, features = ["std"] }
+brisque = { workspace = true, optional = true, features = ["std", "avx512"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
