@@ -1097,3 +1097,9 @@ benchmarks/mac_validation_2026-10-18/stlpips-metal-variation-2026-10-19.json	ign
 benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json	ignored	Finite-only Mac Metal protocol and immutable scheduling receipt; not native-oracle or performance comparison qualification
 benchmarks/hdrvdp_canonical_2026-10-19/spectral_comparisons.tsv	ignored	Canonical-configuration spectral stage research; separate from published-score and runtime admission schemas.
 benchmarks/port_spotcheck_2026-10-18/review.meta	ignored	Source-review and external-test provenance; no qualified timing observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-base-unmerged-3494d8af.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-00.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-01.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-02.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
