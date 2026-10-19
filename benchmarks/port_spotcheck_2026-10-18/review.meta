@@ -32,3 +32,14 @@ abb086a239948de7fff36850d017b703857bbc2c525a4a97da7d6867fe18594a  ~/tmp/handoff/
 e3a4f11ba861f4db6a7625640a8ab18d9e2ed1d4f58e8c8fa73542697e2324f5  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/lock-check.log
 35288ce984914bdc733a21ebfa2765f4b10705355b98e982d5493adf6fee36db  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/lib.log
 991ca747d34ecf16a87c4fb2f1b3fd30eecb4c76638fdb12590aabbda6cde155  ~/tmp/swe2opt/brisque-pinned-evid-20261019T012337/behavior.log
+
+Existing-master metric-path observation (2026-10-19):
+  git log origin/master -S LaneSums8 --format='%H %aI %s' -- crates/brisque/src/summation.rs
+  git show --stat --format=fuller b52fadb6e996e89b3d28fa1bcb45c2070afcf9cd
+  git merge-base --is-ancestor b52fadb6e996e89b3d28fa1bcb45c2070afcf9cd origin/master
+Ancestry exit0; commit timestamp2026-10-19T03:31:53Z.
+Source inspected at b0c2640917d899b78abd359b5c69cbd6efac9931:
+  summation.rs SHA2560f9cc131cc122eaf0ad8a1577520ccbdc93d9e7e878fa359853a2b4cbdf05984 (LaneSums8 present).
+Separate unmerged candidate ef9763f23b1cfd429140b6dbe9be5b432f7bb538:
+  summation.rs SHA2569d600b752c6860bfa2daf9d8e5dc641c9f72c355e59ac920a3d0e13a668ecb24 (LaneSums8 absent).
+No metric code reverted/edited, and no source-to-timing equivalence asserted.

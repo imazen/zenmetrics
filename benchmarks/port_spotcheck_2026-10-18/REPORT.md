@@ -1,5 +1,17 @@
 # Canonical port checks: evidence status, 2026-10-19
 
+Existing metric-path change on master: commit
+[`b52fadb6e996e89b3d28fa1bcb45c2070afcf9cd`](https://github.com/imazen/zenmetrics/commit/b52fadb6e996e89b3d28fa1bcb45c2070afcf9cd)
+changes BRISQUE convolution, luma, normalization, resize and reductions,
+including f64 `LaneSums8` in place of f32 reduction trees. Its commit timestamp
+is 2026-10-19 03:31:53 UTC; remote-tracking ancestry was verified on October 19.
+It is already on master and has not been reverted by this review. Its
+[committed study](../brisque_simd_2026-10-19/README.md) has separate provenance;
+this review has not independently remeasured its score or timing effects.
+The older unmerged `ef9763f2` BRISQUE candidate uses different source and cannot
+stand in for this master implementation. Retain that distinction when deciding
+which code and benchmark cohort to use.
+
 Missing: the full inventory, the classical size/content/thread matrix, the
 learned-method matrix, qualified ratio intervals, and the final site-readable
 `summary.tsv`. The replacement timing panel has **0/19 qualified metric
