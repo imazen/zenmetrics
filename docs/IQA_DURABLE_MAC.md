@@ -263,3 +263,13 @@ budgets, and add no upcoming map scopes. NN CPU and Metal follow the replacement
 scalar outputs; disabled original service configs remain unchanged. The existing
 30-minute check-in plan reads the new frozen scheduler's `status` output and
 retains a backup of the earlier eight-phase plan.
+
+## Retained STLPIPS-Alex numerical refusal, 2026-10-19
+
+The GPU-first Metal 2K warm attempts at one and eight workers each retain a
+`variant_mismatch` row with three differing call results despite ten clean
+resource-gate samples. The controller correctly leaves them unqualified; a
+clean resource gate alone does not qualify score repeatability. The call
+counter spans warmup/calibration/timed calls, so the exact varying timed rounds
+are not identified. Original two-attempt caps and failed packets are retained.
+[Sealed diagnostic evidence and scope](../benchmarks/mac_validation_2026-10-18/STLPIPS_VARIATION_2026-10-19.md).

@@ -1966,3 +1966,13 @@ doctests, strict clippy and no-default-feature compilation pass. The measured
 1024-square/4K one/eight-worker scores now match the original one-worker bits.
 Master remains unchanged. Before/after timings, RSS and the affected-loop
 retally are in `benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta`.
+
+### Known Bugs: STLPIPS-Alex Metal warm repeatability (2026-10-19)
+
+Two retained 2048×1080 warm first attempts (one/eight workers) report
+`variant_mismatch`, each with three differing call results and ten clean
+resource-gate observations. Baseline bits `3f82881020000000`, observed alternate
+`3f857d5180000000`. Both remain unqualified with verified cleanup and bounded
+retries. The counter includes warmup and calibration; the varying timed rounds
+and cause are unproven. No gate, worker or service changes were made for the
+[read-only capture](benchmarks/mac_validation_2026-10-18/STLPIPS_VARIATION_2026-10-19.md).
