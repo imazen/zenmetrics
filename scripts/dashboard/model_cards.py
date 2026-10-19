@@ -98,6 +98,10 @@ def cards():
     for row in catalog_rows():
         metric=row['metric'];columns=set(row['columns'].split(';'))
         item=next(((p,c) for p,c in nn if columns&set(c.get('columns',[]))),None)
+        if item is None:
+            # A few original cards predate the columns field. An exact named
+            # card still owns its reference and results; aliases do not inherit.
+            item=next(((p,c) for p,c in nn if c.get('name')==metric),None)
         path,model=item if item else (None,{})
         entry=entries.get(base_name(metric,entries),[])
         cite=by_metric.get(model.get('name')) if model else None
@@ -109,7 +113,9 @@ def cards():
             comments='\n'.join(line.lstrip('# ').strip() for line in raw.splitlines() if line.lstrip().startswith('#'))
             if comments:parity['recorded_source_comments']=comments
 
-        status='Reported results' if parity.get('results') or parity.get('status') or any('reported_worst' in k for k in parity) or 'Measured' in parity.get('recorded_source_comments','') or row['parity'].startswith('reported gate:') else 'Declared gate' if parity else 'Not compared' if 'not compared' in row['parity'] else 'Not documented'
+        status='Reported results' if parity.get('results') or parity.get('status') or any('reported_worst' in k or k.startswith('measured_') for k in parity) or 'Measured' in parity.get('recorded_source_comments','') or row['parity'].startswith('reported gate:') else 'Declared gate' if parity else 'Not compared' if 'not compared' in row['parity'] else 'Not documented'
+        if metric=='dmm' and parity.get('regression_floor_policy'):
+            status='Partial canonical parity'
         inputs=model.get('input',{}) or ({'convention':plain(entry[5])} if len(entry)>5 else {'cli_contract':contracts.get(metric,MISSING)})
         explicit=explicit_aic_inputs(metric)
         if explicit:inputs=explicit
@@ -203,7 +209,7 @@ def readme_section(items):
             ref='unrecorded'
         ref=ref.split(';')[0]
         if len(ref)>32:ref=ref[:29].rstrip()+'…'
-        check=observation.get('check',{'Reported results':'prior','Declared gate':'gate'}.get(c['parity_status'],'unchecked'))
+        check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         ratio=observation.get('ratio')
         speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
         metric='[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')'

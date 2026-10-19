@@ -112,21 +112,21 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 ## ahiq
 
-FR · Learned · CPU · Not documented
+FR · Learned · CPU · Reported results
 
 **Paper: citation needed.**
 
 **Recorded paper:** no evidence
 
-**Reference implementation:** no evidence
+**Reference implementation:** https://github.com/IIGROUP/AHIQ
 
-**Reference identity:** no evidence
+**Reference identity:** IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, upstream-path nine-crop ensemble
 
-**Reference code license:** not recorded
+**Reference code license:** MIT
 
 **Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
 
-**Weights license:** not applicable
+**Weights license:** unknown
 
 **Display:** No display requirement in CLI mapping; see input convention
 
@@ -145,22 +145,31 @@ weights state no licence, so ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq.
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms and export command)
+# export the model once (see crates/zenmetrics-nn/models/ahiq/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric ahiq --reference ref.png --distorted dist.png
 ```
 
+After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq. Consent is not implied by building the CLI.
+
 **Weights:**
 
 ```json
-{}
+{
+  "licence_class": "unknown",
+  "checkpoint": "Google Drive file 1Nk-IpjnDNXbWacoh3T69wkSYhYYWip2W (epoch 32, patch_size 8) linked from https://github.com/IIGROUP/AHIQ; ImageNet backbones via timm pretrained — vit_base_patch8_224.augreg_in21k_ft_in1k (the augreg B_8-i21k checkpoint timm 0.5.4's bare name resolves; NOT the augreg2 variant timm 1.x defaults to) and resnet50.a1_in1k, both Apache-2.0 via timm",
+  "trained_on": "PIPAL (upstream default: --name ahiq_pipal, --train_list PIPAL.txt)"
+}
 ```
 
 **Inputs:**
 
 ```json
 {
-  "cli_contract": "AHIQ — learned FR quality metric (upstream IIGROUP/AHIQ, MIT\ncode; ViT-B/8 + ResNet-50 taps, deformable fusion, mean of nine\n224×224 crops, higher is better). Needs feature nn; its\nweights state no licence, so ZENMETRICS_NN_ACCEPT_WEIGHTS=ahiq."
+  "format": "packed sRGB8",
+  "normalisation": "cv2 BGR->RGB, v/255, (x-0.5)/0.5 -> [-1, 1]; NO resizing anywhere",
+  "resize": "none — the port scores nine deterministic 224x224 crops (five_point_crop idx 0-8: four corners, centre, four edge centres) and averages. Upstream test.py's default is n_ensemble=20 seeded random crops (seed 1919); the <=9 branch is this nine-crop protocol, so the port is a deterministic deviation from upstream's default",
+  "min_size": 224
 }
 ```
 
@@ -168,18 +177,25 @@ target/release/zenmetrics score --metric ahiq --reference ref.png --distorted di
 
 ```json
 {
-  "reported": "no evidence",
-  "oracle": "no evidence"
+  "oracle": "IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, upstream-path nine-crop ensemble",
+  "tolerance_jnd": 0.001,
+  "jnd": 0.024882,
+  "results": "rten worst |d| 5.295e-8 (2.1e-6 JND); ort-cuda worst |d| 2.582e-7 (1.0e-5 JND); 17 goldens incl. 320x240+240x320 non-square rows; warm ref == cold on both engines; logs [local path] on i265"
 }
 ```
 
 **Conventions:**
 
 ```json
-{}
+{
+  "aic4": {
+    "convention": "NOT REPRODUCED by the upstream protocol. Under upstream's own inference path with the port's deterministic nine-crop convention (s9), all 61 pairs carry a systematic positive offset vs the published column; the column follows a different convention than upstream test.py scoring. The port implements upstream semantics and documents the gap rather than chasing it.",
+    "results": "native s9 on all 61 pairs: median |d| 0.1405 (5.6 JND), max |d| 0.2125, SRCC 0.76. Table: benchmarks/ahiq_aic_probe/aic_ahiq.tsv; log [local path] on i265."
+  }
+}
 ```
 
-**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+**Sources:** [crates/zenmetrics-nn/models/ahiq/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-nn/models/ahiq/card.toml) · [crates/zenmetrics-nn/LICENSE-ahiq](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-nn/LICENSE-ahiq)
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
@@ -187,7 +203,7 @@ target/release/zenmetrics score --metric ahiq --reference ref.png --distorted di
 
 ## ahiq-pyiqa
 
-FR · Learned · CPU · Declared gate
+FR · Learned · CPU · Reported results
 
 **Paper: citation needed.**
 
@@ -2164,7 +2180,7 @@ target/release/zenmetrics score --metric cw-ssim --reference ref.png --distorted
 
 ## cw-ssim-pyiqa
 
-FR · Classical · CPU · Declared gate
+FR · Classical · CPU · Reported results
 
 **Paper:** [Complex Wavelet Structural Similarity: A New Image Similarity Index](https://doi.org/10.1109/TIP.2009.2025923). M.P. Sampat; Zhou Wang; S. Gupta; A.C. Bovik; M.K. Markey. IEEE Transactions on Image Processing. 2009.
 
@@ -2444,21 +2460,21 @@ target/release/zenmetrics score --metric dists --reference ref.png --distorted d
 
 ## dmm
 
-FR · Learned · CPU · Not documented
+FR · Learned · CPU · Partial canonical parity
 
 **Paper: citation needed.**
 
 **Recorded paper:** no evidence
 
-**Reference implementation:** no evidence
+**Reference implementation:** https://github.com/Baoliang93/DMM
 
-**Reference identity:** no evidence
+**Reference identity:** pip DMM_PyTorch (DMM_PyTorch/DMM.py)
 
-**Reference code license:** not recorded
+**Reference code license:** MIT (Baoliang Chen 2024)
 
 **Rust license:** AGPL-3.0-only OR LicenseRef-Imazen-Commercial
 
-**Weights license:** not applicable
+**Weights license:** permissive
 
 **Display:** No display requirement in CLI mapping; see input convention
 
@@ -2477,7 +2493,7 @@ Needs feature nn; its only weights are torchvision VGG16
 git clone https://github.com/imazen/zenmetrics && cd zenmetrics
 bash scripts/ci/clone-siblings.sh
 cargo build --release -p zenmetrics-cli --features nn
-# export the model once (see crates/zenmetrics-nn/models/<model>/card.toml for weight terms and export command)
+# export the model once (see crates/zenmetrics-nn/models/dmm/card.toml for weight terms and export command)
 export ZENMETRICS_NN_MODEL_DIR=$PWD/nn-models
 target/release/zenmetrics score --metric dmm --reference ref.png --distorted dist.png
 ```
@@ -2485,14 +2501,26 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 **Weights:**
 
 ```json
-{}
+{
+  "licence_class": "permissive",
+  "checkpoint": "torchvision vgg16 IMAGENET1K_V1 (fetched by torchvision)",
+  "trunk_url": "https://download.pytorch.org/models/vgg16-397923af.pth",
+  "trained_on": "n/a — no fitted parameters"
+}
 ```
 
 **Inputs:**
 
 ```json
 {
-  "cli_contract": "DMM — learned FR distance (upstream Baoliang93/DMM, MIT code;\nVGG16 L2-pooled taps, per-patch SVD head, lower is better).\nNeeds feature nn; its only weights are torchvision VGG16\n(permissive), so no consent gate."
+  "format": "packed sRGB8",
+  "normalisation": "v/255 -> [0,1]; upstream's input_norm defaults to off",
+  "resize": "prepare_image_adt: if min(h,w) > 128, PIL-bilinear resize short side to max(floor(min/48)32, 128), long side int(newlong/short); <=128 images pass through. The port reproduces Pillow's fixed-point BILINEAR bit-exactly (resize_bilinear_pil_u8 — zenresize has no Pillow-exactness knob: i16@2^14 largest-remainder vs Pillow's 2^22 last-tap fold)",
+  "max_side": 4096,
+  "max_pixels_64bit": 16777216,
+  "max_pixels_32bit": 1048576,
+  "max_aspect_ratio": 32,
+  "min_size": 128
 }
 ```
 
@@ -2500,18 +2528,26 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 
 ```json
 {
-  "reported": "no evidence",
-  "oracle": "no evidence"
+  "regression_floor_policy": "Regenerating per-row residual floors requires owner approval. Never increase an existing tolerance or move a jnd row to pinned without explicit approval. Candidate generation: just nn-dmm-netlib-goldens; goldens in this directory are reviewed source artifacts.",
+  "oracle": "Frozen per-engine SciPy SGESDD scores on the engine's own ONNX taps; upstream DMM() CPU fp32 MKL scores are recorded separately",
+  "tolerance_jnd": 0.001,
+  "jnd": "0.191420 (KonJND-1k 1008 pairs, ort-cuda, 2026-10-16; JPEG 0.167535 / BPG 0.218804 — benchmarks/nn_konjnd_scale_2026-10-15.md)",
+  "results": "The active score-revision-1 solver passes all 48 frozen row limits. Canonical JND coverage is rten 6/24 and ort-cuda 7/24; the remaining 18/17 rows use owner-approved recorded-residual +5% floors. Those pinned rows are regression controls, not a parity claim. Full-precision native comparisons against upstream MKL: rten median 0.001673475654 / max 0.05674371081; ort-cuda median 0.0007338384395 / max 0.1764253188. No original limit or classification changes. Arithmetic hypotheses are measured individually and qualify only if every frozen limit passes and no row residual increases; all eight candidates are rejected, with complete 48-row comparisons and bit-identical 24-row CUDA repeats. The original numerical section, SVD assertions and frozen goldens are unchanged. Source IDs, per-change results, historical rounded receipts and rejected combined experiments: benchmarks/nn_port_2026-10-15/dmm_fix_2026-10-17.md and dmm_bisect_results_2026-10-17.md."
 }
 ```
 
 **Conventions:**
 
 ```json
-{}
+{
+  "aic4": {
+    "convention": "AIC-4 2026 publishes a DMM column (metrics_subset.csv); the column is not reproduced here and its evaluation pipeline remains undetermined.",
+    "results": "Historical score-revision-1 comparison, not reproduced by the upstream convention — native port vs published on the 61-pair crop set: median |d| 7.47e-2, max 0.417 (benchmarks/dmm_aic_probe/aic_dmm.tsv)."
+  }
+}
 ```
 
-**Sources:** [docs/METRIC_PROVENANCE.md](https://github.com/imazen/zenmetrics/blob/master/docs/METRIC_PROVENANCE.md) · [crates/zenmetrics-cli/src/metrics/mod.rs](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-cli/src/metrics/mod.rs)
+**Sources:** [crates/zenmetrics-nn/models/dmm/card.toml](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-nn/models/dmm/card.toml) · [crates/zenmetrics-nn/LICENSE-dmm](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-nn/LICENSE-dmm)
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
@@ -2519,7 +2555,7 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 
 ## dmm-pyiqa
 
-FR · Learned · CPU · Declared gate
+FR · Learned · CPU · Reported results
 
 **Paper: citation needed.**
 
@@ -7734,7 +7770,7 @@ target/release/zenmetrics score --metric pieapp --reference ref.png --distorted 
 
 ## pieapp-pyiqa
 
-FR · Learned · CPU · Declared gate
+FR · Learned · CPU · Reported results
 
 **Paper:** [PieAPP: Perceptual Image-Error Assessment through Pairwise Preference](https://arxiv.org/abs/1806.02067). Prashnani, Ekta; Cai, Hong; Mostofi, Yasamin; Sen, Pradeep. CVPR 2018. 2018 (arXiv submission year; publication venue may be later).
 
@@ -12605,7 +12641,7 @@ target/release/zenmetrics score --metric wadiqam-nr-tid --reference ref.png --di
 
 ## wadiqam-pyiqa
 
-FR · Learned · CPU · Declared gate
+FR · Learned · CPU · Reported results
 
 **Paper:** [Deep Neural Networks for No-Reference and Full-Reference Image Quality Assessment](https://arxiv.org/abs/1612.01697). Bosse, Sebastian; Maniry, Dominique; Müller, Klaus-Robert; Wiegand, Thomas; Samek, Wojciech. IEEE TIP 2018. 2016 (arXiv submission year; publication venue may be later).
 

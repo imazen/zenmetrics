@@ -67,8 +67,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
 | [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | ChrisDud0257/AFINE | prior | — |
-| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | unrecorded | unchecked | — |
-| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('a… | gate | — |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | IIGROUP/AHIQ | prior | — |
+| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('a… | prior | — |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | pass | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl butteraugli v0.9.2 / 0… | unchecked | — |
@@ -81,11 +81,11 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp v0.5.7 (PyPI) | prior | — |
 | [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp v0.5.7 + CPU twin | unchecked | — |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | unrecorded | unchecked | — |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | pyiqa 0.1.16 create_metric('c… | gate | — |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | pyiqa 0.1.16 create_metric('c… | prior | — |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | h4nwei/DeepDC | prior | — |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | dingkeyan93/DISTS | prior | — |
-| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | unrecorded | unchecked | — |
-| [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('d… | gate | — |
+| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
+| [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('d… | prior | — |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
 | [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | dssim-core itself (the canoni… | prior | — |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
@@ -133,7 +133,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch source mirrored a… | prior | — |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
 | [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public compute_… | prior | — |
-| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('p… | gate | — |
+| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('p… | prior | — |
 | [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | pass | ≈0.1× |
 | [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | unrecorded | unchecked | — |
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | unrecorded | unchecked | — |
@@ -187,7 +187,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | dmaniry/deepIQA | prior | — |
-| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('w… | gate | — |
+| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('w… | prior | — |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Cool-Chic | prior | — |
 | [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | unrecorded | unchecked | — |
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | unchecked | — |

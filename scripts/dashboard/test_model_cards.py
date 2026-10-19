@@ -30,6 +30,14 @@ class ModelCards(unittest.TestCase):
         self.assertIn('Hyper Network',self.by_name['hyperiqa']['citation']['title'])
         self.assertNotIn('Gini',self.by_name['hyperiqa']['citation']['title'])
 
+    def test_exact_named_original_cards_keep_their_evidence_and_limits(self):
+        self.assertIn('IIGROUP/AHIQ',self.by_name['ahiq']['reference_implementation'])
+        self.assertEqual(self.by_name['ahiq']['parity_status'],'Reported results')
+        self.assertIn('6/24',self.by_name['dmm']['parity']['results'])
+        self.assertEqual(self.by_name['dmm']['parity_status'],'Partial canonical parity')
+        self.assertIn('measured_ladder',self.by_name['wadiqam-pyiqa']['parity'])
+        self.assertEqual(self.by_name['wadiqam-pyiqa']['parity_status'],'Reported results')
+
     def test_checkpoint_licence_and_oracle_scopes_survive(self):
         card=self.by_name['pieapp']
         self.assertIn('Non-Commercial',card['weights_license'])
