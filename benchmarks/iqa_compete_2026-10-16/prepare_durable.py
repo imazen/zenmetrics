@@ -30,6 +30,7 @@ def main():
     p.add_argument('--resource-wrapper', type=Path, help='Copy an explicit run-heavy wrapper and its adjacent macOS implementation into this local bundle')
     p.add_argument('--metrics', default='all')
     p.add_argument('--sizes', default='cid22,aic-small,aic-medium,aic-large,2k,4k,8k')
+    p.add_argument('--modes', choices=('score', 'score+map', 'both'), default='both')
     p.add_argument('--threads', default='1,8', help='Explicit worker counts, frozen in the manifest')
     p.add_argument('--cold-repeats', type=int, default=3)
     p.add_argument('--zenbench', type=Path, help='Freeze the native zenbench CLI for checked Linux P-core placement')
@@ -91,7 +92,7 @@ def main():
         pair = pairs[size]
         for metric in metrics:
             for threads in counts:
-                for mode in ('score', 'score+map'):
+                for mode in (('score', 'score+map') if a.modes == 'both' else (a.modes,)):
                     for phase in ('cold', 'warm'):
                         for repeat in range(a.cold_repeats if phase == 'cold' else 1):
                             cell = dict(metric_name=metric, size_name=size, width=pair['width'], height=pair['height'],
@@ -107,7 +108,8 @@ def main():
                                   build_receipt_sha256=sha(a.build_receipt), features=build['features'], cold_definition='fresh process: scorer construction and first evaluation after RGB input loading; OS caches not flushed',
                                   warm_definition='10 zenbench rounds, 100 ms target per round, after initialization and warmup',
                                   input_provenance_sha256=sha(a.inputs_meta), corpus_scope='single S67 reference/distortion; scaling study, not perceptual ranking',
-                                  metrics=metrics, sizes=sizes, threads=counts, inventory=inventory))
+                                  metrics=metrics, sizes=sizes, threads=counts, modes=a.modes, inventory=inventory,
+                                  protocol_id='durable-cold3-warm10-100ms-scalar-v1' if a.modes == 'score' and a.cold_repeats == 3 and counts == [1, 8] else 'explicit-durable-configuration'))
     if a.zenbench:
         manifest['input_sha256']['tools/zenbench'] = sha(a.output / 'tools/zenbench')
         manifest['metadata']['cpu_placement'] = dict(policy='performance',

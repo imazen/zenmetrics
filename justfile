@@ -1623,15 +1623,20 @@ iqa-compete-landing-gates output snapshot *options:
 dashboard-regenerate:
     python3 scripts/dashboard/regenerate.py
 
-# Rust-only CPU path, including classical NR (BRISQUE/NIQE/PIQE).
-# Advanced GPU/NN/Python experiments are explicit opt-ins below.
-bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
+# Canonical scalar CPU comparison: frozen RGB, cold3 + warm10 at 100ms, threads1/8.
+# Requires explicit --binary/--pairs/--build-receipt/--source-commit/--bundle/--output/--lock/--run-heavy.
+# Build beforehand under the host heavy lock; see docs/IQA_CANONICAL_COMMANDS.md.
+bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
+    python3 benchmarks/iqa_compete_2026-10-16/canonical_bench.py '{{sizes}}' '{{metrics}}' {{options}}
+
+# Exact 27 changed/added routes, using the same canonical protocol.
+bench-iqa-changed *options:
+    just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k changed {{options}}
+
+# Historical portable 5/3/1 panel: supplemental evidence, never canonical replacements.
+bench-iqa-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     cargo build --locked --release -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete --bin bench-iqa
     '{{env_var_or_default("CARGO_TARGET_DIR","target")}}/release/bench-iqa{{if os() == "windows" { ".exe" } else { "" }}}' '{{sizes}}' '{{metrics}}' {{options}}
-
-# Only the changed-since-f7668c7 scope, fastest first within each size/thread budget.
-bench-iqa-changed *options:
-    just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k,8k changed {{options}}
 
 # Standalone checks for exact changed scope and retained timing order.
 bench-iqa-changed-check:
@@ -1639,7 +1644,8 @@ bench-iqa-changed-check:
     rustc --edition 2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/benchmark_selection_tests.rs -o "$HOME/tmp/changed-benchmark-selection/tests"
     "$HOME/tmp/changed-benchmark-selection/tests"
 
-bench-iqa-advanced sizes="cid22,aic-small,aic-medium,aic-large,2k,4k,8k" metrics="all" *options:
+# Historical Python/GPU/NN panels have their own protocol; supplemental only.
+bench-iqa-advanced-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     python3 benchmarks/iqa_compete_2026-10-16/bench.py '{{sizes}}' '{{metrics}}' {{options}}
 
 bench-iqa-check:
@@ -1693,7 +1699,7 @@ iqa-durable-check:
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_admission_recovery.py
 
 iqa-durable-prepare binary pairs output revision *options:
-    python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' {{options}}
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_durable.py --binary '{{binary}}' --pairs '{{pairs}}' --output '{{output}}' --source-commit '{{revision}}' --sizes cid22,aic-small,aic-medium,aic-large,2k,4k --modes score --threads 1,8 --cold-repeats 3 {{options}}
 
 # Start a copied, frozen ARM64 bundle; no compiler or model download needed.
 bench-iqa-mac bundle output action="install" *options:
@@ -1733,7 +1739,7 @@ iqa-durable-build-receipt binary output command_file +options:
     python3 benchmarks/iqa_compete_2026-10-16/record_durable_build.py '{{binary}}' '{{output}}' --command-file '{{command_file}}' {{options}}
 
 iqa-durable-run manifest output wrapper lock *options:
-    python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' {{options}}
+    python3 benchmarks/iqa_compete_2026-10-16/durable.py run '{{manifest}}' '{{output}}' --run-heavy '{{wrapper}}' --lock '{{lock}}' --memory 12G --jobs 8 {{options}}
 
 # Frozen family sequence in a restarting Linux user service.
 bench-iqa-linux plan action="status":
@@ -1982,3 +1988,7 @@ iqa-canonical-cpu-check:
 iqa-canonical-cpu-prepare *args:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_canonical_cpu.py {{args}}
 
+
+# Fixed canonical IQA recipe arguments, immutable output and shared-lock controls.
+iqa-canonical-command-check:
+    TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_canonical_commands.py
