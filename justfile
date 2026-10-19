@@ -1858,6 +1858,19 @@ hdrvdp-canonical-check-symmetric:
 hdrvdp-canonical-pixels pairs output *native:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" OPENBLAS_NUM_THREADS=1 python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/pixel_control.py '{{pairs}}' '{{output}}' {{native}}
 
+hdrvdp-canonical-build-decode source newdir:
+    python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_native_decode.py '{{source}}' '{{newdir}}'
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" cargo build --locked --release --manifest-path '{{newdir}}/Cargo.toml' -p vdpprobe --bin native-decode
+
+hdrvdp-canonical-decode binary images output:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" '{{binary}}' '{{images}}' '{{output}}'
+
+hdrvdp-canonical-build-stages newdir:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/prepare_native_stages.py '{{newdir}}'
+
+hdrvdp-canonical-stages v221 v222 v307 probe output:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" OPENBLAS_NUM_THREADS=1 python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/spectral_control.py '{{v221}}' '{{v222}}' '{{v307}}' '{{probe}}' '{{output}}'
+
 # Finite Mac GPU timing policy and strict numerical refusal controls.
 iqa-finite-gpu-policy-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py

@@ -1,0 +1,67 @@
+// Source-inclusion diagnostic: numerical modules/data are frozen unchanged.
+use std::{fs, io::Write, path::Path};
+// Visibility is local to this diagnostic binary, not a library API addition.
+#[path = "@INTERP@"] pub mod interp;
+#[path = "@SPECTRAL2@"] pub mod spectral;
+#[derive(Debug)] pub enum Error { SpectralData(String) }
+pub type Result<T> = std::result::Result<T,Error>;
+pub mod v3 {
+    // Type-only shims for the unmodified spectral module's arguments.
+    pub mod params {
+        #[derive(Clone, Copy)] pub enum DisplayPreset { CcflLcd,Crt,LedLcd,LedLcdSrgb,LedLcdWcg,Oled,D65 }
+        pub enum Emission { Preset(DisplayPreset), Custom { wavelengths_nm:Vec<f64>,columns:Vec<Vec<f64>> } }
+        pub enum InputEncoding { SrgbDisplay,RgbBt709,RgbBt2020,Xyz,Generic }
+    }
+    #[path = "@SPECTRAL3@"] pub mod spectral;
+}
+fn emit(f:&mut fs::File,stage:&str,cols:&[Vec<f64>]) {
+    assert!(!cols.is_empty() && cols.iter().all(|c|c.len()==cols[0].len()));
+    for r in 0..cols[0].len() { for (c,col) in cols.iter().enumerate() {
+        writeln!(f,"{stage}\t{r}\t{c}\t{:.17e}",col[r]).unwrap();
+    }}
+}
+fn main() {
+    let a:Vec<String>=std::env::args().collect();
+    let root=Path::new(&a[1]);
+    let grid_oct:Vec<f64>=fs::read_to_string(&a[3]).unwrap().lines().skip(1)
+        .filter_map(|l| { let p:Vec<_>=l.split('\t').collect(); (p[0]=="grid").then(||p[3].parse().unwrap()) }).collect();
+    assert_eq!(grid_oct.len(),420);
+    let ver:u8=a[4].parse().unwrap();
+    let grid=if ver==2 {spectral::wavelength_grid()} else {v3::spectral::lamb()};
+    let mut f=fs::File::create_new(&a[2]).unwrap(); writeln!(f,"stage\trow\tcolumn\tvalue").unwrap();
+    emit(&mut f,"grid",&[grid.clone()]);
+    let display=if ver==2 {"emission_spectra_ccfl-lcd.csv"} else {"emission_spectra_oled.csv"};
+    for (name,label) in [("log_cone_smith_pokorny_1975.csv","cone_log"),("cie_scotopic_lum.txt","rod"),(display,"display")] {
+        let data=fs::read_to_string(root.join(name)).unwrap();
+        let rows:Vec<Vec<f64>>=data.lines().filter(|l|!l.trim().is_empty()).map(|l|l.split(',').map(|v|v.trim().parse().unwrap()).collect()).collect();
+        let x:Vec<_>=rows.iter().map(|r|r[0]).collect();
+        for (query,prefix) in [(&grid,"raw_"),(&grid_oct,"matched_raw_")] {
+            let cols:Vec<Vec<f64>>=(1..rows[0].len()).map(|c| {
+                let y:Vec<_>=rows.iter().map(|r|r[c]).collect();
+                if ver==2 {interp::interp1_pchip(&x,&y,query,0.0)} else {interp::interp1_pchip_extrap(&x,&y,query)}
+            }).collect();
+            emit(&mut f,&format!("{prefix}{label}"),&cols);
+        }
+    }
+    if ver==2 {
+        let s=spectral::photoreceptor_sensitivities();
+        let e=spectral::emission_spectra(spectral::DisplaySpectra::CcflLcd,3);
+        let m=spectral::lmsr_matrix(&e);
+        emit(&mut f,"receptors",&s);emit(&mut f,"emission",&e);
+        let cols:Vec<Vec<_>>=(0..4).map(|c|m.iter().map(|r|r[c]).collect()).collect(); emit(&mut f,"mixing",&cols);
+    } else {
+        let s=v3::spectral::receptor_sensitivities().unwrap();
+        let e=v3::spectral::emission_columns(&v3::params::Emission::Preset(v3::params::DisplayPreset::Oled)).unwrap();
+        emit(&mut f,"receptors",&s);emit(&mut f,"emission",&e);
+        emit(&mut f,"xyz_cmf",&v3::spectral::xyz_cmf().unwrap());
+        emit(&mut f,"aging24",&[v3::spectral::aging_optical_density_filter(24)]);
+        let trans=v3::spectral::itu2native(v3::params::InputEncoding::Xyz,&e).unwrap().unwrap();
+        let trans_cols:Vec<Vec<_>>=(0..3).map(|c|trans.iter().map(|r|r[c]).collect()).collect();
+        emit(&mut f,"xyz_to_native",&trans_cols);
+        let cols:Vec<Vec<f64>>=(0..4).map(|r|(0..3).map(|c| {
+            let p:Vec<_>=(0..420).map(|i|s[r][i]*e[c][i]*683.002).collect();interp::trapz(&grid,&p)
+        }).collect()).collect();
+        let norm:f64=cols.iter().take(2).flat_map(|c|c.iter()).sum();
+        emit(&mut f,"mixing",&cols.iter().map(|c|c.iter().map(|v|v/norm).collect()).collect::<Vec<Vec<_>>>());
+    }
+}

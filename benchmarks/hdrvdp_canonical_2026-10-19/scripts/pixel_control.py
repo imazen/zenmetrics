@@ -27,6 +27,10 @@ driver=Path(__file__).with_name('pixel_dump.m')
 shutil.copy2(driver,output/'pixel_dump.m')
 subprocess.run(['octave','--quiet',str(output/'pixel_dump.m'),str(listing),str(output/'octave')],check=True)
 octave={r['name']:r for r in csv.DictReader((output/'octave/manifest.tsv').open(),delimiter='\t')}
+native_shapes=None
+if native:
+    native_shapes={r['name']:r for r in csv.DictReader((native/'manifest.tsv').open(),delimiter='\t')}
+    assert set(native_shapes)==set(octave)
 ffmpeg=shutil.which('ffmpeg'); assert ffmpeg
 summary=dict(n=0, exact_octave=0, exact_pillow=0, exact_native=0,
              unequal_octave_bytes=0, unequal_pillow_bytes=0, unequal_native_bytes=0,
@@ -50,7 +54,9 @@ with (output/'pixels.tsv').open('w') as table:
             assert im.mode=='RGB' and im.size==(w,h)
             pillow=im.tobytes()
         images=dict(octave=(output/'octave'/(p.name+'.rgb')).read_bytes(),pillow=pillow)
-        if native: images['native']=(native/(p.name+'.rgb')).read_bytes()
+        if native:
+            assert native_shapes[p.name]==r, 'native decoded geometry differs'
+            images['native']=(native/(p.name+'.rgb')).read_bytes()
         record=dict(name=p.name,width=w,height=h,input_sha256=hashlib.sha256(p.read_bytes()).hexdigest(),
                     oracle_sha256=hashlib.sha256(oracle).hexdigest(),native_sha256='unmeasured')
         for key, data in images.items():
