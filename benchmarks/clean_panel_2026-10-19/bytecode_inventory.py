@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import json
+import zipfile
 
 
 def environment(base=None):
@@ -31,7 +32,21 @@ def inventory(roots):
         root=Path(raw)
         state=dict(path=str(root),resolved=str(root.resolve()),exists=root.exists())
         root_states.append(state)
-        if not root.exists(): continue  # Absent zip/import root is still bound above.
+        if not root.exists():
+            # zipimport accepts /container.egg/internal/prefix even though the
+            # full pseudo-path does not exist in the filesystem. Bind the first
+            # existing file ancestor and its exact internal prefix.
+            container = next((p for p in root.parents if p.is_file()), None)
+            if container is not None:
+                if not zipfile.is_zipfile(container):
+                    raise ValueError('unsupported file-prefix import root: '+str(root))
+                state.update(kind='archive-prefix', container=str(container),
+                    container_resolved=str(container.resolve(strict=True)),
+                    prefix=root.relative_to(container).as_posix(),
+                    sha256=digest(container))
+            else:
+                state['kind'] = 'absent'
+            continue
         if root.is_file():
             state.update(kind='file',sha256=digest(root))  # zip/egg roots include bytecode too.
             continue
