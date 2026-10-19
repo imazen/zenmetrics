@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Bind optional upstream image-2.20.1 resize M-files for primary reference runs (`13d4e8a1`) and distinguish focused VSI reference-runtime differences from metric defects (`fad84fd0`), retaining prior observations and all numerical bounds.
+
+- Retain synthetic primary-reference comparisons (`bf7f1fc3`), raw-crop preparation (`19bce08c`), the initial photo finding (`41f45a7d`), and serialized parity/failure/memory controls (`23c93c01`); these supply no qualified speed ratios.
+
 - Execute the primary FSIM/VSI fixed-factor references through a hash-checked headless Octave benchmark adapter (`e2d414c3`); retain diagnostic scalar results separately from Rust parity and timing qualification.
 
 - Bind an opt-in primary SSIMULACRA2 benchmark build to owned Highway source and compiler receipts (`763820ae`), preserving older executable cohorts and their stated limits.

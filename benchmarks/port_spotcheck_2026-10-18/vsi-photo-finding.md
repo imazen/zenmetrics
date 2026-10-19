@@ -1,10 +1,11 @@
-# VSI real-photo crop parity failure
+# VSI real-photo crop: reference resize mismatch
 
-Open correctness finding, 2026-10-19, host lilith-wsl. Cause and affected grid
-extent remain unresolved. No metric code or numerical bound changed.
+Reference-runtime finding, 2026-10-19, host lilith-wsl. A separately bound
+resize control explains the focused photo mismatch without changing metric
+code or the numerical bound. The initial observations below remain retained.
 
 The 64×64 center crop of the retained S67 reference/CCM15 4K pair fails the
-documented VSI absolute bound of **1e-4**:
+documented VSI absolute bound of **1e-4** against the image-2.12 runner:
 
 | Route | Score |
 |---|---|
@@ -12,11 +13,16 @@ documented VSI absolute bound of **1e-4**:
 | Primary factor-1 scratch copy | 0.94679144074028154 |
 | Frozen Rust `vsi` | 0.9567964257437082 |
 | Frozen Rust `vsi-nodownscale` | 0.9567964257437082 |
+| Same original author source, unchanged image-2.20.1 resize M-file overlay | 0.95679610895892431 |
 
 Maximum absolute difference: **0.010004985003426614**. Both canonical
 first/warm calls repeat, and the existing Rust probe checks repeated score
 bits. The unsuffixed Rust score bits are `3fee9e1389aff725`.
-These results do not identify the responsible numeric stage.
+The new reference's absolute Rust difference is **3.1678478384922215e-7**,
+within the unchanged bound. The selected upstream resize implements the
+antialiased convention claimed by the port; system image 2.12 uses different
+interpolation. This is a two-M-file overlay on Octave 6.4, not a full newer
+package installation. [Source bindings, focused controls, and limits](vsi-resize-runtime.md).
 
 An independent invocation selects the original, unchanged author release
 `VSI.m`, SHA256 `5939b9053966f58377e08052b5e2d0e0e3f954040fe732625591363285433954`.

@@ -23,15 +23,22 @@ The 19 configurations are `brisque`, `butteraugli`, `butteraugli-original`,
 `cambi`, `cambi-aic2026`, `psnr-y-libvmaf`, `vmaf`, `vmaf-4k`, `vmaf-neg`,
 `vmaf-neg-studio601`, `vmaf-studio601`, and `vmaf-v1`.
 
-## Parity failures
+## Parity findings
 
-The [64×64 S67/CCM15 photo crop](vsi-photo-finding.md) fails VSI parity:
+The initial [64×64 S67/CCM15 photo crop](vsi-photo-finding.md) fails against
+the image-2.12.0 reference runner:
 Rust `vsi` and `vsi-nodownscale` return 0.9567964257437082 versus
 0.94679144074028154 from the unmodified primary reference. The absolute
 difference, 0.010004985003426614, exceeds the unchanged 1e-4 bound.
 Independent pixel-ingress and original-source controls reproduce the failure.
-Cause and affected extent remain unresolved; no metric code changed.
-This does not invalidate the different synthetic input's partial passes.
+A [resize-dependency control](vsi-resize-runtime.md) explains this local
+mismatch. The same author source with unchanged image-2.20.1 resize M-files
+returns 0.95679610895892431, for an absolute Rust difference of
+3.1678478384922215e-7, within the unchanged 1e-4 bound. Three procedural
+low-contrast cases also pass with that dependency. No metric code changed.
+This is an explicitly identified two-M-file overlay on Octave 6.4, not a
+complete newer package installation; its full panel is a separate experiment.
+The earlier 2.12 observations and synthetic-input partial passes are retained.
 
 ## Why the replacement panel remains unqualified
 

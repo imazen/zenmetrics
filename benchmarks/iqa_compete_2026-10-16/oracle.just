@@ -106,7 +106,7 @@ vsi-precision-prepare source pairs output +options:
 # Caller supplies both heavy locks, run-heavy, TMPDIR, and the full output log.
 [positional-arguments]
 vsi-precision-run evidence:
-    env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 /usr/bin/time -v -o "$1/memory.txt" timeout --kill-after=20s 120s octave-cli --no-gui --no-window-system --no-history --no-init-file --quiet "$1/entry.m"
+    cd "$1" && env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 /usr/bin/time -v -o memory.txt timeout --kill-after=20s 120s octave-cli --no-gui --no-window-system --no-history --no-init-file --quiet entry.m
 
 [positional-arguments]
 image-resize-source-check archive evidence:
