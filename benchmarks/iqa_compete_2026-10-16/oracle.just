@@ -136,3 +136,11 @@ octave-automatic-panel inputs references rust_build output threads image_archive
 [positional-arguments]
 octave-factor-mode-check canonical manifest binary build_receipt reference distorted evidence:
     python3 -B check_factor_modes.py --canonical "$1" --manifest "$2" --binary "$3" --build-receipt "$4" --reference "$5" --distorted "$6" --evidence "$7"
+
+# Caller supplies both heavy locks and run-heavy around this entire scalar grid.
+[positional-arguments]
+haarpsi-primary-panel source inputs binary receipt output:
+    python3 -B haarpsi_primary.py --source "$1" --inputs "$2" --binary "$3" --build-receipt "$4" --output "$5"
+haarpsi-primary-publish panel inputs output:
+    python3 -B publish_haarpsi_panel.py '{{panel}}' '{{inputs}}' '{{output}}'
+
