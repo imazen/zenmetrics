@@ -1,0 +1,28 @@
+Primary FSIM/VSI parity panel preparation; not qualified timing data
+Observed UTC: 2026-10-19T10:50:53.832506+00:00
+Host: lilith-wsl, Ryzen9 7950X, WSL2; source parent 41f45a7d03db5b07e9f3365dba29201d155f087d
+Rust source/build/inputs: see review.meta and raw-spotcheck-inputs.md. Binaryb9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d.
+Default plan:12inputpairs x2families x4factors x2budgets=192cases, not yet measured by this record. Thread budgets1and28, affinity32eligibleCPUs; available-thread cap subtracts4.
+Controller wraps each canonical/Rust child with lilith-heavy then lilith-wsl-heavy locks,run-heavy12Gjobs=casebudget; controller itself is nice19/ionice3 and does not hold the locks across child launches.
+Source/reference/executable/input/helper identities freeze before execution. Resume verifies artifacts; copied partial-control old outcome retained SHA2560c56b1b49aec8d842bf22eff11ba5f7de09063836f742bdf22441b282150d620 before retry. Identity changes require a new attempt, not overwriting old data.
+Single-case smoke and resume correctly report1parity_fail,0qualifiedtimings; this is expected from the recorded VSIphoto failure, not controller success masquerading as metric parity.
+An injected oracle exit71 control records canonical failure and still executes Rust:scorebits3fee9e1389aff725,processRSS9032kbytes. This fault control is not a canonical metric outcome.
+Shared scoring_command puts GNUtime outside timeout and scorer directly inside deadline. Original timeout/20s kill grace unchanged.
+Real-child control:bad ordering parentreturnedrc124 at1.0217994281556457s with exact owned child stilllive; cleaned that PID/start identity. Production ordering parentreturnedrc137 at21.04288041894324s with no live child.
+Controlrun:bothlocks,run-heavy12Gjobs1,rc0,22s,peakRSS0.01GiB,minavail14134MiB,peakload1.29.
+Existing supervision tests5/5pass unchanged; rc0,0s,peakRSS0.02GiB,minavail14436MiB,peakload1.08.
+Initial PIPE-observed comparison confounded parent return with inherited-pipe lifetime:wholeobserver81s,rc0,peakRSS0.01GiB,minavail13179MiB,peakload3.33. Retained, not accepted as deadline containment evidence.
+Complete commands and per-child resource receipts are retained in the logs below. No full source/runtime-closure, acquisition-runner qualification or speed ratio claimed.
+External evidence SHA256:
+8f0be7125941b6994a1c661f0d13c09687210df984625c84fc9952e58a4f0f09  ~/tmp/portcheck-oracle-timeout-control-20261019T1040.log
+8345da86f8a6a897fb9553d0d16afa11769667d1305ea2dabd2222a58b10b8c0  ~/tmp/portcheck-oracle-timeout-control-20261019T1040/results.json
+37df2130736ad9643d555893634e5d73a8a11a229f1890c33d69259e8a4aee80  ~/tmp/portcheck-oracle-timeout-control-20261019T1040-r2.log
+346e5adb84cbab99499f07abe0fb62865d5d61ab37a42b96c67516797503431d  ~/tmp/portcheck-oracle-timeout-control-20261019T1040-r2/results.json
+bbe7163b68891c2b6471a062f829f58d8df41d8f8425e7bea70992a590b68395  ~/tmp/portcheck-supervision-existing-tests-20261019T1043.log
+244275fbdc12e6d926400059d15492f9e4bb2b5cad554039a1df8c345c06be95  ~/tmp/portcheck-primary-panel-smoke-20261019T1048-final.log
+52262fe568c8dfdc1b26f0a46b0a6af45a95aef2a42f6f9cf0376d43c227b359  ~/tmp/portcheck-primary-panel-resume-20261019T1048-final.log
+b7fa2d2d0cf1b542a794d41485ffc59805a51a418f9536ab875e7e4b0ca8a4fe  ~/tmp/portcheck-primary-panel-partial-control-20261019T1045-r3.log
+258583247afc8900b7c726be5c444915b1e8f98c8dd94ed9de17be28a69e5e61  ~/tmp/portcheck-primary-panel-partial-control-20261019T1045-r3/summary.json
+3b55cb64401a2952cb97de9d9a1ad6addb283390ff522d68d4270365b7b08d0e  ~/tmp/portcheck-primary-panel-fallback-control-20261019T1047.log
+d872e5f9bf6ef315faee13f6c277712e602c99288603de80240fefcfa195fbf7  ~/tmp/portcheck-primary-panel-fallback-control-20261019T1047/attempt/summary.json
+5d76faf7e66effa7b73d707b84f2408687062911923b7066124b91df1a476cdb  ~/tmp/portcheck-primary-grid-20261019T1020/references.json

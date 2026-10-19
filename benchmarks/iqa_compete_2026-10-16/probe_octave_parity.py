@@ -9,11 +9,13 @@ import json
 import math
 import os
 from pathlib import Path
+import platform
 import struct
 import subprocess
 
 from check_fixed_factor_oracle import check_manifest
 from octave_primary import process_max_rss, sha
+from supervision import scoring_command
 
 
 def main():
@@ -70,10 +72,10 @@ def main():
     config_path = evidence / 'config.json'
     config_path.write_text(json.dumps(config, indent=2) + '\n')
     command = [str(a.binary), str(config_path)]
-    if a.measure_memory:
-        command = ['/usr/bin/time', '-v', '-o', str(evidence / 'process-memory.txt'), *command]
+    command = scoring_command(command, system=platform.system(), seconds=120,
+                              memory_log=evidence / 'process-memory.txt' if a.measure_memory else None)
     with (evidence / 'stdout.log').open('w') as stdout, (evidence / 'stderr.log').open('w') as stderr:
-        run = subprocess.run(command, env=env, stdout=stdout, stderr=stderr, timeout=120)
+        run = subprocess.run(command, env=env, stdout=stdout, stderr=stderr)
     if run.returncode:
         raise RuntimeError(f'Rust probe failed rc={run.returncode}; see {evidence}/stderr.log')
     lines = (evidence / 'stdout.log').read_text().splitlines()

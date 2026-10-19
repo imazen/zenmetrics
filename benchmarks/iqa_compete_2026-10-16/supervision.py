@@ -22,3 +22,17 @@ def timeout_command(system, seconds):
     if system == 'Linux':
         return ['timeout', '--kill-after=20s', f'{seconds}s']
     raise RuntimeError('Resource supervision is not qualified on ' + system)
+
+
+def scoring_command(command, *, system, seconds, memory_log=None):
+    """Keep the scorer directly inside its deadline; observe RSS from outside.
+
+    GNU time is an observing parent, not the child the deadline must kill.
+    Putting time inside timeout can let a signal-resistant scorer outlive it.
+    """
+    wrapped = [*timeout_command(system, seconds), *map(str, command)]
+    if memory_log is not None:
+        if system != 'Linux':
+            raise RuntimeError('This GNU time memory receipt is Linux-specific')
+        wrapped = ['/usr/bin/time', '-v', '-o', str(memory_log), *wrapped]
+    return wrapped

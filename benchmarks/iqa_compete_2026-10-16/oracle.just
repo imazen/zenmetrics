@@ -79,3 +79,18 @@ octave-primary-memory manifest reference distorted width height threads samples 
 [positional-arguments]
 octave-rust-parity-memory binary build_receipt canonical manifest reference distorted threads evidence:
     python3 -B probe_octave_parity.py --binary "$1" --build-receipt "$2" --canonical "$3" --manifest "$4" --reference "$5" --distorted "$6" --threads "$7" --evidence "$8" --measure-memory
+
+# Controller wraps each child with both heavy-job locks and run-heavy itself.
+# Do not wrap this recipe in either lock.
+[positional-arguments]
+octave-panel inputs references rust_build output threads:
+    nice -n 19 ionice -c 3 python3 -B run_octave_panel.py --inputs "$1" --references "$2" --rust-build "$3" --output "$4" --threads "$5"
+
+[positional-arguments]
+octave-panel-resume inputs references rust_build output threads:
+    nice -n 19 ionice -c 3 python3 -B run_octave_panel.py --inputs "$1" --references "$2" --rust-build "$3" --output "$4" --threads "$5" --resume
+
+# Nonmetric live-child control; caller supplies both locks and run-heavy.
+[positional-arguments]
+oracle-memory-timeout-check evidence:
+    python3 -B check_oracle_memory_timeout.py "$1"

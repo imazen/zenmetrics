@@ -11,10 +11,12 @@ import json
 import math
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 
 from check_fixed_factor_oracle import check_manifest
+from supervision import scoring_command
 
 
 def sha(path):
@@ -120,8 +122,8 @@ end
     if a.measure_memory:
         env['LC_ALL'] = 'C'
     command = [str(executable), '--no-gui', '--no-window-system', '--no-history', '--no-init-file', '--quiet', str(entry)]
-    if a.measure_memory:
-        command = ['/usr/bin/time', '-v', '-o', str(evidence / 'process-memory.txt'), *command]
+    command = scoring_command(command, system=platform.system(), seconds=a.timeout,
+                              memory_log=evidence / 'process-memory.txt' if a.measure_memory else None)
     record = {'command': command, 'manifest_sha256': sha(a.manifest),
               'source_sha256': source_before, 'input_sha256': before,
               'width': a.width, 'height': a.height, 'threads_requested': a.threads,
@@ -132,8 +134,7 @@ end
               'qualification': 'diagnostic canonical execution; no Rust comparison or qualified ratio'}
     (evidence / 'attempt.json').write_text(json.dumps(record, indent=2) + '\n')
     with (evidence / 'stdout.log').open('w') as stdout, (evidence / 'stderr.log').open('w') as stderr:
-        result = subprocess.run(command, cwd=evidence, env=env, stdout=stdout,
-                                stderr=stderr, timeout=a.timeout)
+        result = subprocess.run(command, cwd=evidence, env=env, stdout=stdout, stderr=stderr)
     record['returncode'] = result.returncode
     (evidence / 'completion.json').write_text(json.dumps(record, indent=2) + '\n')
     if result.returncode:
