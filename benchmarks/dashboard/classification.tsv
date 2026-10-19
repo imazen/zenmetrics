@@ -1119,3 +1119,10 @@ benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairB.tsv	ignored	Comp
 benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairC.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/runner-image2201.json	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-fixed-panel.meta	ignored	Artifact, command and memory receipts for completed fixed-factor numerical panels.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic.json	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.

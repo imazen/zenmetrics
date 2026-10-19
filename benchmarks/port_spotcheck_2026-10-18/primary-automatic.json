@@ -1,0 +1,94 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-automatic-panel-20261019T1200",
+  "identity_sha256": "0d56fc81f6ac0e7d67daf077a933c7ea4066fa5829a912c432cb11625ab27109",
+  "events_sha256": "c7cb4fec34ec9514186526f26f3e859f1f478d56d41013cf0453465116a9ce03",
+  "summary_sha256": "db629a1273bb9d26ed8c570eca723fa1060274db605fb94b72da3c5e0068f2c6",
+  "cases": 48,
+  "scalar_rows": 72,
+  "statuses": {
+    "parity_pass": 48
+  },
+  "qualified_timing_cells": 0,
+  "shards": [
+    {
+      "path": "primary-automatic-fsim-pairA.tsv",
+      "sha256": "dcfae67bacae64b2af24d0bfd0d0b31a6084dcbc39dc2e6c8e790b5ac50249e3",
+      "bytes": 6441
+    },
+    {
+      "path": "primary-automatic-fsim-pairB.tsv",
+      "sha256": "a4109a84874eb88f67d8f2b99df85b6b461685431378ac5ac2ba3660c45268ec",
+      "bytes": 6442
+    },
+    {
+      "path": "primary-automatic-fsim-pairC.tsv",
+      "sha256": "ae608b2a953f58c5ac82b4ca4211a63fbad5d4c696b0488c8a02cd7a6fd9d311",
+      "bytes": 6441
+    },
+    {
+      "path": "primary-automatic-vsi-pairA.tsv",
+      "sha256": "48423dba8207d747c1ddbccdd09f53e6ba80bd0d78b7f07af4720c4d9514825d",
+      "bytes": 3337
+    },
+    {
+      "path": "primary-automatic-vsi-pairB.tsv",
+      "sha256": "eeac402dddf0b74698ae57efec459a9fd9042793fdd01ea4239190661db7d3ca",
+      "bytes": 3333
+    },
+    {
+      "path": "primary-automatic-vsi-pairC.tsv",
+      "sha256": "923a2ec0fc061f7c429881f11d35c97eed9ddc96b831b5e415837a1fbdcb761d",
+      "bytes": 3328
+    }
+  ],
+  "outcome_sha256": {
+    "fsim-auto-pairA-1mp-t1/outcome.json": "1d3286cf64a859a1b99362703066d1db13e3d5c7244e59a65147ee5bb31cfe15",
+    "fsim-auto-pairA-1mp-t28/outcome.json": "b6a51b481beac6331d5205761e8d1236c0eaafcf51855739e9808ddc873870d4",
+    "fsim-auto-pairA-4k-t1/outcome.json": "5a5bb7c0c1a5f6117c014d3e5389086f645f696d0ba4b4b3c61bce3a750072b7",
+    "fsim-auto-pairA-4k-t28/outcome.json": "ca1faac2c87808b0132c0eef7b9e08526bad617f4bb36421af96ea52c54e88b8",
+    "fsim-auto-pairA-64-t1/outcome.json": "1b4652299db7d16a76c679eed73c93eb7d6d804304d9b7621ad17266a32c6d3c",
+    "fsim-auto-pairA-64-t28/outcome.json": "e1f40f0d995d400c4e7540e3f92bb86f5fa283a4648a467a2985e4983a3576bc",
+    "fsim-auto-pairA-odd-t1/outcome.json": "b41ebdfec575244dc104436bb0395dc53b3c4aa6b6d0bab7d5e4aaace5dbe557",
+    "fsim-auto-pairA-odd-t28/outcome.json": "57f78662e62e95b6960e174e77fb86b31501caff4b861c6221b17df533edfa0c",
+    "fsim-auto-pairB-1mp-t1/outcome.json": "7e483fcc15e4ae90439bd7f613ae9314fcc95fd79eadbce5a91bcd8dd59a75bb",
+    "fsim-auto-pairB-1mp-t28/outcome.json": "b5dcfbe6d8b9e57689fcbb0cbd0b0465df766100de820edbb15c4cc9de8b161f",
+    "fsim-auto-pairB-4k-t1/outcome.json": "62d5b94a964c47a085b0f6481531ef44bce4a1213a11425909a0626a35811006",
+    "fsim-auto-pairB-4k-t28/outcome.json": "0bd8444c68879645d528f65c00f653facf5437631431445fb1a2a3adc7a90ccd",
+    "fsim-auto-pairB-64-t1/outcome.json": "f9a2c4584aa39fc7944f5421f8fecc09ec8f04f9cd6aa8ed940d29f2f27494ed",
+    "fsim-auto-pairB-64-t28/outcome.json": "961737ebd52361c28b2c397bb6f1283e3b2030274330a5aa3ae4a8e48d030252",
+    "fsim-auto-pairB-odd-t1/outcome.json": "af2d6fd7ce86a8f9c76785d595086fd2ea8db464ba76bfe2af93ae2a686bee13",
+    "fsim-auto-pairB-odd-t28/outcome.json": "9463a9f4dc2252bbfdbf99bcb657e3ddbb93d4efc714739de6dc648eac43944f",
+    "fsim-auto-pairC-1mp-t1/outcome.json": "230bedba370c7fa8cba893f9a46c796963575b5d5af73c282b86c3d26b16aa80",
+    "fsim-auto-pairC-1mp-t28/outcome.json": "4ecc25d37e70922c623ab71eb1b27b89c8b719668f6ff345dd4f07df8a467dad",
+    "fsim-auto-pairC-4k-t1/outcome.json": "b8ab8ce53574df5168bb6a1c49d325a9dba32588bce7aafd922278d7160b391e",
+    "fsim-auto-pairC-4k-t28/outcome.json": "d0b19778696279dadbe34939a0a58640c7103fd7b0abb38f30a9c4552f131321",
+    "fsim-auto-pairC-64-t1/outcome.json": "abd1a66bf59ae7991c109288cea40cdcc2e2f35c544eefc9b10fe4b2b5740d28",
+    "fsim-auto-pairC-64-t28/outcome.json": "8f5a2f29b564b08cb825bdc8e381576f49d052fa2eb74d4fe133d51ff86a57ed",
+    "fsim-auto-pairC-odd-t1/outcome.json": "91c9585c3c80afaf51e3d1fd1aac8bba949f4495cddbf3294cbc9ed2b7bda630",
+    "fsim-auto-pairC-odd-t28/outcome.json": "aaa79702830abc94ec57fe462cca54eae3070adae7486f5e9b9623ae8bfaf503",
+    "vsi-auto-pairA-1mp-t1/outcome.json": "325930efe4790eadedfafb609daeb46d0037533cd21b40932713433a9fd886e1",
+    "vsi-auto-pairA-1mp-t28/outcome.json": "cb391e67d23b32f7349a6a1b61a1ca7b06f21ac6bd97d5993fc4d4346cd9c0ee",
+    "vsi-auto-pairA-4k-t1/outcome.json": "f4c91997edde5e209308f155568efde8381a5219cb48590d2019ce031317fd17",
+    "vsi-auto-pairA-4k-t28/outcome.json": "ffec361f81adda44fc35e1626ae09f45d6487617f6af35a81d57014080580eb9",
+    "vsi-auto-pairA-64-t1/outcome.json": "0bb28001b87f0f353a9f84b743151136d993f2e1c9bb6ad1c9d4ea72f970159e",
+    "vsi-auto-pairA-64-t28/outcome.json": "22ad9cb7d35c587dd5ab193d9171334b192e3223a4025e6b8031a4d08b7973b9",
+    "vsi-auto-pairA-odd-t1/outcome.json": "a304e1f357fed0e0f72502f7276ab6710d2e4838f65520dee2b08b04c3920974",
+    "vsi-auto-pairA-odd-t28/outcome.json": "11c708bacd19daaf51866626101499535e55ce01ab51164192359cfc8aa94757",
+    "vsi-auto-pairB-1mp-t1/outcome.json": "c29fb6f3da5fc92e0fa331469a9cd5d7081022cb01f2c02c245c9a43486b5b47",
+    "vsi-auto-pairB-1mp-t28/outcome.json": "8f5632ba91c73d27e8c9313530cac96647559bbc1ba2d0ceea0c1f6edd879591",
+    "vsi-auto-pairB-4k-t1/outcome.json": "262e10d50ab359a4b7311d0d58c502032b02b84a137943f574f5ea226bc25958",
+    "vsi-auto-pairB-4k-t28/outcome.json": "ce713d3ad31fd15786e7f5eb052799c244c8216d756b97c9e20ebc5f30b40dfa",
+    "vsi-auto-pairB-64-t1/outcome.json": "bae6dc83eca9c487adaf4a47ab3a8b647a3ffbcfd8d58a17b3364c44828fc73d",
+    "vsi-auto-pairB-64-t28/outcome.json": "1de073d0de556de0ab03c4e8a1d4c165d56bda4feba04c9975b7be0c242b2573",
+    "vsi-auto-pairB-odd-t1/outcome.json": "cb8adedf0236c7415f87c76366890b6811b2dfef0d18ba5bb15768d862962ef2",
+    "vsi-auto-pairB-odd-t28/outcome.json": "9fc1dde30bcd1873d8ab206b35be546d4f25ee2cf097aa62f1753e3a6b81dd63",
+    "vsi-auto-pairC-1mp-t1/outcome.json": "a8dd4a93aa9b6ae2a7f033d35c1d41d4814cb46b7ec5cdbd24517f91713dc204",
+    "vsi-auto-pairC-1mp-t28/outcome.json": "47449c99b238439533dcc1e1e843d5acab56b39cb9fb665ccbfb0d5133d4734f",
+    "vsi-auto-pairC-4k-t1/outcome.json": "934f829b85dec2a75db6d764bc5f97ab267005737ce2bbb1c695375c5493a008",
+    "vsi-auto-pairC-4k-t28/outcome.json": "00b66d020528155aa30f9a9d00af84af075d3bf1fcce3e9d99afea8e00d39370",
+    "vsi-auto-pairC-64-t1/outcome.json": "0b12b9ecd7636c482afcb3aafe889993c8ed9983ee78e65ccc769202e2b6f9f5",
+    "vsi-auto-pairC-64-t28/outcome.json": "5f6e4bca2c94c3cb1e7fe9cba05d95bbcef3a7a223ffc997f8caf1d06e7bae6f",
+    "vsi-auto-pairC-odd-t1/outcome.json": "a819a1b90d1ddc4a839c1b24e4e800bab13e14162a767a8783b8a599072c4f69",
+    "vsi-auto-pairC-odd-t28/outcome.json": "84f23d0398792535a15e59764bc28f227a9078bd5620fde231b05f6d629ddf23"
+  }
+}
