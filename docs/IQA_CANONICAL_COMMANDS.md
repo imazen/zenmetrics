@@ -68,3 +68,7 @@ successor against the same remaining caps. Preserve that reservation if
 preparation fails; inspect its recorded successor before taking further action.
 Existing manually prepared successor lineages must be audited before using this
 helper on their original parent.
+
+Exports retain the executed worker engine when the worker reports it, including
+weightless private CW-SSIM’s native Rust route. The NN engine environment remains
+a fallback for older workers; absent engine evidence remains null.

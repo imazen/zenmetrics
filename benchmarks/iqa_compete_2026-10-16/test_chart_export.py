@@ -58,6 +58,13 @@ class ChartExport(unittest.TestCase):
         self.assertEqual((self.source/'report.json').read_bytes(),original)
         self.assertEqual(self.capture('old',False)[1],[])
 
+    def test_native_worker_engine_survives_export_without_nn_environment(self):
+        self.record['row']['engine']='rust'
+        (self.attempt/'worker.log').write_text('IQA_ROW '+json.dumps(self.record['row'])+'\n')
+        self.record['log_sha256']=durable.file_hash(self.attempt/'worker.log')
+        durable.save_result(self.attempt/'result.json',self.record)
+        self.assertEqual(self.capture('native-engine')[1][0]['engine'],'rust')
+
     def test_reported_attempt_is_not_duplicated(self):
         self.report['cells'][0].update(status='ok',attempts=[self.record])
         (self.source/'report.json').write_text(json.dumps(self.report))

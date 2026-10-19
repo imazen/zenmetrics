@@ -129,7 +129,7 @@ def export(root, output, host, include_sealed=False, record_rejected_overlays=Fa
                              config_sha256=attempt.get('config_sha256'), log_sha256=attempt.get('log_sha256'),
                              evidence_origin=attempt['evidence_origin'], sealed_result_sha256=attempt.get('sealed_result_sha256'),
                              cleanup_verified=attempt.get('cleanup_verified'),
-                             engine=config.get('worker_environment',{}).get('ZENMETRICS_NN_ENGINE'),
+                             engine=row.get('engine', config.get('worker_environment',{}).get('ZENMETRICS_NN_ENGINE')),
                              weights_consent=config.get('worker_environment',{}).get('ZENMETRICS_NN_ACCEPT_WEIGHTS'))
                 value.update({k:row.get(k,config.get(k)) for k in FIELDS})
                 value.update(resource_evidence(path.parent/'cells'/config['durable_cell_id']/
