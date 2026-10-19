@@ -153,7 +153,7 @@ butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	791d08d7
 # adds Ssimulacra2Reference::compare_with_maps and Ssimulacra2Maps::diffmap
 # (score path unchanged; weighted_sum/transform split is the same ops).
 # 54fabca9 is PR #12 squash-merged on main, tree-identical to c91ca7ed.
-fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	54fabca919230767ba0944cbec0a37d7eb3a2a7a	-
+fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	7c71ca00f08df3e6582f54c10edeef228ce2cb3c	-
 dssim	https://github.com/lilith/dssim.git	../../dssim	eec33f556d7ee991c4b906198c3a1b74f6f6063d	-
 # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
 # and `../../../heic`). OFF in every CI build below, but cargo
