@@ -1096,3 +1096,5 @@ benchmarks/hdrvdp_canonical_2026-10-19/qualification.meta	ignored	Canonical-conf
 benchmarks/mac_validation_2026-10-18/stlpips-metal-variation-2026-10-19.json	ignored	Retained unqualified numerical diagnostic; not timing or oracle qualification
 benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json	ignored	Finite-only Mac Metal protocol and immutable scheduling receipt; not native-oracle or performance comparison qualification
 benchmarks/hdrvdp_canonical_2026-10-19/spectral_comparisons.tsv	ignored	Canonical-configuration spectral stage research; separate from published-score and runtime admission schemas.
+benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fixed-look benchmark policy metadata; no measured or qualified timing results.
+benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
