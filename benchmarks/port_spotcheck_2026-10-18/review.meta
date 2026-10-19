@@ -151,3 +151,25 @@ External artifacts (SHA256):
 264ef552148bab232da3b8e3e2d53322731d9dd67c0acc65c6aca79fff0a6b60  ~/tmp/portcheck-primary-rgb-build-20261019T0948.log
 c9845fc41fd885e57dac412330429b264d05e2a3c9543653fba46ba63e37d9f0  ~/tmp/portcheck-primary-rgb-controls-20261019T0951.log
 425fe0d3e5efce25eb094599d32f192374a836f8978e5ecbb15b541ebb8f2915  ~/tmp/portcheck-primary-rgb-controls-20261019T0951/results.json
+
+Owned static Highway reference build:
+  Published763820ae8800; ancestry checked on origin/master.
+  Highway1.2.0 official release and GitHub tag API resolve457c891775a7397bdb0376bb1031e6e027af1c48.
+  Official commit-archive SHA2565124b0501c98d9930dbb065bfa1a5bbbd59ce0f12facb7e1e33aaef01a5f1f1a.
+  Binary9d0fc033b44580055909b52e2cabad87d2c5f6fb28c4fe970391738fe3f67ac1.
+  Static library6741ea1ebedf54eb59073f069d0d647630c859e1169d077e11cb27aa2ddd6218.
+  Source files232 and installed headers32 match verified archive. Cache chooses owned include/library; native flags absent from both compile-command sets.
+  Wrong-third-archive and existing-output refusal controls preserve output state.
+  Six canonical-ingress comparisons pass at official display precision; no Rust gate or timing qualification.
+  Repeatable build: oracle.just ssim2-primary-rgb-owned-build <ssim-archive> <lcms-archive> <fresh-output> <hwy-archive>.
+  Repeatable controls: oracle.just ssim2-primary-owned-ingress-check <binary> <ssim-archive> <source> <fresh-evidence> <official-cli> <hwy-archive> <hwy-source> <hwy-prefix>.
+  All argv/paths are retained in complete logs below. Both locks and run-heavy --mem12G, owned ext4TMPDIR.
+  Buildjobs8:rc0,17s,peakRSS0.42GiB,minavail11121MiB,peakload3.85.
+  Final reusable controlsjobs2:rc0,0s,peakRSS0.02GiB,minavail12641MiB,peakload1.59.
+  This closes the new executable's static Highway source/compiler gap, not runtime CMS path or old capture binding.
+External artifacts(SHA256):
+2f485a8bbb0b2b4b5ad0e3ef51a5bb482c05889aa0bd17b37543bc7e71545035  ~/tmp/portcheck-primary-hwy-20261019T0953/archive-receipt.json
+57986eb46c879a641890fe661756679541b2ad6f60d2312a9d1c1a588ec26e51  ~/tmp/portcheck-primary-owned-build-20261019T0955.log
+3ee7cf92d26aefc3ad31106d88cabfcf6069f389f97d715dcea44986cb157e11  ~/tmp/portcheck-primary-owned-build-controls-20261019T0956/results.json
+f1b4fa29553ee2d5b52aa1b232d9859b6098269d3079eb7856bd254963d90036  ~/tmp/portcheck-primary-owned-controls-20261019T0958.log
+a6717b905fa512b8ce1cb328749049aeaa4fd7f0a402ec63d7be9155f7930db7  ~/tmp/portcheck-primary-owned-controls-20261019T0958/results.json

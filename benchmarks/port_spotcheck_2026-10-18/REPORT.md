@@ -154,6 +154,13 @@ eight-decimal score display. This verifies the two canonical ingress paths;
 it does not compare Rust to C++, bind the remaining static dependency source,
 or qualify timing ratios. Refusal and source-preservation controls pass.
 
+The separately identified owned-Highway build (`763820ae`) closes that static
+dependency source/compiler gap for executable `9d0fc033…`. Its 232 Highway
+source files and 32 installed headers match the pinned archive. The six
+canonical-ingress comparisons still agree with the official CLI's display.
+The runtime CMS branch, Rust comparisons and qualified ratios remain open;
+earlier executable identities retain their original limitations.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

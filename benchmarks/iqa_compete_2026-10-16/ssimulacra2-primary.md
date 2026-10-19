@@ -185,7 +185,8 @@ output is refused with the retained executable unchanged.
 The six canonical-ingress comparisons still match the official CLI's display.
 This closes the specific static Highway source/compiler gap for the new
 executable. It does not bind earlier executables, establish the runtime CMS
-branch, compare Rust scores, or qualify a performance ratio. Complete logs,+compiler/cache hashes and dynamic library receipts are retained in
+branch, compare Rust scores, or qualify a performance ratio. Complete logs,
+compiler/cache hashes and dynamic library receipts are retained in
 `~/tmp/portcheck-primary-owned-build-20261019T0955.log`; controls are in
 `~/tmp/portcheck-primary-owned-controls-20261019T0955/` and
 `~/tmp/portcheck-primary-owned-build-controls-20261019T0956/`.

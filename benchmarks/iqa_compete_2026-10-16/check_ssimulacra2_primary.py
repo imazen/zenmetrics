@@ -16,6 +16,22 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_source(archive_path, source_root, expected_sha):
+    assert digest(archive_path) == expected_sha
+    with tarfile.open(archive_path) as archive:
+        members = [item for item in archive if item.isfile()]
+        expected = set()
+        for item in members:
+            relative = Path(*Path(item.name).parts[1:])
+            assert '..' not in relative.parts and not relative.is_absolute()
+            expected.add(relative.as_posix())
+            assert archive.extractfile(item).read() == (source_root / relative).read_bytes(), relative
+        actual = {p.relative_to(source_root).as_posix()
+                  for p in source_root.rglob('*') if p.is_file()}
+        assert actual == expected, (actual - expected, expected - actual)
+    return len(expected)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
@@ -23,22 +39,30 @@ def main():
     parser.add_argument('--source-root', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--official', type=Path)
+    parser.add_argument('--hwy-archive', type=Path)
+    parser.add_argument('--hwy-source-root', type=Path)
+    parser.add_argument('--hwy-prefix', type=Path)
     args = parser.parse_args()
+    hwy = [args.hwy_archive, args.hwy_source_root, args.hwy_prefix]
+    if any(hwy) and not all(hwy):
+        parser.error('all three --hwy-* paths are required together')
     assert digest(args.archive) == '530e9b23b5be10f5981367ba06ce804b3b536a409fcb3b510fa420170304d9c8'
     args.evidence.mkdir()  # Fresh evidence only; preserve existing attempts.
     receipts = []
-    with tarfile.open(args.archive) as archive:
-        members = [item for item in archive if item.isfile()]
-        expected = set()
-        for item in members:
-            relative = Path(*Path(item.name).parts[1:])
-            assert '..' not in relative.parts and not relative.is_absolute()
-            expected.add(relative.as_posix())
-            assert archive.extractfile(item).read() == (args.source_root / relative).read_bytes(), relative
-        actual = {p.relative_to(args.source_root).as_posix()
-                  for p in args.source_root.rglob('*') if p.is_file()}
-        assert actual == expected, (actual - expected, expected - actual)
-    receipts.append({'case': 'all extracted source files equal official archive', 'files': len(expected)})
+    count = verify_source(args.archive, args.source_root,
+                          '530e9b23b5be10f5981367ba06ce804b3b536a409fcb3b510fa420170304d9c8')
+    receipts.append({'case': 'all extracted source files equal official archive', 'files': count})
+    if all(hwy):
+        count = verify_source(args.hwy_archive, args.hwy_source_root,
+                              '5124b0501c98d9930dbb065bfa1a5bbbd59ce0f12facb7e1e33aaef01a5f1f1a')
+        headers = list((args.hwy_prefix / 'include').rglob('*.h'))
+        assert headers, 'no installed Highway headers'
+        for header in headers:
+            relative = header.relative_to(args.hwy_prefix / 'include')
+            assert header.read_bytes() == (args.hwy_source_root / relative).read_bytes(), relative
+        receipts.append({'case': 'Highway source and installed headers match',
+                         'source_files': count, 'headers': len(headers),
+                         'library_sha256': digest(args.hwy_prefix / 'lib/libhwy.a')})
 
     def run(name, argv, expected_rc, executable=args.binary):
         result = subprocess.run([str(executable), *map(str, argv)],

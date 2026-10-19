@@ -40,3 +40,7 @@ ssim2-primary-rgb-check binary archive source_root evidence:
 [positional-arguments]
 ssim2-primary-rgb-ingress-check binary archive source_root evidence official:
     python3 -B check_ssimulacra2_primary.py --binary "$1" --archive "$2" --source-root "$3" --evidence "$4" --official "$5"
+
+[positional-arguments]
+ssim2-primary-owned-ingress-check binary archive source_root evidence official hwy_archive hwy_source hwy_prefix:
+    python3 -B check_ssimulacra2_primary.py --binary "$1" --archive "$2" --source-root "$3" --evidence "$4" --official "$5" --hwy-archive "$6" --hwy-source-root "$7" --hwy-prefix "$8"
