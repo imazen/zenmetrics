@@ -1154,3 +1154,5 @@ benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.tsv	ignored	Partial e
 benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.meta	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim-precision.json	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
 benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.meta	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
+benchmarks/port_spotcheck_2026-10-18/execution-coverage.tsv	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
+benchmarks/port_spotcheck_2026-10-18/execution-coverage.json	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.

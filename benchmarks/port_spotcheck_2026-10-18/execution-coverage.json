@@ -1,0 +1,26 @@
+{
+  "inventory_rows": 127,
+  "included": 124,
+  "scalar_observed_names": 34,
+  "qualified_timing_cells": 0,
+  "status_counts": {
+    "missing": 90,
+    "scalar-pass": 13,
+    "finding:canonical-odd-ASAN": 1,
+    "excluded:owner": 2,
+    "unbound": 20,
+    "excluded:proprietary-unreleased": 1
+  },
+  "source_indexes": {
+    "runner-image212.json": "a73fc3f6a8aea9f16285edc44a660b5a1d27ac42bf69d5db7c53c77af139e455",
+    "runner-image2201.json": "c9672cc3a922993c2c5deb2c552e6b33c39a558b8151ce09bdf935b7a5a9e540",
+    "primary-automatic.json": "1a7d708c13e588963d270dad73dc67e13b0b072c10f55b24ed8280709fa9567d",
+    "primary-gmsd.json": "625ea8740d27e120c9c6d0c0c11e7ff667d816a014a877a6cb0961727f0e7a97",
+    "primary-mdsi.json": "bd04f227e10b68c5e532ab0d8cd8b90fce7d74c1339dd5051e29770e0a7c2897",
+    "primary-haarpsi.json": "5b9c3b173c97371fe9c9a43ca7182b698083f44b7f8ea0903c6fb81ea397a5fb",
+    "primary-pyiqa-ssim.json": "ab7518d22cc883e350374026a722ed8d43d0a5d044945c194826134a05c058cb"
+  },
+  "timing_prefix_sha256": "c9a214005adaa8ed5f34b922c4e452690aabdb0d92e19c57ec5d857dd893d113",
+  "coverage_sha256": "53f9ac23c8465023f9d9ad79114faca0133303b601b77f7d6baa228b4de3baee",
+  "coverage_bytes": 7763
+}
