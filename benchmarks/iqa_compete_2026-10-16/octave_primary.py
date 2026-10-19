@@ -57,6 +57,7 @@ def main():
     p.add_argument('--timeout', type=float, default=300)
     p.add_argument('--measure-memory', action='store_true', help='retain /usr/bin/time -v process peak RSS')
     p.add_argument('--image-archive', type=Path, help='select the explicit hash-bound upstream resize M-file overlay')
+    p.add_argument('--automatic-factor', action='store_true', help='execute the registered original source; the manifest fixed copy remains an unused integrity control')
     a = p.parse_args()
     if min(a.width, a.height, a.threads, a.samples) <= 0 or a.timeout <= 0:
         p.error('dimensions, threads, samples and timeout must be positive')
@@ -66,7 +67,7 @@ def main():
     if manifest['source']['name'] not in names:
         p.error('only primary MATLAB FSIM/VSI source copies are supported')
     function, columns = names[manifest['source']['name']]
-    source = Path(manifest['output']['path']).resolve(strict=True)
+    source = Path(manifest['source']['path'] if a.automatic_factor else manifest['output']['path']).resolve(strict=True)
     if source.name != function + '.m':
         p.error(f'Octave requires the function filename {function}.m')
     inputs = [a.reference.resolve(strict=True), a.distorted.resolve(strict=True)]
@@ -139,6 +140,9 @@ end
                               memory_log=evidence / 'process-memory.txt' if a.measure_memory else None)
     record = {'command': command, 'manifest_sha256': sha(a.manifest),
               'source_sha256': source_before, 'input_sha256': before,
+              'factor_mode': 'automatic' if a.automatic_factor else 'fixed',
+              'resolved_factor': max(1, (min(a.width, a.height) + 128) // 256) if a.automatic_factor else manifest['patch']['factor'],
+              'source_selection': 'registered original; manifest fixed artifact not executed' if a.automatic_factor else 'verified fixed artifact',
               'width': a.width, 'height': a.height, 'threads_requested': a.threads,
               'executable_sha256': sha(executable), 'adapter_sha256': sha(Path(__file__)),
               'image_resize_overlay': resize_receipt,

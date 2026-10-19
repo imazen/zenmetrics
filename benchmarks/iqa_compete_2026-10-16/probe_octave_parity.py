@@ -35,7 +35,11 @@ def main():
         p.error('binary differs from frozen build receipt')
     if build['source_revision'] != 'e2d414c33a6d3c7da50a818fa36e56654d3ebeef' or build['adapters_applied']:
         p.error('this gate record requires the unmodified frozen source revision')
-    if canonical['manifest_sha256'] != sha(a.manifest) or canonical['source_sha256'] != manifest['patch']['after_sha256']:
+    automatic = canonical.get('factor_mode', 'fixed') == 'automatic'
+    expected_source = manifest['patch']['before_sha256'] if automatic else manifest['patch']['after_sha256']
+    if canonical.get('factor_mode', 'fixed') not in ['fixed', 'automatic']:
+        p.error('unknown factor mode')
+    if canonical['manifest_sha256'] != sha(a.manifest) or canonical['source_sha256'] != expected_source:
         p.error('canonical execution/source manifest mismatch')
     inputs = [a.reference.resolve(strict=True), a.distorted.resolve(strict=True)]
     hashes = [sha(path) for path in inputs]
@@ -45,8 +49,11 @@ def main():
     if source_name not in ['vsi-matlab', 'fsim-matlab']:
         p.error('primary VSI/FSIM source required')
     family = source_name.split('-')[0]
-    factor = manifest['patch']['factor']
-    metric = f'{family}-nodownscale' if factor == 1 else f'{family}-k{factor}'
+    factor = (max(1, (min(canonical['width'], canonical['height']) + 128) // 256)
+              if automatic else manifest['patch']['factor'])
+    if canonical.get('resolved_factor', factor) != factor:
+        p.error('resolved factor disagrees with the selected source convention')
+    metric = family if automatic else f'{family}-nodownscale' if factor == 1 else f'{family}-k{factor}'
     bound = 1e-4 if family == 'vsi' else 5e-5
     gate_source = 'docs/METRIC_PROVENANCE.md @e2d414c33a6d3c7da50a818fa36e56654d3ebeef; existing base gate inherited by owner fixed-factor variants'
     if not canonical['score_rows'] or not all(row['all_finite'] for row in canonical['score_rows']):
@@ -96,7 +103,8 @@ def main():
                          'max_abs_delta': delta, 'bound': bound, 'pass': delta <= bound})
     if hashes != [sha(path) for path in inputs] or sha(a.binary) != binary_sha:
         raise RuntimeError('input or executable changed during probe')
-    result = {'metric': metric, 'factor': factor, 'command': command, 'config_sha256': sha(config_path),
+    result = {'metric': metric, 'factor': factor, 'factor_mode': 'automatic' if automatic else 'fixed',
+              'command': command, 'config_sha256': sha(config_path),
               'binary_sha256': binary_sha, 'build_receipt_sha256': sha(a.build_receipt),
               'canonical_record_sha256': sha(a.canonical), 'manifest_sha256': sha(a.manifest),
               'input_sha256': hashes, 'width': canonical['width'], 'height': canonical['height'],

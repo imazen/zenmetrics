@@ -45,7 +45,7 @@ def main():
     root = a.panel.resolve(strict=True)
     identity = json.loads((root / 'identity.json').read_text())
     summary = json.loads((root / 'summary.json').read_text())
-    expected = {f'{family}-k{factor}-{row["pair"]}-{row["size_name"]}-t{budget}'
+    expected = {f'{family}-' + ('auto' if factor is None else f'k{factor}') + f'-{row["pair"]}-{row["size_name"]}-t{budget}'
                 for row, family, factor, budget in itertools.product(
                     identity['input_selection'], identity['families'], identity['factors'], identity['threads'])}
     paths = list(root.glob('*/outcome.json'))
@@ -75,7 +75,8 @@ def main():
             assert compared['pass'] == (compared['max_abs_delta'] <= compared['bound'])
             records.append(dict(cohort=a.label, family=outcome['family'], case=outcome['case'], metric=result['metric'],
                                 column=compared['column'], pair=outcome['pair'], size=outcome['size'],
-                                width=outcome['width'], height=outcome['height'], factor=outcome['factor'],
+                                width=outcome['width'], height=outcome['height'], factor=compared.get('factor', result['factor']),
+                                factor_mode=result.get('factor_mode', 'fixed'),
                                 threads=outcome['threads'], ours=repr(compared['ours']),
                                 canonical_first=repr(compared['canonical_values'][0]),
                                 canonical_warm=repr(compared['canonical_values'][-1]),

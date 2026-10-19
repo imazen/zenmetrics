@@ -52,10 +52,10 @@ def main():
     cap = max(1, len(affinity) - 4)
     threads = sorted(set(cap if value == 'all' else int(value) for value in a.threads.split(',')))
     families = a.families.split(',')
-    factors = [int(value) for value in a.factors.split(',')]
+    factors = [None] if a.factors == 'auto' else [int(value) for value in a.factors.split(',')]
     if not threads or min(threads) <= 0 or max(threads) > cap:
         p.error(f'thread budgets must be 1..{cap} under this host resource policy')
-    if not families or not set(families) <= {'fsim', 'vsi'} or not factors or not set(factors) <= {1, 2, 3, 4}:
+    if not families or not set(families) <= {'fsim', 'vsi'} or not factors or not set(factors) <= {None, 1, 2, 3, 4}:
         p.error('FSIM/VSI factors1-4 required')
     if len(families) != len(set(families)) or len(factors) != len(set(factors)):
         p.error('duplicate family or factor selection')
@@ -75,9 +75,10 @@ def main():
         p.error('no selected input pairs')
     manifests = {}
     for family, factor in itertools.product(families, factors):
-        path = Path(references[family][str(factor)]).resolve(strict=True)
+        carrier = 1 if factor is None else factor
+        path = Path(references[family][str(carrier)]).resolve(strict=True)
         manifest = check_manifest(path)
-        if manifest['source']['name'] != family + '-matlab' or manifest['patch']['factor'] != factor:
+        if manifest['source']['name'] != family + '-matlab' or manifest['patch']['factor'] != carrier:
             p.error('reference identity/factor mismatch')
         manifests[(family, factor)] = path
     for row in selected:
@@ -127,7 +128,8 @@ def main():
             raise RuntimeError('Octave executable changed during frozen panel')
         if a.image_archive:
             image_resize_source.validate_archive(a.image_archive)
-        key = f'{family}-k{factor}-{row["pair"]}-{row["size_name"]}-t{budget}'
+        factor_name = 'auto' if factor is None else f'k{factor}'
+        key = f'{family}-{factor_name}-{row["pair"]}-{row["size_name"]}-t{budget}'
         directory = output / key
         if a.resume and (directory / 'outcome.json').exists():
             outcome = json.loads((directory / 'outcome.json').read_text())
@@ -155,6 +157,8 @@ def main():
                    '--measure-memory', '--octave', str(a.octave)]
         if a.image_archive:
             command += ['--image-archive', str(a.image_archive)]
+        if factor is None:
+            command += ['--automatic-factor']
         canonical_rc = execute(command, budget, directory / 'canonical-wrapper.log')
         canonical = None
         if canonical_rc == 0:
@@ -180,7 +184,7 @@ def main():
         else:
             # Still execute Rust independently when the primary reference failed.
             config = {'width': row['width'], 'height': row['height'], 'reference': str(reference),
-                      'distorted': str(distorted), 'metric_name': f'{family}-nodownscale' if factor == 1 else f'{family}-k{factor}',
+                      'distorted': str(distorted), 'metric_name': family if factor is None else f'{family}-nodownscale' if factor == 1 else f'{family}-k{factor}',
                       'threads': budget, 'probe_only': True, 'only_mode': 'score', 'timing_phase': 'warm'}
             write_artifact(directory / 'rust-independent.json', encoded(config))
             scorer = scoring_command([str(binary), str(directory / 'rust-independent.json')],

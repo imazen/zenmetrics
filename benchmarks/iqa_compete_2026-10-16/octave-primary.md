@@ -1,14 +1,15 @@
-# Primary fixed-factor Octave adapter
+# Primary Octave FSIM/VSI adapter
 
 [octave_primary.py](octave_primary.py) executes the authors' MATLAB FSIM/VSI
-releases through Octave. It accepts only the primary source identities and
-verified scratch copies produced by [the fixed-factor patcher](fixed-factor-oracle.md).
-Original source bytes remain unchanged; the copy replaces only the factor
-expression with k in 1–4. This is a benchmark reference, outside shipped crates.
+releases through Octave. Its default selects verified scratch copies produced
+by [the fixed-factor patcher](fixed-factor-oracle.md), replacing only the factor
+expression with k in 1–4. `--automatic-factor` instead selects the registered
+original source. This is a benchmark reference, outside shipped crates.
 
-Missing: the full size/content/thread matrix, remaining Rust comparisons, map
-comparisons where both APIs expose them, qualified paired ratios and runtime
-call-graph closure. Successful Octave execution does not establish equivalence
+Missing: qualified paired ratios and full runtime call-graph closure.
+The completed numerical matrices are recorded in the
+[result report](../port_spotcheck_2026-10-18/vsi-resize-runtime.md).
+Successful Octave execution does not establish equivalence
 to every MATLAB/toolbox release. No numerical gate changes here.
 
 The adapter checks manifests and exact RGB8 input sizes before launching a fresh
@@ -87,11 +88,29 @@ The whole serialized probe panel reports
 `done rc=0 1s | peak-RSS 0.02GiB | min-avail 13122MiB | peak-load 3.82`.
 Run `oracle.just octave-rust-parity` with the eight explicit arguments listed
 by `just --show`; preserve full output under both locks and the resource wrapper.
-Full matrix, map coverage where available and qualified speed ratios remain missing.
+This initial eight-case control remains a separate historical cohort.
 
 The subsequent [real-photo crop failure](../port_spotcheck_2026-10-18/vsi-photo-finding.md)
-shows why those synthetic passes are partial: the unchanged VSI gate fails on
-that different input, including the unmodified primary reference and base Rust
-route. The optional `--measure-memory` flag retains GNU time process peak RSS
+shows why source dependencies need explicit bindings: image 2.12 interpolation
+differs from the port's claimed antialiased convention. Selecting unchanged
+upstream image-2.20.1 resize M-files resolves the focused photo discrepancy
+within the unchanged gate; see the linked report for its full panel and runtime
+limits. The optional `--measure-memory` flag retains GNU time process peak RSS
 for each canonical/Rust child; explicit `oracle.just` memory recipes enable it.
 These process peaks do not supply matched speed measurements.
+
+## Automatic factors
+
+The automatic panel uses the factor-1 manifest as a registry/integrity carrier,
+but executes its **original** source path and checks the registered before-patch
+SHA256. The unused fixed copy remains checked and is explicitly labeled as
+unused. Records distinguish `factor_mode=automatic`, the selected original path,
+and the resolved factor. At 3840×2160 that factor is 8. Rust probes select the
+unsuffixed `fsim` or `vsi`, and retain their existing numerical bounds.
+
+`oracle.just octave-automatic-panel` accepts inputs, reference map, frozen Rust
+build, fresh output, thread selection, and the explicit image archive. The
+controller supplies both heavy locks and run-heavy. `octave-factor-mode-check`
+rejects source-mode confusion, unknown modes and wrong resolved factors before
+the Rust executable or evidence directory is opened. No automatic mode changes
+a reference source or an existing metric implementation.
