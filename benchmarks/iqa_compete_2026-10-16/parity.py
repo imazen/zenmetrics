@@ -1,5 +1,6 @@
 """Existing competition parity gates, shared by live and saved-row checks."""
 from references import same_pair_reference
+from comparison_tolerances import ABSOLUTE_BOUNDS
 
 def qualify_rows(results,references,inventory,scales,python_package=None):
     mismatch=False
@@ -27,6 +28,9 @@ def qualify_rows(results,references,inventory,scales,python_package=None):
         elif python_package and name not in {'lpips-alex','lpips-vgg','lpips-squeeze','dists','stlpips-alex','stlpips-vgg','deepdc'}:
             bound={'psnr':1e-10,'ssimc':7.5e-7,'ssimc-pyiqa-f32':7.5e-7,'ms-ssim-pyiqa-f32':1.9e-6,'gmsd':1e-14,'fsim':5e-5,'fsimc':5e-5,'vsi':1e-4,'haarpsi':5e-5,'flip-v17':1e-6,'cvvdp':1e-3,'vif':5e-13,'iwssim-piq':1e-4,'mdsi':0.,'ms-gmsd':0.,'ms-gmsdc':0.,'brisque':15.138428e-3}.get(name,0.)
             source='docs/METRIC_PROVENANCE.md; exact comparison for variants without a documented cross-package bound'
+            if name == 'gmsd' and python_package == 'pyiqa':
+                bound=ABSOLUTE_BOUNDS[('gmsd','pyiqa:gmsd')]
+                source='Owner-approved PyIQA GMSD scalar comparison, 2026-10-19; not the libgmsd golden gate'
         else:
             column=next(m['columns'][0] for m in inventory if m['metric_name']==name)
             bound=scales[column]*1e-3

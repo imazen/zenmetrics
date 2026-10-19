@@ -9,6 +9,35 @@ The caller supplies the frozen programs, inputs, and explicit scope in SPEC_JSON
 import json, sys, os, subprocess, hashlib, math
 from pathlib import Path
 from supervision import scoring_command
+from comparison_tolerances import ABSOLUTE_BOUNDS
+
+# zenbench pair command check, outside measurement clocks. Unsupported routes
+# refuse rather than acquiring a tolerance intended for a different reference.
+if sys.argv[1:2] == ["--check"]:
+    metric, reference, baseline, candidate = sys.argv[2:]
+    bound = ABSOLUTE_BOUNDS[(metric, reference)]
+    a, b = [
+        json.loads((Path(p) / "arm.json").read_text()) for p in (baseline, candidate)
+    ]
+    if not a["input_hashes"] or a["input_hashes"] != b["input_hashes"]:
+        raise ValueError("comparison inputs differ")
+    if not a["scores"] or not b["scores"]:
+        raise ValueError("missing scores")
+    if not all(math.isfinite(x) for x in a["scores"] + b["scores"]):
+        raise ValueError("nonfinite score")
+    delta = max(abs(x - y) for x in a["scores"] for y in b["scores"])
+    print(
+        json.dumps(
+            dict(
+                metric=metric,
+                reference=reference,
+                absolute_delta=delta,
+                absolute_bound=bound,
+                accepted=delta <= bound,
+            )
+        )
+    )
+    sys.exit(0 if delta <= bound else 1)
 
 root = Path(sys.argv[1])
 arm = sys.argv[2]

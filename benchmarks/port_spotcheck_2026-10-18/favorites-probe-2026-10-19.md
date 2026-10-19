@@ -1,5 +1,39 @@
 # Twenty-minute favorite-metric probe — 2026-10-19
 
+## Owner-approved tolerance update (after the probe)
+
+The owner requested changing the two comparison tolerances. The live probe
+checker now uses **0.002 absolute for `msssim` vs `octave:msssim`** and
+**2e-8 absolute for `gmsd` vs `pyiqa:gmsd`**. Both retained comparisons pass
+these new bounds; controls just above each bound reject. The PyIQA GMSD
+competition path uses the same shared policy. Same-implementation Rust goldens
+and original-C GMSD bounds are unchanged. Historical packets and the original
+exclusions below retain the policy that applied when measured.
+
+Use the pair command check with arguments
+`probe_pair_arm.py --check METRIC REFERENCE ${baseline} ${candidate}`.
+Reference names are explicit; an unsupported combination refuses. Input hashes
+must agree and empty/nonfinite scores refuse. This accepts scalar agreement for
+those variants, not resource cleanliness or full benchmark qualification.
+
+### Additional native comparison: libvpx
+
+Source checked 2026-10-19:
+[libvpx fastssim.c](https://chromium.googlesource.com/webm/libvpx/+/refs/heads/main/vpx_dsp/fastssim.c),
+blob `4d32a02a55549613a09b8302773586f97fb18e42`.
+`vpx_calc_fastssim` implements a four-scale gradient-based approximation. It
+starts with downsampling, uses renormalized scale weights, and adds luminance
+at the coarsest scale. It exposes raw per-plane scores through output pointers;
+the return value converts the 0.8Y+0.1U+0.1V combination to decibels.
+
+A comparison adapter should report the raw Y output with an explicit luma and
+bit-depth contract; directly comparing its dB return to the Rust [0,1] scalar
+would be wrong. Keep it named as the libvpx fast variant, separately from the
+five-scale Wang route and existing `msssim-libvmaf` implementation. No libvpx
+metric was built or timed in this change.
+
+## Original timed-probe record
+
 Owner budget: 12:56:11–13:16:11 UTC, including admission and reporting.
 Used the existing `zenbench pair` Iterate framework, resident-input warm timings,
 randomized whole-invocation A/B with A/A controls, and prebuilt scorers. Ten

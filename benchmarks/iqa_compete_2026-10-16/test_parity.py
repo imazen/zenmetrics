@@ -37,4 +37,13 @@ class Parity(unittest.TestCase):
         self.assertTrue(qualify_rows([self.row],self.references,[],{}))
         self.assertEqual(self.row['abs_delta'],0.)
         self.assertEqual(self.row['status'],'variant_mismatch')
+
+class ApprovedAlternativeTolerance(unittest.TestCase):
+    def test_pyiqa_gmsd_bound_is_package_scoped(self):
+        for package, delta, mismatch in [('pyiqa', 1.1e-8, False), ('pyiqa', 2.1e-8, True), ('piq', 1.1e-8, True)]:
+            row=dict(host='fixture',os='Linux-fixture',metric_name='gmsd',size_name='1mp',threads=1,
+                     pair_sha256='a',status='ok',score=delta,n=1)
+            refs={('fixture','Linux-fixture','gmsd','1mp',1,'a'):dict(score=0.,impl_binary_sha='rust',pair_sha256='a',threads=1)}
+            self.assertEqual(qualify_rows([row],refs,[],{},package),mismatch)
+
 if __name__=='__main__':unittest.main()
