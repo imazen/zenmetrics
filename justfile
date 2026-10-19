@@ -1857,3 +1857,7 @@ iqa-finite-gpu-policy-tests:
 iqa-score-observations-tests:
     rustc --edition=2024 -D warnings --test benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_score_observations.rs -o "$HOME/tmp/iqa-score-observations-tests"
     "$HOME/tmp/iqa-score-observations-tests"
+
+# Freeze replacement executable/runners; existing assets and source bundle stay immutable.
+iqa-worker-successor source binary build output:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_worker_successor.py '{{source}}' '{{binary}}' '{{build}}' '{{output}}'
