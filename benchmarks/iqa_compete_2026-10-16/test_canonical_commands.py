@@ -6,9 +6,25 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import canonical_bench as runner
+import durable
+from types import SimpleNamespace
 
 
 class CanonicalCommands(unittest.TestCase):
+    def test_initial_asset_hashing_holds_shared_admission(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            lock = Path(tmp) / 'heavy.lock'
+            def preflight(_):
+                with lock.open('a+') as probe:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                raise ValueError('fixture stops before measurements')
+            with patch.object(durable, 'manifest', side_effect=preflight):
+                with self.assertRaisesRegex(ValueError, 'fixture stops'):
+                    durable.run(SimpleNamespace(lock=str(lock), manifest='fixture', output=str(Path(tmp)/'output')))
+            with lock.open('a+') as probe:
+                fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_fixed_protocol_and_shared_lock_released_before_durable(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             root = Path(tmp)

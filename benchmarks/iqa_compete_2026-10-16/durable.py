@@ -650,10 +650,16 @@ def report(output, configs, identity, cap, heartbeat=None):
 
 
 def run(args):
-    binary, configs, frozen = manifest(args.manifest)
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     with locked(output / 'coordinator.lock') as output_fd:
+        # Preflight hashes large assets too; retain heartbeat and exclusive coordinator ownership.
+        def preflight_heartbeat():
+            (output / 'controller-heartbeat').touch()
+        preflight_heartbeat()
+        admission = locked(args.lock, wait=True, heartbeat=preflight_heartbeat) if args.lock else contextlib.nullcontext(None)
+        with admission:
+            binary, configs, frozen = manifest(args.manifest)
         identity_path = output / 'identity.json'
         policy = dict(timeout_seconds=args.timeout_seconds, max_attempts=args.max_attempts,
                       wrapper=str(Path(args.run_heavy).resolve(strict=True)) if args.run_heavy else None,
@@ -674,7 +680,7 @@ def run(args):
         else:
             if args.action != 'run':
                 raise Refusal('output has no frozen identity')
-            if any(p.name != 'coordinator.lock' for p in output.iterdir()):
+            if any(p.name not in ('coordinator.lock', 'controller-heartbeat') for p in output.iterdir()):
                 raise Refusal('refusing to initialize nonempty output')
             atomic(identity_path, dict(frozen=frozen, policy=policy))
         identity = digest(encoded(dict(frozen=frozen, policy=policy)))

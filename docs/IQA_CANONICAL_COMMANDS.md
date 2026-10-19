@@ -49,3 +49,8 @@ Recipes named smoke, probe, control, tests or check are diagnostics; their
 intentionally short budgets are not comparison measurements. Historical recipes
 that explicitly request 8K remain supplemental and are not part of the active
 non-8K campaign. Build recipes do not themselves qualify timing observations.
+
+New durable runners also acquire shared admission for initial full asset hashing.
+This prevents coordinator preflight CPU work from overlapping another admitted
+measurement. Hashing remains outside cold and warm clocks; frozen older runners
+retain their original identities.
