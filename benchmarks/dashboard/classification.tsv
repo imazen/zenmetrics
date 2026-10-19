@@ -1152,3 +1152,5 @@ benchmarks/port_spotcheck_2026-10-18/summary.tsv	ignored	Partial exploratory pai
 benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.json	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
 benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
 benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.meta	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim-precision.json	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.meta	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.

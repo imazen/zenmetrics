@@ -1,0 +1,50 @@
+{
+  "rows": [
+    {
+      "metric": "ssim-pyiqa",
+      "pair": "pairC",
+      "size": "64",
+      "ours": 0.8464570620684126,
+      "original_primary": 0.8464416085540024,
+      "original_abs_delta": 1.5453514410235236e-05,
+      "f64_luma_control": 0.8464571472838196,
+      "f64_luma_abs_delta": 8.521540695305418e-08,
+      "f64_window_control": 0.8464570620684057,
+      "f64_window_abs_delta": 6.994405055138486e-15,
+      "rounded_luma_pixels_differing": [
+        2,
+        0
+      ],
+      "default_window_dtype": "torch.float32"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32",
+      "pair": "pairA",
+      "size": "64",
+      "ours": 0.9617047606552988,
+      "original_primary": 0.9617049334011841,
+      "original_abs_delta": 1.727458853739705e-07,
+      "f64_luma_control": 0.9617049334011841,
+      "f64_luma_abs_delta": 1.727458853739705e-07,
+      "f64_window_control": 0.9617047606552684,
+      "f64_window_abs_delta": 3.0309088572266774e-14,
+      "rounded_luma_pixels_differing": null,
+      "default_window_dtype": "torch.float32"
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32",
+      "pair": "pairA",
+      "size": "odd",
+      "ours": 0.9913156732468423,
+      "original_primary": 0.991315711279806,
+      "original_abs_delta": 3.8032963667333775e-08,
+      "f64_luma_control": 0.991315711279806,
+      "f64_luma_abs_delta": 3.8032963667333775e-08,
+      "f64_window_control": 0.9913156731827539,
+      "f64_window_abs_delta": 6.40884012526044e-11,
+      "rounded_luma_pixels_differing": null,
+      "default_window_dtype": "torch.float32"
+    }
+  ],
+  "qualified_timing_cells": 0
+}

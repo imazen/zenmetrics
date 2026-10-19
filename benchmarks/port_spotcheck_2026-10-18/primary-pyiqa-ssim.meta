@@ -1,0 +1,12 @@
+Observed 2026-10-19 on lilith-wsl / Ryzen 9 7950X / WSL2. PyIQA 0.1.16, Torch CPU; no neural weights. Precision controls are diagnostics, not replacement references or acceptance bounds.
+Full 480-row grid: primary-pyiqa-ssim.json, data b912f26c; source 418d1a6c/8c7deda1. Frozen baseline e2d414c3 / b9279b4a; candidate fix 970ea199 / a4386150. The correction is also integrated independently on master at 59f81e48. The grid retains its original baseline/candidate identities.
+Precision control source 13e94b12; exact source/module/environment hashes in external identity.json below.
+Command (both locks, run-heavy12G/jobs1; HF_HUB_OFFLINE=1 and CUDA_VISIBLE_DEVICES empty):
+just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just pyiqa-ssim-precision ~/tmp/portcheck/pyiqa-env/bin/python ~/tmp/portcheck-pyiqa-full-joined-20261019T1346 ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-ssim-precision-20261019T1333
+run-heavy: done rc=0 3s | peak-RSS 0.85GiB | min-avail 13102MiB | peak-load 1.38
+The primary default Gaussian is float32 then promoted to float64; controls pass a double Gaussian explicitly. Rounded-class control also constructs luma in float64. All three unchanged default-primary scores reproduce exactly; no global dtype or installed source changed.
+SHA256 external evidence (paths verified on lilith-wsl):
+33c8fd23fcd2ac41165951c2cc825fe23dc70f3504d66022a9aa81ae1fcd9771  /home/lilith/tmp/portcheck-ssim-precision-20261019T1333/identity.json
+ba950cf12ce3c6d41ef5db9aec8854e54df720761f5b50ec3ef7bbcc7a723054  /home/lilith/tmp/portcheck-ssim-precision-20261019T1333/results.json
+034c60efbf1057ea816dfecf6e838024ba20bcd9fce651126804fa9a74c8b5bc  /home/lilith/tmp/portcheck-ssim-precision-20261019T1333.log
+83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712  /home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json
