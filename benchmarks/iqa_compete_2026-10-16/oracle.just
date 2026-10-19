@@ -99,3 +99,21 @@ oracle-memory-timeout-check evidence:
 [positional-arguments]
 ssim-candidate-compare baseline candidate inputs output:
     nice -n 19 ionice -c 3 python3 -B compare_ssim_candidate.py --baseline "$1" --candidate "$2" --inputs "$3" --output "$4"
+
+[positional-arguments]
+fixed-factor-create name factor source output:
+    python3 -B fixed_factor_oracle.py patch --name "$1" --factor "$2" --source-path "$3" --out "$4"
+
+# Caller supplies both locks, run-heavy, GNU-time receipt, and complete log.
+[positional-arguments]
+pyiqa-ssim-probe python manifest inputs output threads:
+    "$1" -B probe_pyiqa_ssim.py --manifest "$2" --inputs "$3" --output "$4" --threads "$5"
+
+# The controller supplies both locks, deadlines and run-heavy for every case.
+[positional-arguments]
+pyiqa-ssim-panel python inputs references output:
+    nice -n 19 ionice -c 3 python3 -B run_pyiqa_ssim_panel.py --python "$1" --inputs "$2" --references "$3" --output "$4"
+
+[positional-arguments]
+ssim-candidate-publish input output:
+    python3 -B publish_ssim_candidate.py "$1" "$2"
