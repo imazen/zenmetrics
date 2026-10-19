@@ -107,3 +107,28 @@ b4407344a7c26dfa051128f22b91b3d3248793856e18c7f7e7c25c9589f09ff6  ~/tmp/portchec
   historical Rust headline column is explicit in retained IQA_ROW receipts.
   Historical native path/version does not establish executable-hash binding.
   No historical ratio accepted, no new score API called, no parity qualified.
+
+Source census and primary SSIMULACRA2 build preparation (2026-10-19, lilith-wsl):
+  Census39c3008195f5166e3ba19cc6aa7685dc0be42ec1; classification c0009175bf44f7c75c7095d0817d7e6099bd5807.
+  Builder reviewed a5dfd7ff8e4649c7df8082d380d8ce620988aa48; identical two-file rebase e0b26212a57427aeaf8a52fe1bc5ec2f9910ed19.
+  Both published commits verified ancestors of origin/master by git merge-base --is-ancestor.
+  Builder payload SHA256:27dbe2daf7a14699b460b379a7aed559d2fa216759c9932448e97b3fd7489169.
+  Builder doc SHA256:a2721ddd80952b57a925e024359bb8d8a82983a8210e76face5cd6f2d4964e24.
+  Independent source census controls:10/10pass; primary builder controls:9/9pass.
+  No scoring API invoked by these controls; no parity or timing result.
+  Both locks, run-heavy --mem12G --jobs1, owned disk TMPDIR:
+  census rc0,0s,peakRSS0.03GiB,minavail13187MiB,peakload4.01;
+  builder controls rc0,0s,peakRSS0.02GiB,minavail13235MiB,peakload4.01.
+  Author build rc0,15s,peakRSS0.42GiB,minavail11358MiB,peakload3.76.
+  Static HWY source/compiler provenance unbound; dynamic path receipts do not establish full closure.
+  Clean owned invsrc/swe2opt workspaces forgotten and removed after verified landing; tabs preserved.
+  Verification recipe: just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just inventory-source-check
+External review artifacts (SHA256):
+ed697fb72452ce827c55333eb80b5e095e28b70ac6a7c390ef00df85fd90788b  ~/tmp/portcheck-inventory-review-39c30081/review.md
+3f5613a7a6f859da7584f1b30ca3ee3d1a25607d78b14c1738cf1361625c0a34  ~/tmp/portcheck-inventory-review-39c30081/independent_controls.py
+dfe905f697930d410b676af1a8de43f1c65d8fd930973de0caf0f75d04e549d4  ~/tmp/portcheck-inventory-review-39c30081/independent-controls.json
+adedc3a8e1636e00f8a8692ba831fd6ef5a1b1c8f48cc871d867d06bb8920083  ~/tmp/portcheck-inventory-review-39c30081/root-controls.log
+2df22059a99de4de50bfc218ce855915ca30c539bee41389a4910e8d27d8718f  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/review.md
+440f97e64e41636f62cb5365c725ffe00e899a76d954fd51c9a5e6b63c586eeb  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/independent_controls.py
+1bd079cb98e6580eb146508ac26ad0b66913cf88b0a6e1858681e5f781e6c11e  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/independent-controls.json
+ac73c77413ae7c0b7dc1a25290986b7580377e064ccfcfd55fbb8296b926ef11  ~/tmp/portcheck-primary-builder-review-a5dfd7ff/root-controls.log

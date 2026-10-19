@@ -12,7 +12,7 @@ The older unmerged `ef9763f2` BRISQUE candidate uses different source and cannot
 stand in for this master implementation. Retain that distinction when deciding
 which code and benchmark cohort to use.
 
-Missing: the full inventory, the classical size/content/thread matrix, the
+Missing: complete executable/source/model bindings for the inventory, the classical size/content/thread matrix, the
 learned-method matrix, qualified ratio intervals, and the final site-readable
 `summary.tsv`. The replacement timing panel has **0/19 qualified metric
 configurations**. This denominator describes that panel, not the complete CLI
@@ -124,6 +124,27 @@ The opt-in adapter starts a new cohort. Complete executable/source closure,
 matched cold/warm work, numerical parity and paired ratio intervals remain
 missing. The exact selected color-transform path still needs build-specific
 binding before claiming equivalent preprocessing. **0/19 remains unchanged.**
+
+## Source inventory and primary SSIMULACRA2 build
+
+The [source census](inventory-source.md) landed at `39c30081`, with dashboard
+classification at `c0009175`. It covers all 126 exact CLI registry names in
+127 records: 124 included names, two excluded PieAPP aliases and one non-CLI
+AIMOS exclusion. Primary-reference languages and source identities are separate
+from substitute runners. Unknown gates, revisions, weights and executable
+bindings remain explicit. Three hash-indexed shards stay below 30,000 bytes
+each. Independent corruption, preservation and exact-coverage controls pass.
+This source census does not replace a newly frozen executable inventory.
+
+The [primary SSIMULACRA2 builder](../iqa_compete_2026-10-16/ssimulacra2-primary.md)
+landed at `e0b26212`. It builds unchanged Cloudinary v2.1 source with its
+required Little-CMS 2.13 dependency. Archive hash checks precede all output
+mutation; fresh-directory reservation, path quoting and stage failures have
+independent controls. A contained build succeeds, and its usage-only invocation
+returns before image reads or scoring. Static Highway source/compiler provenance
+remains unbound. A raw-RGB adapter, numerical comparisons and matched cold/warm
+measurements remain missing. Neither leaf changes an existing metric path or
+qualifies a replacement-panel configuration.
 
 ## Qualification contract
 

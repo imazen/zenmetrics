@@ -15,3 +15,11 @@ mad-helper-check manifest:
 
 native-scope-check source binary:
     python3 -B check_libjxl_scope.py '{{source}}' --binary '{{binary}}'
+
+inventory-source-check:
+    python3 -B ../port_spotcheck_2026-10-18/make_inventory_source.py ../port_spotcheck_2026-10-18 --verify
+
+# Caller supplies both host locks, run-heavy and a complete output log.
+[positional-arguments]
+ssim2-primary-build ssim2_archive lcms_archive output:
+    bash build_ssimulacra2_primary.sh "$1" "$2" "$3"

@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add the hash-indexed 126-name canonical source census (`39c30081`, classification `c0009175`) and contained primary SSIMULACRA2 v2.1 builder (`e0b26212`); numerical and timing qualification remain open.
+
 - Add and independently review opt-in libjxl RGB-input benchmark timing scope (`62aaf7e9`), retaining default staging; matched cohort and numerical qualification remain open.
 
 - Add and independently verify benchmark-only MAD helper ownership overlay (`64548ff6`) and repeatable artifact integrity recipes (`daa3ce8e`); no full metric or timing qualification.
