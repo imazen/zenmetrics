@@ -2024,3 +2024,19 @@ Enabling `cpu-vmaf` without `cpu-metrics` compiled the scoring dispatch but
 excluded its local VMAF adapter module, resolving calls against the external
 crate instead. The module now compiles for either feature.
 `just metric-dispatch-check` covers the lean native consumer combination.
+
+### Known Bugs: IQA due time and consent propagation (2026-10-19)
+
+The 15-hour due time was incorrectly interpreted as permission to stop;
+the Mac guard stopped unfinished CPU work at 13:01:10Z. A new immutable
+no-stop successor resumed the existing remaining budgets at 14:44:56Z.
+Maintained plans require explicit `stop_at_deadline=true` for a cutoff.
+
+The i265 preparer passed literal `all` into the native named-consent parser.
+Seven gated NN models therefore refused with missing `WeightsConsent` despite
+explicit benchmark acceptance. The preparation path now expands explicitly
+requested acceptance to named terms and records both forms; default empty
+consent and the native gate stay strict. A separately owner-authorized retry
+campaign preserves all old attempts and grants two new attempts only to
+proven exhausted consent refusals. Other exhausted bounds/allocation/timeout
+failures remain separately blocked. See [the owning contract](docs/IQA_DURABLE_MAC.md).

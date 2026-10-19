@@ -326,3 +326,40 @@ remaining production attempt in the new bundle. Both timings passed all ten
 resource gates, were accepted with instability flags, and reproduced the
 control maximum deltas. Their original failed packets remain unchanged;
 the new packets explicitly report `score_repeatability_qualified=false`.
+
+### Due-time correction and uninterrupted authorization (2026-10-19)
+
+The owner clarified that the 15-hour window meant results were due, **not**
+authorization to stop. The previous Mac endpoint guard stopped the CPU
+coordinator at a worker boundary at 13:01:10Z. Its original plans, guard and
+results remain unchanged. The immutable `iqa-mac-20261019-resume-no-stop.noindex`
+successor resumed at 14:44:56Z: four CPU cells retain one remaining attempt,
+then 544 retain two. GPU is already terminal; its finite-score policy and all
+prior qualified lineage remain preserved. The new service is
+`io.imazen.iqa-scalar.e5cedae3de4c5d74`. It has no endpoint condition or window
+guard; the check-in plan now follows this sequence.
+
+Maintained scheduler plans treat due times as reporting metadata. A cutoff or
+new window guard requires explicit `stop_at_deadline=true`; absent/false does
+not authorize a stop. Historical frozen schedulers keep their original bytes.
+
+The i265 frontier was already terminal, including its two CPU groups, so
+removing a cutoff alone could not create runnable attempts. The owner explicitly
+authorized **two new attempts per consent-blocked cell** in a separate campaign.
+`iqa-i265-20261019-consent-retry-no-stop` schedules 336 GPU cells then 256 CPU
+cells, including affected 512 cells. Original attempts, original caps and
+exhausted non-consent faults remain preserved. Neither successor schedules maps
+or pending 8K geometries. Receipts and current blockers are linked from the
+[resumption receipt](../benchmarks/mac_validation_2026-10-18/no-stop-resumption-2026-10-19.json).
+
+### Explicit weight-consent propagation
+
+The frozen i265 configs requested `ZENMETRICS_NN_ACCEPT_WEIGHTS=all`, but the
+native CLI accepts named score columns and ignores unknown names. This was
+benchmark preparation plumbing, not an unsupported implementation. Preparation
+now expands an explicit `--accept-weights all` to the selected gated models'
+recognized names and records requested/resolved consent in the manifest.
+Empty acceptance still grants nothing; unknown explicit names refuse.
+The native consent gate, metric code, binaries, weights and numerical/resource
+gates are unchanged. The corrected campaign uses the existing binaries with
+explicit names, and preserves the original missing-consent packets.

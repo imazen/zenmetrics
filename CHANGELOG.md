@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Treat IQA due times as reporting metadata unless stopping is explicitly authorized; expand explicit benchmark weight acceptance into native named consents and support a separately authorized consent-only retry campaign (`c777ae3e`).
+
 - Retain primary Wang MS-SSIM passes and the VIFp RGB precision finding (`0628a938`, `38b74376`, `23be24ea`); preserve numerical gates and keep the candidate correction unmerged.
 
 - Apply user-authorized external PyIQA SSIM bounds with explicit boundary/error controls (`6e8eb91c`); retain original observations and all existing Rust golden assertions.

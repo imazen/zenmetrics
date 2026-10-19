@@ -1179,3 +1179,4 @@ benchmarks/port_spotcheck_2026-10-18/primary-vif-pairC.tsv	ignored	Primary scala
 benchmarks/port_spotcheck_2026-10-18/primary-vif.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
 benchmarks/port_spotcheck_2026-10-18/primary-msssim.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
 benchmarks/port_spotcheck_2026-10-18/primary-vif.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
+benchmarks/mac_validation_2026-10-18/no-stop-resumption-2026-10-19.json	ignored	Immutable no-stop resumption, explicit consent correction and separate owner-authorized retry budget; not new oracle qualification

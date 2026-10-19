@@ -1,0 +1,454 @@
+{
+  "schema": 1,
+  "captured_utc": "2026-10-19T14:53:10.399423+00:00",
+  "correction": "15 hours was a results due time, not authorization to stop",
+  "pending_maps": 0,
+  "pending_8k": 0,
+  "mac": {
+    "service": "user/501/io.imazen.iqa-scalar.e5cedae3de4c5d74",
+    "plan_sha256": "2ac7ccb86ac14525fbf67912e3fdfa4883e3e9079d4b79f2b55a671742f4c9f2",
+    "window_end_unix": null,
+    "phases": [
+      {
+        "name": "larger-nn-cpu-attempts2-attempts2-attempts2-attempts1",
+        "cells": 4,
+        "max_attempts": 1,
+        "manifest_sha256": "dbb520d10890caf89048a444f5cb2f067fa762c4e29efdc599e6671109b229e7"
+      },
+      {
+        "name": "larger-nn-cpu-attempts2-attempts2-attempts2-attempts2",
+        "cells": 544,
+        "max_attempts": 2,
+        "manifest_sha256": "78e4467202c021c19bac7739a1c78c165b2a75364801bacf4985143ab779bd33"
+      }
+    ],
+    "finite_metal_lineage_preserved": true,
+    "original_binaries_preserved": true,
+    "non_nn_latest_frontier": {
+      "retained": 379,
+      "exhausted": 88,
+      "pending": 0
+    }
+  },
+  "i265": {
+    "service": "iqa-scalar-c97f716d972ef1ad.service",
+    "plan_sha256": "04a9fcf50df310e4b79973413adacd966ae477bc2349b1872a191e9d1a643c1c",
+    "window_end_unix": null,
+    "authorization": "Owner explicitly authorized two new attempts per consent-blocked cell",
+    "new_attempts_per_cell": 2,
+    "original_attempts_reset": false,
+    "phases": [
+      {
+        "name": "gpu-consent-source0",
+        "cells": 56,
+        "max_attempts": 2,
+        "manifest_sha256": "c3893cd7076ce80c951f9ac2bce66afbb10c8a0674212589bed6d9f2aff5c054"
+      },
+      {
+        "name": "gpu-consent-source1",
+        "cells": 280,
+        "max_attempts": 2,
+        "manifest_sha256": "0abeb8d275ac1cce04844335c67da5101b68705c282b8192b3ba08efb6203e0e"
+      },
+      {
+        "name": "cpu-consent-source2",
+        "cells": 56,
+        "max_attempts": 2,
+        "manifest_sha256": "b2ecd544881c55adafb592388051a769b02f23077ce7092e5ebcc1c789acab06"
+      },
+      {
+        "name": "cpu-consent-source3",
+        "cells": 144,
+        "max_attempts": 2,
+        "manifest_sha256": "4234899ee3dca5e9bc958d1c247f94e60eedeedfc6342961523d012c03ba3010"
+      },
+      {
+        "name": "cpu-consent-source4",
+        "cells": 56,
+        "max_attempts": 2,
+        "manifest_sha256": "edd28d3f861dacb424774e74fe98b6fbe78452b46361ec355829626aa6f6e18c"
+      }
+    ],
+    "consent_cells": {
+      "gpu512": 56,
+      "gpu_larger": 280,
+      "cpu512": 56,
+      "cpu_larger": 200
+    },
+    "original_larger_failure_classifications": {
+      "larger-nn-cuda-attempts2-attempts2": [
+        {
+          "metric": "afine",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "ahiq",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "ckdn",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "dreamsim",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "hyperiqa",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "liqe",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "lpips-vgg",
+          "classification": "ORT-allocation-2160942080",
+          "cells": 8
+        },
+        {
+          "metric": "musiq",
+          "classification": "patch-bound",
+          "cells": 16
+        },
+        {
+          "metric": "paq2piq",
+          "classification": "missing-named-weights-consent",
+          "cells": 40
+        },
+        {
+          "metric": "stlpips-vgg",
+          "classification": "ORT-allocation-2160942080",
+          "cells": 8
+        }
+      ],
+      "larger-nn-cpu-attempts2-attempts1": [
+        {
+          "metric": "afine",
+          "classification": "missing-named-weights-consent",
+          "cells": 16
+        },
+        {
+          "metric": "ahiq",
+          "classification": "missing-named-weights-consent",
+          "cells": 16
+        },
+        {
+          "metric": "ckdn",
+          "classification": "missing-named-weights-consent",
+          "cells": 16
+        },
+        {
+          "metric": "deepdc",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "deepdc",
+          "classification": "scope-timeout",
+          "cells": 4
+        },
+        {
+          "metric": "dists",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "dists",
+          "classification": "scope-timeout",
+          "cells": 4
+        },
+        {
+          "metric": "dreamsim",
+          "classification": "missing-named-weights-consent",
+          "cells": 24
+        },
+        {
+          "metric": "hyperiqa",
+          "classification": "missing-named-weights-consent",
+          "cells": 24
+        },
+        {
+          "metric": "liqe",
+          "classification": "missing-named-weights-consent",
+          "cells": 24
+        },
+        {
+          "metric": "lpips-vgg",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "lpips-vgg",
+          "classification": "scope-timeout",
+          "cells": 1
+        },
+        {
+          "metric": "musiq",
+          "classification": "patch-bound",
+          "cells": 8
+        },
+        {
+          "metric": "paq2piq",
+          "classification": "missing-named-weights-consent",
+          "cells": 24
+        },
+        {
+          "metric": "stlpips-vgg",
+          "classification": "scope-timeout",
+          "cells": 8
+        },
+        {
+          "metric": "wadiqam-nr-live",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        }
+      ],
+      "larger-nn-cpu-attempts2-attempts2": [
+        {
+          "metric": "afine",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "ahiq",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "ckdn",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "deepdc",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "deepdc",
+          "classification": "scope-timeout",
+          "cells": 4
+        },
+        {
+          "metric": "dists",
+          "classification": "scope-timeout",
+          "cells": 8
+        },
+        {
+          "metric": "dreamsim",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "hyperiqa",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "liqe",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "lpips-vgg",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "lpips-vgg",
+          "classification": "scope-timeout",
+          "cells": 1
+        },
+        {
+          "metric": "musiq",
+          "classification": "patch-bound",
+          "cells": 8
+        },
+        {
+          "metric": "paq2piq",
+          "classification": "missing-named-weights-consent",
+          "cells": 8
+        },
+        {
+          "metric": "stlpips-vgg",
+          "classification": "scope-timeout",
+          "cells": 8
+        },
+        {
+          "metric": "wadiqam-nr-live",
+          "classification": "insufficient-warm-rounds",
+          "cells": 1
+        },
+        {
+          "metric": "wd",
+          "classification": "insufficient-warm-rounds",
+          "cells": 2
+        }
+      ]
+    }
+  },
+  "resource_wrappers": {
+    "mac": "12GiB monitored process-tree guard; 8 jobs; mac-heavy.lock",
+    "i265": "12GiB cgroup cap; 8 jobs; i265-heavy.lock; existing zenbench P-core qualification"
+  },
+  "evidence": "/home/lilith/benchmark-artifacts/iqa-resume-20261019",
+  "source_fix": "c777ae3eee88",
+  "first_qualified_samples": [
+    {
+      "cell_id": "000000-6e16ddfbfc1843ca",
+      "metric": "afine",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000000-6e16ddfbfc1843ca/attempt-0001/result.json",
+      "result_sha256": "dec25242ea623096eff56363d110bd63a813b229916172476fb0a96ae0034ec9",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000001-102e0450899cc44f",
+      "metric": "afine",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000001-102e0450899cc44f/attempt-0001/result.json",
+      "result_sha256": "5111ea635ae3695fe06c4e335011509c162cae00a1b9698d6e88db929f2b62aa",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000002-eb1fb47965d490a8",
+      "metric": "afine",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000002-eb1fb47965d490a8/attempt-0001/result.json",
+      "result_sha256": "672a3e2d67d1c75ff465d333302f3a62e7008ee329df36acf3e11347a228a14a",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000003-2618ec81f7136169",
+      "metric": "afine",
+      "threads": 1,
+      "phase": "warm",
+      "n": 10,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000003-2618ec81f7136169/attempt-0001/result.json",
+      "result_sha256": "74c4123a5bdba5af858e617bdfdb5cbe1b2054f5bdecedfe089e10169a2f47e2",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000004-0dcf4c8c98810984",
+      "metric": "afine",
+      "threads": 8,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000004-0dcf4c8c98810984/attempt-0001/result.json",
+      "result_sha256": "f10acd7706cc2e93a514bf97aaa7071cb27230fdc650c43a97ffb1250a489f20",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000005-cfe6e3019a981391",
+      "metric": "afine",
+      "threads": 8,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000005-cfe6e3019a981391/attempt-0001/result.json",
+      "result_sha256": "643858897d12ce6c14cee10ddebcc25fa195d4a95388d3aec9e6058efad22f92",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000006-a79c742bc2dd968b",
+      "metric": "afine",
+      "threads": 8,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000006-a79c742bc2dd968b/attempt-0001/result.json",
+      "result_sha256": "74a058f1cea4b15f69e72a74d2296a6fe40cf3b991ecd4ffe7577aa35e8bbc54",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000007-1db8ba6403037e7e",
+      "metric": "afine",
+      "threads": 8,
+      "phase": "warm",
+      "n": 10,
+      "score_bits": "c006e0dd80000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000007-1db8ba6403037e7e/attempt-0001/result.json",
+      "result_sha256": "ffc79c729db6512554866e564dbe92d2ed7a2bfcfcecc46148a8c464f8eb3b95",
+      "consent": "afine",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000008-405f08af1b3e410e",
+      "metric": "ahiq",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "3fe6368720000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000008-405f08af1b3e410e/attempt-0001/result.json",
+      "result_sha256": "a6ea65b23632b1ddf726573ad9da164fce9fa3217fb504f00ba1d97a3ce51cfd",
+      "consent": "ahiq",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000009-5c40b8a1bfed8f7c",
+      "metric": "ahiq",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "3fe6368720000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000009-5c40b8a1bfed8f7c/attempt-0001/result.json",
+      "result_sha256": "156dd1d0a557447b92262da60ec867686464f9b079ccd6bfdcbd2ac6f642116d",
+      "consent": "ahiq",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000010-8d32f8bca057b377",
+      "metric": "ahiq",
+      "threads": 1,
+      "phase": "cold",
+      "n": 1,
+      "score_bits": "3fe6368720000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000010-8d32f8bca057b377/attempt-0001/result.json",
+      "result_sha256": "56c1974f0be8ffba515a1b06b59999a61a7c8380bb6a4e4e67862c9a1574b895",
+      "consent": "ahiq",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    },
+    {
+      "cell_id": "000011-f68771bbfea3e9ab",
+      "metric": "ahiq",
+      "threads": 1,
+      "phase": "warm",
+      "n": 10,
+      "score_bits": "3fe6368720000000",
+      "result": "/home/lilith/benchmark-results/iqa-i265-20261019-consent-retry-no-stop/gpu-consent-source0/cells/000011-f68771bbfea3e9ab/attempt-0001/result.json",
+      "result_sha256": "c6830097581ba836a309051e976fe4dae12cc9b3f2f4ccc2a7ccf6f40cfb6e31",
+      "consent": "ahiq",
+      "binary_sha256": "2256ada792205730f5229e648ee2f8ae80558c59fcbebcdbdaa01d2a6002b2d2"
+    }
+  ],
+  "checks": {
+    "named_consent": 4,
+    "consent_retry_eligibility": 1,
+    "scheduler": 17
+  }
+}
