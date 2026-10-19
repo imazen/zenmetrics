@@ -1855,6 +1855,9 @@ hdrvdp-canonical-prepare-symmetric tree newtree:
 hdrvdp-canonical-check-symmetric:
     flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" octave --quiet benchmarks/hdrvdp_canonical_2026-10-19/scripts/check_symmetric_control.m
 
+hdrvdp-canonical-pixels pairs output *native:
+    flock "$HOME/tmp/dev-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 24G -- env TMPDIR="$HOME/tmp/hdrvdpcx" OPENBLAS_NUM_THREADS=1 python3 benchmarks/hdrvdp_canonical_2026-10-19/scripts/pixel_control.py '{{pairs}}' '{{output}}' {{native}}
+
 # Finite Mac GPU timing policy and strict numerical refusal controls.
 iqa-finite-gpu-policy-tests:
     python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_finite_gpu_policy.py
