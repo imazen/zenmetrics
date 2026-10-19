@@ -18,6 +18,25 @@ categories per the tighten-tolerances rubric:
   in a fast variant vs a reference variant. Tightening requires
   changing one path to match the other (often expensive perf-wise).
 
+## Authorized external PyIQA SSIM comparison policy, 2026-10-19
+
+For the twenty PyIQA 0.1.16 SSIM-family CLI names, the user delegated selection
+of reasonable cross-implementation bounds after reviewing the complete retained
+grid and precision controls. The absolute inclusive bounds are 1e-6 for the
+eighteen unrounded/direct/fixed names (`ssim-pyiqa-f32`, `ssimc-pyiqa-f32`,
+`ms-ssim-pyiqa-f32`, and each `-k2` through `-k6`) and 5e-5 for the original
+rounded `ssim-pyiqa` and `ms-ssim-pyiqa` classes. Selected-case controls identify
+float32 Gaussian construction and luma rounding as distinct precision effects.
+These external policies leave all existing same-implementation Rust golden
+assertions unchanged and do not cover SSIMULACRA2.
+
+The [policy-applied cohort](../benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json)
+binds the original boundless index and its six shards: 390 scored candidate
+comparisons pass and 90 cases have matching window-size refusals. Refusals are
+not scalar passes. The classifier checks explicit window errors and finite
+deltas, with controls immediately below, at and above both bounds. Map and
+timing qualification remain separate.
+
 ## Methodology
 
 For each tolerance:

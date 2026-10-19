@@ -1,8 +1,14 @@
 # Primary PyIQA SSIM grid, 2026-10-19
 
-Missing: documented cross-implementation bounds for these twenty CLI names,
-map comparisons where applicable, and qualified cold/warm timing ratios.
-Every scalar observation remains **UNBOUND / UNQUALIFIED**.
+Missing: map comparisons where applicable and qualified cold/warm timing ratios.
+The original observation cohort retains its **UNBOUND / UNQUALIFIED** labels.
+A [separate policy-applied view](approved-pyiqa-ssim.json) records the bounds
+authorized on October 19: **1e-6 absolute** for the eighteen unrounded/direct/fixed
+routes and **5e-5 absolute** for `ssim-pyiqa` and `ms-ssim-pyiqa`, the two original
+rounded classes. All 390 scored candidate comparisons pass; the other 90 cases
+have matching window-size refusals and are counted separately. The frozen
+baseline has 378 passes, twelve numerical misses and six refusal mismatches,
+plus 84 matching refusals. No existing Rust golden assertion changed.
 
 The [480 observations](primary-pyiqa-ssim.json) cover all twenty registered
 base and fixed-factor names, three raw content pairs, four geometries and
@@ -25,7 +31,9 @@ to master. These observations retain their original executable identities.
 The largest unchanged-default differences are 1.727458853739705e-7 for
 unrounded RGB SSIM, 3.803296377835608e-8 for unrounded base MS-SSIM,
 and 1.5453514410235236e-5 for the original rounded SSIM class. They are
-measured differences, not newly selected acceptance bounds.
+measured differences. The authorized policy separates float32 Gaussian
+construction effects from the original classes' luma rounding effects; it
+does not establish bit identity or extend to SSIMULACRA2.
 
 ## Precision controls
 

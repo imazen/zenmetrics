@@ -1,128 +1,128 @@
-metric	phase	scalar_cases	expected_scalar_cases	scalar_pass_cases	status	maps	retained_timing_cases	expected_timing_cases	qualified_timing_cases	evidence
-vmaf	classical	0	24	0	missing	missing	0	48	0	
-vmaf-neg	classical	0	24	0	missing	missing	0	48	0	
-vmaf-4k	classical	0	24	0	missing	missing	0	48	0	
-cambi	classical	0	24	0	missing	missing	0	48	0	
-msssim	classical	0	24	0	missing	missing	0	48	0	
-ssim	classical	0	24	0	missing	missing	0	48	0	
-ssimc	classical	0	24	0	missing	missing	0	48	0	
-vsi	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-automatic.json
-fsim	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-automatic.json
-gmsd	classical	24	24	18	finding:canonical-odd-ASAN	18-bit-identical;6-canonical-crash	0	48	0	primary-gmsd.json
-ms-gmsd	classical	0	24	0	missing	missing	0	48	0	
-ms-gmsdc	classical	0	24	0	missing	missing	0	48	0	
-mdsi	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-mdsi.json
-mad	classical	0	24	0	missing	missing	0	48	0	
-psnr	classical	0	24	0	missing	missing	0	48	0	
-psnr-y	classical	0	24	0	missing	missing	0	48	0	
-psnr-y601	classical	0	24	0	missing	missing	0	48	0	
-psnr-y-studio601	classical	0	24	0	missing	missing	0	48	0	
-psnr-cb	classical	0	24	0	missing	missing	0	48	0	
-psnr-cr	classical	0	24	0	missing	missing	0	48	0	
-psnr-ycbcr611	classical	0	24	0	missing	missing	0	48	0	
-psnrhvs	classical	0	24	0	missing	missing	0	48	0	
-psnrhvs-y	classical	0	24	0	missing	missing	0	48	0	
-psnrhvs-daala	classical	0	24	0	missing	missing	0	48	0	
-nlpd	classical	0	24	0	missing	missing	0	48	0	
-brisque	classical	0	24	0	missing	missing	0	48	0	
-niqe	classical	0	24	0	missing	missing	0	48	0	
-piqe	classical	0	24	0	missing	missing	0	48	0	
-haarpsi	classical	24	24	24	scalar-pass	missing	13	48	0	primary-haarpsi.json
-iwssim	classical	0	24	0	missing	missing	0	48	0	
-flip	classical	0	24	0	missing	missing	0	48	0	
-flip-v17	classical	0	24	0	missing	missing	0	48	0	
-pieapp	excluded	0	0	0	excluded:owner	missing	0	0	0	
-pieapp-pyiqa	excluded	0	0	0	excluded:owner	missing	0	0	0	
-lpips-alex	learned	0	24	0	missing	missing	0	48	0	
-lpips-vgg	learned	0	24	0	missing	missing	0	48	0	
-lpips-squeeze	learned	0	24	0	missing	missing	0	48	0	
-dists	learned	0	24	0	missing	missing	0	48	0	
-stlpips-alex	learned	0	24	0	missing	missing	0	48	0	
-stlpips-vgg	learned	0	24	0	missing	missing	0	48	0	
-deepdc	learned	0	24	0	missing	missing	0	48	0	
-dreamsim	learned	0	24	0	missing	missing	0	48	0	
-afine	learned	0	24	0	missing	missing	0	48	0	
-wadiqam-fr-live	learned	0	24	0	missing	missing	0	48	0	
-wadiqam-fr-tid	learned	0	24	0	missing	missing	0	48	0	
-wadiqam-nr-live	learned	0	24	0	missing	missing	0	48	0	
-wadiqam-nr-tid	learned	0	24	0	missing	missing	0	48	0	
-wd	learned	0	24	0	missing	missing	0	48	0	
-ws-hv	classical	0	24	0	missing	missing	0	48	0	
-ciede2000	classical	0	24	0	missing	missing	0	48	0	
-cvvdp	classical	0	24	0	missing	missing	0	48	0	
-cvvdp-gpu	classical	0	24	0	missing	missing	0	48	0	
-nlpd-iqa	classical	0	24	0	missing	missing	0	48	0	
-iwssim-piq	classical	0	24	0	missing	missing	0	48	0	
-iwssim-gpu	classical	0	24	0	missing	missing	0	48	0	
-hdrvdp	classical	0	24	0	missing	missing	0	48	0	
-hdrvdp3	classical	0	24	0	missing	missing	0	48	0	
-hdrvdp-aic2026	classical	0	24	0	missing	missing	0	48	0	
-hdrvdp3-aic2026	classical	0	24	0	missing	missing	0	48	0	
-vmaf-v1	classical	0	24	0	missing	missing	0	48	0	
-vmaf-studio601	classical	0	24	0	missing	missing	0	48	0	
-vmaf-neg-studio601	classical	0	24	0	missing	missing	0	48	0	
-cambi-aic2026	classical	0	24	0	missing	missing	0	48	0	
-ssim-libvmaf	classical	0	24	0	missing	missing	0	48	0	
-msssim-libvmaf	classical	0	24	0	missing	missing	0	48	0	
-psnr-y-libvmaf	classical	0	24	0	missing	missing	0	48	0	
-butteraugli	classical	0	24	0	missing	missing	0	48	0	
-butteraugli-gpu	classical	0	24	0	missing	missing	0	48	0	
-butteraugli-original	classical	0	24	0	missing	missing	0	48	0	
-ssim2	classical	0	24	0	missing	missing	0	48	0	
-ssim2-gpu	classical	0	24	0	missing	missing	0	48	0	
-ssimulacra1	classical	0	24	0	missing	missing	0	48	0	
-dssim	classical	0	24	0	missing	missing	0	48	0	
-dssim-gpu	classical	0	24	0	missing	missing	0	48	0	
-mdctpsnr	classical	0	24	0	missing	missing	0	48	0	
-vif	classical	0	24	0	missing	missing	0	48	0	
-vifvec	classical	0	24	0	missing	missing	0	48	0	
-haarpsi-y	classical	24	24	24	scalar-pass	missing	12	48	0	primary-haarpsi.json
-fsim-y	classical	0	24	0	missing	missing	0	48	0	
-fsim-k2	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
-fsim-k3	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
-fsim-k4	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
-fsim-nodownscale	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
-vsi-k2	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
-vsi-k3	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
-vsi-k4	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
-vsi-nodownscale	classical	24	24	24	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
-cw-ssim	classical	0	24	0	missing	missing	0	48	0	
-cw-ssim-pyiqa	classical	0	24	0	missing	missing	0	48	0	
-dmm	learned	0	24	0	missing	missing	0	48	0	
-dmm-pyiqa	learned	0	24	0	missing	missing	0	48	0	
-ahiq	learned	0	24	0	missing	missing	0	48	0	
-ahiq-pyiqa	learned	0	24	0	missing	missing	0	48	0	
-arniqa	learned	0	24	0	missing	missing	0	48	0	
-maniqa	learned	0	24	0	missing	missing	0	48	0	
-liqe	learned	0	24	0	missing	missing	0	48	0	
-musiq	learned	0	24	0	missing	missing	0	48	0	
-hyperiqa	learned	0	24	0	missing	missing	0	48	0	
-paq2piq	learned	0	24	0	missing	missing	0	48	0	
-ckdn	learned	0	24	0	missing	missing	0	48	0	
-topiq-fr	learned	0	24	0	missing	missing	0	48	0	
-topiq-fr-pipal	learned	0	24	0	missing	missing	0	48	0	
-wadiqam-pyiqa	learned	0	24	0	missing	missing	0	48	0	
-ssim-pyiqa	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32-k2	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32-k3	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32-k4	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32-k5	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssim-pyiqa-f32-k6	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32-k2	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32-k3	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32-k4	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32-k5	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ssimc-pyiqa-f32-k6	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32-k2	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32-k3	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32-k4	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32-k5	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-ms-ssim-pyiqa-f32-k6	classical	24	24	0	unbound	missing	0	48	0	primary-pyiqa-ssim.json
-zensim	classical	0	24	0	missing	missing	0	48	0	
-zensim-gpu	classical	0	24	0	missing	missing	0	48	0	
-proposal-butteraugli	classical	0	24	0	missing	missing	0	48	0	
-aimos	excluded	0	0	0	excluded:proprietary-unreleased	missing	0	0	0	
+metric	phase	scalar_cases	expected_scalar_cases	scalar_pass_cases	matching_size_refusals	status	maps	retained_timing_cases	expected_timing_cases	qualified_timing_cases	evidence
+vmaf	classical	0	24	0	0	missing	missing	0	48	0	
+vmaf-neg	classical	0	24	0	0	missing	missing	0	48	0	
+vmaf-4k	classical	0	24	0	0	missing	missing	0	48	0	
+cambi	classical	0	24	0	0	missing	missing	0	48	0	
+msssim	classical	0	24	0	0	missing	missing	0	48	0	
+ssim	classical	0	24	0	0	missing	missing	0	48	0	
+ssimc	classical	0	24	0	0	missing	missing	0	48	0	
+vsi	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-automatic.json
+fsim	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-automatic.json
+gmsd	classical	24	24	18	0	finding:canonical-odd-ASAN	18-bit-identical;6-canonical-crash	0	48	0	primary-gmsd.json
+ms-gmsd	classical	0	24	0	0	missing	missing	0	48	0	
+ms-gmsdc	classical	0	24	0	0	missing	missing	0	48	0	
+mdsi	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	primary-mdsi.json
+mad	classical	0	24	0	0	missing	missing	0	48	0	
+psnr	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-y	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-y601	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-y-studio601	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-cb	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-cr	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-ycbcr611	classical	0	24	0	0	missing	missing	0	48	0	
+psnrhvs	classical	0	24	0	0	missing	missing	0	48	0	
+psnrhvs-y	classical	0	24	0	0	missing	missing	0	48	0	
+psnrhvs-daala	classical	0	24	0	0	missing	missing	0	48	0	
+nlpd	classical	0	24	0	0	missing	missing	0	48	0	
+brisque	classical	0	24	0	0	missing	missing	0	48	0	
+niqe	classical	0	24	0	0	missing	missing	0	48	0	
+piqe	classical	0	24	0	0	missing	missing	0	48	0	
+haarpsi	classical	24	24	24	0	scalar-pass	missing	13	48	0	primary-haarpsi.json
+iwssim	classical	0	24	0	0	missing	missing	0	48	0	
+flip	classical	0	24	0	0	missing	missing	0	48	0	
+flip-v17	classical	0	24	0	0	missing	missing	0	48	0	
+pieapp	excluded	0	0	0	0	excluded:owner	missing	0	0	0	
+pieapp-pyiqa	excluded	0	0	0	0	excluded:owner	missing	0	0	0	
+lpips-alex	learned	0	24	0	0	missing	missing	0	48	0	
+lpips-vgg	learned	0	24	0	0	missing	missing	0	48	0	
+lpips-squeeze	learned	0	24	0	0	missing	missing	0	48	0	
+dists	learned	0	24	0	0	missing	missing	0	48	0	
+stlpips-alex	learned	0	24	0	0	missing	missing	0	48	0	
+stlpips-vgg	learned	0	24	0	0	missing	missing	0	48	0	
+deepdc	learned	0	24	0	0	missing	missing	0	48	0	
+dreamsim	learned	0	24	0	0	missing	missing	0	48	0	
+afine	learned	0	24	0	0	missing	missing	0	48	0	
+wadiqam-fr-live	learned	0	24	0	0	missing	missing	0	48	0	
+wadiqam-fr-tid	learned	0	24	0	0	missing	missing	0	48	0	
+wadiqam-nr-live	learned	0	24	0	0	missing	missing	0	48	0	
+wadiqam-nr-tid	learned	0	24	0	0	missing	missing	0	48	0	
+wd	learned	0	24	0	0	missing	missing	0	48	0	
+ws-hv	classical	0	24	0	0	missing	missing	0	48	0	
+ciede2000	classical	0	24	0	0	missing	missing	0	48	0	
+cvvdp	classical	0	24	0	0	missing	missing	0	48	0	
+cvvdp-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+nlpd-iqa	classical	0	24	0	0	missing	missing	0	48	0	
+iwssim-piq	classical	0	24	0	0	missing	missing	0	48	0	
+iwssim-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+hdrvdp	classical	0	24	0	0	missing	missing	0	48	0	
+hdrvdp3	classical	0	24	0	0	missing	missing	0	48	0	
+hdrvdp-aic2026	classical	0	24	0	0	missing	missing	0	48	0	
+hdrvdp3-aic2026	classical	0	24	0	0	missing	missing	0	48	0	
+vmaf-v1	classical	0	24	0	0	missing	missing	0	48	0	
+vmaf-studio601	classical	0	24	0	0	missing	missing	0	48	0	
+vmaf-neg-studio601	classical	0	24	0	0	missing	missing	0	48	0	
+cambi-aic2026	classical	0	24	0	0	missing	missing	0	48	0	
+ssim-libvmaf	classical	0	24	0	0	missing	missing	0	48	0	
+msssim-libvmaf	classical	0	24	0	0	missing	missing	0	48	0	
+psnr-y-libvmaf	classical	0	24	0	0	missing	missing	0	48	0	
+butteraugli	classical	0	24	0	0	missing	missing	0	48	0	
+butteraugli-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+butteraugli-original	classical	0	24	0	0	missing	missing	0	48	0	
+ssim2	classical	24	24	0	0	unbound	N/A-primary-scalar-API	0	48	0	primary-ssim2.json
+ssim2-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+ssimulacra1	classical	0	24	0	0	missing	missing	0	48	0	
+dssim	classical	0	24	0	0	missing	missing	0	48	0	
+dssim-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+mdctpsnr	classical	0	24	0	0	missing	missing	0	48	0	
+vif	classical	0	24	0	0	missing	missing	0	48	0	
+vifvec	classical	0	24	0	0	missing	missing	0	48	0	
+haarpsi-y	classical	24	24	24	0	scalar-pass	missing	12	48	0	primary-haarpsi.json
+fsim-y	classical	0	24	0	0	missing	missing	0	48	0	
+fsim-k2	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
+fsim-k3	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
+fsim-k4	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
+fsim-nodownscale	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image212.json
+vsi-k2	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
+vsi-k3	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
+vsi-k4	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
+vsi-nodownscale	classical	24	24	24	0	scalar-pass	N/A-primary-scalar-API	0	48	0	runner-image2201.json
+cw-ssim	classical	0	24	0	0	missing	missing	0	48	0	
+cw-ssim-pyiqa	classical	0	24	0	0	missing	missing	0	48	0	
+dmm	learned	0	24	0	0	missing	missing	0	48	0	
+dmm-pyiqa	learned	0	24	0	0	missing	missing	0	48	0	
+ahiq	learned	0	24	0	0	missing	missing	0	48	0	
+ahiq-pyiqa	learned	0	24	0	0	missing	missing	0	48	0	
+arniqa	learned	0	24	0	0	missing	missing	0	48	0	
+maniqa	learned	0	24	0	0	missing	missing	0	48	0	
+liqe	learned	0	24	0	0	missing	missing	0	48	0	
+musiq	learned	0	24	0	0	missing	missing	0	48	0	
+hyperiqa	learned	0	24	0	0	missing	missing	0	48	0	
+paq2piq	learned	0	24	0	0	missing	missing	0	48	0	
+ckdn	learned	0	24	0	0	missing	missing	0	48	0	
+topiq-fr	learned	0	24	0	0	missing	missing	0	48	0	
+topiq-fr-pipal	learned	0	24	0	0	missing	missing	0	48	0	
+wadiqam-pyiqa	learned	0	24	0	0	missing	missing	0	48	0	
+ssim-pyiqa	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa	classical	24	24	18	6	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32	classical	24	24	18	6	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32-k2	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32-k3	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32-k4	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32-k5	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssim-pyiqa-f32-k6	classical	24	24	18	6	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32-k2	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32-k3	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32-k4	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32-k5	classical	24	24	24	0	scalar-pass	missing	0	48	0	approved-pyiqa-ssim.json
+ssimc-pyiqa-f32-k6	classical	24	24	18	6	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32-k2	classical	24	24	12	12	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32-k3	classical	24	24	12	12	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32-k4	classical	24	24	12	12	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32-k5	classical	24	24	12	12	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+ms-ssim-pyiqa-f32-k6	classical	24	24	6	18	scalar-pass-with-size-refusals	missing	0	48	0	approved-pyiqa-ssim.json
+zensim	classical	0	24	0	0	missing	missing	0	48	0	
+zensim-gpu	classical	0	24	0	0	missing	missing	0	48	0	
+proposal-butteraugli	classical	0	24	0	0	missing	missing	0	48	0	
+aimos	excluded	0	0	0	0	excluded:proprietary-unreleased	missing	0	0	0	

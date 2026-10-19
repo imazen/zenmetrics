@@ -29,7 +29,7 @@ def main():
     selections = [('runner-image212.json', 'fsim'), ('runner-image2201.json', 'vsi'),
                   ('primary-automatic.json', None), ('primary-gmsd.json', None),
                   ('primary-mdsi.json', None), ('primary-haarpsi.json', None),
-                  ('primary-pyiqa-ssim.json', None)]
+                  ('approved-pyiqa-ssim.json', None)]
     if (base / 'primary-ssim2.json').exists():
         selections.append(('primary-ssim2.json', None))
     for index_name, family in selections:
@@ -50,14 +50,18 @@ def main():
         for index, row in evidence[metric]:
             cases[(row['pair'], row['size'], row['threads'])].append((index, row))
         assert len(cases) <= 24
-        accepted = sum(all(row.get('passed') == 'True' or row.get('status') == 'pass' for _, row in values)
+        accepted = sum(all(row.get('passed') == 'True' or row.get('status') == 'pass' or row.get('candidate_status') == 'pass' for _, row in values)
                        for values in cases.values())
+        refused = sum(all(row.get('candidate_status') == 'matching-size-refusal' for _, row in values)
+                      for values in cases.values())
         if metric in excluded:
             status = 'excluded:proprietary-unreleased' if metric == 'aimos' else 'excluded:owner'
         elif not cases:
             status = 'missing'
         elif accepted == len(cases):
             status = 'scalar-pass' if len(cases) == 24 else 'partial-scalar-pass'
+        elif accepted + refused == len(cases) and refused:
+            status = 'scalar-pass-with-size-refusals'
         elif metric == 'gmsd':
             status = 'finding:canonical-odd-ASAN'
         else:
@@ -69,7 +73,7 @@ def main():
             maps = 'N/A-primary-scalar-API' if cases else 'missing'
         output.append(dict(metric=metric, phase='excluded' if metric in excluded else 'learned' if metric == 'wd' or entry['family'] == 'nn' else 'classical',
                            scalar_cases=len(cases), expected_scalar_cases=0 if metric in excluded else 24,
-                           scalar_pass_cases=accepted, status=status, maps=maps,
+                           scalar_pass_cases=accepted, matching_size_refusals=refused, status=status, maps=maps,
                            retained_timing_cases=sum(r['metric'] == metric for r in timing),
                            expected_timing_cases=0 if metric in excluded else 48, qualified_timing_cases=0,
                            evidence=','.join(sorted({index for index, _ in evidence[metric]}))))

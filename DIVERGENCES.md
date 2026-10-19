@@ -811,5 +811,11 @@ float64 rounded luma, reduce the three observed differences from
 6.994405055138486e-15 / 3.0309088572266774e-14 / 6.40884012526044e-11.
 These are diagnostic parameter controls, not replacement reference outputs or
 new acceptance bounds. The original primary scores reproduce exactly and are
-retained. Scalar qualification remains unassigned pending a documented bound;
-no numerical threshold or expected test value changed.
+retained. On October 19 the user authorized selecting reasonable external
+bounds: 1e-6 absolute for eighteen unrounded/direct/fixed routes and 5e-5 for
+the two original rounded classes. The separately retained
+[policy-applied view](benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json)
+has 390 candidate scalar passes and 90 matching size refusals; the baseline
+has twelve numerical misses and six refusal mismatches. The original boundless
+tables and all existing Rust golden expectations remain unchanged. Map and
+timing qualification remain open.

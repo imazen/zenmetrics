@@ -334,10 +334,15 @@ path is recorded in the [prefix metadata](haarpsi-paired-prefix.meta).
 
 The [full PyIQA SSIM study](primary-pyiqa-ssim.md) now includes all twenty
 registered names: 480 observations, 390 scored comparisons and 90 matching
-size refusals. Acceptance bounds remain unassigned. Three caller-parameter
+size refusals. The user authorized selecting external bounds on October 19;
+the [separate policy-applied view](approved-pyiqa-ssim.json) uses 1e-6 absolute
+for eighteen unrounded/direct/fixed routes and 5e-5 for the two original rounded
+classes. All 390 scored candidate comparisons pass. The 90 matching size
+refusals remain separate; the baseline has twelve numerical misses and six
+refusal mismatches. Three caller-parameter
 precision controls reproduce original primary values exactly and isolate
 Gaussian/luma precision effects in those cases. Original primary values and
-failed timeout attempts remain available. No bound or test expectation changed.
+failed timeout attempts remain available. Existing Rust golden tests are unchanged.
 The [full SSIM index](primary-pyiqa-ssim.json),
 [precision controls](primary-pyiqa-ssim-precision.json), and
 [command/source receipts](primary-pyiqa-ssim.meta) distinguish these cohorts.
