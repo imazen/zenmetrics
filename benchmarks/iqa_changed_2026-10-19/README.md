@@ -80,3 +80,19 @@ minimum available memory 18352 MiB, peak load 4.21. The Linux recipe gives worke
 the outer launcher uses 12 GiB and is not their ancestor scope. The build alone
 uses its 12 GiB scope. [Actual worker policies](i265/resource-policy.json) retain
 the resource header counts and maximum-RSS row. Timing qualification is unchanged.
+
+## Collected r7900x initial panel
+
+[r7900x-initial27/timings.csv](r7900x-initial27/timings.csv) contains the first
+27-name panel, not the full inventory. All 324 requested scopes finish:
+312 successful timing rows, of which 301 are clean; eleven retain heavy-process
+flags and remain unqualified. Twelve deterministic MS-SSIM size refusals are
+retained separately. Runtime is 1670 seconds, peak RSS 9.47 GiB, minimum available
+memory 14300 MiB, peak load 4.62. As on i265, native recipe workers use 16 GiB
+scopes separately from the 12 GiB outer launcher.
+
+The first remainder setup lacked outside-workspace sibling links and failed
+before measurement. That snapshot and log are preserved. A fresh snapshot
+includes those links, with an independent target directory so the initial
+worker binary and its source snapshot are preserved. Full CPU remainder
+measurement is pending; this initial table does not establish that coverage.

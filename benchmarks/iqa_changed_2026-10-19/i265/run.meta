@@ -1,0 +1,54 @@
+{
+  "identity": {
+    "commit": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+    "binary_sha256": "5169daef303c5592a8a183c54b24bcb2f4ae0a9ec198edb91324af607a6c7a1e",
+    "binary_identity": "pe-relink-metadata-v1",
+    "host": "i265",
+    "os": "linux",
+    "arch": "x86_64",
+    "fixture": null,
+    "corpus": "/home/lilith/tmp/aic-sub/img",
+    "threads": [
+      1,
+      8
+    ],
+    "protocol": "coverage-5-3-1-v1",
+    "with_dvifmish": false,
+    "optional_fingerprint": null,
+    "scalar_only": true
+  },
+  "build_commit": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+  "binary_file_sha256": "5169daef303c5592a8a183c54b24bcb2f4ae0a9ec198edb91324af607a6c7a1e",
+  "command": [
+    "/home/lilith/tmp/iqa-changed-20261019T1620Z/snapshot/target/release/bench-iqa",
+    "cid22,aic-small,aic-medium,aic-large,2k,4k",
+    "changed",
+    "--host",
+    "i265",
+    "--corpus",
+    "/home/lilith/tmp/aic-sub/img",
+    "--skip-native",
+    "--scalar-only",
+    "--threads",
+    "1,8",
+    "--output",
+    "/home/lilith/tmp/iqa-changed-20261019T1620Z/results"
+  ],
+  "host": "i265",
+  "hardware": {
+    "os": "linux",
+    "arch": "x86_64",
+    "threads": 8
+  },
+  "toolchains": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "cmake": "cmake version 4.2.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake)."
+  },
+  "competitors": {
+    "native": "explicitly skipped",
+    "python": "not enabled"
+  },
+  "resource_policy": "Configured/local run-heavy per cell when present; otherwise plain portable child timeout, 1100 s; no plain-path memory cap claimed",
+  "optional_dvifm": []
+}

@@ -1,0 +1,54 @@
+{
+  "identity": {
+    "commit": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+    "binary_sha256": "190992c4b61cdb78f65be44866fe87797f587925878957310fda586110631e96",
+    "binary_identity": "pe-relink-metadata-v1",
+    "host": "r7900x",
+    "os": "linux",
+    "arch": "x86_64",
+    "fixture": null,
+    "corpus": "/home/lilith/tmp/iqa-changed-20261019T1620Z/corpus",
+    "threads": [
+      1,
+      8
+    ],
+    "protocol": "coverage-5-3-1-v1",
+    "with_dvifmish": false,
+    "optional_fingerprint": null,
+    "scalar_only": true
+  },
+  "build_commit": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+  "binary_file_sha256": "190992c4b61cdb78f65be44866fe87797f587925878957310fda586110631e96",
+  "command": [
+    "/home/lilith/tmp/iqa-changed-20261019T1620Z/snapshot/target/release/bench-iqa",
+    "cid22,aic-small,aic-medium,aic-large,2k,4k",
+    "changed",
+    "--host",
+    "r7900x",
+    "--corpus",
+    "/home/lilith/tmp/iqa-changed-20261019T1620Z/corpus",
+    "--skip-native",
+    "--scalar-only",
+    "--threads",
+    "1,8",
+    "--output",
+    "/home/lilith/tmp/iqa-changed-20261019T1620Z/results"
+  ],
+  "host": "r7900x",
+  "hardware": {
+    "os": "linux",
+    "arch": "x86_64",
+    "threads": 24
+  },
+  "toolchains": {
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "cmake": "cmake version 4.2.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake)."
+  },
+  "competitors": {
+    "native": "explicitly skipped",
+    "python": "not enabled"
+  },
+  "resource_policy": "Configured/local run-heavy per cell when present; otherwise plain portable child timeout, 1100 s; no plain-path memory cap claimed",
+  "optional_dvifm": []
+}

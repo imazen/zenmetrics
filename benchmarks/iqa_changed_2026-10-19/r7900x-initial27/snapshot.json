@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "captured_utc": "2026-10-19T17:15:19.681686+00:00",
+  "collector_sha256": "f256d621c81acb69e1612cc4a344cbc191c1eeca954d4b43f12fb9edef451c15",
+  "sources": [
+    {
+      "path": "/home/lilith/tmp/iqa-changed-20261019T1620Z/results/da1cd9b69c980040442e5f3e5f1c5505e91f69d19e2cc4f1ed7cf8c8ed5c3b42/rows.jsonl",
+      "sha256": "9b9d4628b122f46c789b3c24ea988816792152cf47db872c8ac47ee414ed4322",
+      "rows": 324,
+      "complete": true
+    }
+  ],
+  "rows": 324,
+  "qualified_timing_rows": 301,
+  "observations_sha256": "49bca2a0bd1a5fe797739143632b169df4c955d4e7b35e26cd259283eb0d1f22",
+  "timings_csv_sha256": "2ac873bd6ef787f3c1907875ffe4902d6ed10f963146d630d4d4b3dfed1ca579",
+  "memory_precision_note": "Peak RSS is retained at the resource wrapper reporting precision; exact bytes are not inferred."
+}

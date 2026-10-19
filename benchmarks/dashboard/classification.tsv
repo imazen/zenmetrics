@@ -1204,3 +1204,8 @@ benchmarks/iqa_changed_2026-10-19/i265/observations.jsonl	ignored	Portable CPU c
 benchmarks/iqa_changed_2026-10-19/i265/snapshot.json	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
 benchmarks/iqa_changed_2026-10-19/i265/timings.csv	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
 benchmarks/iqa_changed_2026-10-19/i265/resource-policy.json	ignored	Measured worker resource-policy audit; separate from timing observations.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/observations.jsonl	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/snapshot.json	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/timings.csv	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/run.meta	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/i265/run.meta	ignored	Exact portable invocation, toolchain and binary provenance for collected timings.
