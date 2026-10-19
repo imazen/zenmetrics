@@ -1,0 +1,208 @@
+{
+  "rows": 336,
+  "outputs": [
+    {
+      "path": "primary-pyiqa-multiscale-pairA.tsv",
+      "sha256": "fc199cf893da533ce2590f7fb3606131dbe0870e0a6b408701dea20532c4a627",
+      "bytes": 7391
+    },
+    {
+      "path": "primary-pyiqa-single-pairA.tsv",
+      "sha256": "f6abf687dc046350e8bb06791525248498e6dbcae095d71c9f6a8de9cc0f7320",
+      "bytes": 14871
+    },
+    {
+      "path": "primary-pyiqa-multiscale-pairB.tsv",
+      "sha256": "c70ba4ed67a9b12618ffcf91c4687d077510a3f9d570f73ef515e06b5e1de845",
+      "bytes": 7380
+    },
+    {
+      "path": "primary-pyiqa-single-pairB.tsv",
+      "sha256": "c411cb788d5faf7c726c414ee3e7bc8e6c474d7cbb61e3b92096f9d55b6571e1",
+      "bytes": 14879
+    },
+    {
+      "path": "primary-pyiqa-multiscale-pairC.tsv",
+      "sha256": "dd7509cf2c5972beef508478942177cc9bebb30301c57e2204c3606091932ecb",
+      "bytes": 7390
+    },
+    {
+      "path": "primary-pyiqa-single-pairC.tsv",
+      "sha256": "8c5eda524cba3e07bb44e4b20564ee2d98fb6a1548f9e3f2d6275d07321fc465",
+      "bytes": 14878
+    }
+  ],
+  "artifacts": [
+    {
+      "cohort": "primary",
+      "root": "/home/lilith/tmp/portcheck-pyiqa-ssim-panel-20261019T1206-r2",
+      "manifest_sha256": "eb01edbdaef9a21debe2a2bf5b180bcc35ba94278d2d910552ccbd3e2565c89c"
+    },
+    {
+      "cohort": "supplement",
+      "root": "/home/lilith/tmp/portcheck-pyiqa-ssim-supplement-20261019T1253",
+      "manifest_sha256": "bc61ba72d049c24e148f324f07523a1eb39ffce6f184ce9fcc99f11ae501a5bd"
+    },
+    {
+      "cohort": "multiscale",
+      "root": "/home/lilith/tmp/portcheck-ssim-candidate-matrix-20261019T1151",
+      "manifest_sha256": "8a2104859ab469867fdc4a0231b9cb9b319ff376cafd9df81017f2c1cade0ca5"
+    },
+    {
+      "cohort": "single_scale",
+      "root": "/home/lilith/tmp/portcheck-ssim-single-fixed-matrix-20261019T1243",
+      "manifest_sha256": "fb4a14db6561a24de95456b393ea538b2216eb8dddaad817f9623d727fcc294b"
+    }
+  ],
+  "max_abs_deltas": {
+    "ssim-pyiqa-f32:baseline": 1.484695616449372e-07,
+    "ssim-pyiqa-f32:candidate": 1.484695616449372e-07,
+    "ssimc-pyiqa-f32:baseline": 1.727458853739705e-07,
+    "ssimc-pyiqa-f32:candidate": 1.727458853739705e-07,
+    "ms-ssim-pyiqa-f32:baseline": 3.803296377835608e-08,
+    "ms-ssim-pyiqa-f32:candidate": 3.803296377835608e-08,
+    "ssim-pyiqa:baseline": 1.5453514410235236e-05,
+    "ssim-pyiqa:candidate": 1.5453514410235236e-05,
+    "ms-ssim-pyiqa:baseline": 6.04103930879063e-07,
+    "ms-ssim-pyiqa:candidate": 6.04103930879063e-07,
+    "ssim-pyiqa-f32-k2:baseline": 7.622285935759976e-08,
+    "ssim-pyiqa-f32-k2:candidate": 7.622285935759976e-08,
+    "ssimc-pyiqa-f32-k2:baseline": 8.751443036913997e-08,
+    "ssimc-pyiqa-f32-k2:candidate": 8.751443036913997e-08,
+    "ms-ssim-pyiqa-f32-k2:baseline": 1.0899715920165143e-05,
+    "ms-ssim-pyiqa-f32-k2:candidate": 1.0223587643132248e-08,
+    "ssim-pyiqa-f32-k3:baseline": 5.0499527670666566e-08,
+    "ssim-pyiqa-f32-k3:candidate": 5.0499527670666566e-08,
+    "ssimc-pyiqa-f32-k3:baseline": 5.995302265748848e-08,
+    "ssimc-pyiqa-f32-k3:candidate": 5.995302265748848e-08,
+    "ms-ssim-pyiqa-f32-k3:baseline": 6.261592985190578e-05,
+    "ms-ssim-pyiqa-f32-k3:candidate": 5.184784268585929e-09,
+    "ssim-pyiqa-f32-k4:baseline": 4.372001249919322e-08,
+    "ssim-pyiqa-f32-k4:candidate": 4.372001249919322e-08,
+    "ssimc-pyiqa-f32-k4:baseline": 5.1366633502247794e-08,
+    "ssimc-pyiqa-f32-k4:candidate": 5.1366633502247794e-08,
+    "ms-ssim-pyiqa-f32-k4:baseline": 3.689863169686891e-05,
+    "ms-ssim-pyiqa-f32-k4:candidate": 2.973977730746924e-09
+  },
+  "counts": [
+    {
+      "metric": "ms-ssim-pyiqa",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 6
+    },
+    {
+      "metric": "ms-ssim-pyiqa",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 18
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 6
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 18
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k2",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k2",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k3",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k3",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k4",
+      "canonical_status": "canonical-error:RuntimeError",
+      "candidate_status": "refused",
+      "cases": 12
+    },
+    {
+      "metric": "ms-ssim-pyiqa-f32-k4",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 12
+    },
+    {
+      "metric": "ssim-pyiqa",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssim-pyiqa-f32",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k2",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k3",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k4",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k2",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k3",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k4",
+      "canonical_status": "scored",
+      "candidate_status": "scored",
+      "cases": 24
+    }
+  ],
+  "primary_attempts": 96,
+  "primary_process_failures": 3,
+  "supplemental_attempts": 7,
+  "gate": "UNBOUND; no pass inferred",
+  "qualified_timing_cells": 0
+}

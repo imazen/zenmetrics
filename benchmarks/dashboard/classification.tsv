@@ -1136,3 +1136,10 @@ benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairB.tsv	ignored	Primary GMSD
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairC.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd.json	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-gmsd.meta	ignored	Primary GMSD source, commands and artifact integrity metadata; no qualified timings.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.json	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
