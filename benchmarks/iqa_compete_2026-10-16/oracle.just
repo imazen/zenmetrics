@@ -117,3 +117,6 @@ pyiqa-ssim-panel python inputs references output:
 [positional-arguments]
 ssim-candidate-publish input output:
     python3 -B publish_ssim_candidate.py "$1" "$2"
+ssim-single-fixed-compare baseline candidate inputs output:
+    nice -n19 ionice -c3 python3 -B compare_ssim_candidate.py --baseline '{{baseline}}' --candidate '{{candidate}}' --inputs '{{inputs}}' --output '{{output}}' --single-scale-fixed
+

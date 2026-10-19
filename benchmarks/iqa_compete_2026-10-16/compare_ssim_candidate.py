@@ -39,7 +39,7 @@ def group(plan_path):
     for name in ['OMP_NUM_THREADS', 'RAYON_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS']:
         env[name] = str(plan['threads'])
     rows = []
-    for metric in BASE_NAMES + FIXED_NAMES:
+    for metric in plan.get('metrics', BASE_NAMES + FIXED_NAMES):
         row = {'metric': metric, 'base_name': metric in BASE_NAMES}
         for arm, binary in plan['binaries'].items():
             binary = Path(binary)
@@ -84,9 +84,13 @@ def group(plan_path):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--group', type=Path)
+    p.add_argument('--single-scale-fixed', action='store_true',
+                   help='Collect only the ten additional fixed single-scale luma/RGB names')
     for name in ['baseline', 'candidate', 'inputs', 'output']:
         p.add_argument('--' + name, type=Path)
     a = p.parse_args()
+    metrics = ([f'{family}-pyiqa-f32-k{k}' for family in ['ssim', 'ssimc'] for k in range(2, 7)]
+               if a.single_scale_fixed else BASE_NAMES + FIXED_NAMES)
     if a.group:
         return group(a.group.resolve(strict=True))
     if any(getattr(a, name) is None for name in ['baseline', 'candidate', 'inputs', 'output']):
@@ -98,14 +102,14 @@ def main():
     for name, binary in binaries.items():
         assert hashes[name] == receipts[name]['binary_sha256']
         inventory = json.loads(subprocess.check_output([str(binary), 'inventory'], text=True))
-        assert all(any(r['metric_name'] == metric and r['compiled'] for r in inventory) for metric in BASE_NAMES + FIXED_NAMES)
+        assert all(any(r['metric_name'] == metric and r['compiled'] for r in inventory) for metric in metrics)
     a.inputs = a.inputs.resolve(strict=True)
     inputs = json.loads(a.inputs.read_text())['pairs']
     a.output.mkdir()
     root = a.output.resolve()
     cap = max(1, len(os.sched_getaffinity(0)) - 4)
     identity = {'builds': receipts, 'binary_sha256': hashes, 'inputs_sha256': sha(a.inputs),
-                'worker_sha256': sha(Path(__file__)), 'threads': [1, cap], 'qualified_timing_cells': 0}
+                'worker_sha256': sha(Path(__file__)), 'threads': [1, cap], 'metrics': metrics, 'qualified_timing_cells': 0}
     write(root / 'identity.json', identity)
     results = []
     for row in inputs:
