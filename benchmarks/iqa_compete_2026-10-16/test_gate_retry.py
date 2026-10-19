@@ -1,5 +1,5 @@
 import unittest
-from prepare_gate_retry import selection, reserve
+from prepare_gate_retry import selection, reserve, frozen_controller
 from pathlib import Path
 import tempfile
 import os
@@ -12,6 +12,12 @@ def cell(attempts, clean):
 
 
 class GateRetry(unittest.TestCase):
+    def test_verifier_uses_frozen_runner_identity(self):
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+            bundle=Path(tmp)
+            (bundle/'durable.py').write_text('from pathlib import Path\nSELF=str(Path(__file__).resolve())\n')
+            self.assertEqual(frozen_controller(bundle).SELF,str(bundle/'durable.py'))
+
     def test_successor_reservation_cannot_be_reused(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             results=Path(tmp)

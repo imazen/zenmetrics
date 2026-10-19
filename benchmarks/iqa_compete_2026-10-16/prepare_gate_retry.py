@@ -3,6 +3,7 @@
 import argparse
 from collections import defaultdict
 import json
+import importlib.util
 from pathlib import Path
 import durable
 from mac_service import verify
@@ -31,6 +32,14 @@ def selection(report, cap):
     return pending, exhausted
 
 
+def frozen_controller(bundle):
+    # Verification must execute the exact runner identified by the old manifest.
+    spec = importlib.util.spec_from_file_location('gate_retry_frozen_controller', bundle / 'durable.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def reserve(results, identity, output):
     # One reservation per parent prevents a second successor from reusing its cap.
     reservation = results / 'gate-retry-reservation.json'
@@ -51,7 +60,8 @@ def main():
         p.error('new successor directory required; old artifacts are immutable')
     with durable.locked(a.lock, wait=True), durable.locked(a.results / 'coordinator.lock'):
         verify(a.bundle)
-        _, configs, frozen = durable.manifest(a.bundle / 'manifest.json')
+        controller = frozen_controller(a.bundle)
+        _, configs, frozen = controller.manifest(a.bundle / 'manifest.json')
         saved = durable.load(a.results / 'identity.json')
         report = durable.load(a.results / 'report.json')
         identity = durable.digest(durable.encoded(saved))
@@ -63,13 +73,14 @@ def main():
             raise ValueError('original campaign must be terminal before retry selection')
         # Validate every retained attempt seal/config/log and its projected report count.
         for config, cell in zip(configs, report['cells']):
-            _, records = durable.attempts(a.results, config, identity)
+            _, records = controller.attempts(a.results, config, identity)
             final = next((r for r in records if r['status'] in ('ok', 'unsupported')), None)
             if cell['config'] != config or cell['attempts'] != records or cell.get('row') != (final['row'] if final else None):
                 raise ValueError('parent report projection differs from sealed attempt history')
         groups, exhausted = selection(report, saved['policy']['max_attempts'])
         original = durable.load(a.bundle / 'manifest.json')['cells']
-        reserve(a.results, identity, a.output)
+        if groups:
+            reserve(a.results, identity, a.output)
         a.output.mkdir(parents=True, exist_ok=False)
         successors = []
         for remaining, indices in sorted(groups.items()):
