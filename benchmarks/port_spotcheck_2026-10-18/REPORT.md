@@ -225,6 +225,16 @@ unsuffixed names produce 108 bit-identical baseline/candidate score cases and
 before/after observations; independent primary-reference comparison and
 qualified speed ratios are still missing. This SSIM correction has not landed on master.
 
+## Primary HaarPSI scalar grid
+
+The [primary HaarPSI scalar panel](primary-haarpsi.md) passes 48/48 cases for
+both RGB and unrounded-luma names across the requested sizes, retained pairs
+and thread budgets 1 and 28. Maximum absolute difference is
+5.942815561876813e-8 against the unchanged 5e-5 bound. The original author
+M-file is unchanged and source-bound; both process RSS values and the aggregate
+run-heavy receipt are retained. Map comparisons and qualified timing ratios
+remain missing.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

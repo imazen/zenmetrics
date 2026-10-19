@@ -1126,3 +1126,8 @@ benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairA.tsv	ignored	Com
 benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
 benchmarks/port_spotcheck_2026-10-18/primary-automatic.json	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairA.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairB.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairC.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.json	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.meta	ignored	Primary HaarPSI scalar experiment command and evidence metadata; no qualified timing data.

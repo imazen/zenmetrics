@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Execute and retain the primary HaarPSI RGB/luma scalar grid (`0d6e2c37`); all 48 cases pass the unchanged bound, with map and timing qualification still open.
+
 - Execute original automatic-factor reference bodies with explicit source-mode joins (`18427a98`) and retain their completed scalar grid (`9a89dfe0`); no existing metric code or gate changes.
 
 - Export retained fixed-factor numerical cohorts through artifact-checked scalar shards (`30b0ddd9`, original system-runner data `582c0cef`), with per-process RSS and resource receipts; qualified speed ratios remain missing.

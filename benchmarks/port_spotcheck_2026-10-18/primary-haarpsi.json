@@ -1,0 +1,51 @@
+{
+  "source_panel": "/home/lilith/tmp/portcheck-haarpsi-primary-panel-20261019T1220",
+  "identity": {
+    "source_sha256": "ef1bed2872fd1f74842afdccfd1d6b0e3a93bc5479b14bf845460f08dec8ee4a",
+    "origin": "https://github.com/rgcda/haarpsi/blob/3b9599b0c1911ee08f1bb991bb19e19d86727819/HaarPSI.m",
+    "helpers": {
+      "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+      "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+      "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    "binary_sha256": "b9279b4af7032a35a11b7bd6da2ddb9d258ec044475ea97eb7d99e69aaf8ea6d",
+    "build_receipt_sha256": "33de446a955d39bf8441d697ec4bfef88e12938e1c2158b4d12d05adcca652cd",
+    "octave_sha256": "66ee110ee2bc13b7a9547e1f619cd06e041269aac819b9f344992da4e79ea7f7",
+    "inputs_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+    "threads": [
+      1,
+      28
+    ],
+    "bound": 5e-05,
+    "gate_source": "crates/haarpsi/README.md: Verification",
+    "qualified_timing_cells": 0,
+    "map_status": "missing: scalar-only probe; no map acceptance gate inferred"
+  },
+  "identity_sha256": "3afc55a83daee61f654813b711978162ebfc85186282eb541cfd7a25f0e141d3",
+  "completion_sha256": "67db770049b4fc3a6c0b57df02573103dcb365664296b7ce33902225e5ebe5cc",
+  "artifact_manifest_sha256": "60f0fe21de779db6fe4846ba2131dfc2ad9ec03bbb4883119eaf60994da914dd",
+  "wrapper_log_sha256": "f87723c73080cfaef403e23216333673932a1334cb1655b2efbf17d425843e9d",
+  "cases": 48,
+  "statuses": {
+    "pass": 48
+  },
+  "max_abs_delta": 5.942815561876813e-08,
+  "qualified_timing_cells": 0,
+  "shards": [
+    {
+      "path": "primary-haarpsi-pairA.tsv",
+      "bytes": 3848,
+      "sha256": "4a6c127d96396b617217b9f469ff2413c5d1790e2279a157cad740e253f4f45c"
+    },
+    {
+      "path": "primary-haarpsi-pairB.tsv",
+      "bytes": 3830,
+      "sha256": "341ec303858568d8d1ac35f1e7becbb7c0c1201546e5fde1aee576ca39ca8497"
+    },
+    {
+      "path": "primary-haarpsi-pairC.tsv",
+      "bytes": 3856,
+      "sha256": "ca286f3a648410dd255e0004b97fa64e2715669d5e243cb6eb05763d51bb2392"
+    }
+  ]
+}

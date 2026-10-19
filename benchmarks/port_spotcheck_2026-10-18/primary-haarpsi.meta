@@ -1,0 +1,15 @@
+Observed 2026-10-19 on WSL2 Ryzen 9 7950X. Raw RGB8 crops, frozen Rust e2d414c33a6d3c7da50a818fa36e56654d3ebeef.
+48/48 scalar cases pass, HaarPSI RGB and unrounded luma; source unchanged author M-file 3b9599b0c1911ee08f1bb991bb19e19d86727819.
+Max absolute delta 5.942815561876813e-8, existing 5e-5 scalar gate. Maps and qualified timing ratios missing.
+GNUtime process RSS in each row; run-heavy receipt is aggregate for the whole panel, not per arm:
+run-heavy: done rc=0 58s | peak-RSS 1.19GiB | min-avail 12705MiB | peak-load 2.28
+Commands in oracle.just: haarpsi-primary-panel and haarpsi-primary-publish; exact per-case scorer commands retained under source_panel in index.
+Full panel command:
+flock ~/tmp/lilith-heavy.lock flock ~/tmp/lilith-wsl-heavy.lock ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 28 -- env TMPDIR=~/tmp/portcheck-supervisor-scratch just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just haarpsi-primary-panel ~/tmp/portcheck-haarpsi-primary-20261019T1217/HaarPSI.m ~/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json ~/tmp/portcheck-primary-rust-20261019T1010/target/release/iqa-compete ~/tmp/portcheck-primary-rust-20261019T1010/build-receipt.json ~/tmp/portcheck-haarpsi-primary-panel-20261019T1220
+SHA256 external evidence (paths checked on lilith-wsl):
+3afc55a83daee61f654813b711978162ebfc85186282eb541cfd7a25f0e141d3  /home/lilith/tmp/portcheck-haarpsi-primary-panel-20261019T1220/identity.json
+67db770049b4fc3a6c0b57df02573103dcb365664296b7ce33902225e5ebe5cc  /home/lilith/tmp/portcheck-haarpsi-primary-panel-20261019T1220/completion.json
+60f0fe21de779db6fe4846ba2131dfc2ad9ec03bbb4883119eaf60994da914dd  /home/lilith/tmp/portcheck-haarpsi-primary-panel-20261019T1220/publication-files.sha256.jsonl
+f87723c73080cfaef403e23216333673932a1334cb1655b2efbf17d425843e9d  /home/lilith/tmp/portcheck-haarpsi-primary-panel-20261019T1220.log
+5b9c3b173c97371fe9c9a43ca7182b698083f44b7f8ea0903c6fb81ea397a5fb  /home/lilith/tmp/portcheck-haarpsi-published-20261019T1232/primary-haarpsi.json
+ef78ae01481d9d2edbd06dab4fc97ac3358c5424c9b2e81ba7b6e2b3db7ee92a  /home/lilith/tmp/portcheck-haarpsi-published-20261019T1232.log
