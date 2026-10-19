@@ -117,3 +117,85 @@ fn degenerate_content_is_degenerate_not_nan() {
         Ok(v) => panic!("{w}x{h} flat: expected Degenerate, got {:?}", scores(&*v)),
     }
 }
+
+#[test]
+fn gray8_strided_equals_packed_bit_for_bit() {
+    // GRAY8 rows read through their real stride: same plane, tight vs
+    // padded, must give identical bits (see strided RGB8 test above).
+    let (w, h) = (193usize, 97usize);
+    let rgb = textured_rgb8(w, h, 11);
+    let lum: Vec<u8> = rgb
+        .chunks_exact(3)
+        .map(|p| ((77 * p[0] as u32 + 150 * p[1] as u32 + 29 * p[2] as u32) >> 8) as u8)
+        .collect();
+    let stride = w + 13;
+    let mut buf = vec![0u8; stride * h];
+    for y in 0..h {
+        buf[y * stride..y * stride + w].copy_from_slice(&lum[y * w..(y + 1) * w]);
+    }
+    let packed: Image<'_> = PixelSlice::new(&lum, w as u32, h as u32, w, PixelDescriptor::GRAY8)
+        .unwrap()
+        .into();
+    let strided: Image<'_> =
+        PixelSlice::new(&buf, w as u32, h as u32, stride, PixelDescriptor::GRAY8)
+            .unwrap()
+            .into();
+    let a = evaluate(packed);
+    let b = evaluate(strided);
+    assert_eq!(a.len(), b.len());
+    for ((ka, va), (kb, vb)) in a.iter().zip(b.iter()) {
+        assert_eq!(ka, kb);
+        assert_eq!(va.to_bits(), vb.to_bits(), "{ka} differs strided GRAY8 vs packed");
+    }
+}
+
+#[test]
+fn gray8_matches_rgb8_neutral_bit_for_bit() {
+    // Neutral RGB8 (r==g==b==v) and GRAY8 v produce the same luma plane:
+    // to_y(v,v,v) = rint32(fma(v,.114, .299v + .587v)); the arithmetic is
+    // ~2ulp from v, well under the .5 rounding boundary, so both
+    // descriptors feed identical f32 planes downstream -> identical
+    // scores.
+    let (w, h) = (192usize, 128usize);
+    let rgb = textured_rgb8(w, h, 13);
+    let lum: Vec<u8> = rgb
+        .chunks_exact(3)
+        .map(|p| ((77 * p[0] as u32 + 150 * p[1] as u32 + 29 * p[2] as u32) >> 8) as u8)
+        .collect();
+    let neutral: Vec<u8> = lum.iter().flat_map(|&v| [v, v, v]).collect();
+    let a = evaluate(rgb8_image(&neutral, w, h));
+    let gimg: Image<'_> = PixelSlice::new(&lum, w as u32, h as u32, w, PixelDescriptor::GRAY8)
+        .unwrap()
+        .into();
+    let b = evaluate(gimg);
+    assert_eq!(a.len(), b.len());
+    for ((ka, va), (kb, vb)) in a.iter().zip(b.iter()) {
+        assert_eq!(ka, kb);
+        assert_eq!(va.to_bits(), vb.to_bits(), "{ka} differs RGB8-neutral vs GRAY8");
+    }
+}
+
+#[test]
+fn odd_dimensions_score_finite() {
+    // Odd widths/heights >= 8 hit scalar border columns in conv7 and
+    // ragged quad_sums lengths; all must still score, finite.
+    for (w, h) in [
+        (9usize, 9usize),
+        (9, 15),
+        (15, 9),
+        (17, 13),
+        (33, 9),
+        (101, 51),
+        (197, 101),
+        (255, 63),
+    ] {
+        let data = textured_rgb8(w, h, 3);
+        match Brisque::new().evaluate_image(rgb8_image(&data, w, h), EvalOpts::new()) {
+            Ok(e) => {
+                let v = scores(&*e);
+                assert!(v[0].1.is_finite(), "{w}x{h}: non-finite brisque {v:?}");
+            }
+            Err(e) => panic!("{w}x{h}: expected finite score, got {}", e.error().kind()),
+        }
+    }
+}

@@ -61,8 +61,10 @@ pub(crate) fn quad_tree_sums(token: Token, x: &[f32]) -> [f32; 4] {
         } else if hi - lo == 8 {
             // Batch a whole len-8 subtree: one vector computes all four
             // statistics elementwise (bit-identical to the per-element
-            // leaf values — `min/max(x,0)²` ≡ the `<0`/`>0` masks,
-            // including NaN and ±0), then each stat's 8 positions are
+            // leaf values — `min/max(x,0)²` ≡ the `<0`/`>0` masks for
+            // finite x (u8-derived luma is always finite; NaN semantics
+            // are backend-dependent — NEON `vmin` propagates NaN where
+            // the scalar mask yields 0), then each stat's 8 positions are
             // folded with the scalar pairwise order the recursive tree
             // would use. Replaces eight per-leaf `from_array` builds.
             let xv = f32x8::load_t(token, x[lo..hi].try_into().unwrap());
