@@ -1,0 +1,136 @@
+{
+  "case": {
+    "pair": "pairA",
+    "size": "64",
+    "threads": 1,
+    "canonical": 90.86388011956463
+  },
+  "stacks": [
+    {
+      "calls": 8,
+      "frames": [
+        "cmsDoTransform",
+        "jxl::ColorEncoding::SetFieldsFromICC() [clone .part.0]",
+        "jxl::(anonymous namespace)::JxlCmsInit(void*, unsigned long, unsigned long, JxlColorProfile const*, JxlColorProfile const*, float)",
+        "jxl::ThreadPool::RunCallState<jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned long)#1}, jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned int, unsigned long)#2}>::CallInitFunc(void*, unsigned long)",
+        "jxl::ThreadPool::SequentialRunnerStatic(void*, void*, int (*)(void*, unsigned long), void (*)(void*, unsigned int, unsigned long), unsigned int, unsigned int)",
+        "jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)",
+        "jxl::ImageBundle::TransformTo(jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&, float)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&)",
+        "main"
+      ]
+    },
+    {
+      "calls": 40,
+      "frames": [
+        "cmsDoTransform",
+        "BlackPointAsDarkerColorant",
+        "cmsDetectBlackPoint",
+        "ComputeConversion",
+        "DefaultICCintents",
+        "cmsCreateExtendedTransform",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateTransformTHR",
+        "jxl::(anonymous namespace)::ProfileEquivalentToICC(_cmsContext_struct*, std::unique_ptr<void, jxl::(anonymous namespace)::ProfileDeleter> const&, jxl::PaddedBytes const&, jxl::ColorEncoding const&)",
+        "jxl::ColorEncoding::SetFieldsFromICC() [clone .part.0]",
+        "jxl::(anonymous namespace)::JxlCmsInit(void*, unsigned long, unsigned long, JxlColorProfile const*, JxlColorProfile const*, float)",
+        "jxl::ThreadPool::RunCallState<jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned long)#1}, jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned int, unsigned long)#2}>::CallInitFunc(void*, unsigned long)",
+        "jxl::ThreadPool::SequentialRunnerStatic(void*, void*, int (*)(void*, unsigned long), void (*)(void*, unsigned int, unsigned long), unsigned int, unsigned int)",
+        "jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)",
+        "jxl::ImageBundle::TransformTo(jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*)"
+      ]
+    },
+    {
+      "calls": 2032,
+      "frames": [
+        "cmsDoTransform",
+        "jxl::(anonymous namespace)::ProfileEquivalentToICC(_cmsContext_struct*, std::unique_ptr<void, jxl::(anonymous namespace)::ProfileDeleter> const&, jxl::PaddedBytes const&, jxl::ColorEncoding const&)",
+        "jxl::ColorEncoding::SetFieldsFromICC() [clone .part.0]",
+        "jxl::(anonymous namespace)::JxlCmsInit(void*, unsigned long, unsigned long, JxlColorProfile const*, JxlColorProfile const*, float)",
+        "jxl::ThreadPool::RunCallState<jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned long)#1}, jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned int, unsigned long)#2}>::CallInitFunc(void*, unsigned long)",
+        "jxl::ThreadPool::SequentialRunnerStatic(void*, void*, int (*)(void*, unsigned long), void (*)(void*, unsigned int, unsigned long), unsigned int, unsigned int)",
+        "jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)",
+        "jxl::ImageBundle::TransformTo(jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&, float)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&)",
+        "main"
+      ]
+    },
+    {
+      "calls": 4,
+      "frames": [
+        "cmsDoTransform",
+        "BlackPointAsDarkerColorant",
+        "cmsDetectBlackPoint",
+        "ComputeConversion",
+        "DefaultICCintents",
+        "cmsCreateExtendedTransform",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateTransformTHR",
+        "jxl::(anonymous namespace)::JxlCmsInit(void*, unsigned long, unsigned long, JxlColorProfile const*, JxlColorProfile const*, float)",
+        "jxl::ThreadPool::RunCallState<jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned long)#1}, jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned int, unsigned long)#2}>::CallInitFunc(void*, unsigned long)",
+        "jxl::ThreadPool::SequentialRunnerStatic(void*, void*, int (*)(void*, unsigned long), void (*)(void*, unsigned int, unsigned long), unsigned int, unsigned int)",
+        "jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)",
+        "jxl::ImageBundle::TransformTo(jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&, float)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&)"
+      ]
+    },
+    {
+      "calls": 4,
+      "frames": [
+        "cmsDoTransform",
+        "BlackPointAsDarkerColorant",
+        "ComputeConversion",
+        "DefaultICCintents",
+        "cmsCreateExtendedTransform",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateMultiprofileTransformTHR",
+        "cmsCreateTransformTHR",
+        "jxl::(anonymous namespace)::JxlCmsInit(void*, unsigned long, unsigned long, JxlColorProfile const*, JxlColorProfile const*, float)",
+        "jxl::ThreadPool::RunCallState<jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned long)#1}, jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)::{lambda(unsigned int, unsigned long)#2}>::CallInitFunc(void*, unsigned long)",
+        "jxl::ThreadPool::SequentialRunnerStatic(void*, void*, int (*)(void*, unsigned long), void (*)(void*, unsigned int, unsigned long), unsigned int, unsigned int)",
+        "jxl::(anonymous namespace)::CopyToT(jxl::ImageMetadata const*, jxl::ImageBundle const*, jxl::RectT<unsigned long> const&, jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*, jxl::Image3<float>*)",
+        "jxl::ImageBundle::TransformTo(jxl::ColorEncoding const&, JxlCmsInterface const&, jxl::ThreadPool*)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&, float)",
+        "ComputeSSIMULACRA2(jxl::ImageBundle const&, jxl::ImageBundle const&)",
+        "main"
+      ]
+    }
+  ],
+  "scores": [
+    90.86388011956463,
+    90.86388011956463
+  ],
+  "command": [
+    "timeout",
+    "--kill-after=20s",
+    "120s",
+    "gdb",
+    "--batch",
+    "--quiet",
+    "-x",
+    "/home/lilith/tmp/portcheck-ssim2-cms-callers-20261019T1518/trace.gdb",
+    "--args",
+    "/home/lilith/tmp/portcheck-primary-owned-build-20261019T0955/build/iqa-ssim2-primary",
+    "ssim2",
+    "64",
+    "64",
+    "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-reference.rgb",
+    "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-distorted.rgb",
+    "1",
+    "score",
+    "1"
+  ],
+  "canonical_sha256": "9d0fc033b44580055909b52e2cabad87d2c5f6fb28c4fe970391738fe3f67ac1",
+  "worker_sha256": "68a89f6423852ba79cb33d50e85da7643eea962e6c94a69aad6ba471fe21e8fe",
+  "panel_identity_sha256": "f2d755fa1483ce696d1c5be9db1b086a75d98a86173db8e4698b03c9b52b54fc",
+  "panel_completion_sha256": "cb0595c085e34f3a686fb34890256864df7d5d6e12bab5a5e1e2085d1cb61d35",
+  "script_sha256": "83fa4d80afffd46a0bd557948557202caadb7408aef6197bb271c148398e8f7b",
+  "stdout_sha256": "aad6f7b9c185e02334b2b905760f471b51032bc0a1efc7a881e68355095d9349",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "qualified_timing_cells": 0
+}

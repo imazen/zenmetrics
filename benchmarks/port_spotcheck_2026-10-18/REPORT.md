@@ -358,3 +358,9 @@ its unchanged 1e-4 absolute bound (maximum difference 4.752062978119476e-6).
 At 64 squared the caller selects the documented adaptive three-level policy;
 the original default five-level refusal remains logged. Internal map comparison
 and paired timing remain open. This is separate from the Metrix alternative.
+
+## Further native-map and CMS observations, 2026-10-19
+
+Missing: an assigned external map bound, attribution of the HaarPSI nonfinite differences, and CMS runtime tracing across the remaining input matrix. The [HaarPSI map grid](haarpsi-maps.md) preserves 24 RGB map comparisons. The 4K illustration pair has 41 Rust-NaN/primary-finite positions at each thread count, retained separately from matching NaNs. These findings do not alter scalar passes or qualify map parity.
+
+A separate [SSIMULACRA2 CMS call-stack observation](ssim2-cms-callers.md) attributes all 2,088 `cmsDoTransform` calls on the 64×64 photo control to initialization stacks containing `JxlCmsInit`. It preserves the earlier failed zero-transform hypothesis and the exact scalar result. It is untimed and does not establish runtime closure for the full matrix.

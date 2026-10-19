@@ -1,0 +1,11 @@
+{
+  "host": "lilith-wsl",
+  "cpu": "Ryzen 9 7950X",
+  "source": "53f6d26dda0f3be9d3598b6f6b6e4fc8e31bc998",
+  "observed_utc": "2026-10-19",
+  "raw_result": "/home/lilith/tmp/portcheck-ssim2-cms-callers-20261019T1518/result.json",
+  "raw_result_sha256": "fee3a4c65fa59b74b232bfe4f565aa992b411b724e2d1330ac7a23dcc03a6c37",
+  "full_log": "/home/lilith/tmp/portcheck-ssim2-cms-callers-20261019T1518.log",
+  "full_log_sha256": "0ff400817007d0d9e0d929f188762fa5c65211ade9081dc3b92226246d51998b",
+  "qualified_timing_cells": 0
+}

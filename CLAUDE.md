@@ -561,6 +561,10 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **Checkpoint at `53f6d26d` fails BMP alpha-policy tests; macOS also fails two numerical pins (2026-10-19).** The full CLI checkpoint profile exposes two old BMP tests that assume implicit alpha dropping, while the current decoder defaults to `RequireOpaque`. Linux x64 WGPU/CUDA, Linux ARM64 and macOS ARM64 reproduce those failures. On macOS ARM64, `ssimulacra1::oracle_tests::original_author_synthetic_pin` also exceeds its unchanged `1e-12` allowance, and `flip_and_cw_ssim_match_pinned_reference_values` reports FLIP-v17 `0.07714100182056427` versus pinned `0.07714099436998367` under the unchanged `1e-9` bound. Those numerical differences are not yet attributed. Checkpoint publication remains blocked; no tag or gate adjustment has been made. Run: https://github.com/imazen/zenmetrics/actions/runs/39275363269
+
+- **HaarPSI native map has nonfinite mismatches on a retained illustration pair (2026-10-19).** At 3840×2160, 41 positions at each of 1/28 threads return Rust NaN against a finite weighted mean of the original primary similarity/weight arrays. The primary's weight sums at those positions are between `2.1316282072803006e-14` and `3.410605131648481e-13`; the cause of Rust's NaNs is not established. Scalar results retain their earlier values and the existing scalar gate. Maps have no assigned external bound. Evidence and exact input/source bindings: [map observations](benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.md).
+
 - **VIFp RGB luma precision, found 2026-10-19:** the frozen e2d414c3
   `vif` route misses the unchanged 1e-9 author-reference gate in 22/24 raw
   size/content/thread cases (largest difference 4.093188010756421e-9).

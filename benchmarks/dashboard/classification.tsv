@@ -1180,3 +1180,11 @@ benchmarks/port_spotcheck_2026-10-18/primary-vif.json	ignored	Primary scalar par
 benchmarks/port_spotcheck_2026-10-18/primary-msssim.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
 benchmarks/port_spotcheck_2026-10-18/primary-vif.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
 benchmarks/mac_validation_2026-10-18/no-stop-resumption-2026-10-19.json	ignored	Immutable no-stop resumption, explicit consent correction and separate owner-authorized retry budget; not new oracle qualification
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-nonfinite.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairA.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairB.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairC.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
