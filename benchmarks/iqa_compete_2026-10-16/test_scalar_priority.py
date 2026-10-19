@@ -14,6 +14,20 @@ def record(status='failed', warm=False, clean=True):
 
 
 class ScalarPriorityTests(unittest.TestCase):
+    def test_due_time_never_implicitly_authorizes_stop(self):
+        self.assertIsNone(priority.stop_endpoint(dict(window_end_unix=1, deadline_unix=2)))
+        self.assertIsNone(priority.stop_endpoint(dict(window_end_unix=1, stop_at_deadline=False)))
+        self.assertEqual(priority.stop_endpoint(dict(window_end_unix=1, stop_at_deadline=True)), 1)
+
+    def test_window_guard_refuses_without_explicit_stop(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as d:
+            p=Path(d)/'sequence.json'
+            p.write_text(json.dumps(dict(window_end_unix=1)))
+            with self.assertRaisesRegex(ValueError, 'explicit stop_at_deadline'):
+                priority.install_window_guard(p)
+            self.assertFalse((p.parent/'window-guard.json').exists())
+
     def test_dimension_disable_ignores_labels_and_orientation(self):
         policy = dict(disabled_geometries=[[7680,4320]])
         self.assertTrue(priority.disabled_geometry(dict(width=7680,height=4320,size_name="other"),policy))

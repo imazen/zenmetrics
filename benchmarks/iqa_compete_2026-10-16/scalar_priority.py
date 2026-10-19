@@ -430,13 +430,14 @@ def prepare(config, root, ranking):
             phase = freeze(execution_bundle, root/name, execution, dict(source=original, cells=entries))
             phase.update(name=name, output=str(Path(config['results'])/name), max_attempts=remaining)
             phases.append(phase)
-    if not phases and not deferred and not config.get('deadline_unix'):
+    if not phases and not deferred and not config.get('deadline_unix') and not config.get('allow_empty'):
         raise ValueError('no remaining work')
     write(root / 'retained-coverage.json', coverage)
     write(root / 'ranking-final.json', dict(criterion='clean 512 scalar eight-worker warm median; ten rounds minimum',
             top10=ranking[:10], ranking=ranking, requested_families=sorted(name for name in inventory_names if requested_family(name)), quality_claim='requested families; no formal quality Pareto claim'))
     plan = dict(schema=1, lock=config['lock'], phases=phases, source_sha256=sha(Path(__file__)),
-                disabled_geometries=config.get('disabled_geometries', []), window_end_unix=config.get('window_end_unix'), requested_start_unix=config.get('requested_start_unix'), ranking_sha256=sha(root / 'ranking-final.json'), coverage_sha256=sha(root / 'retained-coverage.json'),
+                disabled_geometries=config.get('disabled_geometries', []), window_end_unix=config.get('window_end_unix') if config.get('stop_at_deadline') is True else None,
+                stop_at_deadline=config.get('stop_at_deadline') is True, results_due_unix=config.get('results_due_unix', config.get('window_end_unix')), requested_start_unix=config.get('requested_start_unix'), ranking_sha256=sha(root / 'ranking-final.json'), coverage_sha256=sha(root / 'retained-coverage.json'),
                 policy='scalar only; priority fastest ten plus all dvifmish and named families; then remaining scalar; then original NN')
     import shutil
     coordinator = root / 'coordinator'
@@ -457,6 +458,11 @@ def prepare(config, root, ranking):
     return plan
 
 
+def stop_endpoint(plan):
+    # A due time is reporting metadata, never implicit authorization to stop.
+    return (plan.get('window_end_unix') or plan.get('deadline_unix')) if plan.get('stop_at_deadline') is True else None
+
+
 def execute(plan_path, expected):
     if sha(plan_path) != expected:
         raise ValueError('sequence changed')
@@ -467,7 +473,7 @@ def execute(plan_path, expected):
     if sha(Path(__file__)) != plan['source_sha256']:
         raise ValueError('executed scheduler differs')
     for phase in plan['phases']:
-        if (plan.get('window_end_unix') or plan.get('deadline_unix')) and time.time() >= (plan.get('window_end_unix') or plan['deadline_unix']):
+        if stop_endpoint(plan) and time.time() >= stop_endpoint(plan):
             write_path = plan_path.parent / 'deadline-paused.json'
             write_path.write_text(json.dumps(dict(checked_utc=now(), deadline_unix=plan.get('window_end_unix') or plan['deadline_unix'], next_phase=phase['name'], complete=False))+'\n')
             return 0
@@ -534,6 +540,8 @@ def install_window_guard(plan_path):
     """Stop the coordinator at the first shared worker boundary after the endpoint."""
     root = plan_path.parent
     plan = load(plan_path)
+    if not stop_endpoint(plan):
+        raise ValueError('window guard requires explicit stop_at_deadline authorization')
     service = load(root / 'installed-service.json')['service']
     config = dict(lock=plan['lock'], sources=plan['phases'], stop_services=[service],
                   output=str(root / 'window-boundary'), deadline_unix=plan['window_end_unix'],

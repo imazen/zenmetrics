@@ -1907,3 +1907,11 @@ metric-dispatch-check rev="@":
 # Lean VMAF adapter regression tests include the independent PSNR plane check.
 vmaf-adapter-check rev="@":
     just snap-cargo {{rev}} test -p zenmetrics-cli --no-default-features --features cpu-vmaf --lib metrics::vmaf
+
+# Explicit named weight-consent propagation; no default consent.
+iqa-weight-consent-tests:
+    python3 benchmarks/iqa_compete_2026-10-16/test_weight_consents.py
+
+# Requires explicit owner authorization for a separate consent-only attempt budget.
+iqa-consent-retry config:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_consent_retry.py '{{config}}'

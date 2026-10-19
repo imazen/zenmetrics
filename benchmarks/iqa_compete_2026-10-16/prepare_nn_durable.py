@@ -15,6 +15,19 @@ from selection import select_metrics
 
 NEURAL = LEARNED | {'ahiq', 'dmm'}
 
+# Exact names consumed by the frozen native CLI's WeightsConsent adapter.
+CONSENT_COLUMNS = frozenset({'ckdn', 'afine', 'dreamsim', 'ahiq', 'liqe', 'hyperiqa', 'paq2piq', 'pieapp'})
+
+
+def resolve_weight_consents(requested, metrics):
+    """Expand an explicit caller acceptance, never grant consent by default."""
+    names = {name.strip() for name in requested.split(',') if name.strip()}
+    if names == {'all'}:
+        names = CONSENT_COLUMNS.intersection(metrics)
+    elif names - CONSENT_COLUMNS:
+        raise ValueError('unknown explicit weight consent names: ' + ','.join(sorted(names - CONSENT_COLUMNS)))
+    return ','.join(sorted(names))
+
 
 def model_files(directory, prefix):
     import onnx
@@ -63,6 +76,7 @@ def main():
     metrics = sorted(select_metrics(a.metrics, eligible))
     if not metrics or set(metrics) - eligible:
         raise ValueError('requested NN routes are not compiled')
+    accepted_weights = resolve_weight_consents(a.accept_weights, metrics)
     sources = json.loads(a.models.read_bytes())
     if set(metrics) - sources.keys():
         raise ValueError('missing caller-supplied model directories: ' + str(sorted(set(metrics) - sources.keys())))
@@ -124,13 +138,14 @@ def main():
     for template in templates:
         for metric in metrics:
             worker_env = dict(runtime_env, ZENMETRICS_NN_MODEL_DIR='models/' + metric,
-                              ZENMETRICS_NN_ENGINE=a.engine, ZENMETRICS_NN_ACCEPT_WEIGHTS=a.accept_weights)
+                              ZENMETRICS_NN_ENGINE=a.engine, ZENMETRICS_NN_ACCEPT_WEIGHTS=accepted_weights)
             if a.engine == 'ort-webgpu':
                 worker_env['WGPU_BACKEND'] = 'metal'
             cells.append(dict(template, metric_name=metric, device={'rten': 'cpu', 'ort-cuda': 'cuda', 'ort-webgpu': 'metal'}[a.engine],
                               worker_environment=worker_env, asset_paths=per_model[metric] + runtime_assets))
     manifest.update(binary_sha256=sha(a.binary), input_sha256=inputs, cells=cells)
     manifest['metadata'].update(metrics=metrics, engine=a.engine, features=build['features'],
+                                weight_consent=dict(requested=a.accept_weights, resolved=accepted_weights, explicit_only=True),
                                 omitted_slow_metrics=sorted(eligible - set(metrics)) if a.metrics == 'all' else [],
                                 runner_sha256={name: sha(a.output / name) for name in ('durable.py', 'mac_service.py', 'admission_recovery.py')},
                                 source_commit=build['source_commit'], build_receipt_sha256=sha(a.build),
