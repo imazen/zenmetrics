@@ -1161,3 +1161,11 @@ benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairB.tsv	ignored	Pinned-prim
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairC.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2.json	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
 benchmarks/port_spotcheck_2026-10-18/primary-ssim2.meta	ignored	Primary SSIMULACRA2 commands and external artifact hashes.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.meta	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
