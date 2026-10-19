@@ -120,3 +120,11 @@ octave-image-source-panel inputs references rust_build output threads image_arch
 [positional-arguments]
 vsi-image-source-panel inputs references rust_build output threads image_archive:
     nice -n 19 ionice -c 3 python3 -B run_octave_panel.py --inputs "$1" --references "$2" --rust-build "$3" --output "$4" --threads "$5" --image-archive "$6" --families vsi
+
+[positional-arguments]
+octave-panel-summary panel output label:
+    python3 -B summarize_octave_panel.py "$1" "$2" --label "$3"
+
+[positional-arguments]
+octave-panel-summary-check panel evidence:
+    python3 -B check_panel_summary.py "$1" "$2"
