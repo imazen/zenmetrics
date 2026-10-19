@@ -210,9 +210,11 @@ fn conv7_simd_col_end(w: usize) -> usize {
 /// Each lane runs the identical sequential 49-tap FMA chain as the
 /// scalar path for its own output column — one fused rounding per tap
 /// through `mul_add_portable` — so results are bit-identical on every
-/// tier (the scalar tier emulates the same lanes). Rows outside
-/// `[3, h-3)` and columns outside `[3, conv7_simd_col_end(w))` are left
-/// for the scalar border code in [`conv7`].
+/// tier (the scalar tier emulates the same lanes). Lane groups cover
+/// every row; out-of-range rows contribute zero tap-vectors in the
+/// scalar chain's tap order. Only columns outside
+/// `[3, conv7_simd_col_end(w))` are left for the scalar border code in
+/// [`conv7`].
 #[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f32x8))]
 fn conv7_core(
     token: Token,
@@ -955,6 +957,14 @@ mod conv7_tests {
                 assert_eq!(v3[c].to_bits(), want[c].to_bits(), "v3 gray {c} differs");
             }
         }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            let mut v4 = vec![f32::NAN; w];
+            gray_row_core_v4x_t(t, &row, w, &mut v4);
+            for c in 0..w {
+                assert_eq!(v4[c].to_bits(), want[c].to_bits(), "v4x gray {c} differs");
+            }
+        }
         for c in 0..w {
             assert_eq!(scalar[c].to_bits(), want[c].to_bits(), "scalar gray {c} differs");
         }
@@ -984,6 +994,35 @@ mod conv7_tests {
             conv7_core_v4x_t(t, &x, w, h, &k, &mut v4);
             for (i, (a, b)) in scalar.iter().zip(&v4).enumerate() {
                 assert_eq!(a.to_bits(), b.to_bits(), "v4x interior pixel {i} differs");
+            }
+        }
+    }
+
+    /// `mscn_core` is elementwise with correctly-rounded ops — every
+    /// tier must produce the identical `nr` plane.
+    #[cfg(all(feature = "_dev", target_arch = "x86_64"))]
+    #[test]
+    fn mscn_tiers_identical() {
+        use archmage::SimdToken;
+        let n = 1029usize; // tail + full groups
+        let x = genimg(n, 1, 0x517cc1b727220a95);
+        let mu = genimg(n, 1, 0x0fe1f89f9f6dd1d1);
+        let std_c = genimg(n, 1, 0x42545402321c8b1e);
+        let mut scalar = vec![f32::NAN; n];
+        mscn_core_scalar_t(archmage::ScalarToken, &x, &mu, &std_c, &mut scalar);
+        if let Some(t) = archmage::X64V3Token::summon() {
+            let mut v3 = vec![f32::NAN; n];
+            mscn_core_v3_t(t, &x, &mu, &std_c, &mut v3);
+            for (i, (a, b)) in scalar.iter().zip(&v3).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "v3 mscn {i} differs");
+            }
+        }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4xToken::summon() {
+            let mut v4 = vec![f32::NAN; n];
+            mscn_core_v4x_t(t, &x, &mu, &std_c, &mut v4);
+            for (i, (a, b)) in scalar.iter().zip(&v4).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "v4x mscn {i} differs");
             }
         }
     }

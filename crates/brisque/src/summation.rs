@@ -2,7 +2,7 @@
 //!
 //! Each sum splits its index range in half until one value remains. This
 //! specifies a deterministic addition order without any platform kernel code.
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 /// One leaf of the [`aggd_tree_sums`]/[`ggd_tree_sums`] fused walk.
 /// Lane order is fixed: [neg², pos², |x|, x²]; lanes 4..8 stay +0.
@@ -190,4 +190,83 @@ pub(crate) fn outer_sum(values: &[f32], rows: usize, columns: usize) -> Vec<f32>
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
     );
     out
+}
+
+#[cfg(all(test, feature = "_dev", target_arch = "x86_64"))]
+mod tier_tests {
+    use super::*;
+    use archmage::SimdToken;
+
+    fn genimg(n: usize, seed: u64) -> Vec<f32> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                (s as f32 / u64::MAX as f32) * 4.0 - 2.0
+            })
+            .collect()
+    }
+
+    /// Every dispatch tier replays the same per-column balanced tree —
+    /// outputs must be bit-identical.
+    #[test]
+    fn outer_sum_tiers_identical() {
+        for &(rows, columns) in &[(6, 3), (9, 37), (11, 128), (2, 13)] {
+            let v = genimg(rows * columns, 0x9e3779b97f4a7c15 ^ (rows as u64) << 8 ^ columns as u64);
+            let mut scalar = vec![f32::NAN; columns];
+            outer_sum_core_scalar_t(archmage::ScalarToken, &v, rows, columns, &mut scalar);
+            if let Some(t) = archmage::X64V3Token::summon() {
+                let mut v3 = vec![f32::NAN; columns];
+                outer_sum_core_v3_t(t, &v, rows, columns, &mut v3);
+                assert_eq!(
+                    scalar.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                    v3.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                    "v3 outer_sum {rows}x{columns}"
+                );
+            }
+            #[cfg(feature = "avx512")]
+            if let Some(t) = archmage::X64V4xToken::summon() {
+                let mut v4 = vec![f32::NAN; columns];
+                outer_sum_core_v4x_t(t, &v, rows, columns, &mut v4);
+                assert_eq!(
+                    scalar.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                    v4.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                    "v4x outer_sum {rows}x{columns}"
+                );
+            }
+        }
+    }
+
+    /// `quad_tree_sums` tiers — the fused four-statistic walk replays
+    /// each halving tree's association on every tier.
+    #[test]
+    fn quad_tree_sums_tiers_identical() {
+        for &n in &[8usize, 9, 33, 255, 1024, 4099] {
+            let x = genimg(n, 0x2545f4914f6cdd1d ^ n as u64);
+            let scalar = quad_tree_sums_scalar_t(archmage::ScalarToken, &x);
+            if let Some(t) = archmage::X64V3Token::summon() {
+                let v3 = quad_tree_sums_v3_t(t, &x);
+                for k in 0..4 {
+                    assert_eq!(
+                        scalar[k].to_bits(),
+                        v3[k].to_bits(),
+                        "v3 quad n={n} stat {k}"
+                    );
+                }
+            }
+            #[cfg(feature = "avx512")]
+            if let Some(t) = archmage::X64V4xToken::summon() {
+                let v4 = quad_tree_sums_v4x_t(t, &x);
+                for k in 0..4 {
+                    assert_eq!(
+                        scalar[k].to_bits(),
+                        v4[k].to_bits(),
+                        "v4x quad n={n} stat {k}"
+                    );
+                }
+            }
+        }
+    }
 }
