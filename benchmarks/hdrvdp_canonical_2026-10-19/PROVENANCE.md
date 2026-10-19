@@ -98,3 +98,8 @@ Their sha256 list is [`crop_img_sha256.txt`](crop_img_sha256.txt).
   configuration search, port change) did not start: the lane was wound down
   by the owner after this step. The remaining work is listed in the lane
   report.
+
+## Successor upstream evidence
+
+Official release archives, hashes, CTC conditions, and the retained Octave
+compatibility audit are recorded in [UPSTREAM.md](UPSTREAM.md).
