@@ -6,9 +6,10 @@ import panel
 class Qualification(unittest.TestCase):
     def setUp(self):
         self.m = {'inputs':[{'sha256':'input'}], 'arms':{'ours':{'build_identity':'rust','sample_count':1},'canonical':{'build_identity':'oracle','sample_count':1}}, 'scope':{'ours':'resident-rgb-call','canonical':'resident-rgb-call'},'parity_abs_bound':0.001}
+        self.m.update(schema=2,workload=dict(metric_name='brisque',width=512,height=512,threads=1,mode='score',timing_phase='warm',reference='reference',distorted='distorted'))
         self.b = {'block_id':'a','manifest_sha256':panel.identity(self.m),'arms':[]}
         for name,time in [('ours',20),('canonical',10)]:
-            self.b['arms'].append(dict(arm=name,block_id='a',build_identity=self.m['arms'][name]['build_identity'],input_identity=panel.identity(self.m['inputs']),scope=self.m['scope'][name],exit_code=0,contaminated=False,samples=[dict(ns=time,gate_clean=True)],score=1.0))
+            self.b['arms'].append(dict(arm=name,block_id='a',build_identity=self.m['arms'][name]['build_identity'],input_identity=panel.identity(self.m['inputs']),scope=self.m['scope'][name],exit_code=0,contaminated=False,samples=[dict(ns=time,gate_clean=True)],score=1.0,observed_validated=True,observed_workload=copy.deepcopy(self.m['workload'])))
 
     def test_actual_block(self):
         self.assertEqual(panel.qualify_block(self.b,self.m),2)
@@ -48,10 +49,9 @@ class Qualification(unittest.TestCase):
         from pathlib import Path
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'source';path.write_text('frozen')
-            manifest=copy.deepcopy(self.m)
-            manifest.update(metric='brisque',shape=[512,512,1,'score'],artifacts=[dict(path=str(path),sha256=panel.digest(path))])
-            manifest['inputs']=manifest['artifacts']
-            for arm in manifest['arms'].values():arm['argv']=['scorer']
+            from test_repairs import fixture
+            manifest=fixture(Path(directory))
+            manifest['artifacts'].append(dict(path=str(path),sha256=panel.digest(path)))
             panel.verify(manifest)
             path.write_text('changed')
             with self.assertRaises(ValueError):panel.verify(manifest)

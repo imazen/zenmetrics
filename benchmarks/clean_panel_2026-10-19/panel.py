@@ -11,6 +11,10 @@ import statistics
 import subprocess
 import sys
 import uuid
+import signal
+import containment
+import workload
+import runtime_closure
 
 METRICS = set('brisque butteraugli butteraugli-original cambi cambi-aic2026 mdctpsnr psnr-y-libvmaf ssim2 vmaf vmaf-4k vmaf-neg vmaf-neg-studio601 vmaf-studio601 vmaf-v1 vsi vsi-k2 vsi-k3 vsi-k4 vsi-nodownscale'.split())
 
@@ -42,6 +46,8 @@ def verify(manifest):
     for arm in manifest['arms'].values():
         if not arm['build_identity'] or not arm['argv']:
             raise ValueError('missing build identity')
+    workload.validate_contract(manifest)
+    runtime_closure.verify(manifest['native_closure'])
     bound = manifest['parity_abs_bound']
     if not math.isfinite(bound) or bound < 0:
         raise ValueError('invalid parity gate')
@@ -49,6 +55,10 @@ def verify(manifest):
 
 def qualify_block(block, manifest):
     """One contaminated arm rejects its entire block; inner samples are not pairs."""
+    if manifest.get('schema') != 2:
+        raise ValueError('unsupported receipt schema')
+    if block.get('error') or block.get('identity_error'):
+        raise ValueError('terminal block failure: ' + str(block.get('error') or block.get('identity_error')))
     if block['manifest_sha256'] != identity(manifest):
         raise ValueError('manifest identity mismatch')
     if len(block['arms']) != 2 or {a['arm'] for a in block['arms']} != {'ours', 'canonical'}:
@@ -57,6 +67,10 @@ def qualify_block(block, manifest):
     scores = {}
     for arm in block['arms']:
         name = arm['arm']
+        if any(arm.get('observed_workload', {}).get(k) != manifest['workload'][k] for k in workload.FIELDS):
+            raise ValueError('observed workload does not match manifest')
+        if arm.get('observed_validated') is not True:
+            raise ValueError('unvalidated emitted workload')
         if arm['block_id'] != block['block_id']:
             raise ValueError('wrong block pairing')
         if arm['build_identity'] != manifest['arms'][name]['build_identity']:
@@ -118,75 +132,98 @@ def run_arm(name, manifest, block_id, directory):
     contention = directory / (name + '.contention.json')
     command = [sys.executable, manifest['contention_script'], str(contention), str(log), '--',
                manifest['run_heavy'], '--mem', '12G', '--jobs', '1', '--',
-               sys.executable, manifest['resources_script'], 'timeout', '120',
-               'taskset', '-c', str(manifest['cpu']), *spec['argv']]
-    env = os.environ.copy()
+               manifest['taskset'], '-c', str(manifest['cpu']), *spec['argv']]
+    env = runtime_closure.environment(manifest['native_closure']['loader'])
     env.update({k: '1' for k in ('RAYON_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','RTEN_NUM_THREADS')})
     env.pop('PYTHONPATH', None)
     env.update(PYTHONNOUSERSITE='1', PYTHONDONTWRITEBYTECODE='1', TMPDIR=str(directory), ZENBENCH_NO_SAVE='1', ZENBENCH_CPU_POLICY='unrestricted')
     with log.open('x') as output:
-        code = subprocess.run(command, env=env, stdout=output, stderr=subprocess.STDOUT).returncode
+        code = containment.execute(command, output, env, directory/(name+'.containment.json'))
     text = log.read_text()
+    containment.write(directory/(name+'.execution.json'), dict(exit_code=code, log=str(log), log_sha256=digest(log), command=command))
     accounting = json.loads(contention.read_text()) if contention.exists() else {}
-    samples, score = [], None
-    if spec['protocol'] == 'iqa-row':
-        rows = [json.loads(l[8:]) for l in text.splitlines() if l.startswith('IQA_ROW ')]
-        if len(rows) == 1 and rows[0].get('status') == 'ok':
-            row = rows[0]
-            score = row['score']
-            samples = [{'ns': s['elapsed_ns'][0] / s['iterations'], 'gate_clean': s['gate_clean']}
-                       for s in row.get('zenbench_samples', [])]
-    elif spec['protocol'] == 'canonical-samples':
-        for line in text.splitlines():
-            if line.startswith('SAMPLE '):
-                _, _, ns, value = line.split()
-                samples.append({'ns': int(ns), 'gate_clean': accounting.get('contaminated') is False})
-                score = float(value)
-    else:
-        raise ValueError('unknown protocol')
+    observed = workload.parse(text, name, manifest, accounting.get('contaminated') is False)
+    contained = json.loads((directory/(name+'.containment.json')).read_text())
+    process = observed['observed_process']
+    matched = [p for p in contained['owned'] if p['pid']==process['pid'] and p['pgid']==process['pgid'] and p['exe']==str(Path(spec['argv'][0]).resolve())]
+    if contained['status'] != 'empty' or contained['remaining'] or len(matched) != 1:
+        raise ValueError('emitted process is not a verified contained scorer')
+    observed['observed_process'] = dict(process, start=matched[0]['start'], exe=matched[0]['exe'])
     return dict(arm=name, block_id=block_id, build_identity=spec['build_identity'],
                 input_identity=identity(manifest['inputs']), scope=manifest['scope'][name],
-                exit_code=code, contaminated=accounting.get('contaminated', True), samples=samples,
-                score=score, log=str(log), log_sha256=digest(log),
+                exit_code=code, contaminated=accounting.get('contaminated', True), **observed, log=str(log), log_sha256=digest(log),
                 contention=str(contention), resource_lines=[l for l in text.splitlines() if l.startswith('run-heavy:')])
 
 
 def acquire(manifest, output, count):
+    previous = signal.getsignal(signal.SIGTERM)
+    def interrupted(sig, frame):
+        raise KeyboardInterrupt('signal ' + str(sig))
+    signal.signal(signal.SIGTERM, interrupted)
+    try:
+        return _acquire(manifest, output, count)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _acquire(manifest, output, count):
     output.mkdir(parents=True, exist_ok=False)
-    (output/'manifest.json').write_text(json.dumps(manifest, indent=2))
+    containment.write(output/'manifest.json', manifest)
     blocks = []
-    # One bounded block per lock hold. No sleep-for-quiet loop under the locks.
     for index in range(count):
-        if (output/'STOP').exists():
-            break
+        if (output/'STOP').exists(): break
         with (Path.home()/'tmp/lilith-heavy.lock').open('a') as first, (Path.home()/'tmp/lilith-wsl-heavy.lock').open('a') as second:
             fcntl.flock(first, fcntl.LOCK_EX)
             fcntl.flock(second, fcntl.LOCK_EX)
-            if (output/'STOP').exists():
-                break
-            verify(manifest)
+            if (output/'STOP').exists(): break
             block_id = str(uuid.uuid4())
             directory = output/block_id
             directory.mkdir()
             order = ['ours','canonical'] if index % 2 == 0 else ['canonical','ours']
-            block = dict(block_id=block_id, manifest_sha256=identity(manifest), order=order, arms=[])
-            (directory/'started.json').write_text(json.dumps(block))
-            for name in order:
-                block['arms'].append(run_arm(name,manifest,block_id,directory))
+            block = dict(block_id=block_id, manifest_sha256=identity(manifest), order=order, arms=[],
+                         arm_states={n:'not-started' for n in order}, status='started')
+            containment.write(directory/'started.json', block)
+            phase = 'pre-verification'
+            interrupted = False
             try:
                 verify(manifest)
-            except ValueError as error:
-                block['identity_error'] = str(error)
-                for arm in block['arms']:
-                    arm['contaminated'] = True
-            (directory/'block.json').write_text(json.dumps(block,indent=2))
-            blocks.append(block)
-        # Expensive statistical processing is outside the acquisition boundary.
-        result = summarize(blocks,manifest)
-        (output/'summary.json').write_text(json.dumps(result,indent=2))
-        print(json.dumps(result),flush=True)
+                for name in order:
+                    phase = 'arm:' + name
+                    block['arm_states'][name] = 'running'
+                    containment.write(directory/'progress.json', block)
+                    arm = run_arm(name, manifest, block_id, directory)
+                    block['arms'].append(arm)
+                    block['arm_states'][name] = 'completed'
+                    containment.write(directory/(name+'.arm.json'), arm)
+                    containment.write(directory/'progress.json', block)
+                phase = 'post-verification'
+                verify(manifest)
+                block['status'] = 'completed'
+            except BaseException as error:
+                interrupted = isinstance(error, (KeyboardInterrupt, SystemExit))
+                block['status'] = 'rejected'
+                block['error'] = dict(phase=phase, type=type(error).__name__, message=str(error))
+                if phase.startswith('arm:'):
+                    block['arm_states'][phase[4:]] = 'failed'
+                if phase == 'post-verification':
+                    block['identity_error'] = str(error)
+                    for arm in block['arms']: arm['contaminated'] = True
+            finally:
+                # Final receipts cannot be bypassed by another ordinary signal.
+                previous = {sig:signal.getsignal(sig) for sig in (signal.SIGTERM,signal.SIGINT)}
+                for sig in previous: signal.signal(sig, signal.SIG_IGN)
+                block['attempt_files'] = [dict(path=p.name,sha256=digest(p)) for p in sorted(directory.iterdir()) if p.is_file() and p.name not in ('block.json','progress.json')]
+                containment.write(directory/'block.json', block)
+                blocks.append(block)
+                result = summarize(blocks, manifest)
+                containment.write(output/'summary.json', result)
+                print(json.dumps(result), flush=True)
+                for sig,handler in previous.items(): signal.signal(sig,handler)
+            if block['status'] == 'rejected':
+                containment.write(output/'halted.json', dict(block_id=block_id, interrupted=interrupted))
+                break
     if (output/'STOP').exists():
-        (output/'cancelled.json').write_text(json.dumps({'completed_blocks':len(blocks)}))
+        containment.write(output/'cancelled.json', {'completed_blocks':len(blocks)})
     return blocks
 
 

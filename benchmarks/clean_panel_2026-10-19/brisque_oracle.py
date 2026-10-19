@@ -4,6 +4,8 @@ import json
 import os
 import time
 from pathlib import Path
+from panel import digest
+from workload import ADAPTER, VERSION_SUFFIX
 
 
 def main():
@@ -22,7 +24,8 @@ def main():
     r=np.fromfile(args.reference,dtype=np.uint8).reshape(512,512,3)
     d=np.fromfile(args.distorted,dtype=np.uint8).reshape(512,512,3)
     print('IQA_PROCESS '+json.dumps({'pid':os.getpid(),'pgid':os.getpgrp()}),flush=True)
-    print('VERSION pyiqa-'+pyiqa.__version__+' brisque paired-NR',flush=True)
+    print('VERSION pyiqa-'+pyiqa.__version__+VERSION_SUFFIX,flush=True)
+    print('WORKLOAD '+json.dumps(dict(metric_name='brisque',width=512,height=512,threads=torch.get_num_threads(),mode='score',timing_phase='warm',reference=str(args.reference.absolute()),distorted=str(args.distorted.absolute()),adapter=ADAPTER,adapter_sha256=digest(__file__),weights_sha256=digest(args.weights),input_sha256={'reference':digest(args.reference),'distorted':digest(args.distorted)},sample_count=10)),flush=True)
 
     def score_pair():
         # Public Rust PairedNoReference evaluates reference and distorted separately.
@@ -37,7 +40,7 @@ def main():
         start=time.perf_counter_ns()
         scores=score_pair()
         elapsed=time.perf_counter_ns()-start
-        print(f'SAMPLE {i+1} {elapsed} {scores[1]:.17g}',flush=True)
+        print('SAMPLE '+json.dumps(dict(sample_id=i+1,ns=elapsed,reference_score=scores[0],score=scores[1])),flush=True)
 
 
 if __name__=='__main__':main()
