@@ -13,6 +13,12 @@ from prepare_coverage import freeze
 def selection(report, cap):
     if not report.get('complete'):
         raise ValueError('original campaign must be terminal before retry selection')
+    for cell in report['cells']:
+        c = cell['config']
+        if (c.get('only_mode') != 'score' or max(c.get('width', 0), c.get('height', 0)) >= 7680
+                or c.get('threads') not in (1, 8) or c.get('sample_target_ns') != 100_000_000
+                or c.get('coverage_first') is not False):
+            raise ValueError('canonical scalar non-8K protocol required')
     pending, exhausted = defaultdict(list), []
     for index, cell in enumerate(report['cells']):
         if cell['status'] != 'ok' or cell['config']['timing_phase'] != 'warm':

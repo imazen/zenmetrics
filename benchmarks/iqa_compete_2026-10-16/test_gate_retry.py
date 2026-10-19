@@ -7,11 +7,20 @@ import os
 
 def cell(attempts, clean):
     return dict(cell_id=str(attempts)+str(clean), status='ok',
-                config=dict(timing_phase='warm'), attempts=[{}]*attempts,
+                config=dict(timing_phase='warm', only_mode='score', width=512, height=512, threads=8, sample_target_ns=100_000_000, coverage_first=False), attempts=[{}]*attempts,
                 row=dict(n=10, zenbench_samples=[dict(gate_clean=clean)]*10))
 
 
 class GateRetry(unittest.TestCase):
+    def test_maps_and_8k_cannot_enter_retry_scope(self):
+        c=cell(1,False)
+        c['config']['only_mode']='score+map'
+        with self.assertRaisesRegex(ValueError,'scalar non-8K'):
+            selection(dict(complete=True,cells=[c]),2)
+        c['config']['only_mode']='score';c['config']['width']=7680
+        with self.assertRaisesRegex(ValueError,'scalar non-8K'):
+            selection(dict(complete=True,cells=[c]),2)
+
     def test_verifier_uses_frozen_runner_identity(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
             bundle=Path(tmp)
