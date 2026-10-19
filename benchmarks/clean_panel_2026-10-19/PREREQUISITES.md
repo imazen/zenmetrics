@@ -27,6 +27,14 @@ review before another real seal. Old attempts and this partial attempt remain.
 Resource receipt: rc1, 24s, peak RSS 0.05 GiB, minimum available 13812 MiB,
 peak load 1.62, 12 GiB hard cap, one job. These are sealing resources.
 
+A separate real import-identity subcheck then captured 12 discovered roots and
+8,751 executable caches under both locks/run-heavy. Both immediate pre/post
+inventory checks passed without scorer execution. Binding SHA256:
+779c1ea9b481add31cde115cbfb94f1dead19e82d9966f1d8b544674cb098a88.
+This validates only import inventory stability, not full schema2 identity or
+native loading. Resource receipt: rc0, 8s, peak RSS 0.03 GiB, minimum available
+13881 MiB, peak load 2.13, 12 GiB cap/jobs1.
+
 ## Second paired-NR scalar: synthetic validation only
 
 PairedNoReference::scores already exposes distorted `brisque` and reference
