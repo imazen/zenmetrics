@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Changed
+
+- Propagate existing runtime-dispatched AVX512 support through metric consumer dependency edges, ported from `3494d8af`; preserve their existing threading features. Unsupported CPUs retain their fallback paths.
+
 ### Fixed
 
 - Fixed-factor MS-SSIM pools each scoring view independently of its twofold pyramid; unsuffixed variants retain their existing path (from `970ea199`).

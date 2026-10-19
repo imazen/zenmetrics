@@ -223,7 +223,7 @@ Across the same twelve pairs/geometries and two thread budgets, the five
 unsuffixed names produce 108 bit-identical baseline/candidate score cases and
 12 matching small-input refusals. Fixed-name behavior changes remain separate
 before/after observations; independent primary-reference comparison and
-qualified speed ratios are still missing. This SSIM correction has not landed on master.
+qualified speed ratios are still missing. The integration described below brings this correction onto master; historical fixed-factor observations retain their original implementation identity.
 
 ## Primary HaarPSI scalar grid
 
@@ -252,3 +252,35 @@ excluded from this study; AIMOS is excluded as proprietary and unreleased.
 Evidence paths, hashes, exact test commands, and resource receipts are in
 [the metadata record](review.meta). No timing ratio is supplied because none
 has qualified in this replacement panel.
+
+## Metric implementation integration, 2026-10-19
+
+The fixed-factor MS-SSIM correction from `970ea199` is integrated with the
+luma-only FSIM API from PR 92 (`c9f98a98`). Existing combined FSIM/FSIMc CLI
+outputs remain combined; callers that need only luma can use `score_luma8`
+without computing chroma. Ten SSIM tests and all 23 FSIM library tests pass,
+including direct-statistics, fixed-factor, strided, and exact luma agreement
+checks. FSIM all-target compilation, doctests (no cases), and strict all-target
+clippy pass. The debug FSIM run was interrupted during an expensive existing
+FFT test; the complete release suite subsequently passed without changing
+assertions.
+
+AVX512 dependency propagation is ported from `3494d8af`, preserving existing
+threading features and excluding that commit's lockfile and analysis edits.
+A lean CLI build also exposed a module gate that excluded the VMAF adapter
+when only `cpu-vmaf` was enabled; that gate is corrected. Runtime dispatch
+retains fallback tiers. Local checks ran on an AVX2 host and do not measure
+AVX512 performance or establish a Rust/canonical speed ratio.
+
+Reproduce with `just fixed-factor-check`, `just metric-dispatch-check`, and
+`just vmaf-adapter-check`, under the normal host resource wrapper. The FSIM
+release run completed in 16 seconds with 0.45 GiB wrapper peak RSS; the SSIM
+run completed in 21 seconds with 0.99 GiB wrapper peak RSS. These are test
+process resource receipts, not per-metric performance measurements.
+
+The separate `fix/clean-panel-diagnostic-fixture` branch correctly retains
+the tied median case (`p_order=0.89`) and exercises the original rejection
+threshold using continuous values (`p_order=0.01`). Both values were reproduced
+from its unchanged diagnostic implementation. Its full clean-panel framework
+is not imported here: its production controller is disabled, and the fixture
+repair supplies neither acquisition readiness nor a qualified ratio.

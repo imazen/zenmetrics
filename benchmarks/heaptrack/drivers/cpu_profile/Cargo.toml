@@ -38,7 +38,7 @@ metrics-parallel = [
 
 [dependencies]
 sha2 = "0.11.0"
-nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel"] }
+nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel", "avx512"] }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
 zenmetrics-abstractions = { path = "../../../../crates/zenmetrics-abstractions", optional = true }
 cubecl = { workspace = true, optional = true }
@@ -48,8 +48,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
 zenbench = { git = "https://github.com/imazen/zenbench", rev = "ac675d3", default-features = false, features = ["precise-timing", "alloc-profiling"] }
-cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
-iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
+cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std", "avx512"] }
+iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std", "avx512"] }
 zensim       = { path = "../../../../../zensim/zensim" }
 # RESOLVED VERSION: this requirement reads 0.8.1, but the workspace's
 # [patch.crates-io] supplies the LOCAL sibling, so `cargo tree -p cpu-profile -i
@@ -86,14 +86,14 @@ rgb          = "0.8"
 # accounting reflects the production allocation pattern.
 bytemuck     = "1"
 # Optional: only so `metrics-parallel` can name their `parallel` features.
-fsim         = { workspace = true, optional = true }
-haarpsi      = { workspace = true, optional = true }
-mad-iqa      = { workspace = true, optional = true }
-msssim       = { workspace = true, optional = true }
-psnrhvs      = { workspace = true, optional = true }
-vif          = { workspace = true, optional = true }
-vmaf         = { workspace = true, optional = true }
-vsi          = { workspace = true, optional = true }
+fsim         = { workspace = true, optional = true, features = ["avx512"] }
+haarpsi      = { workspace = true, optional = true, features = ["avx512"] }
+mad-iqa      = { workspace = true, optional = true, features = ["avx512"] }
+msssim       = { workspace = true, optional = true, features = ["avx512"] }
+psnrhvs      = { workspace = true, optional = true, features = ["avx512"] }
+vif          = { workspace = true, optional = true, features = ["avx512"] }
+vmaf         = { workspace = true, optional = true, features = ["avx512"] }
+vsi          = { workspace = true, optional = true, features = ["avx512"] }
 mdctpsnr     = { workspace = true, optional = true }
 # cpu-metrics only: pulls nlpd + tempfile + the native-CPU backends — the same
 # dep set this crate already builds — plus the umbrella (`zenmetrics-api`)

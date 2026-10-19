@@ -185,7 +185,7 @@ cvvdp       = { workspace = true, optional = true, features = ["std", "avx512", 
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim      = { workspace = true, optional = true }
-iwssim      = { workspace = true, optional = true, features = ["std", "parallel"] }
+iwssim      = { workspace = true, optional = true, features = ["std", "parallel", "avx512"] }
 hdrvdp      = { workspace = true, optional = true, features = ["avx512", "parallel"] }
 imgref      = { workspace = true, optional = true }
 rgb         = { workspace = true, optional = true }

@@ -206,7 +206,7 @@ pub(crate) fn to_yuv420(
 }
 
 /// Standalone CAMBI defaults with the AIC VMAF studio-601/even-crop ingress.
-#[cfg(feature = "cpu-vmaf")]
+#[cfg(all(feature = "cpu-vmaf", any(feature = "cpu-metrics", test)))]
 pub(crate) fn cambi(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Box<dyn std::error::Error>> {
     check_dims(r, d)?;
     let (w, h) = even_size(d);
@@ -216,7 +216,7 @@ pub(crate) fn cambi(r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Box<dyn std::er
 }
 
 /// Integer luma conversion observed for swscale's RGB24 to limited BT.601.
-#[cfg(feature = "cpu-vmaf")]
+#[cfg(all(feature = "cpu-vmaf", any(feature = "cpu-metrics", test)))]
 pub(crate) fn cambi_aic2026(
     r: &Rgb8Image,
     d: &Rgb8Image,

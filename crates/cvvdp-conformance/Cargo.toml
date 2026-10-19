@@ -33,7 +33,7 @@ cuda = ["cvvdp-gpu/cuda", "cvvdp-gpu/cubecl-types", "dep:cubecl"]
 wgpu = ["cvvdp-gpu/wgpu", "cvvdp-gpu/cubecl-types", "dep:cubecl"]
 
 [dependencies]
-cvvdp = { workspace = true }
+cvvdp = { workspace = true, features = ["avx512"] }
 cvvdp-gpu = { workspace = true, default-features = false, features = ["pixels"] }
 serde_json = { workspace = true }
 # `image` remains ONLY for `jpeg_roundtrip` in situations.rs: the

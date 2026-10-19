@@ -629,7 +629,7 @@ vif = { workspace = true, optional = true, features = ["std", "avx512", "paralle
 iwssim = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 mdctpsnr = { workspace = true, optional = true, features = ["std", "parallel"] }
-vmaf = { workspace = true, optional = true, features = ["simd", "parallel"] }
+vmaf = { workspace = true, optional = true, features = ["simd", "parallel", "avx512"] }
 nlpd = { path = "../nlpd", optional = true, features = ["avx512", "parallel"] }
 zenmetrics-nn = { path = "../zenmetrics-nn", optional = true }
 zenmetrics-abstractions = { path = "../zenmetrics-abstractions", optional = true, default-features = false }

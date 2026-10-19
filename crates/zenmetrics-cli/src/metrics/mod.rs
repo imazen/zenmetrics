@@ -52,7 +52,8 @@ mod ssim_pyiqa;
 mod ssimulacra1;
 mod ws_hv;
 pub use display::CvvdpDisplay;
-#[cfg(feature = "cpu-metrics")]
+// VMAF adapter tests cross-check their Y plane against classical PSNR.
+#[cfg(any(feature = "cpu-metrics", all(test, feature = "cpu-vmaf")))]
 mod classical;
 #[cfg(feature = "nn")]
 mod nn;
@@ -60,7 +61,7 @@ mod nn;
 mod nr;
 #[cfg(feature = "pyiqa-ports")]
 mod pyiqa_ports;
-#[cfg(feature = "cpu-metrics")]
+#[cfg(any(feature = "cpu-metrics", feature = "cpu-vmaf"))]
 pub mod vmaf;
 
 // ssim2 / dssim / butteraugli one-shot CPU scoring now routes through the

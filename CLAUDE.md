@@ -2008,3 +2008,10 @@ odd dimensions. Unsuffixed SSIM/MS-SSIM routes retain their existing path.
 Tests compare against independent materialized scoring views and direct
 window statistics; historical fixed-factor results must not be relabeled
 as results of this correction. Source change: `970ea199`.
+
+### Known Bugs: lean VMAF CLI feature gating (2026-10-19)
+
+Enabling `cpu-vmaf` without `cpu-metrics` compiled the scoring dispatch but
+excluded its local VMAF adapter module, resolving calls against the external
+crate instead. The module now compiles for either feature.
+`just metric-dispatch-check` covers the lean native consumer combination.

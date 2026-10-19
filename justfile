@@ -1892,3 +1892,18 @@ iqa-score-observations-tests:
 # Freeze replacement executable/runners; existing assets and source bundle stay immutable.
 iqa-worker-successor source binary build output:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_worker_successor.py '{{source}}' '{{binary}}' '{{build}}' '{{output}}'
+
+# Fixed-factor scoring regressions; run inside the usual host resource wrapper.
+fixed-factor-check rev="@":
+    just snap-cargo {{rev}} test -p fsim --release --features avx512 --all-targets
+    just snap-cargo {{rev}} test -p fsim --features avx512 --doc
+    just snap-cargo {{rev}} test -p zenmetrics-cli --no-default-features --lib ssim_pyiqa
+    just snap-cargo {{rev}} clippy -p fsim --features avx512 --all-targets -- -D warnings
+
+# Verify native metric consumer feature propagation against the pinned graph.
+metric-dispatch-check rev="@":
+    just snap-cargo {{rev}} check -p zenmetrics-cli --no-default-features --features cpu-fsim,cpu-vmaf,cpu-cvvdp,cpu-iwssim,orchestrator,orchestrator-cpu-cvvdp,orchestrator-cpu-iwssim
+
+# Lean VMAF adapter regression tests include the independent PSNR plane check.
+vmaf-adapter-check rev="@":
+    just snap-cargo {{rev}} test -p zenmetrics-cli --no-default-features --features cpu-vmaf --lib metrics::vmaf

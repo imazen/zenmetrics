@@ -36,7 +36,7 @@ cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 # CPU-side scalar reference + shared params/presets/Score types. Phase
 # 8c.1-B flipped this direction so the GPU crate consumes from the CPU
 # crate (the canonical "no GPU" reference now lives in cvvdp).
-cvvdp = { workspace = true, default-features = false, features = ["std"] }
+cvvdp = { workspace = true, default-features = false, features = ["std", "avx512"] }
 cubecl = { workspace = true }
 zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 # JSON parsing for the vendored display_models.json / color_spaces.json

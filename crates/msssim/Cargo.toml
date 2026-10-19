@@ -40,7 +40,7 @@ rayon = { version = "1.10", optional = true }
 
 [dev-dependencies]
 vmaf-head-sys = "=0.2.0"
-psnrhvs = { workspace = true }
+psnrhvs = { workspace = true, features = ["avx512"] }
 
 # Compile the CLI's actual classical kernel without its decoder graph.
 [[example]]
