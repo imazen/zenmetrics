@@ -47,9 +47,24 @@ class ExistingLocks:
         except BaseException:
             # No child can have launched from acquire; release partial admission.
             self.release(dict(no_child_launched=True));raise
-    def release(self,cleanup):
+    def prepare_release(self,cleanup):
         if self.released:raise ValueError('duplicate release')
+        # All pathname/kernel/receipt operations that can fail are attempted
+        # while both locks remain held. No release until caller proves cleanup.
+        for i,(stream,path) in enumerate(self.fds):
+            if inspect(path)!=self.expected[i]:raise ValueError('release path changed')
+            admission_receipt.lock_record(stream,path,i)
         event(self.output/'events.jsonl','cleanup-confirmed',cleanup=cleanup)
+        self.prepared=True
+    def release(self,cleanup):
+        # Acquisition failures have no child; retain the existing partial path.
+        if cleanup.get('no_child_launched') is True:
+            event(self.output/'events.jsonl','cleanup-confirmed',cleanup=cleanup)
+            self.prepared=True
+        else:self.prepare_release(cleanup)
+        self.release_prepared()
+    def release_prepared(self):
+        if self.released or not getattr(self,'prepared',False):raise ValueError('unprepared release')
         for i,(stream,path) in reversed(list(enumerate(self.fds))):
             before=fdinfo(os.getpid(),stream.fileno())
             fcntl.flock(stream,fcntl.LOCK_UN)
