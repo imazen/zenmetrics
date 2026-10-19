@@ -95,7 +95,7 @@ for ver,root,base,display in [(2,v222,'v222','ccfl-lcd'),(3,v307/'data','v307','
             compare('native3_discarded_tail_then_vs_v307/raw_'+label,a,release['raw_'+label])
 fields=list(reports[0])
 with (out/'comparisons.tsv').open('w') as f:
-    w=csv.DictWriter(f,fieldnames=fields,delimiter='\t');w.writeheader();w.writerows(reports)
+    w=csv.DictWriter(f,fieldnames=fields,delimiter='\t',lineterminator='\n');w.writeheader();w.writerows(reports)
 upstream_files={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [v221/'load_spectral_resp.m',v222/'load_spectral_resp.m',v307/'utils/load_spectral_resp.m',v307/'hdrvdp_visual_pathway.m',v307/'utils/hdrvdp_iturgb2native.m']}
 meta=dict(scipy=scipy.__version__,numpy=np.__version__,commands=commands,tables=table_properties,upstream_files=upstream_files,
           probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest(),
