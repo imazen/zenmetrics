@@ -207,3 +207,12 @@ primary-pair-prefix-publish panel output profiles:
 
 ssim2-primary-panel canonical inputs binary receipt output:
     python3 -B ssim2_primary_panel.py --canonical '{{canonical}}' --inputs '{{inputs}}' --binary '{{binary}}' --build-receipt '{{receipt}}' --output '{{output}}'
+
+ssim2-primary-cms-callers canonical panel output:
+    python3 -B trace_ssim2_cms_callers.py --canonical '{{canonical}}' --panel '{{panel}}' --output '{{output}}'
+
+haarpsi-primary-maps-publish panel output:
+    python3 -B publish_haarpsi_maps.py '{{panel}}' '{{output}}'
+
+haarpsi-primary-map-check python build source panel inputs output:
+    '{{python}}' -B check_haarpsi_maps.py --build '{{build}}' --source '{{source}}' --panel '{{panel}}' --inputs '{{inputs}}' --output '{{output}}'
