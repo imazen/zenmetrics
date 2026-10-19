@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Record exact 122-image decoded-pixel parity and spectral-stage controls, including two complete HDR2 interventions with unchanged reproduction gates (`20ae248a`, `e09003e5`, `f9a5deb5`, `7887df5b`, `2c84c79a`).
+
 - Add benchmark-only HDR2 Hermitian-completion controls for the Octave symmetric-IFFT adaptation, retaining both axis conventions and the original exact-reproduction gate (`257c403a`, `269e64fb`, `d252ddf1`).
 
 - Add owner-opted finite-only Mac Metal timing acceptance with full-call nonfinite checks, score ranges, error deltas and numerical-instability flags; retain strict historical/oracle checks and attempt budgets (`5461e05e`, `8f55d666`, `01eba514`).
