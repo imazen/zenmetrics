@@ -82,6 +82,10 @@ end
 fclose(f); fclose(out);
 if exist('symmetric_ifft_control','file')
  global HDRVDP_FFT_STATS;
- fprintf('FFT_CONTROL calls,abs_defect,relative_defect,row_delta,column_delta,axis_delta:');
- fprintf(' %.17g', HDRVDP_FFT_STATS); fprintf('\n');
+ if isempty(HDRVDP_FFT_STATS)
+  fprintf('FFT_CONTROL audit disabled; selected axis: %s\n', getenv('HDRVDP_FFT_AXIS'));
+ else
+  fprintf('FFT_CONTROL calls,abs_defect,relative_defect,row_delta,column_delta,axis_delta:');
+  fprintf(' %.17g', HDRVDP_FFT_STATS); fprintf('\n');
+ end
 end

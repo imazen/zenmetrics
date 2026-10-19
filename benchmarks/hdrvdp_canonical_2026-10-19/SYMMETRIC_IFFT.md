@@ -18,7 +18,9 @@ negative rows with conjugate/reversed-column partners, and handles DC and
 Nyquist rows separately. Its column convention transposes this operation.
 For every actual invocation it also computes the original real inverse,
 records maximum spectral conjugacy defect and output differences, and
-returns the selected convention. No transform size, padding, input, filter,
+returns the selected convention. `HDRVDP_FFT_AUDIT=0` computes only the
+selected completion/inverse for the second full-panel run; synthetic controls
+require its output to be exactly identical to audit mode. No transform size, padding, input, filter,
 display parameter or pooling operation changes. HDR2's default
 `do_si_gauss=false` leaves the separate Gaussian FFT branch inactive.
 
