@@ -283,10 +283,11 @@ fn conv_gauss_valid(img: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize)
 }
 
 /// Elementwise `out[i] = f(src[i])` — par under `parallel` when the
-/// pool has >1 thread, serial otherwise (per-element math identical).
+/// plane clears `kernel::PAR_MIN` and the pool has >1 thread, serial
+/// otherwise (per-element math identical).
 fn map2(out: &mut [f32], src: &[f32], f: impl Fn(&f32) -> f32 + Sync) {
     #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
+    if crate::kernel::par_ok(out.len()) {
         use rayon::prelude::*;
         out.par_iter_mut()
             .zip(src.par_iter())
@@ -320,7 +321,7 @@ fn fold_ranges(
             })
     };
     #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
+    if crate::kernel::par_ok(n) {
         use rayon::prelude::*;
         let parts: Vec<(f64, f64, f64, f64)> = (0..BANDS)
             .into_par_iter()
@@ -458,8 +459,11 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
     let c2 = (k2 * 255.0f32) * (k2 * 255.0f32);
     let c3 = c2 / 2.0f32;
 
-    let ((mu_r, vw, vh), (mu_d, _, _)) =
-        crate::kernel::maybe_join(|| conv_gauss_valid(r, w, h), || conv_gauss_valid(d, w, h));
+    let ((mu_r, vw, vh), (mu_d, _, _)) = crate::kernel::maybe_join(
+        w * h,
+        || conv_gauss_valid(r, w, h),
+        || conv_gauss_valid(d, w, h),
+    );
     let sq = |img: &[f32]| -> Vec<f32> {
         let mut out = vec![0.0f32; img.len()];
         map2(&mut out, img, |&v| v * v);
@@ -471,7 +475,7 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
     #[cfg(not(feature = "parallel"))]
     let ri = 0usize;
     #[cfg(feature = "parallel")]
-    if rayon::current_num_threads() > 1 {
+    if crate::kernel::par_ok(rd.len()) {
         use rayon::prelude::*;
         rd.par_iter_mut()
             .zip(r.par_iter())
@@ -482,8 +486,9 @@ fn iqa_ssim(r: &[f32], d: &[f32], w: usize, h: usize) -> (f64, f64, f64, f64) {
     for k in ri..rd.len() {
         rd[k] = r[k] * d[k];
     }
-    let (r2, d2) = crate::kernel::maybe_join(|| sq(r), || sq(d));
+    let (r2, d2) = crate::kernel::maybe_join(r.len(), || sq(r), || sq(d));
     let ((sr_c, _, _), (sd_c, _, _)) = crate::kernel::maybe_join(
+        r2.len(),
         || conv_gauss_valid(&r2, w, h),
         || conv_gauss_valid(&d2, w, h),
     );

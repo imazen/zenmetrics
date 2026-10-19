@@ -1047,3 +1047,4 @@ benchmarks/aic_refusals_2026-10-18/hdrvdp2-octave.tsv	ignored	Independent numeri
 benchmarks/aic_refusals_2026-10-18/hdrvdp2-oracle-summary.tsv	ignored	Independent numerical oracle aggregate, not runtime data
 benchmarks/aic_refusals_2026-10-18/qualification.meta	ignored	AIC convention source and resource receipt, not runtime observations
 benchmarks/opt_ssimulacra1_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssimulacra1-blur-simd branch; not a dashboard metric schema.
+benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/msssim-libvmaf-mt-gate branch; not a dashboard metric schema.
