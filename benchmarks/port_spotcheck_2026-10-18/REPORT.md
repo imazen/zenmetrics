@@ -69,6 +69,21 @@ the scoped test result, not canonical parity, ARM execution, performance, or
 approval to merge the underlying optimization. The live remote branch SHA was
 independently checked on 2026-10-19. Master receives no metric-path changes.
 
+## Fixed-factor source tooling
+
+[Oracle source patching](../iqa_compete_2026-10-16/fixed-factor-oracle.md)
+landed at `9bb02ed493db667505828642d03872306538021e`. It creates separately
+identified scratch copies of hash-pinned FSIM, VSI and PyIQA sources with one
+factor expression changed. MATLAB FSIM/VSI remain primary references; PyIQA
+FSIM/VSI are diagnostic variants, while PyIQA is primary for its SSIM names.
+Source identities, factor choice and the SSIM `downsample=True` runtime
+requirement remain explicit.
+
+Independent artifact controls and an actual CLI alias regression passed before
+landing. Those controls verify source preservation and patch provenance. They
+execute no metric and do not qualify a fixed-factor implementation, score or
+timing cell. The corresponding metric experiments remain missing.
+
 ## Qualification contract
 
 Each new observation must bind source and adapters, executable hashes, inputs,

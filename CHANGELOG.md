@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add hash-checked fixed-factor oracle source copies, exclusive artifact writes and provenance validation for MATLAB FSIM/VSI and PyIQA comparisons (`9bb02ed4`); no metric execution or existing metric-path changes.
+
 - Record canonical port-check timing exclusions and the separately tested, unmerged BRISQUE test/comment follow-up (`ef9763f2`); no existing metric path changes.
 
 - Record exact 122-image decoded-pixel parity and spectral-stage controls, including two complete HDR2 interventions with unchanged reproduction gates (`20ae248a`, `e09003e5`, `f9a5deb5`, `7887df5b`, `2c84c79a`).
