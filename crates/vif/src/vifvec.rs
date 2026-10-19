@@ -2058,6 +2058,39 @@ pub(crate) fn vifvec_core_impl(
 mod tests {
     use super::*;
 
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn covariance_is_bit_identical_across_thread_budgets() {
+        let (w, h) = (73, 81);
+        let y: Vec<f64> = (0..w * h)
+            .map(|i| ((i * 37 % 257) as f64 - 123.0) / 7.0)
+            .collect();
+        let evaluate = |threads| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(|| refparams_vecgsm(&y, w, h))
+        };
+        let serial = evaluate(1);
+        let parallel = evaluate(8);
+        assert_eq!((serial.2, serial.3), (parallel.2, parallel.3));
+        for (a, b) in serial.0.iter().zip(&parallel.0) {
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "S-field changes with worker budget"
+            );
+        }
+        for (a, b) in serial.1.iter().zip(&parallel.1) {
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "eigenvalue changes with worker budget"
+            );
+        }
+    }
+
     #[test]
     fn local_statistics_match_scalar_windows() {
         let (w, h) = (83, 77);
