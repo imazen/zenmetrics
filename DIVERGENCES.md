@@ -797,3 +797,19 @@ Every metric port or reference-version bump updates this file **in the
 same commit**: a ledger row (or delta refresh) plus a per-metric entry
 for anything that isn't pure float noise. Crate-level depth stays in the
 crate docs — this file links, it does not duplicate.
+
+
+## PyIQA SSIM precision conventions observed 2026-10-19
+
+The [twenty-name raw RGB grid](benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.md)
+retains 480 named scalar observations. The captured PyIQA 0.1.16 default dtype
+constructs a float32 Gaussian before promotion. Its original rounded SSIM class
+also promotes float32 luma coefficients. Selected-case controls through the
+unchanged original functions, passing a float64 Gaussian and (where applicable)
+float64 rounded luma, reduce the three observed differences from
+1.5453514410235236e-5 / 1.727458853739705e-7 / 3.8032963667333775e-8 to
+6.994405055138486e-15 / 3.0309088572266774e-14 / 6.40884012526044e-11.
+These are diagnostic parameter controls, not replacement reference outputs or
+new acceptance bounds. The original primary scores reproduce exactly and are
+retained. Scalar qualification remains unassigned pending a documented bound;
+no numerical threshold or expected test value changed.

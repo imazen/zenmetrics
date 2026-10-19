@@ -5,7 +5,7 @@ The original cohort was retired incomplete during its 26th case to redesign per-
 Pointwise Student-t CI of whole-block log ratios. Timing quantization/systematic error is unbounded; this is zenbench Iterate, not Confirm. Each row has GNUtime process maximum RSS and its run-heavy resource receipt. The arithmetic means and geometric paired ratio need not divide exactly.
 Source collection: d60bd5ff (arms/plan), 8413b483 (controller); exporter 0babd331.
 Publication command:
-flock ~/tmp/lilith-heavy.lock flock ~/tmp/lilith-wsl-heavy.lock ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 1 -- just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just primary-pair-prefix-publish ~/tmp/portcheck-haarpsi-pair-panel-20261019T1302 ~/tmp/portcheck-haarpsi-prefix-published-20261019T1352 --profiles ~/tmp/portcheck-haarpsi-flag-profiles-20261019T1324
+flock ~/tmp/lilith-heavy.lock flock ~/tmp/lilith-wsl-heavy.lock ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 1 -- just --justfile benchmarks/iqa_compete_2026-10-16/oracle.just primary-pair-prefix-publish ~/tmp/portcheck-haarpsi-pair-panel-20261019T1302 ~/tmp/portcheck-haarpsi-prefix-published-20261019T1352 ~/tmp/portcheck-haarpsi-flag-profiles-20261019T1324
 Actual first execution called the same Python exporter directly; exact command is retained in the wrapper log below.
 run-heavy: done rc=0 0s | peak-RSS 0.03GiB | min-avail 13543MiB | peak-load 1.08
 Site-readable summary.tsv is this prefix, not the complete metric inventory. haarpsi-paired-prefix.tsv retains this cohort when summary.tsv later advances. Four above-1.08 cells have exact-configuration profiles, indexed with hashes in haarpsi-paired-prefix.json. Full profiles remain outside Git.
@@ -15,3 +15,5 @@ c9a214005adaa8ed5f34b922c4e452690aabdb0d92e19c57ec5d857dd893d113  /home/lilith/t
 f179f2a1e1461f47659ce489e28b2c6e9d68adb74f49360ebdf92bf362211aea  /home/lilith/tmp/portcheck-haarpsi-prefix-published-20261019T1352.log
 28597ae59eb28220a31d5938830df5515d5b97a74ff200314966090b8f6bd25c  /home/lilith/tmp/portcheck-haarpsi-pair-panel-20261019T1302/retirement.json
 617976d1f6ad616051e207ac8394678164c8df45534f9e7ae8dc27931596cf35  /home/lilith/tmp/portcheck-haarpsi-pair-plan-20261019T1302/plan.json
+
+Separate balanced full plan (active at publication): /home/lilith/tmp/portcheck-haarpsi-balanced-full-20261019T1352/plan.json; 96 cases; canonical warm calls 100/10/1/1 at 64/odd/1MP/4K; cold blocks128 below4K,20 at4K; warm blocks20. Original prefix is never pooled with this cohort.

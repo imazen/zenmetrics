@@ -303,3 +303,41 @@ threshold using continuous values (`p_order=0.01`). Both values were reproduced
 from its unchanged diagnostic implementation. Its full clean-panel framework
 is not imported here: its production controller is disabled, and the fixture
 repair supplies neither acquisition readiness nor a qualified ratio.
+
+
+## Execution update: full SSIM grid and first paired timing table
+
+Missing remains: most classical and all learned execution matrices, qualified
+speed ratios, comparable maps for methods exposing them, and complete runtime
+closure. The newly published [summary.tsv](summary.tsv) is a **25/96-case
+partial HaarPSI timing prefix**, with zero qualified timing cells. It is now
+available to the site generator and optimization queue. The earlier missing
+summary statement above describes the preceding snapshot.
+
+All four above-1.08 cells in this prefix have exact-configuration whole-process
+CPU profiles, bound in [the artifact index](haarpsi-paired-prefix.json).
+The 64×64 photo RGB 28-thread warm observation is 4.025143785 ms Rust versus
+0.529015065 ms canonical, paired geometric ratio 7.609710678332473,
+CI95 [7.4508351580649865, 7.771973930364894]. Its resource receipt is
+`run-heavy: done rc=0 67s | peak-RSS 0.08GiB | min-avail 14206MiB | peak-load 1.34`.
+This is exploratory Iterate-mode evidence. The profile includes kernel
+scheduling, futex wakeups and Rayon worker activity; its whole-process sample
+percentages are not exclusive metric-kernel costs. `pool_map` schedules 32
+bands whenever more than one worker is available, including these tiny maps.
+No optimization has been applied in this review.
+
+The original timing cohort was retired incomplete during case 26 to redesign
+per-invocation sample budgets. All raw completed and partial evidence remains.
+A separate full 96-case plan now declares sampling and block counts before
+execution; results will not pool the old and new cohorts. Its active local
+path is recorded in the [prefix metadata](haarpsi-paired-prefix.meta).
+
+The [full PyIQA SSIM study](primary-pyiqa-ssim.md) now includes all twenty
+registered names: 480 observations, 390 scored comparisons and 90 matching
+size refusals. Acceptance bounds remain unassigned. Three caller-parameter
+precision controls reproduce original primary values exactly and isolate
+Gaussian/luma precision effects in those cases. Original primary values and
+failed timeout attempts remain available. No bound or test expectation changed.
+The [full SSIM index](primary-pyiqa-ssim.json),
+[precision controls](primary-pyiqa-ssim-precision.json), and
+[command/source receipts](primary-pyiqa-ssim.meta) distinguish these cohorts.
