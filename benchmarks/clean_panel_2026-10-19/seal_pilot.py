@@ -12,7 +12,7 @@ from panel import digest, identity
 
 
 def record(path):
-    path=Path(path).resolve()
+    path=Path(path).absolute()
     return {'path':str(path),'sha256':digest(path)}
 
 
@@ -53,8 +53,8 @@ def main():
         inputs.append(record(dest))
     inventory=root/'sources.json'
     inventory.write_text(json.dumps(source_inventory(args.build),sort_keys=True))
-    receipts=[record(inventory),record(baseline),record(weights)]
-    for name in ['rustc.txt','cargo.txt','features.txt','metadata.json','build-command.txt','model-preload.meta.json','luma-maps.meta.json']:
+    receipts=[record(inventory),record(baseline),record(weights),record(here/'seal_pilot.py'),record(here.parent/'build_baseline.sh')]
+    for name in ['build-resource.log','rustc.txt','cargo.txt','features.txt','metadata.json','build-command.txt','model-preload.meta.json','luma-maps.meta.json']:
         dest=root/name;shutil.copy2(args.build/name,dest);receipts.append(record(dest))
     for name in ['Cargo.lock','ci/sibling-pins.tsv']:
         dest=root/Path(name).name;shutil.copy2(source/name,dest);receipts.append(record(dest))
@@ -69,7 +69,7 @@ def main():
         for name in sorted(files):
             path=Path(directory)/name
             if path.is_file() and path.suffix not in {'.pyc','.pyo'}:environment.append(record(path))
-    environment.extend([record(args.python),record(here/'brisque_oracle.py')])
+    environment.extend([record(args.python),record(sys.executable),record(here/'brisque_oracle.py')])
     runtime=json.loads(subprocess.check_output([str(args.python),'-c','import sys,sysconfig,json;print(json.dumps(dict(version=sys.version,stdlib=sysconfig.get_path("stdlib"))))'],text=True))
     stdlib=Path(runtime['stdlib'])
     for path in sorted(stdlib.rglob('*.py')):
@@ -80,7 +80,8 @@ def main():
             fields=line.strip().split()
             paths=[f for f in fields if f.startswith('/')]
             if paths and Path(paths[0]).is_file():environment.append(record(paths[0]))
-    packages=subprocess.check_output([str(args.python),'-m','pip','freeze','--all'],text=True)
+    packages=json.loads(subprocess.check_output([str(args.python),'-c',
+        'import importlib.metadata as m,json;print(json.dumps(sorted((d.metadata.get("Name",""),d.version) for d in m.distributions())))'],text=True))
     canonical={'runtime':runtime,'packages':packages,'artifacts':environment,'weights':record(weights)}
     canonical_file=root/'canonical.json';canonical_file.write_text(json.dumps(canonical,indent=2))
     config=root/'cell.json'
