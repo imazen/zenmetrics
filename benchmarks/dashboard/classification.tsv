@@ -1199,3 +1199,7 @@ benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fi
 benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
 benchmarks/rebenchmark_since_f7668c7/scope.json	ignored	Source-audited rerun scope; no measurements or qualification claims.
 benchmarks/rebenchmark_since_f7668c7/order.tsv	ignored	Historical timing references used only for changed-metric scheduling; new executable timings are separate measurements.
+benchmarks/iqa_changed_2026-10-19/launch-and-controls.json	ignored	CPU campaign launch and control/resource provenance; actual timings are collected separately.
+benchmarks/iqa_changed_2026-10-19/i265/observations.jsonl	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
+benchmarks/iqa_changed_2026-10-19/i265/snapshot.json	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
+benchmarks/iqa_changed_2026-10-19/i265/timings.csv	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.

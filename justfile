@@ -1957,3 +1957,10 @@ clean-panel-monitor-control binary source_manifest output:
 
 clean-panel-monitor-repair-check current output retained_author retained_reviewer:
     python3 benchmarks/clean_panel_2026-10-19/monitor_repair_controls.py {{current}} {{output}} {{retained_author}} {{retained_reviewer}}
+
+# Bind portable scalar timing rows to their worker memory/resource receipts.
+iqa-portable-collect output +roots:
+    python3 benchmarks/iqa_compete_2026-10-16/collect_portable_results.py '{{output}}' {{roots}}
+
+iqa-portable-collect-check:
+    python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_portable_collection.py

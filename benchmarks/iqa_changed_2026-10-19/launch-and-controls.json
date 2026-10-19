@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "source": "519a6ecb63cfa596904f240ae083c1685b0e96ab",
+  "nn_cpu_stops": {
+    "i265": {
+      "checked_utc": "2026-10-19T16:35:49.307472+00:00",
+      "no_owned_watchdogs": true,
+      "services": [
+        "iqa-scalar-c97f716d972ef1ad.service"
+      ],
+      "stopped_idle_pids": [],
+      "raw_sha256": "fa0ecbe220c558f98ba99123c92983f1e1e0c387046a7040fe44e5539059d38e",
+      "raw_path": "/home/lilith/tmp/iqa-changed-20261019T1620Z/nn-stop/boundary.json"
+    },
+    "mac": {
+      "checked_utc": "2026-10-19T16:53:31.881301+00:00",
+      "no_owned_watchdogs": true,
+      "services": [
+        "user/501/io.imazen.iqa-scalar.e5cedae3de4c5d74"
+      ],
+      "stopped_idle_pids": [
+        66898
+      ],
+      "raw_sha256": "0d68d2f178f4ce399338a1dfca1b5089b7e71330830062bcac57049f747be481",
+      "raw_path": "/home/lilith/tmp/iqa-changed-20261019T1620Z/mac-nn-stop.json"
+    }
+  },
+  "resolve_commands": {
+    "i265": "systemctl --user show iqa-scalar-c97f716d972ef1ad.service -p ActiveState -p MainPID",
+    "mac": "launchctl print user/501/io.imazen.iqa-scalar.e5cedae3de4c5d74"
+  },
+  "controls": {
+    "i265": {
+      "rows": 4,
+      "status": "PASS",
+      "scope": "PSNR/GMSD scalar1+8 five samples",
+      "seconds": 4,
+      "peak_rss_gib_rounded": 0.13
+    },
+    "mac": {
+      "rows": 4,
+      "status": "PASS",
+      "scope": "PSNR/GMSD scalar1+8 five samples"
+    }
+  },
+  "build_resources": {
+    "i265": {
+      "rc": 0,
+      "seconds": 97,
+      "peak_rss_gib_rounded": 0.87,
+      "memory_guard": "12G cgroup"
+    },
+    "mac": {
+      "rc": 0,
+      "seconds": 743,
+      "peak_rss_gib_rounded": 0.99,
+      "memory_guard": "12G monitored process-tree RSS; no cgroup"
+    }
+  },
+  "sources_and_results_preserved": true,
+  "tag_creation": false,
+  "scope": {
+    "i265": "27 changed CPU names",
+    "mac": "27 changed CPU names",
+    "r7900x": "all compiled non-NN CPU names plus six private dvifmish routes; first27 excluded from remaining phases",
+    "threads": [
+      1,
+      8
+    ],
+    "scalar_only": true,
+    "non_8k_first": true
+  }
+}
