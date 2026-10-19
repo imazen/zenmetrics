@@ -1892,3 +1892,7 @@ iqa-score-observations-tests:
 # Freeze replacement executable/runners; existing assets and source bundle stay immutable.
 iqa-worker-successor source binary build output:
     python3 benchmarks/iqa_compete_2026-10-16/prepare_worker_successor.py '{{source}}' '{{binary}}' '{{build}}' '{{output}}'
+
+# Independent block acquisition controls; no metric benchmark is launched.
+clean-panel-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/clean_panel_2026-10-19 -p 'test_*.py'
