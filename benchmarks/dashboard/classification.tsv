@@ -1431,3 +1431,8 @@ benchmarks/aic_rescore_2026-10-20/native-aic61.csv	ignored	Native resumable AIC 
 benchmarks/aic_rescore_2026-10-20/comparison.tsv	ignored	Native resumable AIC score qualification; numerical rows, not a timing panel.
 benchmarks/rebenchmark_since_f7668c7/order_current_after_flip_2026-10-20.tsv	ignored	Historical scheduling hints only; observed i265 1024x1024 one-thread medians, no current implementation speed claim
 benchmarks/canonical_recheck_2026-10-19/dssim-reference-lineage.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/original-wd-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/psnr-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/musiq-numpy125-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/cohorts-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cohorts-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

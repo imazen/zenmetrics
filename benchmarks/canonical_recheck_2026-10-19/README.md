@@ -529,3 +529,7 @@ do not establish agreement with the author repository. The
 Primary canonical comparisons are being replayed against author DSSIM 3.5.1
 at `kornelski/dssim` `0e44c9b7`, retaining the same native code and bounds.
 The older-fork map results are retained with that identity too.
+
+## Completed initial learned pass, 2026-10-20
+
+The initial learned pass has observations for all 28 requested non-PieAPP names. WD passes at both thread settings: one-thread absolute difference 0, Rust/canonical time ratio 0.11094338612430271; eight-thread difference 1.862645149230957e-9, ratio 0.07819718004981498. Last blocks: 293s / 84s, peak-RSS 2.34 / 2.35 GiB, minimum available 10029 / 11760 MiB, peak load 5.57 / 4.89. These are representative 512×512 scalar comparisons, not completion of the multi-size, map or cold matrix. The three original STLPIPS import failures remain retained with their already completed replacements.

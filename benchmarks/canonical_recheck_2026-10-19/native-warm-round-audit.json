@@ -1,11 +1,11 @@
 {
-  "observed_blocks": 2041,
-  "successful_native_arms": 1984,
+  "observed_blocks": 2102,
+  "successful_native_arms": 2045,
   "missing_native_arms": 57,
   "required_rounds": 10,
   "findings": 0,
-  "raw_manifest": "~/tmp/local-canonical-20261019T2330/native-warm-round-audit-published-20261020T112919Z.json",
-  "raw_manifest_sha256": "9517d257a4a329165560b93e15d9109f11433cd073837bc66fab47365c8913dd",
+  "raw_manifest": "~/tmp/local-canonical-20261019T2330/native-warm-round-audit-published-20261020T123638Z.json",
+  "raw_manifest_sha256": "f7602cfb7fd994d20959246190431bee84abb0558d0f982826e9abf1160f6101",
   "auditor_sha256": "6e648e9937fb60d2a4d4304af920e1b0bf821f14546d83dfe5868623fb40cbef",
   "qualification": "retained successful arms only; missing arms are reported separately; no parity, matrix-completeness or performance acceptance"
 }
