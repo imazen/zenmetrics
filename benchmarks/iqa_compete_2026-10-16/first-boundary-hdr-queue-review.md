@@ -61,6 +61,11 @@ No evaluator ran. Result SHA256:
 `080f5d6a5e2915f77d286e7da81e30ec44c2d71cd13d50f1f412753a8584d809`.
 Wrapper: rc=0, 0 seconds, peak RSS 0.02 GiB, minimum available 15146 MiB,
 peak load 3.84. These are static-controller resource observations.
+The old coordinator already checked the seal file's explicit hash; the changed
+seal control exercises the audit's own binding. Old acceptance in that fixture
+refers to `checked_case` alone, not an end-to-end old coordinator bypass. The
+old coordinator's concrete closure gap concerns artifacts covered by the seal
+and retained arms, whose bytes can change while the seal/summary files do not.
 
 The corrected source commit is `d5e7bacd8e8db17f00a6e7cb4058d8970d02dc2f`.
 Tested copies match tracked queue SHA256
