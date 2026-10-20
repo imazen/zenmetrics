@@ -324,6 +324,20 @@ selection and refusal of changed evidence. See the
 
 ### Current forty-route local comparison, 2026-10-20
 
+The later [timing-boundary review](../benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix.md)
+identifies setup differences on four HDR routes, six VMAF model routes and
+DSSIM. A manifest may now supply `scope_dispositions`, a mapping from route
+name to its source-backed explanation. `bench-iqa-canonical-compare` records
+those caveats in a new plan, retains all numerical checks and withholds a
+comparable timing ratio for those cases. It does not rewrite older plans or
+observations, loosen a numerical bound or approve an exception. Unknown route
+names and empty explanations are refused.
+
+`just bench-iqa-canonical-scoped-check` verifies ratio withholding, preservation
+of numerical gates and refusal to overwrite retained plans. The local base HDR
+reference fixture supports only threads 1/8; the generic `1,28` example above
+does not qualify it for a 28-thread request.
+
 The [current40 command receipt](../benchmarks/canonical_recheck_2026-10-19/local40-current40worker-command.json)
 records successful preparation of all 40 changed routes at threads 1/8 (80 cases),
 including the revised base HDR names. On this box, run:

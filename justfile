@@ -1696,8 +1696,15 @@ bench-iqa-canonical-changed manifest output *options:
 
 # Compare the exact manifest scope; select thread budgets explicitly (default 1,8).
 bench-iqa-canonical-compare manifest output threads="1,8" *options:
-    just bench-iqa-canonical-ordered-plan '{{manifest}}' '{{output}}.plan.json' --threads '{{threads}}'
+    just bench-iqa-canonical-scoped-plan '{{manifest}}' '{{output}}.plan.json' --threads '{{threads}}'
     just bench-iqa-canonical '{{output}}.plan.json' '{{output}}' {{options}}
+
+# Keep numerical gates and withhold timing ratios for explicitly caveated scopes.
+bench-iqa-canonical-scoped-plan manifest output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_scoped_canonical.py '{{manifest}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-scoped-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_scoped_canonical
 
 # One current native worker plus explicit original-reference plans, changed routes only.
 bench-iqa-canonical-changed-plan manifest output *options:
