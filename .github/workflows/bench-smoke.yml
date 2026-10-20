@@ -33,13 +33,13 @@ jobs:
         run: bash scripts/ci/clone-siblings.sh
       - name: Executable identity regression tests
         run: cargo test --locked --release -p cpu-profile --features compete,metrics-parallel --bin bench-iqa executable_identity
-      - name: Build and run two CPU metrics
-        run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native
+      - name: Build and run two supplemental smoke metrics
+        run: just bench-iqa-supplemental smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native
       - name: Preserve first Windows executable
         if: runner.os == 'Windows'
         run: cp target/release/iqa-compete.exe target/first-iqa-compete.exe
       - name: Verify resume
-        run: just bench-iqa smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native | tee "$HOME/tmp/bench-smoke/resume.log"
+        run: just bench-iqa-supplemental smoke ssim2,gmsd --host ci --fixture synthetic-v1 --skip-native | tee "$HOME/tmp/bench-smoke/resume.log"
       - name: Require no new timed cells
         run: |
           if ! grep -q 'added=0 skipped=' "$HOME/tmp/bench-smoke/resume.log"; then
