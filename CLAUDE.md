@@ -2156,5 +2156,7 @@ native settings, budgets and numerical bounds are preserved. See the
 The new FLIP SIMD module is included directly by `cpu-profile`, so its
 archmage and zenmetrics-math references must also be declared in that
 benchmark package. A fresh build of `7d27d22b` exposed missing direct
-dependencies and failed before scoring. The harness manifest repair is
-under local verification; production metric arithmetic is unchanged.
+dependencies and failed before scoring. The harness manifest repair passes a clean CPU benchmark build with the
+AVX-512 dependency fingerprints verified. The build reports 144s, peak-RSS
+0.88 GiB, minimum available 10210 MiB and peak load 6.51. Production metric
+arithmetic is unchanged.

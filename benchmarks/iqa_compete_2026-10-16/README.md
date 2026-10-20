@@ -391,3 +391,29 @@ Directly included metric modules compile in the benchmark package. The
 `compete` feature therefore enables its own `avx512` cfg and declares the
 same archmage, magetypes and zenmetrics-math dependencies as the CLI. Runtime
 dispatch remains enabled; no native-CPU compiler flag is required.
+
+`just bench-iqa-canonical-cuda-reference PYTHON ...` runs the original
+CVVDP 0.5.7 or Python-IW-SSIM callable on explicit PyTorch CUDA. Supply the
+original package/source path and any additional pure-Python dependency path.
+The wrapper reports CUDA, device and TF32 settings. Scalar materialization
+completes each call; a pre-call synchronization is outside the timer. Its
+legacy eigensystem reality checks run after timing. Numerical controls observed
+CVVDP absolute difference 9.5367431640625e-7 (existing 0.001 bound passes) and
+IW-SSIM difference 1.4385154963880709e-6 (no assigned bound). These controls
+establish neither GPU timing ratios nor full-grid parity.
+
+`just bench-iqa-canonical-nn-first PLAN NEW_OUTPUT` acquires three alternating
+fresh-process blocks per declared case. Each block uses both heavy locks and
+a 12 GiB cap, retains both first evaluations and process memory receipts, and
+checks all plan bindings before and after execution. The manifest supplies
+explicit native/canonical commands and per-arm model environments. Its output
+is a separate first-evaluation phase; warm comparison summaries remain distinct.
+
+For FR author-network routes, one evaluation scores the input pair. The generic
+“both NR images” wording in retained author-plan scope strings applies only to
+NR routes; their bound source and call logs define the actual executed boundary.
+
+`bench-iqa-canonical-nn-first-profile PLAN CASE NEW_OUTPUT` records the complete
+native probe process under caller-supplied admission. Its profile includes model
+priming, the first evaluation and the second score-stability control. Sampled
+shares therefore do not isolate the timed first evaluation.

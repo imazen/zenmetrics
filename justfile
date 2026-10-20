@@ -2283,3 +2283,15 @@ aic-precision-check binary reference distorted output:
     python3 scripts/complexity/check_aic_precision.py --binary '{{binary}}' --reference '{{reference}}' --distorted '{{distorted}}' --output '{{output}}'
 
 
+
+# Caller supplies heavy admission; the author callable runs on explicit PyTorch CUDA.
+bench-iqa-canonical-cuda-reference python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/canonical_cuda_reference_cell.py {{options}}
+
+# Controller acquires both heavy locks and a 12 GiB scope per alternating block.
+bench-iqa-canonical-nn-first plan output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_first_evaluation.py '{{plan}}' '{{output}}'
+
+# Caller supplies heavy admission; records the whole first-evaluation probe lifetime.
+bench-iqa-canonical-nn-first-profile plan case output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/profile_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}'
