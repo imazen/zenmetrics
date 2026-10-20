@@ -25,7 +25,7 @@ while true; do
   jj -R "$PRIVATE" --quiet --ignore-working-copy git fetch || echo "$ts fetch failed (private)"
   rm -rf "$BRIEF_OUT/site"
   if (cd "$WS" && scripts/complexity/brief.sh > "$BRIEF_OUT.log" 2>&1); then
-    now=$(sha256sum "$BRIEF_OUT/site/index.html" | cut -d' ' -f1)
+    now=$(grep -v 'data-build-time' "$BRIEF_OUT/site/index.html" | sha256sum | cut -d' ' -f1)  # the build-time line alone is not a change
     if [ "$now" != "$last" ]; then
       rev=$(python3 -c "import json;print(json.load(open('$BRIEF_OUT/brief_data.json'))['sources']['public'])")
       if npx --yes wrangler@4.149.0 pages deploy "$BRIEF_OUT/site" --project-name "$PROJECT" --branch main \

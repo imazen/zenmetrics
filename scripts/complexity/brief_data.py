@@ -276,10 +276,17 @@ def canonical_perf():
             if r['timing_phase'] == 'warm':
                 c.update(med=sig(float(r['median_ns']) / 1e6), mean=sig(float(r['mean_ns']) / 1e6) if r['mean_ns'] else None,
                          p10=sig(float(r['p10_ns']) / 1e6) if r['p10_ns'] else None, p90=sig(float(r['p90_ns']) / 1e6) if r['p90_ns'] else None,
-                         n=int(r['n']))
+                         n=int(r['n']), clean=int(r['warm_rounds_clean'] or 0), flagged=int(r['warm_rounds_flagged'] or 0),
+                         rounds=[sig(float(v) / 1e6) for v in (r.get('round_means_ns') or '').split(';') if v] or None)
+            for k in ('simd_tier', 'placement_policy', 'placement_cpus', 'rayon_threads_observed'):
+                if r.get(k):
+                    c[k] = r[k]
+            if r.get('peak_rss_gib_rounded'):
+                c['rss'] = float(r['peak_rss_gib_rounded'])
             else:
                 c.setdefault('reps', []).append(sig(float(r['median_ns']) / 1e6))
-    rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps')]
+    rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps'), c.get('rounds'),
+             c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus')]
             for (h, m, s, t, ph), c in sorted(cells.items())]
     cov = json.loads((d / 'coverage.json').read_text()) if (d / 'coverage.json').exists() else {}
     coverage = {}
@@ -289,7 +296,8 @@ def canonical_perf():
         coverage[h] = dict(ok=ok, cells=total)
     sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
     order = sorted(sizes, key=lambda s: sizes[s][0] * sizes[s][1])
-    return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms'],
+    return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms', 'rounds_ms',
+                        'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus'],
                 rows=rows, hosts={h: HOSTS.get(h, h) for h in sorted({r[0] for r in rows})},
                 sizes=[dict(name=s, w=sizes[s][0], h=sizes[s][1]) for s in order],
                 coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts,

@@ -15,6 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).with_name('brief_page')
 ROOT = Path(__file__).resolve().parents[2]
 E = html.escape
+LABEL_SCALE = 1.4
 ORIGIN_LABEL = {'public': 'zenmetrics', 'private': 'private port', 'dvifmish': 'dvifmish'}
 
 
@@ -63,7 +64,7 @@ class Plot:
 
     def __init__(self, w, h, xdom, ydom, xlog=True, ylog=False, margin=(56, 16, 16, 46)):
         self.w, self.h, self.xlog, self.ylog = w, h, xlog, ylog
-        self.L, self.R, self.T, self.B = margin
+        self.L, self.R, self.T, self.B = margin[0] + 14, margin[1], margin[2], margin[3] + 12
         self.xd = [math.log10(v) for v in xdom] if xlog else list(xdom)
         self.yd = [math.log10(v) for v in ydom] if ylog else list(ydom)
         self.parts, self.boxes = [], []
@@ -91,15 +92,16 @@ class Plot:
         p = self.parts
         for v in self.ticks(self.xd, self.xlog):
             x = self.X(v)
-            p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{B}"/><text class="pl-tick" x="{x:.1f}" y="{B+15}" text-anchor="middle">{xfmt(v)}</text>')
+            p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{B}"/><text class="pl-tick" x="{x:.1f}" y="{B+20}" text-anchor="middle">{xfmt(v)}</text>')
         for v in self.ticks(self.yd, self.ylog, ystep):
             y = self.Y(v)
-            p.append(f'<line class="pl-grid" x1="{L}" y1="{y:.1f}" x2="{R}" y2="{y:.1f}"/><text class="pl-tick" x="{L-6}" y="{y+4:.1f}" text-anchor="end">{(yfmt or fmt_num)(v)}</text>')
+            p.append(f'<line class="pl-grid" x1="{L}" y1="{y:.1f}" x2="{R}" y2="{y:.1f}"/><text class="pl-tick" x="{L-8}" y="{y+6:.1f}" text-anchor="end">{(yfmt or fmt_num)(v)}</text>')
         p.append(f'<line class="pl-axisline" x1="{L}" y1="{B}" x2="{R}" y2="{B}"/><line class="pl-axisline" x1="{L}" y1="{T}" x2="{L}" y2="{B}"/>')
-        p.append(f'<text class="pl-axis" x="{(L+R)/2:.1f}" y="{B+36}" text-anchor="middle">{E(xlabel)}</text>')
+        p.append(f'<text class="pl-axis" x="{(L+R)/2:.1f}" y="{B+46}" text-anchor="middle">{E(xlabel)}</text>')
         p.append(f'<text class="pl-axis" transform="translate(14,{(T+B)/2:.1f}) rotate(-90)" text-anchor="middle">{E(ylabel)}</text>')
 
     def label(self, x, y, text, cls='pl-lab', size=11, force=False):
+        size *= LABEL_SCALE  # CSS draws chart labels at about 1.4x the nominal size
         w, h = len(text) * size * 0.58 + 2, size + 2
         for dx, dy, anchor in ((6, 4, 'start'), (-6, 4, 'end'), (6, -7, 'start'), (6, 14, 'start'), (-6, -7, 'end'), (-6, 14, 'end')):
             bx = x + dx if anchor == 'start' else x + dx - w
@@ -405,6 +407,7 @@ def build(data_path, out):
 
     status_md = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()
     perf = d.get('perf') or {}
+    built = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     cov_txt = '; '.join(f"{h} {c['ok']:,} of {c['cells']:,} cells" for h, c in (perf.get('coverage') or {}).items()) or 'coverage unknown'
     synced = (perf.get('synced_utc') or 'unknown')[:16].replace('T', ' ') + ' UTC'
     kinds_js = json.dumps({m['metric']: [m['kind'], m['origin']] for m in d['metrics']})
@@ -422,6 +425,7 @@ def build(data_path, out):
 <main>
 <section class="slide title-slide">
 <p class="eyebrow">JPEG AIC-4 · image-quality metric complexity · draft</p>
+<p class="buildtime" data-build-time>Page built {built}</p>
 <h1>Counted cost vs measured runtime for image-quality metrics</h1>
 <p class="status unfinished"><strong>Unfinished data, updated as it comes in.</strong> Timing campaigns are still running ({E(cov_txt)}); neural metrics at 4K, several counts and the agreement data are incomplete or preliminary. This page rebuilds every five minutes from the latest committed results: data revision <code>{E(src["public"])}</code>, timings synced {E(synced)}.</p>
 <p class="status"><strong>Provisional.</strong> One host (Intel Core Ultra 7 265K), one image pair at 1024×1024 for the fits. Agreement uses the preliminary AIC2026 subjective JND reconstruction (public split: 42 sources, 5,768 images). Most operation counts have one counter so far. Includes {n_priv} private ports and {len(dv)} dvifmish versions.</p>
@@ -429,11 +433,26 @@ def build(data_path, out):
 </section>
 
 <section class="slide" id="perf"><h2>CPU time per metric</h2>
-<p class="slide-note">Performance only. Canonical timing campaign: the same frozen binaries and inputs on three CPUs. Each row: box = 95 % interval of the mean, whiskers = spread (warm: p10–p90 of 10 rounds; cold: min–max of 3 fresh processes), tick = median, tiny dots = single cold runs. Clusters: exact 1-D k-means on log time. Left: one log axis for every metric; right: each cluster on its own linear axis.</p>
+<p class="slide-note">Performance only. Canonical timing campaign: the same frozen binaries and inputs on three CPUs. Each metric has a 1-thread and an 8-thread row. Distribution view: whiskers = spread (warm: p10–p90 of the rounds; cold: min–max of 3 fresh processes), box = 95 % interval of the mean, tick = median, 1 px dots = every individual round or run. Fastest view: the single fastest measurement. Clusters: exact 1-D k-means on log time. The log-axis block shows every metric; below it each cluster has its own linear axis.</p>
 <div class="seg-row"><span class="seg-label">CPU</span><div class="seg" id="perf-host"></div></div>
 <div class="seg-row"><span class="seg-label">Image</span><div class="seg" id="perf-size"></div></div>
-<div class="seg-row"><span class="seg-label">Threads</span><div class="seg threads-seg"></div><span class="seg-label">Phase</span><div class="seg" id="perf-phase"></div></div>
+<div class="seg-row"><span class="seg-label">Phase</span><div class="seg" id="perf-phase"></div><span class="seg-label">View</span><div class="seg" id="perf-view"></div></div>
 <figure><div id="perfchart"></div><figcaption id="perfinfo"></figcaption>{legend_html(False)}</figure>
+</section>
+
+<section class="slide" id="methodology"><h2>How the timings are protected</h2>
+<p>The canonical timings come from zenbench-driven runs (<code>benchmarks/iqa_compete_2026-10-16/PROTOCOL.md</code>; zenbench <code>METHODOLOGY.md</code>). What each protection does, and what it does not guarantee:</p>
+<ul class="method">
+<li><b>CPU placement on hybrid CPUs.</b> The Intel Core Ultra 7 265K mixes performance and efficiency cores. On Linux each cell runs inside a cgroup cpuset restricted to one core class (performance cores 0–7 on i265), because a <code>taskset</code> mask alone cannot stop a library's thread pool from widening its affinity. zenbench verifies the placement before and after every round and records the class and enforcement status. On macOS core affinity is only advisory, so the M4 Pro runs are recorded as unrestricted placement.</li>
+<li><b>Busy detection.</b> A background sampler records whole-host CPU load (excluding the benchmark's own workers), available memory, temperature where a sensor exists, and foreign heavy processes. A round that exceeds the limits is flagged, not silently dropped. A warm cell qualifies only with ten gate-clean rounds; the row text shows clean rounds out of n.</li>
+<li><b>Admission and serialization.</b> Jobs take a shared heavy-job lock and zenbench's FIFO cooperative admission before warmup, so two benchmarks do not time each other. A launch refused for high load waits outside the lock and is retried; the refusal is kept as a row, never as a timing.</li>
+<li><b>Warm measurement.</b> The scorer is constructed and warmed first (input already resident in memory, file decoding outside the clock). Then at least ten rounds, each a batch of calls sized to about 100 ms, with iteration counts jittered ±20 % and arm order shuffled. Statistics are over round batch means, not single calls; raw and overhead-compensated times are both kept.</li>
+<li><b>Cold measurement.</b> Three fresh processes each time scorer construction plus the first full evaluation, the cost a one-shot command-line call pays.</li>
+<li><b>Resource limits.</b> Each cell runs under a hard memory cap (12 GiB cgroup on Linux) and an outer timeout under twenty minutes; peak RSS is measured by the operating system. A timeout or memory refusal is an explicit row.</li>
+<li><b>Identity.</b> Every row carries the binary hash, input hashes, engine and thread budget. Different binaries are never pooled, and a cell's score must be bit-identical across its warmup, calibration and timed calls.</li>
+</ul>
+<p class="note">Limits: a cpuset is a boundary, not a reservation; other work can still share those cores, their SMT siblings, caches and memory bandwidth. Load is checked at round boundaries, not continuously, and whole-host load can miss contention on a single core. macOS placement cannot be certified.</p>
+<p class="note">zenbench data shown per row: every round's batch mean (dots), n, gate-clean and flagged rounds, peak RSS, and (in the tooltip) SIMD tier and placement. Retained but not plotted: per-round raw versus compensated time, execution order, iteration counts and the load readings before and after each cell.</p>
 </section>
 
 <section class="slide" id="pareto"><h2>Agreement with subjective scores vs CPU time</h2>
