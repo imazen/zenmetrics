@@ -12,7 +12,7 @@ FIELDS=('host campaign source source_commit build_receipt_sha256 metric_name siz
         'cell_id attempt status cell_status qualified_timing warm_rounds_clean warm_rounds_flagged '
         'median_ns mean_ns p10_ns p90_ns n peak_rss_gib_rounded peak_rss_precision_gib '
         'os_time_max_rss_bytes memory_evidence_status config_sha256 log_sha256 sealed_result_sha256 '
-        'capture_utc protocol failure_class preferred round_means_ns placement_policy placement_cpus simd_tier rayon_threads_observed').split()
+        'capture_utc protocol failure_class preferred round_means_ns placement_policy placement_cpus simd_tier rayon_threads_observed numerical_qualification').split()
 
 
 def key(row):
@@ -37,6 +37,18 @@ def public_row(row, meta, host, campaign):
     placement=row.get('cpu_placement') if isinstance(row.get('cpu_placement'),dict) else {}
     out['placement_policy']=placement.get('policy')
     out['placement_cpus']=len(placement['cpus']) if isinstance(placement.get('cpus'),list) else None
+    if campaign.startswith('private-nn-'):
+        out['numerical_qualification']=('failed_native_gate' if out['metric_name']=='dmm-pyiqa'
+                                        else 'separate_from_timing_control')
+    return out
+
+
+def public_provenance(meta, campaign):
+    out={k:meta.get(k) for k in ['campaign','manifest_sha256','binary_sha256','inputs',
+         'source_commit','build_receipt_sha256','policy','metrics','manifest_cells']}
+    if campaign.startswith('private-nn-'):
+        # Private model file names and local paths stay in the private capture.
+        out['inputs']=dict(content_sha256=sorted(set((meta.get('inputs') or {}).values())))
     return out
 
 
@@ -100,7 +112,7 @@ def main():
                 for sample in round_rows(out,row):all_rounds.append((out,sample))
                 states[(row['source'],row['cell_id'])]=row['cell_status']
             # Report snapshots and overlays are separate hashes, retained without paths.
-            public_meta={k:meta.get(k) for k in ['campaign','manifest_sha256','binary_sha256','inputs','source_commit','build_receipt_sha256','policy','metrics','manifest_cells']}
+            public_meta=public_provenance(meta,campaign)
             public_meta['capture_utc']=meta['capture']['captured_utc']
             public_meta['exporter_sha256']=meta['capture']['exporter_sha256']
             public_meta['report_hashes']=[s['id'] for s in sources]

@@ -41,3 +41,12 @@ phase, round index and qualification. A warm point is the measured per-call
 mean within a round, not an invented timing for each iteration. The sync's
 evidence fingerprint covers both attempt and round CSVs. No raw image-quality
 scores enter either table. Missing individual round arrays stay missing.
+
+Private NN campaigns can enter the same timing-only projection after explicit
+selection in the private sync config. Their campaign names start with
+`private-nn-`; provenance exposes content hashes without model file names or
+local paths. Saved controls and remaining-only production cells share exact
+identity keys, so preferred selection counts each cell once. Timing controls
+do not establish native numerical parity: DMM retains `failed_native_gate` in
+the export even when its timing gate passes. Unrelated public NN jobs remain
+stopped.

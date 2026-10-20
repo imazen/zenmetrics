@@ -13,6 +13,15 @@ class Projection(unittest.TestCase):
         b=dict(a,impl_binary_sha='two');c=dict(a,reference_sha256='other')
         self.assertNotEqual(key(a),key(b));self.assertNotEqual(key(a),key(c))
 
+    def test_private_nn_aggregates_keep_hashes_and_failed_numerical_gate(self):
+        from publish_saved_results import public_provenance
+        meta=dict(inputs={'/private/model/graph.onnx':'abc'},capture=dict(captured_utc='now'))
+        out=public_provenance(meta,'private-nn-controls')
+        self.assertEqual(out['inputs'],dict(content_sha256=['abc']))
+        row=public_row(dict(metric_name='dmm-pyiqa',score=1.0),meta,'mac','private-nn-controls')
+        self.assertEqual(row['numerical_qualification'],'failed_native_gate')
+        self.assertNotIn('score',row)
+
 class Rounds(unittest.TestCase):
     def test_rounds_are_saved_means_and_not_invented_iterations(self):
         from publish_saved_results import round_rows
