@@ -72,6 +72,22 @@ work under both existing local admission locks and the 12GiB resource wrapper.
 Existing outputs are refused rather than overwritten. Run
 `just bench-iqa-canonical-check` for parser, failure and scope controls.
 
+To extend an existing reference contract onto a size/content grid, supply a
+`pairs.json` with a `pairs` list: each entry names `pair`, `content`, `width`,
+`height`, `reference`, `distorted`, and the two `*_sha256` values. Paths are
+relative to that manifest; inputs must be packed RGB8. The preparer verifies
+the original bindings and every input hash, retains numerical bounds and
+canonical commands, and refuses existing output files:
+
+```sh
+just bench-iqa-canonical-grid-plan SOURCE_PLAN PAIRS_JSON NEW_PLAN \
+  --metrics EXACT_NAME,OTHER_NAME --threads 1,28
+just bench-iqa-canonical NEW_PLAN NEW_RESULTS
+```
+
+This expands warm scalar coverage. Refusals remain recorded process findings;
+it does not establish matching refusal semantics, cold timing or map parity.
+
 ## Additional original implementations
 
 The explicit registry interface adds original MATLAB functions through GNU
@@ -338,6 +354,12 @@ LPIPS-VGG at one thread is borderline after the fixed 20-block follow-up:
 and straddles 1.08. Its 22 flagged native observations among 200 remain
 recorded; regression qualification is still absent.
 
+The [DISTS one-thread fixed 20-block result](dists-pair-cid22-t1-initial20-interval.json)
+is 1.1078520655203383, with 95% interval
+[1.0988772441757937, 1.1152821768564318]. It meets ±3% precision
+and remains above 1.08. All 200 native observations remain included,
+including ten with resource flags; regression qualification remains absent.
+
 For learned metrics, "warm" means resident immutable weights. Reference-image
 features are recomputed inside each complete pair call. In particular, the
 PyIQA CLI calls `Metric::evaluate`, whose port implementation uses `score_cold`;
@@ -378,3 +400,37 @@ start. Resource receipt:
 ```text
 run-heavy: done rc=0 37s | peak-RSS 1.20GiB | min-avail 11974MiB | peak-load 3.14
 ```
+
+## Completed PyIQA neural panel
+
+TOPIQ-FR, TOPIQ-FR-PIPAL, WaDIQaM-PyIQA, AHIQ-PyIQA and DMM-PyIQA pass all
+ten declared local scalar cases on the 512×512 pair (threads 1/8). AHIQ's
+maximum difference is 1.1920928910669204e-8, with Rust/canonical ratios
+0.45325707462175846 / 0.4066629018859161. DMM-PyIQA's maximum difference
+is 1.6204631279276597e-5, with ratios 0.5208965994033374 /
+0.13267680880383784, within its existing 1.78438e-4 bound.
+
+These native calls use ORT CPU. DMM-PyIQA's separate documented RTEN ladder
+misses its bound, so the compact README retains a partial-parity warning.
+That warning, and original DMM's distinct broader partial-parity record, are
+not erased by a local pass. The new ORT CPU observations do not qualify its
+unmeasured size/content grid. Final-block resource receipts:
+
+```text
+AHIQ-PyIQA, 8 threads: run-heavy: done rc=0 242s | peak-RSS 5.34GiB | min-avail 7832MiB | peak-load 8.47
+DMM-PyIQA, 1 thread: run-heavy: done rc=0 51s | peak-RSS 1.93GiB | min-avail 10930MiB | peak-load 2.78
+DMM-PyIQA, 8 threads: run-heavy: done rc=0 27s | peak-RSS 1.93GiB | min-avail 11212MiB | peak-load 3.42
+```
+
+DeepDC at eight threads has completed its initial
+[20-block follow-up](deepdc-pair-cid22-t8-initial20-interval.json):
+1.1435249287058062, 95% interval [1.0973602070974315, 1.1685640565931696].
+It remains above 1.08, but the ±4.04% interval misses the precision target.
+A fixed additional 40 blocks are queued, retaining all 26 flagged native
+observations among the initial 200. These intervals remain descriptive.
+
+The [native-round audit](native-warm-round-audit.json) checks the retained
+successful native arms against all three representations of the ten-round
+contract: row count, timing observations and recorded round means. Its raw
+manifest and hashes remain outside git. This is a structural check of the
+acquired prefix, not an assertion of complete matrix coverage.

@@ -2555,7 +2555,7 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 
 ## dmm-pyiqa
 
-FR · Learned · CPU · Reported results
+FR · Learned · CPU · Partial canonical parity
 
 **Paper: citation needed.**
 

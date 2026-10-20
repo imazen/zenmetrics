@@ -1,4 +1,58 @@
 {
+  "gmsd": {
+    "canonical": "Clunie libgmsd de646c9a / original rounded RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.09107020838862341,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "0b058519188a908f280eb43b3382cfef1d63ffe0accb187819f5590862662498",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.09107020838862341,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.734723475976807e-18,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "0b058519188a908f280eb43b3382cfef1d63ffe0accb187819f5590862662498"
+    ],
+    "qualified": false
+  },
+  "haarpsi": {
+    "canonical": "original HaarPSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.12092149389739834,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.30331331558672947,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.1793922838343462e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "haarpsi-y": {
     "canonical": "original HaarPSI / Octave 6.4",
     "check": "6/6 pass",
@@ -674,45 +728,5 @@
       "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
     ],
     "qualified": false
-  },
-  "piqe": {
-    "canonical": "pypiqe 1.2",
-    "check": "170/170 pass",
-    "ratio": 0.1027578724461734,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.1027578724461734,
-    "observed_cases": 1,
-    "expected_cases": 1,
-    "passed_cases": 1,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 4.618527782440651e-14,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
-    ],
-    "qualified": false,
-    "golden_checks": {
-      "reference": "pypiqe 1.2",
-      "checks_passed": 170,
-      "checks_expected": 170,
-      "finite_score_checks": 170,
-      "matching_errors": 0,
-      "printed_worst_abs_delta": "2.888e-12",
-      "printed_precision": "three significant digits from unchanged test",
-      "gate": "existing JND/1000",
-      "golden_tsv_sha256": "2ead26ed9db1e7faf91a53f9276c6348a12776b9ea642f268906296bd597e32a",
-      "test_source_sha256": "307d14e40acf4e5f595ac7258d2029e250641a40a63e2edaf9b88291b59af48f"
-    },
-    "golden_receipt_sha256": "98899a680fdf6faa62b5d193da1b16c93e02be92757ce338ce6e4aa2692a55a4"
   }
 }

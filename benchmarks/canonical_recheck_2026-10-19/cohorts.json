@@ -510,12 +510,12 @@
   "pyiqa-five-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/pyiqa-five-1100-run",
     "plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
-    "cases": 8,
+    "cases": 10,
     "expected_cases": 10,
     "artifacts": [
       {
         "file": "pyiqa-five-1100-run.tsv",
-        "sha256": "e86f26c5bcdbcc491890a969f6d076b516df87bbb70e61947597cf6d86ef19c8"
+        "sha256": "673c1376662030f8ea8d74427b447e680fe1d426bda0033e3011c1a1fd15a8eb"
       }
     ]
   },
@@ -576,6 +576,30 @@
       {
         "file": "deepdc-pair-cid22-t8-f525415f-confirmation-run.tsv",
         "sha256": "9a84ec3f72052efa86aa9a053de175b1433a0c492286e232ab92870786566bf7"
+      }
+    ]
+  },
+  "original-afine-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-afine-1100-run",
+    "plan_sha256": "492758fb417d4ae01eb5ae3b44995be48be68ff3e1f307b8ce8a3c14f1c1a180",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-afine-1100-run.tsv",
+        "sha256": "f26f2fef06c4202529bed70ba3d85ad5125fcb30e80919c4a1e659118a873d8d"
+      }
+    ]
+  },
+  "dists-pair-cid22-t1-f525415f-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/dists-pair-cid22-t1-f525415f/confirmation-run",
+    "plan_sha256": "5da72cbebf80059562829c95a5ff9b246d24549b4dcd6dc285034874a61ca103",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "dists-pair-cid22-t1-f525415f-confirmation-run.tsv",
+        "sha256": "e23c03ba5ecd60ba99a36f9123b2af8b7e838ebc31bd39f4c004021fe1d2144c"
       }
     ]
   }

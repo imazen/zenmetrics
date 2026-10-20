@@ -55,9 +55,12 @@ class ModelCards(unittest.TestCase):
         self.assertEqual(self.by_name['wadiqam-pyiqa']['parity_status'],'Reported results')
 
     def test_local_pass_does_not_erase_broader_partial_parity(self):
-        with patch('model_cards.comparison_results',return_value={'dmm':dict(check='2/2 pass',ratio=.5)}):
-            text=readme_section([self.by_name['dmm']])
-        self.assertIn('partial; 2/2 pass',text)
+        for metric in ['dmm', 'dmm-pyiqa']:
+            with self.subTest(metric=metric):
+                self.assertEqual(self.by_name[metric]['parity_status'],'Partial canonical parity')
+                with patch('model_cards.comparison_results',return_value={metric:dict(check='2/2 pass',ratio=.5)}):
+                    text=readme_section([self.by_name[metric]])
+                self.assertIn('partial; 2/2 pass',text)
 
     def test_checkpoint_licence_and_oracle_scopes_survive(self):
         card=self.by_name['pieapp']

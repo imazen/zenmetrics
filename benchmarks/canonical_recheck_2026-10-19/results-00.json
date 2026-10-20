@@ -1,4 +1,31 @@
 {
+  "afine": {
+    "canonical": "original A-FINE / pinned source",
+    "check": "2/2 pass",
+    "ratio": 0.9501176765716387,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "492758fb417d4ae01eb5ae3b44995be48be68ff3e1f307b8ce8a3c14f1c1a180",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9501176765716387,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.9859868478633302e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "492758fb417d4ae01eb5ae3b44995be48be68ff3e1f307b8ce8a3c14f1c1a180"
+    ],
+    "qualified": false
+  },
   "ahiq-pyiqa": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
     "check": "2/2 pass",
@@ -367,20 +394,20 @@
   },
   "dists": {
     "canonical": "DISTS-pytorch 0.1",
-    "check": "2/2 pass",
-    "ratio": 1.1295779580866616,
+    "check": "3/3 pass",
+    "ratio": 1.1078520655203383,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+    "ratio_plan_sha256": "5da72cbebf80059562829c95a5ff9b246d24549b4dcd6dc285034874a61ca103",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.1295779580866616,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 0.0,
@@ -388,7 +415,35 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "5da72cbebf80059562829c95a5ff9b246d24549b4dcd6dc285034874a61ca103",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
+    ],
+    "qualified": false
+  },
+  "dmm-pyiqa": {
+    "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+    "check": "2/2 pass",
+    "ratio": 0.5208965994033374,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
+    "ratio_engine": "ort-cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.5208965994033374,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.6204631279276597e-05,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
     ],
     "qualified": false
   },
@@ -666,60 +721,6 @@
     "plan_sha256": [
       "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
       "fb60975c2cfa9aad51ce41136f00ba45bf7274dd0f061c9b85a4aa4f22094b9d"
-    ],
-    "qualified": false
-  },
-  "gmsd": {
-    "canonical": "Clunie libgmsd de646c9a / original rounded RGB ingress",
-    "check": "2/2 pass",
-    "ratio": 0.09107020838862341,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0b058519188a908f280eb43b3382cfef1d63ffe0accb187819f5590862662498",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.09107020838862341,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.734723475976807e-18,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "0b058519188a908f280eb43b3382cfef1d63ffe0accb187819f5590862662498"
-    ],
-    "qualified": false
-  },
-  "haarpsi": {
-    "canonical": "original HaarPSI / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.12092149389739834,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.30331331558672947,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.1793922838343462e-08,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
     ],
     "qualified": false
   }

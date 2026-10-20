@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add hash-bound original-reference comparisons and the changed-route comparative
+  recipe (`952cbfc4`), explicit Chainer CPU inference fixtures (`879eceb6`), and
+  a retained ten-warm-round audit (`5b69c10f`). Local README ratios keep their
+  source, geometry, engine and broader partial-parity limits.
+
 - Pin DSSIM to the exact PR 199 source `22e9ab0` for rebenchmarking, excluding
   the later opt-in caching commit (`28742d06`). Historical benchmark cohorts
   retain their original dependency identities.

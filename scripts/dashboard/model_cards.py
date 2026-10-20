@@ -114,7 +114,7 @@ def cards():
             if comments:parity['recorded_source_comments']=comments
 
         status='Reported results' if parity.get('results') or parity.get('status') or any('reported_worst' in k or k.startswith('measured_') for k in parity) or 'Measured' in parity.get('recorded_source_comments','') or row['parity'].startswith('reported gate:') else 'Declared gate' if parity else 'Not compared' if 'not compared' in row['parity'] else 'Not documented'
-        if metric=='dmm' and parity.get('regression_floor_policy'):
+        if (metric=='dmm' and parity.get('regression_floor_policy')) or (metric=='dmm-pyiqa' and parity.get('blocker')):
             status='Partial canonical parity'
         inputs=model.get('input',{}) or ({'convention':plain(entry[5])} if len(entry)>5 else {'cli_contract':contracts.get(metric,MISSING)})
         explicit=explicit_aic_inputs(metric)
