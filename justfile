@@ -1657,10 +1657,11 @@ bench-iqa-canonical-classical-first plan output *options:
 
 # Fixed-stage confidence interval for a resident-model first-call flag.
 bench-iqa-canonical-first-confirm plan case output *options:
-    python3 -B benchmarks/iqa_compete_2026-10-16/confirm_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}' {{options}}
+    python3 -B benchmarks/iqa_compete_2026-10-16/confirm_scored_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}' {{options}}
 
 bench-iqa-canonical-first-confirm-test:
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_first_confirmation.py -v
+    python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_scored_first_confirmation.py -v
 
 # Finish missing blocks only, after the original coordinator has stopped.
 bench-iqa-canonical-resume output *options:

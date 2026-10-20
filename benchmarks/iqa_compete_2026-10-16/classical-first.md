@@ -9,6 +9,11 @@ It retains every block and refuses an interval on an execution, score or
 numerical-gate failure. Its interval remains descriptive; it does not certify
 runtime isolation or replace the warm measurements.
 
+NN first-call confirmations require an explicit finite nonnegative absolute
+bound and a passing gate in every block. The strict controller records its
+numerical dependencies and bootstrap method. The earlier controller remains
+available for already-running bounded stages; its bytes are preserved.
+
 `compare_classical_first.py PLAN NEW_OUTPUT --blocks 3` acquires one first
 evaluation per fresh process, alternating canonical/native order. It uses
 the frozen native worker's `timing_phase=cold`, `only_mode=score` path.
