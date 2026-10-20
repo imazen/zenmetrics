@@ -225,3 +225,15 @@ audited source hashes. They change no scorer, environment, input or numerical
 expectation. The comparator preserves strict versus inclusive operators.
 VIF's bound is finer than the supplied binary's six-decimal batch output;
 a CSV miss alone does not establish a port error.
+
+For recurring progress checks, `aic-canonical-partial ... --counts-only`
+verifies the same retained output hashes and cohort identities without loading
+residual statistics. It separately counts reference errors, nonfinite values
+and finite comparisons, and leaves full-cohort qualification pending. Its
+identity digest binds the sorted set of completed reference names; it does
+not qualify score agreement or restart any scoring work.
+
+Publication also runs the dashboard guard using `python3` from `PATH`.
+That interpreter must provide the dashboard's `tomllib` dependency. Select
+a compatible publication interpreter without changing the frozen scoring
+interpreters or inputs; a guard failure requires no scoring rerun.

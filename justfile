@@ -2328,8 +2328,8 @@ aic-canonical-progress scratch:
     tail -n 6 {{scratch}}/*.campaign.log
 
 # Partial observations only; output includes reference rows and stays outside git.
-aic-canonical-partial python manifest metric output:
-    {{quote(python)}} benchmarks/aic2026_full_repro_2026-10-20/canonical_partial.py {{quote(manifest)}} {{quote(metric)}} {{quote(output)}}
+aic-canonical-partial python manifest metric output *options:
+    {{quote(python)}} benchmarks/aic2026_full_repro_2026-10-20/canonical_partial.py {{quote(manifest)}} {{quote(metric)}} {{quote(output)}} {{options}}
 
 aic-canonical-provenance manifest runtime_versions *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}} {{options}}

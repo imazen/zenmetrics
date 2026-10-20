@@ -6,11 +6,12 @@ the five worst reference rows. A partial result never qualifies the cohort.
 """
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 
 from canonical_chunks import continuation_records, merge, records
-from canonical_compare import compare
+from canonical_compare import compare, finite
 from canonical_provenance import json_safe
 from canonical_run import sha
 
@@ -20,6 +21,8 @@ def main():
     parser.add_argument('manifest', type=Path)
     parser.add_argument('metric')
     parser.add_argument('output', type=Path)
+    parser.add_argument('--counts-only', action='store_true',
+                        help='verify identities, hashes and errors without residual statistics')
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError('retain previous partial report; choose a new path')
@@ -35,6 +38,9 @@ def main():
     with Path(manifest['pairs']).open() as source:
         metadata = csv.DictReader(source, delimiter='\t').fieldnames
     own, fields = records(native['result'])
+    requested, _ = records(manifest['pairs'])
+    if len(requested) != manifest['cohort_rows'] or own.keys() != requested.keys():
+        raise ValueError('native identities do not equal the complete requested cohort')
     columns = [field for field in fields if field not in metadata]
     if spec.get('native_prefix'):
         columns = [field for field in columns if field.startswith(spec['native_prefix'])]
@@ -67,17 +73,29 @@ def main():
     if not reference.keys() <= own.keys():
         raise ValueError('unknown reference identity')
     values = {key: row.get('value') for key, row in reference.items() if not row.get('error')}
-    summary, worst = compare(args.metric, spec['reference'],
-        {key: row[columns[0]] for key, row in own.items()}, values,
-        spec.get('gate'), spec.get('gate_operator', '<='))
+    own_values = {key: row[columns[0]] for key, row in own.items()}
+    counts = dict(native_rows=len(own),
+        native_nonfinite_values=sum(finite(value) is None for value in own_values.values()),
+        reference_rows=len(reference),
+        reference_errors=sum(bool(row.get('error')) for row in reference.values()),
+        reference_nonfinite_values=sum(finite(value) is None for value in values.values()),
+        finite_comparisons=sum(finite(value) is not None and finite(own_values[key]) is not None
+                               for key, value in values.items()),
+        reference_identities_sha256=hashlib.sha256(
+            ''.join(key+'\n' for key in sorted(reference)).encode()).hexdigest())
+    summary, worst = None, []
+    if not args.counts_only:
+        summary, worst = compare(args.metric, spec['reference'], own_values, values,
+                                spec.get('gate'), spec.get('gate_operator', '<='))
     report = dict(scope='partial; completed reference bundles only', cohort_rows=manifest['cohort_rows'],
         full_cohort_qualification='pending', reference_rows=len(reference), bundles=prior_bundles+len(receipts),
-        reference_errors=sum(bool(row.get('error')) for row in reference.values()),
+        reference_errors=counts['reference_errors'], identity_counts=counts,
+        analysis='identity/error counts only' if args.counts_only else 'residual statistics',
         comparison=summary, worst_five=worst, files=sources,
         manifest_sha256=sha(args.manifest), worker_sha256=sha(__file__))
     with args.output.open('x') as target:
         target.write(json.dumps(json_safe(report), indent=2, allow_nan=False)+'\n')
-    print(json.dumps(json_safe(summary), indent=2, allow_nan=False), flush=True)
+    print(json.dumps(json_safe(counts if args.counts_only else summary), indent=2, allow_nan=False), flush=True)
 
 
 if __name__ == '__main__':
