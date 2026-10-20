@@ -448,3 +448,36 @@ acquired prefix, not an assertion of complete matrix coverage.
 The [current frozen-source recheck](haarpsi-current-maps/haarpsi-maps.json) completes all 24 map cases: four sizes, three content pairs and threads 1/28. On the 3840×2160 illustration, 41 native positions per thread setting are NaN where the original weighted map is finite. The other 22 cases have no nonfinite mismatches. The largest finite-pixel difference across all cases is 1.1233741833871491e-5; no external map bound is assigned. Each native map call also checks its scalar score bits against the scalar-only API. Scalar agreement does not establish pointwise map parity.
 
 The probe links the current frozen HaarPSI rlib from source efae6b8fed9e57346157d92dffc3cdb57c44560e, verifying original crate files and the recorded luma-map adapter. Its 38s wrapper receipt reports peak-RSS 1.12 GiB, minimum available 11755 MiB and peak load 3.34. Raw planes remain outside public git, with hashes in the linked index.
+## NIQE resident-parameter amendment, 2026-10-20
+
+The original BasicSR callable opens its parameter archive on each score. Those
+earlier numerical observations remain retained; its timing ratio is withheld
+because parameter-file I/O differs from the declared resident-parameter scope.
+The [new control and plan amendment](niqe-resident-amendment.json) compares both
+images bit-for-bit against the original loader before warm acquisition. Its
+2s receipt reports peak-RSS 0.28 GiB, minimum available 12697 MiB, load 1.61.
+
+Only the 24 unexecuted NIQE commands in grid group 05 change. The other 96
+cases, every numerical bound and all native sampling settings are preserved;
+the original plan remains beside the amended plan with a backup suffix. Fresh
+512×512 thread-1/8 comparisons are running. The existing 170-case native golden
+check is independent of this reference-timing correction.
+
+ARNIQA's initial one-thread three-block comparison passes with maximum scalar
+difference 1.1920928955078125e-7, and has a descriptive ratio
+1.1888128573459844. Its fixed 20-block interval is running. The warm profile
+places 52.51% of sampled cycles in RTEN's AVX-512 GEMM; a sampled share does not
+identify the cause of the complete cross-implementation gap. Profiling receipt:
+25s, peak-RSS 0.19 GiB, minimum available 12365 MiB, load 1.94.
+ARNIQA at eight threads also passes, with an exact scalar match on this pair,
+and a descriptive initial ratio 1.4371044692018131. Its fixed 20-block
+confirmation is running; both thread settings now have warm profiles. The
+eight-thread profile receipt reports 9s, peak-RSS 0.21 GiB, minimum available
+12098 MiB and load 2.81.
+
+The [combined LPIPS-Alex eight-thread 60-block interval](lpips-alex-pair-cid22-t8-combined60-interval.json)
+is 1.2666206178082384, 95% [1.248051466404187, 1.2913325106393114],
+meeting the requested ±3% precision. All 600 native observations remain,
+including 102 resource flags. Its slowdown flag persists; full regression
+qualification remains absent. The last acquisition block's wrapper reports
+8s, peak-RSS 1.12 GiB, minimum available 11991 MiB and load 1.34.

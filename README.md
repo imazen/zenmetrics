@@ -67,9 +67,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
 | [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | original A-FINE / pin… | 2/2 pass | ≈0.95× R |
-| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | original AHIQ / pinne… | 1/2 pass | ≈0.55× R |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | original AHIQ / pinne… | 2/2 pass | ≈0.55× R |
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.45× O |
-| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
+| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | original ARNIQA / kad… | 2/2 pass | ≈1.19× R ! |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl 0.12.0 origina… | Δ 5e-05 | ≈0.39× |
 | [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl 0.12.0 origina… | Δ 0.0083 | ≈0.026× |
@@ -88,7 +88,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
 | [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core e… | 1 process errors | ≈0.48× |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | original dssim-core e… | Δ 2e-06 | ≈0.5× |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | original dssim-core e… | Δ 5.3e-06 | ≈0.5× ! |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.33× ! |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× ! |
 | [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | original FeatureSIM /… | 6/6 pass | ≈0.22× |
@@ -109,7 +109,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 1 process errors | ≈0.088× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
-| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 4/4 pass | ≈1.16× R ! |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 5/5 pass | ≈1.16× R ! |
 | [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈0.64× R |
 | [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 3/3 pass | ≈1.08× R ! |
 | [`mad`](docs/MODEL_CARDS.md#mad) | FR | author HI/LO + paper… | Δ 0 | ≈0.12× |
@@ -128,7 +128,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 6/6 pass | ≈0.028× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 1.5e-07 | ≈0.35× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | google-research/googl… | prior | — |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 | 170/170 pass | ≈0.18× |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 170/170 pass | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.06× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.04× |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
@@ -172,9 +172,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
-| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.885× |
+| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.885× |
 | [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.895× |
-| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.873× |
+| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 3/26 pass | ≈0.873× |
 | [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.945× |
 | [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.911× |
 | [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR | libvmaf 3.2.0 / named… | Δ 0.00023 | ≈0.74× |
@@ -233,7 +233,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | git clone of miccunifi/ARNIQA (no pip package), pinned 66d16eb0ff1e1655872d32c0c233614a3922aaad | not recorded | not recorded | Apache-2.0 / permissive |
+| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | original ARNIQA / kadid10k | 0.00000011920928955078125 | not recorded | Apache-2.0 / permissive |
 
 </details>
 
@@ -380,7 +380,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000001965514705881688 | not recorded | not recorded / not applicable |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000005282498001246694 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -596,7 +596,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | BasicSR 1.4.2 | 0.00009065496319360378 | not recorded | not recorded / not recorded |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | BasicSR 1.4.2 / resident parameters | 0.00009065496319360378 | not recorded | not recorded / not recorded |
 
 </details>
 

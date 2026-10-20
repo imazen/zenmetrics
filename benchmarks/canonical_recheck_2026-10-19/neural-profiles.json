@@ -89,6 +89,28 @@
       "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
       "wrapper_receipt": "run-heavy: done rc=0 13s | peak-RSS 0.58GiB | min-avail 11689MiB | peak-load 2.15",
       "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/profile"
+    },
+    {
+      "case": "arniqa-original-cid22-t1-7a07601a",
+      "threads": 1,
+      "binary_sha256": "6d160534c4f4442e54620bba03ac7ed28bf0e6ad92ba16d24dfdbc73d477e713",
+      "config_sha256": "5e4f5c66e424ad237bd05c7f73ec2e7c62bd186336dd010addc7851705ee0899",
+      "profile_sha256": "851144239cc54dc0449eabce5d6e08fd8a823fd8f4e3f9e0961b3a165db15b4d",
+      "report_sha256": "63fc33823282d6622feaa0d9c9749b147ed0c6cb30c700722cd208a8c7082953",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 25s | peak-RSS 0.19GiB | min-avail 12365MiB | peak-load 1.94",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/profile"
+    },
+    {
+      "case": "arniqa-original-cid22-t8-7a07601a",
+      "threads": 8,
+      "binary_sha256": "6d160534c4f4442e54620bba03ac7ed28bf0e6ad92ba16d24dfdbc73d477e713",
+      "config_sha256": "db9f73b99187b7ee1c0b1b5f76ad8c31608a3a02a777fbdf52c1139e512b63d6",
+      "profile_sha256": "66a8a624432d1a6cc885127bed12ec393c876c0ab49690a485b9e3a515fc39d0",
+      "report_sha256": "6d73f224684b2f3ac7ab7f8f264ae8bcbeb1495b4a542df502aaed9c3cebe4fe",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 9s | peak-RSS 0.21GiB | min-avail 12098MiB | peak-load 2.81",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/profile"
     }
   ]
 }

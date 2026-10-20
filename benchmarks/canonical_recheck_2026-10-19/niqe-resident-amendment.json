@@ -1,0 +1,25 @@
+{
+  "helper_sha256": "ea91b5cfe85bd4eb7bac4d9ac6193a62284a9c6c5a6a74e926f86742b4628977",
+  "preparer_sha256": "fad5dc31baac8d2bfa49c8b41dbf9c220473f3ddab87e1ff32893ae21ead9286",
+  "control_log_sha256": "d464f963f09a69c096682adaacb26b1fe6dde0e9fa6e840c7e192371ea36b4d5",
+  "original_future_plan_sha256": "2358e383511ea3397b2bba5eabeac5db20fe3c1e155cbd39660c1630a8527294",
+  "future_plan_sha256": "1d332baec31b23c379b7cbab083d256d62e8293e0ae3f9c815f7cd06ce66e899",
+  "replay_plan_sha256": "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d",
+  "numerical_contract": "All numerical case fields, bounds and native sampling settings preserved",
+  "schema": 1,
+  "changed_future_cases": 24,
+  "unchanged_other_cases": 96,
+  "original_score_bits": [
+    "40050b53cd560f20",
+    "40064bb73aa464c1"
+  ],
+  "resident_score_bits": [
+    "40050b53cd560f20",
+    "40064bb73aa464c1"
+  ],
+  "control_log": "~/tmp/local-canonical-20261019T2330/niqe-resident-control-v2.log",
+  "future_plan": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-05.plan.json",
+  "preserved_original_suffix": ".original-niqe-loader.bak",
+  "scope": "Resident RGB8 pair conversion, unchanged BasicSR callable, owned parameter-array copies and result release; immutable archive I/O excluded",
+  "warm_only": true
+}

@@ -1,4 +1,31 @@
 {
+  "fsim-nodownscale": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.21062659760104355,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.21848569294520634,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.329927450832713e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "fsim-y": {
     "canonical": "author FeatureSIM.m first output",
     "check": "3/3 pass",
@@ -249,7 +276,7 @@
   },
   "lpips-alex": {
     "canonical": "lpips 0.1.4",
-    "check": "4/4 pass",
+    "check": "5/5 pass",
     "ratio": 1.162649413650009,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -260,9 +287,9 @@
     "ratio_engine": "rten",
     "ratio_blocks": 20,
     "worst_ratio": 1.3014597690629857,
-    "observed_cases": 4,
-    "expected_cases": 4,
-    "passed_cases": 4,
+    "observed_cases": 5,
+    "expected_cases": 5,
+    "passed_cases": 5,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 3.1480767472003013e-10,
@@ -272,6 +299,7 @@
     "plan_sha256": [
       "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
       "843f2b4f6726bc2b60a55d15c3b68362c4ea16ae518dbd1d96109a262c92bbbc",
+      "dba0864a26e01dc15d39ef5bb11efa7ddfcbba476bc63899c895e70c9ced5c03",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
     "qualified": false
@@ -662,20 +690,20 @@
     "qualified": false
   },
   "niqe": {
-    "canonical": "BasicSR 1.4.2",
+    "canonical": "BasicSR 1.4.2 / resident parameters",
     "check": "170/170 pass",
-    "ratio": 0.1821820729695662,
+    "ratio": 0.17710703799771038,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "ratio_plan_sha256": "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 0.1821820729695662,
+    "worst_ratio": 0.17710703799771038,
     "observed_cases": 1,
-    "expected_cases": 1,
+    "expected_cases": 2,
     "passed_cases": 1,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -684,7 +712,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+      "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d"
     ],
     "qualified": false,
     "golden_checks": {
@@ -700,33 +728,5 @@
       "test_source_sha256": "099905f6a771ee886a0803fe738dc5c301c2d65b9517fd5d672ab1fedfa85030"
     },
     "golden_receipt_sha256": "98899a680fdf6faa62b5d193da1b16c93e02be92757ce338ce6e4aa2692a55a4"
-  },
-  "nlpd": {
-    "canonical": "NLPD_Pytorch / original RGB6",
-    "check": "\u0394 6.5e-07",
-    "ratio": 0.05988943081098836,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.3146162982157682,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 0,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 6.519154935880067e-07,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-      "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
-    ],
-    "qualified": false
   }
 }

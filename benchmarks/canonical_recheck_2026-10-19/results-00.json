@@ -28,7 +28,7 @@
   },
   "ahiq": {
     "canonical": "original AHIQ / pinned source",
-    "check": "1/2 pass",
+    "check": "2/2 pass",
     "ratio": 0.5532055831942069,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -38,10 +38,10 @@
     "ratio_plan_sha256": "9f9597b91a9764ebc99254a72e73d4aeaf47bd98eebebd032352636528cfdf54",
     "ratio_engine": "rten",
     "ratio_blocks": 3,
-    "worst_ratio": 0.5532055831942069,
-    "observed_cases": 1,
+    "worst_ratio": 0.6749985216326098,
+    "observed_cases": 2,
     "expected_cases": 2,
-    "passed_cases": 1,
+    "passed_cases": 2,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.390775044018966e-07,
@@ -77,6 +77,33 @@
     ],
     "plan_sha256": [
       "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
+    ],
+    "qualified": false
+  },
+  "arniqa": {
+    "canonical": "original ARNIQA / kadid10k",
+    "check": "2/2 pass",
+    "ratio": 1.1888128573459844,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 1.4371044692018131,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.1920928955078125e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8"
     ],
     "qualified": false
   },
@@ -160,9 +187,9 @@
     "ratio_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 0.02614980648123637,
-    "observed_cases": 1,
-    "expected_cases": 1,
+    "worst_ratio": 0.8009004716936965,
+    "observed_cases": 3,
+    "expected_cases": 25,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -171,6 +198,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -505,7 +533,7 @@
   },
   "dssim-gpu": {
     "canonical": "original dssim-core eec33f55 / CPU reference",
-    "check": "\u0394 2e-06",
+    "check": "\u0394 5.3e-06",
     "ratio": 0.49662437662833686,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -515,17 +543,18 @@
     "ratio_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 0.49662437662833686,
-    "observed_cases": 1,
-    "expected_cases": 1,
+    "worst_ratio": 15.983711306101481,
+    "observed_cases": 2,
+    "expected_cases": 25,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 1.965514705881688e-06,
+    "max_abs_delta": 5.282498001246694e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -688,33 +717,6 @@
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.38497604496024e-08,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
-    ],
-    "qualified": false
-  },
-  "fsim-nodownscale": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.21062659760104355,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.21848569294520634,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.329927450832713e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

@@ -7,7 +7,7 @@
     "artifacts": [
       {
         "file": "retry-run.tsv",
-        "sha256": "a832e7ad57311e68474b496dfa3d7029b2dec6985b216c694db731f50818d760"
+        "sha256": "0c47154e8b836deaa86d2b53d5e10ed139ee5f9e10225a78e27205d5d353949f"
       }
     ]
   },
@@ -606,12 +606,12 @@
   "original-ahiq-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-ahiq-1100-run",
     "plan_sha256": "9f9597b91a9764ebc99254a72e73d4aeaf47bd98eebebd032352636528cfdf54",
-    "cases": 1,
+    "cases": 2,
     "expected_cases": 2,
     "artifacts": [
       {
         "file": "original-ahiq-1100-run.tsv",
-        "sha256": "8b0383196aafd69bb6ff94fae725b8d57113591ef13aea962b4822cb33e74d65"
+        "sha256": "9715a7d27c3717f4582e6588b4878b2ff7a08953f693a8b19491a7c2ec458bcc"
       }
     ]
   },
@@ -624,6 +624,66 @@
       {
         "file": "stlpips-alex-pair-cid22-t8-1d3aa20e-confirmation-run.tsv",
         "sha256": "06903f6e4969954892ec503d7d83a17172b08e2f8a2beb37332d610d6498d34c"
+      }
+    ]
+  },
+  "original-arniqa-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-arniqa-1100-run",
+    "plan_sha256": "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-arniqa-1100-run.tsv",
+        "sha256": "22dc0f8d9bc067f65733c3b1bed72da91e5cbaeb8e4b97c783619e6979f439f0"
+      }
+    ]
+  },
+  "group-00-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00-run",
+    "plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
+    "cases": 3,
+    "expected_cases": 264,
+    "artifacts": [
+      {
+        "file": "group-00-run.tsv",
+        "sha256": "dbf34b9e9a2904a825250aa7e89e26f8115e6ef1d41a374f0f07db6b7b1c09bb"
+      }
+    ]
+  },
+  "run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 3,
+    "expected_cases": 120,
+    "artifacts": [
+      {
+        "file": "run.tsv",
+        "sha256": "a35a74ba904510f245cbd2ee00c7d6b42bfb240ddcbb16e28a7fb718f21934c0"
+      }
+    ]
+  },
+  "lpips-alex-eight-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-alex-eight-add40-run",
+    "plan_sha256": "dba0864a26e01dc15d39ef5bb11efa7ddfcbba476bc63899c895e70c9ced5c03",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "lpips-alex-eight-add40-run.tsv",
+        "sha256": "a52d7584d65a6814562863528265783070639bea05d2a367a7e9768c29e95ac8"
+      }
+    ]
+  },
+  "niqe-resident-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/niqe-resident-run",
+    "plan_sha256": "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d",
+    "cases": 1,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "niqe-resident-run.tsv",
+        "sha256": "a16c6405dade15edcdf15e3b23f7a8eda13e46ce4a96c9e7c69a025b0744fde7"
       }
     ]
   }
