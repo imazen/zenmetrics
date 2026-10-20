@@ -177,6 +177,7 @@ benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-1-run.tsv	ignore
 benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-2-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/cw-mex-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/cw-pyiqa-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/dssim-current-source-equivalence.json	ignored	DSSIM source-equivalence provenance receipt; not a dashboard measurement panel.
 benchmarks/canonical_recheck_2026-10-19/flip-confirm-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/flip-v17-eight-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
@@ -284,6 +285,7 @@ benchmarks/dmm_aic_probe/dmm_ladder_ort.tsv	ignored	AHIQ/DMM AIC-4 convention pr
 benchmarks/dmm_aic_probe/dmm_ladder_rten.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
 benchmarks/dssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fixed_factor_verify_2026-10-20/aggregates.tsv	ignored	Aggregate of previously committed fixed-factor numerical checks; no new timing observations.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/aggregate.tsv	ignored	Fresh AIC61 fixed-factor numerical verification aggregate; no timing panel.
 benchmarks/fixed_factor_verify_2026-10-20/provenance.json	ignored	Aggregate of previously committed fixed-factor numerical checks; no new timing observations.
 benchmarks/fleet-fits_v9_tier_timing_2026-09-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fsim_fusion_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
