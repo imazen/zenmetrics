@@ -1534,3 +1534,4 @@ benchmarks/aic2026_full_repro_2026-10-20/canonical_reference_identity.tsv	ignore
 benchmarks/aic2026_full_repro_2026-10-20/canonical_reference_identity.meta	ignored	Canonical reference source identity aggregates and provenance; no numerical or performance qualification.
 benchmarks/canonical_recheck_2026-10-19/hdrvdp-photo-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/aic2026_full_repro_2026-10-20/canonical_comparison_bounds.tsv	ignored	Existing canonical comparison bounds and source identities; no measured scores or performance qualification.
+benchmarks/canonical_recheck_2026-10-19/local40-current40worker-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

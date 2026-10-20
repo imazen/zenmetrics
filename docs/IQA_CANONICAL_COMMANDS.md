@@ -321,3 +321,21 @@ the representative table always uses a retained case and links its observation
 number to the full tables. `bench-iqa-canonical-summary-check` checks this
 selection and refusal of changed evidence. See the
 [local export](../benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/index.json).
+
+### Current forty-route local comparison, 2026-10-20
+
+The [current40 command receipt](../benchmarks/canonical_recheck_2026-10-19/local40-current40worker-command.json)
+records successful preparation of all 40 changed routes at threads 1/8 (80 cases),
+including the revised base HDR names. On this box, run:
+
+```sh
+just bench-iqa-canonical-compare "$HOME/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40.json" /absolute/new-results 1,8
+```
+
+The manifest uses the verified current40 native worker. Each reference retains
+one valid pair and geometry; this command does not expand the full four-size,
+three-content grid. The HDR entries cover one 512² photo pair with resident
+spectral parameters, after original/resident exact-bit controls and actual cell
+protocol controls passed. HDR-VDP-2 keeps its 0.005 bound; HDR-VDP-3 has no assigned
+external bound. Timed comparisons and their resource gates remain separate from
+successful preparation. The older 38-route manifests remain frozen predecessors.

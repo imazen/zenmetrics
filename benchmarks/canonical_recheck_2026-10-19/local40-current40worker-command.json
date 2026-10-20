@@ -1,0 +1,42 @@
+{
+  "observed_at_utc": "2026-10-20T18:25:33.972098+00:00",
+  "manifest": "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40.json",
+  "manifest_sha256": "ff572ea7e4075d5459051a8a4554b54511974a6ed4992fe5d03839fe7f59cf6b",
+  "validated_plan": "/home/lilith/tmp/local-canonical-20261019T2330/current40-comparative-plan.json",
+  "validated_plan_sha256": "c000cd89ef40652764780a143aa13439af97ac79f38fc5180b2fcd8771567244",
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "native_binary": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+  "native_binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+  "metrics": 40,
+  "cases": 80,
+  "threads": [
+    1,
+    8
+  ],
+  "command": [
+    "just",
+    "bench-iqa-canonical-compare",
+    "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40.json",
+    "/absolute/new-results",
+    "1,8"
+  ],
+  "order": "Ascending measured native duration on one common local1152 photo; reference inputs retain each route valid geometry",
+  "reference_scope": "One selected valid pair/geometry per route; this80case command does not expand the full4geometry x3content grid",
+  "hdr_scope_promotion": {
+    "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-promoted-headless-v2/scope-promotion.json",
+    "sha256": "f9615c2d6018f6b5daa44a8c500bdb9366e9a790d3ff3967cfad34f8f1b20a1f"
+  },
+  "hdr": {
+    "geometries": [
+      "512x512 photo"
+    ],
+    "warm": true,
+    "bound_v2": 0.005,
+    "bound_v3": null,
+    "paired_timing_status": "Acquisition queued separately; preparation/control receipts are not comparative timings"
+  },
+  "preparation_wrapper": [
+    "run-heavy: done rc=0 7s | peak-RSS 0.06GiB | min-avail 15441MiB | peak-load 2.41"
+  ],
+  "qualification": "All forty routes have explicit source/input-bound original-reference plans. Numerical acceptance and resource qualification remain per acquired case; no complete matrix or accepted regression claim."
+}

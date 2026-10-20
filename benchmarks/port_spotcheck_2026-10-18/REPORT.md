@@ -395,6 +395,15 @@ local ascending order. CI was not run or consulted, as directed.
 
 ## 2026-10-20: site-readable warm observation export
 
+The later [current40 comparative command receipt](../canonical_recheck_2026-10-19/local40-current40worker-command.json)
+supersedes the 38-route preparation scope above: all 40 changed routes now have
+bound reference plans, producing 80 cases at threads 1/8. Preparation passed in
+7 s, peak-RSS 0.06 GiB, minimum available 15,441 MiB, peak load 2.41. Revised HDR
+photo controls passed at both budgets: V2 delta 0.0007070822066168603 against
+0.005; V3 delta 1.7763568394002505e-15 with no assigned bound. Their four paired
+timing cells are acquiring separately. The manifest chooses one valid pair per
+route and does not establish full-grid completion or qualified regression results.
+
 MISSING: the full declared size/content grids, remaining first-call comparisons,
 revised HDR paired timing qualification and accepted regression decisions.
 
