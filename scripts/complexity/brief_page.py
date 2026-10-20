@@ -401,8 +401,12 @@ def build(data_path, out):
         c = m['canonical'] or {}
         if not (m.get('cpu_1t') or m['agreement']):
             continue
+        ledger = c.get('parity') or '–'
+        ledger = 'none recorded' if ledger == 'Not documented' else ledger
         canon_rows.append([f'<code>{E(m["metric"])}</code>', E(ORIGIN_LABEL.get(m['origin'], m['origin'])), E(c.get('family', '–')),
-                           E(c.get('reference') or '–'), E(c.get('parity') or '–'), E(m['column'] or ('–' if m['origin'] == 'dvifmish' else (m['agreement'] or {}).get('column')) or '–'),
+                           E(c.get('reference') if c.get('reference') not in (None, 'no evidence') else 'not recorded'), E(ledger),
+                           E(m['column'] or ('–' if m['origin'] == 'dvifmish' else (m['agreement'] or {}).get('column')) or '–'),
+                           E(m.get('aic_match') or '–'), E(m.get('spotcheck') or '–'),
                            f'{m["agreement"]["agreement"]:.3f}' if m['agreement'] else '–', ns(m.get('cpu_1t')), ns(m.get('cpu_8t'))])
 
     status_md = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()
@@ -494,7 +498,8 @@ def build(data_path, out):
 
 <section class="slide" id="canon"><h2>Ours vs the reference implementation</h2>
 <p>Every metric on this page with its reference ("canonical") implementation and parity status, as in the zenmetrics README's Metrics table, plus agreement and time.</p>
-{table(["metric", "source", "family", "reference implementation", "parity", "AIC2026 column", "agreement", "CPU ns/px 1t", "CPU ns/px 8t"], canon_rows, "wrap canon")}
+<p class="note">Three separate records, each from its own source: <b>reference parity</b> is a comparison with the upstream reference code recorded in <code>docs/METRIC_PROVENANCE.md</code> or a model card ("none recorded" means nobody wrote that comparison down, not that it differs); <b>AIC2026 match</b> is whether our output reproduces the per-image values the dataset authors published (<code>docs/AIC2026_REPRODUCTION_STATUS.md</code>); <b>primary-oracle check</b> is the latest systematic re-run against the primary reference ({E(d["sources"].get("spotcheck") or "not available")}), passes out of expected cases.</p>
+{table(["metric", "source", "family", "reference implementation", "reference parity", "AIC2026 column", "AIC2026 match", "primary-oracle check", "agreement", "CPU ns/px 1t", "CPU ns/px 8t"], canon_rows, "wrap canon")}
 </section>
 
 <section class="slide" id="aic"><h2>Reproducing the published AIC2026 columns</h2>

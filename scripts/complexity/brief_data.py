@@ -203,6 +203,39 @@ def canonical(private):
     return out
 
 
+def aic_status():
+    """Per published AIC2026 column: how docs/AIC2026_REPRODUCTION_STATUS.md classifies our match."""
+    st = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()
+    def sec(a, b):
+        i = st.index(a); return st[i:st.index(b, i + len(a))]
+    def firsts(body):
+        return [re.sub('`', '', l.split('|')[1]).strip() for l in body.splitlines()
+                if l.startswith('| ') and not l.startswith('| Column') and not set(l) <= set('|-: ')]
+    out = {}
+    for col in re.findall(r'`([^`]+)`', re.sub(r'\([^)]*\)', '', sec('## Reproduced', '## Explicit AIC routes'))):
+        out[col] = 'reproduced'
+    for col in firsts(sec('## Identified by configuration search', '## Identified: the column')):
+        out.setdefault(col, 'matched by configuring the reference')
+    for col in firsts(sec('## Identified: the column', '## Close but not exact')):
+        out.setdefault(col, 'matched pyiqa defaults')
+    for col in firsts(sec('## Close but not exact', '## Settled')):
+        out.setdefault(col, 'close, minor residual')
+    for col in firsts(sec('## Implemented but not reproduced', '## Identified by')):
+        out.setdefault(col, 'not reproduced')
+    return out
+
+
+def spotcheck():
+    """Primary-oracle execution coverage (latest port spot-check): metric -> 'status (passes/expected)'."""
+    files = sorted(ROOT.glob('benchmarks/port_spotcheck_*/execution-coverage.tsv'))
+    if not files:
+        return {}, None
+    out = {}
+    for r in csv.DictReader(files[-1].open(), delimiter='\t'):
+        out[r['metric']] = f"{r['status']} ({r['scalar_pass_cases']}/{r['expected_scalar_cases']})" if r['status'].startswith('scalar') else r['status']
+    return out, files[-1].relative_to(ROOT).as_posix()
+
+
 # ---------------------------------------------------------------- statistics
 
 def boot_ci(xs, ys, fn, n=2000):
@@ -362,6 +395,8 @@ def main():
                                  hi=d.get('ci_hi', d.get('hi')), overall=d.get('overall_abs_srcc', d.get('overall')),
                                  column=col or d.get('label') or metric, source=Path(path).name)
 
+    aic = aic_status()
+    spot, spot_src = spotcheck()
     names = sorted(set(est) | {k[0] for k in tim} | set(agree))
     metrics = []
     for m in names:
@@ -382,7 +417,8 @@ def main():
             cpu_1t_reps=t1 and [v * 1e6 / px for v in t1['cpu_reps']], cpu_8t_reps=t8 and [v * 1e6 / px for v in t8['cpu_reps']],
             wall_8t_reps=t8 and [v * 1e6 / px for v in t8['wall_reps']],
             timing_sources=sorted(set((t1 or {}).get('source', []) + (t8 or {}).get('source', []))),
-            agreement=agree.get(m), canonical=canon.get(m)))
+            agreement=agree.get(m), canonical=canon.get(m),
+            aic_match=aic.get(col_of.get(m)) if col_of.get(m) else None, spotcheck=spot.get(m)))
 
     stats = []
     for tb in tables:
@@ -409,7 +445,8 @@ def main():
     doc = dict(schema=1, host=HOST, shape=f'{W}x{H}', seed=SEED,
                sources=dict(public=public_rev(), private=priv and git_rev(priv, 'origin/main'),
                             dvifmish=git_rev(Path.home() / 'work/dvifmish', 'origin/main'),
-                            extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement]),
+                            extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement],
+                            spotcheck=spot_src),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
                tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=canonical_perf())
     a.out.parent.mkdir(parents=True, exist_ok=True)
