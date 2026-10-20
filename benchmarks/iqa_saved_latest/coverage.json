@@ -170,19 +170,18 @@
         "rejected_overlays": 0,
         "failure_class_attempts": {
           "resource_guard_monitored_memory": 128,
-          "worker_failure_unclassified": 2
+          "insufficient_warm_samples": 2
         },
         "exhausted_saved_cells": 65
       },
       {
         "campaign": "private-nn-production-gate-retry",
         "manifest_cells": 12,
-        "saved_attempt_rows": 9,
-        "qualified_attempt_rows": 7,
-        "gate_flagged_attempt_rows": 2,
+        "saved_attempt_rows": 12,
+        "qualified_attempt_rows": 9,
+        "gate_flagged_attempt_rows": 3,
         "observed_cell_statuses": {
-          "ok": 9,
-          "pending": 3
+          "ok": 12
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -191,11 +190,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:50:01.725331+00:00",
-      "2026-10-20T07:50:02.084720+00:00"
+      "2026-10-20T08:00:01.728671+00:00",
+      "2026-10-20T08:00:02.030252+00:00"
     ],
-    "saved_attempt_rows": 3330,
-    "preferred_qualified_cells": 3023,
+    "saved_attempt_rows": 3333,
+    "preferred_qualified_cells": 3025,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -302,7 +301,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 9925,
+    "individual_measurement_rows": 9955,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -426,7 +425,7 @@
         "rejected_overlays": 0,
         "failure_class_attempts": {
           "timeout": 2,
-          "worker_failure_unclassified": 2
+          "insufficient_warm_samples": 2
         },
         "exhausted_saved_cells": 2
       },
@@ -460,8 +459,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:50:01.430040+00:00",
-      "2026-10-20T07:50:01.588695+00:00"
+      "2026-10-20T08:00:01.431512+00:00",
+      "2026-10-20T08:00:01.591664+00:00"
     ],
     "saved_attempt_rows": 4161,
     "preferred_qualified_cells": 3952,
@@ -666,8 +665,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:50:02.186830+00:00",
-      "2026-10-20T07:50:02.316569+00:00"
+      "2026-10-20T08:00:02.156637+00:00",
+      "2026-10-20T08:00:02.281372+00:00"
     ],
     "saved_attempt_rows": 5159,
     "preferred_qualified_cells": 4788,
