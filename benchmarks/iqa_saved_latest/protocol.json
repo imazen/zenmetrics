@@ -27,6 +27,5 @@
   "active_scope": "Mac/i265 changed27 successors; r7900x full non-NN; older saved ordinary observations retained",
   "version_policy": "Different frozen binary identities remain separate series; no pooling",
   "portable": "5/3 portable panels excluded",
-  "completion": "Partial saved-results capture, not campaign completion",
-  "individual_measurements": "*-rounds.csv: one fresh-process cold repeat or measured warm zenbench per-call round mean; no per-iteration timing imputation"
+  "completion": "Partial saved-results capture, not campaign completion"
 }
