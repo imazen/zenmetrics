@@ -2275,6 +2275,10 @@ aic-canonical-progress scratch:
 aic-canonical-provenance manifest runtime_versions *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}} {{options}}
 
+# Copy the requested exports with backups and verify all three destination hashes.
+aic-canonical-mirror manifest receipt label:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_mirror.py {{quote(manifest)}} {{quote(receipt)}} --label {{quote(label)}}
+
 # Diagnostic only: three studio-709 rounding conventions, with no acceptance gate.
 aic-canonical-psnr-rounding python pairs native output *options:
     {{python}} benchmarks/aic2026_full_repro_2026-10-20/diagnose_psnr_rounding.py {{pairs}} {{native}} {{output}} {{options}}
