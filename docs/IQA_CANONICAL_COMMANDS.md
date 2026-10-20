@@ -292,3 +292,21 @@ request never supplies a comparison ratio. Source and controls are retained in
 `benchmarks/canonical_recheck_2026-10-19/original-engine-refusal.json`.
 The original ST-LPIPS 0.0.2 package also imports `torchsummary` (the local runtime
 uses 1.5.1), even though that utility is not called during inference.
+
+### Explicit comparative thread selection
+
+`bench-iqa-canonical-compare` freezes the exact reference manifest scope and runs
+Rust against the declared originals in the manifest's measured scheduling order:
+
+```sh
+just bench-iqa-canonical-compare /absolute/reference-manifest.json /absolute/new-results 1,8
+```
+
+Use `1,28` for this local host's full admitted CPU budget. Additional arguments
+such as `--blocks 3 --samples 5` follow the thread selection. Both plan and result
+paths must be new. Every selected route needs an explicit reference plan; the
+command refuses missing routes or changed source/input bindings. The manifest
+selects the native worker and reference implementations; it performs no build or
+download. The current native changed-only inventory has 40 routes. A comparison
+manifest covers only its declared routes; the retained 38-route manifest does
+not include the two revised base HDR routes pending reference qualification.
