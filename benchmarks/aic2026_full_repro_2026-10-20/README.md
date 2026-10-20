@@ -114,3 +114,11 @@ JSON inventories. It rechecks every listed source hash before exporting their
 contents and records each inventory's own hash. This binds ancillary Octave
 helpers and distinguishes normalized float32 PyIQA inputs from VSI's explicit
 internal float64 conversion without changing the frozen scoring attempt.
+
+`diagnose_psnr_rounding.py` compares the declared studio-709 comparator,
+the frozen native normalization order, and the existing integer-numerator
+definition control. On one retained crop, the two floating-point orders
+produce different rounded luma at one reference pixel; neither equals the
+integer definition at every pixel. This explains that control's residual
+beyond batch rounding. It does not establish full-cohort behavior or an
+acceptance bound; the scoring routes remain unchanged.

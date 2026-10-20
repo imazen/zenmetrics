@@ -2267,6 +2267,10 @@ aic-canonical-campaign manifest *options:
 aic-canonical-provenance manifest runtime_versions *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}} {{options}}
 
+# Diagnostic only: three studio-709 rounding conventions, with no acceptance gate.
+aic-canonical-psnr-rounding python pairs native output *options:
+    {{python}} benchmarks/aic2026_full_repro_2026-10-20/diagnose_psnr_rounding.py {{pairs}} {{native}} {{output}} {{options}}
+
 # Full-precision local AIC CSV regeneration; caller wraps heavy runs in run-heavy.
 aic-rescore +args:
     python3 scripts/complexity/aic_rescore.py {{args}}
