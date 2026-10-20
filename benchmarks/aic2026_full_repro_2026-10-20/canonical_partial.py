@@ -86,7 +86,8 @@ def main():
     summary, worst = None, []
     if not args.counts_only:
         summary, worst = compare(args.metric, spec['reference'], own_values, values,
-                                spec.get('gate'), spec.get('gate_operator', '<='))
+                                spec.get('gate'), spec.get('gate_operator', '<='),
+                                spec.get('gate_basis', 'absolute'))
     report = dict(scope='partial; completed reference bundles only', cohort_rows=manifest['cohort_rows'],
         full_cohort_qualification='pending', reference_rows=len(reference), bundles=prior_bundles+len(receipts),
         reference_errors=counts['reference_errors'], identity_counts=counts,

@@ -44,6 +44,22 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result['match'], 'no-gate')
         self.assertEqual(result['gate'], 'none')
 
+    def test_author_relative_bound_preserves_zero_fallback_and_absolute_default(self):
+        args = ('metric', 'oracle', {'a': 1.5, 'zero': .5}, {'a': 1., 'zero': 0.}, .5)
+        result, _ = compare(*args, gate_basis='reference-relative')
+        self.assertEqual(result['match'], 'MATCH')
+        self.assertEqual(result['gate'], 'rel(ref; abs at zero)<=0.5')
+        self.assertTrue(math.isinf(result['max_rel']))
+        result, _ = compare(*args, gate_operator='<', gate_basis='reference-relative')
+        self.assertEqual(result['match'], 'MISS')
+        args = ('metric', 'oracle', {'a': .25}, {'a': .125}, .5)
+        result, _ = compare(*args, gate_basis='reference-relative')
+        self.assertEqual(result['match'], 'MISS')
+        result, _ = compare(*args)
+        self.assertEqual(result['match'], 'MATCH')
+        with self.assertRaisesRegex(ValueError, 'unsupported comparison bound basis'):
+            compare(*args, gate_basis='unknown')
+
 
 if __name__ == '__main__':
     unittest.main()

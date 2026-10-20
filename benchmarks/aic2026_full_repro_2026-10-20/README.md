@@ -237,3 +237,11 @@ Publication also runs the dashboard guard using `python3` from `PATH`.
 That interpreter must provide the dashboard's `tomllib` dependency. Select
 a compatible publication interpreter without changing the frozen scoring
 interpreters or inputs; a guard failure requires no scoring rerun.
+
+MDSI's frozen author-score test also defines an existing relative bound of
+`1e-9`: divide absolute error by the absolute reference, using absolute error
+when that reference is zero. Reporting views select `reference-relative`
+explicitly; absolute bounds retain their prior behavior. Descriptive relative
+statistics still report infinity for a nonzero error against zero. As with
+VIF, the supplied six-decimal native export cannot establish native parity at
+this finer bound; a CSV miss includes export rounding.
