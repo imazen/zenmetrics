@@ -121,7 +121,11 @@ do not measure. Find this list again with
   CPUs 0–7 as before.
 - `brief_data.py` never pools builds: a cell measured by both uses the newer source once its series has as
   many rows, and counts the older one as superseded.
-- r7900x needs no completion run: its 144 failed cells are input-contract refusals. mac's 65 exhausted
+- `hdrvdp`/`hdrvdp3` refused 8-bit sRGB until `4f89155c` routed it through upstream's `sRGB-display`
+  encoding (100 cd/m² peak, 1 cd/m² black, 30 ppd; checked against official HDR-VDP-2.2.2 goldens). Their
+  cells are re-measured on all three hosts with workers built at `4f89155c` (i265 `06615a9e`), 96 cells each
+  (`*-hdrvdp-srgb`). The earlier refusals stay recorded; they were never timings.
+- r7900x needs no other completion run: its other failed cells are input-contract refusals. mac's 65 exhausted
   `private-nn-production` cells hit the 12 GiB monitored memory guard; they stay refusals unless the guard
   is changed by the owner.
 
