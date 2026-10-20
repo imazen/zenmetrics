@@ -1,0 +1,73 @@
+{
+  "kind": "one real HDR-v2 warm numerical control plus inert protocol tests",
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "case": "original12-hdrvdp-grid-pairA-64x64-t1-warm-current40",
+  "acquired_cases": 1,
+  "acquired_metric_children": 2,
+  "native_score": 60.56309768178813,
+  "canonical_score": 60.56308172053768,
+  "absolute_difference": 1.596125044756036e-05,
+  "absolute_bound": 0.005,
+  "bound_pass": true,
+  "native_observed_rounds": 10,
+  "canonical_observed_samples": 5,
+  "matched_scope": false,
+  "ratio": null,
+  "qualified_timing_cells": 0,
+  "old_gates": {
+    "exact_original_call_gate": {
+      "text": "Each canonical/direct arm twice in separate fresh processes, alternating; every scalar f64 bit must match. This does not assign native v3 parity.",
+      "status": "incomplete"
+    },
+    "native_thread_gate": {
+      "text": "Exact first/warm score bits must agree between thread budgets 1 and 28; retain any disagreement as a finding",
+      "status": "incomplete"
+    },
+    "default_resident_exact": {
+      "text": "Original default/resident exact control, order ['default', 'resident', 'resident', 'default']",
+      "status": "incomplete"
+    },
+    "native_first_call": {
+      "text": "Fresh-process first-call numerical qualification",
+      "status": "incomplete"
+    },
+    "native_timed_score_stability": {
+      "text": "Every timed CPU return observed",
+      "status": "unobserved"
+    }
+  },
+  "raw_control": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/control-v3/cells/original12-hdrvdp-grid-pairA-64x64-t1-warm-current40/result.json",
+    "sha256": "e93b632087b878109c90fc745da7e1e17b2c4d43595bd073776e140fe7cb90ea"
+  },
+  "frozen_manifest": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/manifest.json",
+    "sha256": "08c09162b211544a2d7fb6ac5531f1b8bfa9a2957ac7617f4ad18d1eb77f6849"
+  },
+  "setup": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/control-v3/setup.json",
+    "sha256": "986f60fdacbdc026a00f87c2ddaac26c273c78f1da6f56c781a4bd0d9baf91bb"
+  },
+  "readonly_audit": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/control-readonly-audit.log",
+    "sha256": "31fbb614ee3229d9fa5eaa4556a37afd9467f003a5b85c2f534546923e8a1843"
+  },
+  "metric_resource_receipt": "run-heavy: done rc=0 18s | peak-RSS 0.11GiB | min-avail 14877MiB | peak-load 2.82",
+  "tests": {
+    "command": [
+      "just",
+      "bench-iqa-canonical-hdr-numerical-check",
+      "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/production-rows"
+    ],
+    "normal_controls": 20,
+    "optimized_controls": 20,
+    "metric_children": 0,
+    "log": "/home/lilith/tmp/local-canonical-20261019T2330/hdr-public-source-tests.log",
+    "sha256": "37fe436b8677a308dc00a78e055dba332b204ac67e916d1a9c9abf6219edad65"
+  },
+  "public_source_sha256": {
+    "hdr_original_grid_numerical.py": "5ac626b2cda8043a5181ab7e2d32bb9ed5ae4349801844838825bd80bfbd3dbf",
+    "test_hdr_original_grid_numerical.py": "252d420996809a52795dcc2cc4fffdbbad208c2f16c206c8c77a9c7752f1b031"
+  },
+  "qualification": "One64-square v2 case only. V3 bound/pass remains unassigned and unobserved here. Full48 campaign separately queued, not complete. Spectral-parameter preparation differs; old original/direct, ABBA, first-call and timed-return gates remain incomplete/unobserved. V1 was withdrawn before execution; V2 negative-control exception fixture corrected in V3, without changing rejection or numerical bounds."
+}

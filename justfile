@@ -1655,6 +1655,15 @@ bench-iqa-canonical plan output *options:
 bench-iqa-canonical-classical-first plan output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/compare_classical_first.py '{{plan}}' '{{output}}' {{options}}
 
+# Caller admits setup/check/cell/finish; queue admits each cell itself.
+bench-iqa-canonical-hdr-numerical +options:
+    python3 -I -B benchmarks/iqa_compete_2026-10-16/hdr_original_grid_numerical.py {{options}}
+
+# Caller supplies shared heavy admission and the frozen real-row fixtures.
+bench-iqa-canonical-hdr-numerical-check retained_rows:
+    HDR_NUMERICAL_RETAINED_ROWS='{{retained_rows}}' python3 -I -B benchmarks/iqa_compete_2026-10-16/test_hdr_original_grid_numerical.py -v
+    HDR_NUMERICAL_RETAINED_ROWS='{{retained_rows}}' python3 -I -O -B benchmarks/iqa_compete_2026-10-16/test_hdr_original_grid_numerical.py -v
+
 # Fixed-stage confidence interval for a resident-model first-call flag.
 bench-iqa-canonical-first-confirm plan case output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/confirm_scored_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}' {{options}}

@@ -16,6 +16,13 @@ those old rows does not execute a scorer or add numerical grid coverage.
 
 ## Commands and admission
 
+`just bench-iqa-canonical-hdr-numerical-check RETAINED_ROWS` runs the protocol
+controls normally and with Python assertions disabled. The explicit argument
+names the frozen four-row fixture directory. Invoke it under shared heavy
+admission with disk-backed `TMPDIR`; it does not execute a metric.
+`just bench-iqa-canonical-hdr-numerical ...` exposes the controller's commands
+with the admission rules below.
+
 A frozen private request binds the exact selected48 inventory, headless parent,
 passed nine-preflight receipt, current40 build/source receipts, helper and
 controller hashes, and admission tools. All hashing, retained receipt audits,
