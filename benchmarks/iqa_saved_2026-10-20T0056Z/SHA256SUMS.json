@@ -1,0 +1,12 @@
+{
+  "mac-private-protocol.json": "73f5d365bc2331c0cb2ee20604c381463d7c5f9f2767cccf95a42c46c885bc59",
+  "i265-private-protocol.json": "da8f0b47c6fd95668fd1ab44e86a0259242e36f8ec4dbd1200af9f1fdf9e57fa",
+  "r7900x-private-protocol.json": "e009e8a50d339e2bca51971870f19cae879efd51b1fd969072173b5e61650ed8",
+  "mac-observations.csv": "959b240bcbc9fa7db9e8b691a5297a2e0a0d49a46f409bd1c1cc80a17e117f92",
+  "i265-observations.csv": "e319c481a385514683abb9a319444da3cd71a102f5b2a001a6783ad8b9a4d885",
+  "r7900x-observations.csv": "1114c2b4bd918aea9676db2d9bb21a432f9be15182ead989dacec6aa7504bb41",
+  "sources.json": "301ad5435ddf7707afca74edb763c39d6f991d85aecd3551f8f653499164289c",
+  "coverage.json": "5e6c22caa321d06af48c9c04215011592c5f5e0aca08a2457870af864c90ae83",
+  "protocol.json": "83b88ca0cfd4e2cffe27073e520b844ab629e2194f816d97903f89b3152bbaed",
+  "README.md": "303d5d8a5fcf6f5caedab0f664af5be94ba1334624b0bc883351526895692c8f"
+}

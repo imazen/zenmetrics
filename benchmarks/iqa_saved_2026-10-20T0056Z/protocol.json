@@ -1,0 +1,31 @@
+{
+  "protocol": "canonical-cold3-warm10-100ms-scalar",
+  "cold": "Three fresh processes; scorer constructor plus first full-pair evaluation timed; RGB loading outside clocks",
+  "warm": "Ten clean zenbench rounds, 100ms target; full-pair evaluation after initialization",
+  "threads": [
+    1,
+    8
+  ],
+  "memory": "12G guard, jobs8; Linux hard cgroup; macOS monitored process-tree RSS guard",
+  "qualification": "status ok plus ten gate-clean warm rounds; numerical reproduction is separate",
+  "preferred_key": [
+    "host",
+    "metric_name",
+    "width",
+    "height",
+    "threads",
+    "timing_phase",
+    "cold_repeat",
+    "only_mode",
+    "engine",
+    "impl_binary_sha",
+    "reference_sha256",
+    "distorted_sha256"
+  ],
+  "privacy": "No per-image scores, paths, weights, graphs, model URLs or private source",
+  "zensim": "Exact worker route zensim only; no separately identified W-C or other bake is claimed",
+  "active_scope": "Mac/i265 changed27 successors; r7900x full non-NN; older saved ordinary observations retained",
+  "version_policy": "Different frozen binary identities remain separate series; no pooling",
+  "portable": "5/3 portable panels excluded",
+  "completion": "Partial saved-results capture, not campaign completion"
+}

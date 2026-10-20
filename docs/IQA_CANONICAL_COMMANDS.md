@@ -98,3 +98,15 @@ selected into these successors. r7900x retains its full non-NN scope because
 it has no earlier timing panel. Progress denominators must follow the active
 scope (1296 changed cells versus 4608 full-inventory cells), not silently mark
 excluded unchanged cells complete.
+
+### Saved-result publication during an active campaign
+
+`bench-iqa-capture-saved` reads atomic reports and finalized sealed attempts,
+without adopting unfinished workers or stopping measurements. Capture windows
+and file hashes identify what existed when each host was read. Raw reports
+stay outside public git. `bench-iqa-publish-saved` emits only allowlisted timing,
+resource and provenance fields, with explicit preferred-row identity and
+without per-image scores. Different binaries remain separate series; portable
+panels cannot substitute for canonical cells. The
+[2026-10-20 saved snapshot](../benchmarks/iqa_saved_2026-10-20T0056Z/README.md)
+retains partial observations, refusals and gates separately.

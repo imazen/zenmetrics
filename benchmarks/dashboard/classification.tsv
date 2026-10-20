@@ -1255,3 +1255,13 @@ benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle c
 benchmarks/canonical_recheck_2026-10-19/matlab-extra-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/nr-inputs-sha256.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/iqa_saved_2026-10-20T0056Z/mac-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/i265-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/mac-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/i265-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/sources.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/coverage.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/SHA256SUMS.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
