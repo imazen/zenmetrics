@@ -1658,6 +1658,10 @@ bench-iqa-canonical-resume output *options:
 bench-iqa-canonical-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_comparison.py {{options}}
 
+# Extend an existing reference contract onto a hashed size/content grid.
+bench-iqa-canonical-grid-plan source pairs output +options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_grid.py '{{source}}' '{{pairs}}' '{{output}}' {{options}}
+
 # Freeze and run the 27 changed routes in ascending retained duration.
 bench-iqa-canonical-changed manifest output *options:
     just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'
@@ -1668,7 +1672,7 @@ bench-iqa-canonical-changed-plan manifest output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_changed_canonical.py '{{manifest}}' '{{output}}' {{options}}
 
 bench-iqa-canonical-check:
-    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical test_reference_publication test_canonical_rounds
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical test_reference_publication test_canonical_rounds test_canonical_grid
 
 bench-iqa-canonical-interval results output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}' {{options}}
