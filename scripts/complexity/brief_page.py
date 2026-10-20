@@ -195,10 +195,10 @@ def chart_coef(d, table, threads, linear):
     key = f'cpu_{threads}t'
     ms = [m for m in d['metrics'] if m['estimate'] and m.get(key) and m['estimate'].get(table, 0) > 0]
     xs = [m['estimate'][table] for m in ms]; ys = [m[key] for m in ms]
-    W_, H_ = 470, 360
+    W_, H_ = 520, 400
     if linear:
         xmax, ymax = max(xs) * 1.05, max(ys) * 1.05
-        pl = Plot(W_, H_, (0, xmax), (0, ymax), xlog=False, ylog=False, margin=(62, 14, 40, 46))
+        pl = Plot(W_, H_, (0, xmax), (0, ymax), xlog=False, ylog=False, margin=(62, 40, 62, 46))
         pl.axes('counted cost per pixel', f'CPU ns/px, {threads} thread{"s" if threads > 1 else ""}')
         k, lo, hi = s['scale_linear'], s['scale_linear_lo'], s['scale_linear_hi']
         end = lambda kk: (min(xmax, ymax / kk), min(xmax * kk, ymax))  # where y = kk·x leaves the plot
@@ -209,7 +209,7 @@ def chart_coef(d, table, threads, linear):
         sub = f'Pearson r {s["pearson_linear"]:.2f}, p {re.sub("<[^>]+>", "", fp(s["pearson_linear_p"])).replace("×10", "e")}'
     else:
         xd, yd = log_dom(xs), log_dom(ys)
-        pl = Plot(W_, H_, xd, yd, xlog=True, ylog=True, margin=(62, 14, 40, 46))
+        pl = Plot(W_, H_, xd, yd, xlog=True, ylog=True, margin=(62, 40, 62, 46))
         pl.axes('counted cost per pixel (log)', f'CPU ns/px, {threads} thread{"s" if threads > 1 else ""} (log)')
         k, klo, khi = s['scale'], s['scale_lo'], s['scale_hi']
         x0, x1 = 10 ** pl.xd[0], 10 ** pl.xd[1]
@@ -233,7 +233,7 @@ def chart_coef(d, table, threads, linear):
     else:
         for m, x, y in sorted(zip(ms, xs, ys), key=lambda t: -t[2])[:6]:
             pl.label(pl.X(x), pl.Y(y), m['metric'], 'pl-lab', 10)
-    pl.parts.append(f'<text class="pl-title" x="{pl.L}" y="16">{E(head)}</text><text class="pl-tick" x="{pl.L}" y="31">{E(sub)}</text>')
+    pl.parts.append(f'<text class="pl-title" x="{pl.L - 40}" y="20">{E(head)}</text><text class="pl-tick" x="{pl.L - 40}" y="42">{E(sub)}</text>')
     return pl.svg(f'Counted cost versus CPU time, {threads} thread(s), {"linear" if linear else "log"} axes', 'chart coef')
 
 
@@ -402,7 +402,7 @@ def build(data_path, out):
         if not (m.get('cpu_1t') or m['agreement']):
             continue
         canon_rows.append([f'<code>{E(m["metric"])}</code>', E(ORIGIN_LABEL.get(m['origin'], m['origin'])), E(c.get('family', '–')),
-                           E(c.get('reference') or '–'), E(c.get('parity') or '–'), E(m['column'] or (m['agreement'] or {}).get('column') or '–'),
+                           E(c.get('reference') or '–'), E(c.get('parity') or '–'), E(m['column'] or ('–' if m['origin'] == 'dvifmish' else (m['agreement'] or {}).get('column')) or '–'),
                            f'{m["agreement"]["agreement"]:.3f}' if m['agreement'] else '–', ns(m.get('cpu_1t')), ns(m.get('cpu_8t'))])
 
     status_md = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()

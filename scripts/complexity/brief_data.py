@@ -185,6 +185,12 @@ def canonical(private):
             m = re.match(r'\| `(port-[\w.-]+)` \| ([\d.e-]+) \| ([\d.e-]+) \| ([\d.]+) → ([\d.]+) \| ([\d.]+) → ([\d.]+) \|', line)
             if m:
                 rows[m[1]] = m.groups()
+    # talk-inspired presets: our own reconstruction, so there is no reference implementation to match
+    talk = re.findall(r'^\| `([a-z0-9-]+)`: ', dv.read_text(), re.M) if dv.exists() else []
+    for preset in set(talk) - set(DVIFM.values()):
+        out.setdefault('dvifmish-' + preset, dict(
+            family='FR · Classical', reference='none: dvifmish talk-inspired reconstruction (BMVA talk, 2026-02-04)',
+            parity='Not applicable', licence='private: publishing needs the author\'s consent', source='dvifmish README.md'))
     for preset in DVIFM.values():
         g = rows.get(preset)
         out['dvifmish-' + preset] = dict(
