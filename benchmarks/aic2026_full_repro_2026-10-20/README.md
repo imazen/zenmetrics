@@ -122,3 +122,11 @@ produce different rounded luma at one reference pixel; neither equals the
 integer definition at every pixel. This explains that control's residual
 beyond batch rounding. It does not establish full-cohort behavior or an
 acceptance bound; the scoring routes remain unchanged.
+
+A separate twelve-worker MAD native control completed 11 of 12 rows; one
+worker returned `Cannot allocate memory (os error 12)`. Its wrapper recorded
+2 seconds, 0.10 GiB peak RSS and 13,911 MiB minimum available memory under
+the 12 GiB hard cap. No cap-fired exit was recorded, and the cause is
+unproven. Production retains three single-thread workers per classical
+bundle, releasing shared admission between bundles. The failed control
+does not establish a performance comparison.
