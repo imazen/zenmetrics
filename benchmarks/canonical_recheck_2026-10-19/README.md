@@ -519,3 +519,13 @@ The [GPU-grid profiles](gpu-grid-profiles.json) retain the two 64×64 DSSIM CUDA
 The summary retains subsequent MANIQA, MUSIQ, PaQ2PiQ and WaDIQaM observations and prefers the revised PSNR source when that route has completed. Every older observation keeps its source identity. [Runtime controls](runtime-controls.json) check resident first-evaluation probes in both NN families, author CUDA references for CVVDP and IW-SSIM, and a separate compatible NumPy 1.25.2 MUSIQ runtime. These are setup/accuracy controls, not comparative timing claims or full cold-matrix coverage.
 
 The [GPU reference amendment](gpu-reference-fixture-amendment.json) retains the first IW-SSIM setup failures and replaces the incomplete reference environment with the previously controlled author runner. Its 64×64 refusal is a genuine size-domain observation; the 255×257 scores are acquired without assigning a new bound.
+
+## DSSIM reference lineage finding, 2026-10-20
+
+The earlier DSSIM C reference was built from `lilith/dssim` at `eec33f55`,
+an older fork baseline. These results remain alternative comparisons; they
+do not establish agreement with the author repository. The
+[lineage record](dssim-reference-lineage.json) identifies all affected plans.
+Primary canonical comparisons are being replayed against author DSSIM 3.5.1
+at `kornelski/dssim` `0e44c9b7`, retaining the same native code and bounds.
+The older-fork map results are retained with that identity too.

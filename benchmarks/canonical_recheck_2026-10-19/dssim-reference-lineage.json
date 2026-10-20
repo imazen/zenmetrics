@@ -1,0 +1,83 @@
+{
+  "observed_utc": "2026-10-20T12:23:24.043229+00:00",
+  "old_origin": "https://github.com/lilith/dssim",
+  "old_revision": "eec33f556d7ee991c4b906198c3a1b74f6f6063d",
+  "author_origin": "https://github.com/kornelski/dssim",
+  "author_revision": "0e44c9b7fe91a5265c8e463436c28512186fe9cd",
+  "author_version": "3.5.1",
+  "affected": [
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/dssim-pr199-run/plan.json",
+      "metric": "dssim",
+      "plan_sha256": "06d9c3ea139a0f1c7de741f76bcefc14522dbff40bfacd93b3b6fb4b39cc9698",
+      "cases": 6
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-09.plan.json",
+      "metric": "dssim",
+      "plan_sha256": "0a082ae4621f1ed50e96f3836c1a62547885f6f56497dd6769b3f0c97d166778",
+      "cases": 24
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t1-3cb87691/confirmation-run/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "c5454a51f138d622fa5cbe9707406a55c26e046292b137b85f99ea439d7408dc",
+      "cases": 1
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t1-3cb87691/followup-plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "c5454a51f138d622fa5cbe9707406a55c26e046292b137b85f99ea439d7408dc",
+      "cases": 1
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t28-3cb87691/confirmation-run/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "8285f0a46374b9106ebbc77d21699fdffe2e7389d8a3397fdf57a24c487e2270",
+      "cases": 1
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t28-3cb87691/followup-plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "8285f0a46374b9106ebbc77d21699fdffe2e7389d8a3397fdf57a24c487e2270",
+      "cases": 1
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "cases": 24
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/run/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "cases": 24
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
+      "cases": 20
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/run/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
+      "cases": 20
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/gpu-run/plan.json",
+      "metric": "dssim-gpu",
+      "plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
+      "cases": 1
+    },
+    {
+      "plan": "/home/lilith/tmp/local-canonical-20261019T2330/octave-run/plan.json",
+      "metric": "dssim",
+      "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+      "cases": 6
+    }
+  ],
+  "decision": "Keep old numerical and speed observations as fork-baseline alternatives; withhold primary-canonical claims until author comparisons finish"
+}

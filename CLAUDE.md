@@ -2160,3 +2160,12 @@ dependencies and failed before scoring. The harness manifest repair passes a cle
 AVX-512 dependency fingerprints verified. The build reports 144s, peak-RSS
 0.88 GiB, minimum available 10210 MiB and peak load 6.51. Production metric
 arithmetic is unchanged.
+
+### DSSIM reference provenance, 2026-10-20
+
+The local canonical recheck initially built its DSSIM reference from the CI
+sibling checkout (`lilith/dssim` `eec33f55`). It is an older fork baseline,
+not the author-repository checkout. Retain those observations as alternative
+comparisons; author DSSIM 3.5.1 at `0e44c9b7` is being acquired separately.
+See `benchmarks/canonical_recheck_2026-10-19/dssim-reference-lineage.json`.
+No native code, numerical bound or expected value changes for this correction.
