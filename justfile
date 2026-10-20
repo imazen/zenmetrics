@@ -1668,6 +1668,10 @@ bench-iqa-canonical-hdr-numerical-check retained_rows:
 bench-iqa-canonical-first-confirm plan case output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/confirm_scored_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}' {{options}}
 
+# Caller supplies heavy admission; captures the complete native probe process.
+bench-iqa-canonical-first-profile plan case output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/profile_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}'
+
 bench-iqa-canonical-first-confirm-test:
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_first_confirmation.py -v
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_scored_first_confirmation.py -v
