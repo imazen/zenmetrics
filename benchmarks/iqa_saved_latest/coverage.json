@@ -190,12 +190,12 @@
       {
         "campaign": "remaining-remaining2",
         "manifest_cells": 1504,
-        "saved_attempt_rows": 1165,
-        "qualified_attempt_rows": 1111,
+        "saved_attempt_rows": 1359,
+        "qualified_attempt_rows": 1305,
         "gate_flagged_attempt_rows": 6,
         "observed_cell_statuses": {
-          "ok": 1117,
-          "pending": 387
+          "ok": 1311,
+          "pending": 193
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -265,12 +265,11 @@
       {
         "campaign": "opt-4f89155c",
         "manifest_cells": 480,
-        "saved_attempt_rows": 477,
-        "qualified_attempt_rows": 475,
+        "saved_attempt_rows": 480,
+        "qualified_attempt_rows": 478,
         "gate_flagged_attempt_rows": 2,
         "observed_cell_statuses": {
-          "ok": 477,
-          "pending": 3
+          "ok": 480
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -279,11 +278,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:05:01.797324+00:00",
-      "2026-10-20T15:05:02.960364+00:00"
+      "2026-10-20T15:10:01.733020+00:00",
+      "2026-10-20T15:10:02.860675+00:00"
     ],
-    "saved_attempt_rows": 5939,
-    "preferred_qualified_cells": 5329,
+    "saved_attempt_rows": 6136,
+    "preferred_qualified_cells": 5526,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -390,7 +389,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 18160,
+    "individual_measurement_rows": 18798,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -638,8 +637,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:05:01.424833+00:00",
-      "2026-10-20T15:05:01.815945+00:00"
+      "2026-10-20T15:10:01.428158+00:00",
+      "2026-10-20T15:10:01.820253+00:00"
     ],
     "saved_attempt_rows": 6189,
     "preferred_qualified_cells": 5827,
@@ -900,8 +899,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:05:02.161913+00:00",
-      "2026-10-20T15:05:02.427557+00:00"
+      "2026-10-20T15:10:02.172963+00:00",
+      "2026-10-20T15:10:02.461835+00:00"
     ],
     "saved_attempt_rows": 6359,
     "preferred_qualified_cells": 5937,
