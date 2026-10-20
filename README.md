@@ -82,7 +82,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.021× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.084× |
-| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | h4nwei/DeepDC | prior | — |
+| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 2/2 pass | ≈1.2× R ! |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | DISTS-pytorch 0.1 | 2/2 pass | ≈1.1× R ! |
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
@@ -109,7 +109,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 1 process errors | ≈0.088× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
-| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× R ! |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 3/3 pass | ≈1.2× R ! |
 | [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈0.64× R |
 | [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× R ! |
 | [`mad`](docs/MODEL_CARDS.md#mad) | FR | author HI/LO + paper… | Δ 0 | ≈0.12× |
@@ -166,9 +166,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.096× |
 | [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.1× ! |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 1 process errors | ≈1.1× R ! |
-| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 1 process errors | ≈0.81× R |
-| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈1.1× R ! |
+| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈0.96× R |
+| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 1/2 pass | ≈1× O |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
@@ -326,7 +326,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | DeepDC_PyTorch==0.2 | not recorded | not recorded | MIT / permissive |
+| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | DeepDC-PyTorch 0.2 / input normalization | 0.0 | not recorded | MIT / permissive |
 
 </details>
 
@@ -764,7 +764,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | pyiqa 0.1.16 (torch 2.14.1+cpu) | not recorded | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
+| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | PyIQA 0.1.16 / native ORT CPU comparison | 0.00000011920928955078125 | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | pyiqa 0.1.16 (torch 2.14.1+cpu) | not recorded | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
 
 </details>

@@ -1,4 +1,32 @@
 {
+  "hdrvdp-aic2026": {
+    "canonical": "official HDR-VDP 2.2.2 / Octave FFT adaptation",
+    "check": "\u0394 0.092",
+    "ratio": 0.11563101138088967,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.11651648136251573,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.09194904299747009,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+      "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
+    ],
+    "qualified": false
+  },
   "hdrvdp3-aic2026": {
     "canonical": "official HDR-VDP 3.0.7 / Octave",
     "check": "\u0394 0.00029",
@@ -112,20 +140,20 @@
   },
   "lpips-alex": {
     "canonical": "lpips 0.1.4",
-    "check": "2/2 pass",
-    "ratio": 1.1025701624639512,
+    "check": "3/3 pass",
+    "ratio": 1.162649413650009,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+    "ratio_plan_sha256": "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.2824298438478596,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 3.1480767472003013e-10,
@@ -133,6 +161,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
     "qualified": false
@@ -682,33 +711,6 @@
     "plan_sha256": [
       "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
       "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
-    ],
-    "qualified": false
-  },
-  "psnr": {
-    "canonical": "scikit-image 0.26 / declared RGB ingress",
-    "check": "\u0394 0",
-    "ratio": 0.2071088479792085,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.22826251026437872,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 0,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 0.0,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14"
     ],
     "qualified": false
   }

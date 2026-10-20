@@ -1,0 +1,52 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "lpips-alex-pair-cid22-t1",
+      "blocks": 20,
+      "ratio": 1.162649413650009,
+      "lower_95": 1.1455797183886958,
+      "upper_95": 1.1843805843799495,
+      "relative_halfwidth": 0.018691077873353047,
+      "precision_within_three_percent": true,
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
+      "summary_sha256": "aa892a1f7edb18a561fa52e9600fd32b51b0d7248756bb6d29f126d40f77a2a9",
+      "stage_summary_sha256": [
+        "aa892a1f7edb18a561fa52e9600fd32b51b0d7248756bb6d29f126d40f77a2a9"
+      ],
+      "block_sha256": [
+        "97222e2f0ab13dde27e2630bfb98813405440303e062729380b957f77d79ae1f",
+        "2f37812971f002c9a8e63ef4e825cc9f733a6d2dc37dd616a1c42d09c538389a",
+        "fd9a06c8d01a5b9ad2e34b523006027553e3bcef937bd82a7ed00fb1fd038b94",
+        "38d621dc3ab8ea9f8358ab1d0eb9a2415184ddca5c9e73e2e673cb9696f1dbc7",
+        "2ef74bf5dde3c1c5cd1f695833cd910107d21b7d8378e1d194277dea3ab799c9",
+        "bb99b3be656606dc22f467c85594e12c5bf5db96a7034a88dc573ac0fc988e0c",
+        "3c205304460cd1219ec9d35b498a6ce28eded7495f60652c75ac653e7daaa307",
+        "311694358338aa3bce8088727627b145562dde519e4734054319efda5e66e50d",
+        "63df4d631e6bd15b3cf157fd1ce5017dac4549125a8577468691a878e418b734",
+        "7adab15c6c140d328cbaf2acbf4f8817b119dffdcdb9c32ae31a31b14cedce2d",
+        "db534f0cd59b02069fcfb8456a10fbca04c768ed1428cf76d400902bb11a3321",
+        "310cc9f41861e20329e5a402b1d9596c18e67c3a894f9262241b15e87a39ecd6",
+        "a46aacd28b7249c4580937b7fe2fddc0f67116efda26ab107203dfc663c845db",
+        "88428837a2232690f54b9e106fa5f07bca827e8bca5ec68d890c9257ff8c8140",
+        "ef56e76ac56da8ce1a543200a4735a4a0123377d82843b074e351d723066e216",
+        "3fcf7e47674521a79b31759cdcee7a86065297d2b1681d38870238438505fd05",
+        "193608105749e5f36d9566148d5db580d6a9ebab8f46deb7f8205585f1ac9aa2",
+        "188b7ee3215cd4008ea64b79aa8bdbd4a555d84568f5a7a14552ebb028d8b94c",
+        "59ba7145f0832755462a22eb0ec076ecbe9c1beb55e4c64282d49de59c3b2fac",
+        "5b763f608aa243895a031c4a85fc3089f79b139067c5208c79d6a443aad8ccfa"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 19,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 12,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ]
+}

@@ -291,3 +291,22 @@ Neural ratios now identify their executed engine (R = RTEN, O = ORT CPU).
 Different source/engine cohorts retain separate artifacts even when their raw
 directories share a basename. The index records each raw directory and every
 artifact hash; publication refuses a remaining label collision.
+
+## First completed original neural panel
+
+All seven original learned methods (LPIPS Alex/VGG/Squeeze, ST-LPIPS Alex/VGG,
+DISTS and DeepDC) pass their unchanged bounds at threads 1/8 on the retained
+512×512 photo pair, counting the three successful ST-LPIPS runtime replacements.
+Their largest scalar difference is 6.3964012003703274e-9; DISTS and DeepDC
+match the canonical scalar exactly on both thread settings. This is one local
+content/geometry, not a replacement for the broader frozen golden ladders.
+
+Initial RTEN ratios exceed 1.08 for LPIPS-Alex, ST-LPIPS-Alex and DeepDC at both
+thread settings, plus LPIPS-VGG and DISTS at one thread. LPIPS-Squeeze is faster
+at both settings; VGG/DISTS are faster at eight threads. Each flagged case is
+logged with both measured arm times and prepares a separate fixed follow-up.
+The [first 20-block LPIPS-Alex one-thread interval](lpips-alex-t1-initial20-interval.json)
+is 1.162649413650009, 95% interval [1.1455797183886958, 1.1843805843799495].
+Its 19 flagged observations among 200 remain recorded; this is descriptive,
+not an accepted regression decision. Warm-only perf captures exclude model
+construction through the worker's existing completed-warmup event.

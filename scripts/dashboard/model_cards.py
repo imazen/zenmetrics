@@ -301,6 +301,7 @@ def readme_section(items):
         ref=ref.split(';')[0]
         if len(ref)>24:ref=ref[:21].rstrip()+'…'
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
+        if observation and c['parity_status']=='Partial canonical parity':check='partial; '+check
         ratio=observation.get('ratio')
         speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
         if ratio is not None:speed+={'rten':' R','ort-cpu':' O'}.get(observation.get('ratio_engine'),'')
