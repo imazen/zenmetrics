@@ -40,13 +40,39 @@ def public_row(row, meta, host, campaign):
     return out
 
 
+ROUND_FIELDS = ['host','campaign','source','source_commit','metric_name','size_name','width','height',
+    'threads','timing_phase','cold_repeat','only_mode','engine','impl_binary_sha','reference_sha256',
+    'distorted_sha256','cell_id','attempt','round_index','time_ns','iterations','elapsed_total_ns',
+    'compensated_total_ns','gate_clean','qualified_timing','preferred','peak_rss_gib_rounded',
+    'capture_utc','protocol','measurement_kind']
+
+
+def round_rows(public, raw):
+    """Emit saved rounds, never split an aggregate into invented observations."""
+    means=raw.get('round_means_ns') or []
+    rounds=raw.get('zenbench_rounds') or []
+    if not means and public['timing_phase']=='cold' and public['status']=='ok' and public.get('median_ns') is not None:
+        means=[public['median_ns']]
+    for i,mean in enumerate(means):
+        row={k:public.get(k) for k in ROUND_FIELDS}
+        sample=rounds[i] if i<len(rounds) else {}
+        gate=sample.get('gate_clean')
+        if gate is None and raw.get('warm_rounds_flagged')==0 and raw.get('warm_rounds_clean')==len(means):
+            gate=True
+        row.update(round_index=i,time_ns=mean,iterations=sample.get('iterations'),
+            elapsed_total_ns=(sample.get('elapsed_ns') or [None])[0],
+            compensated_total_ns=(sample.get('compensated_ns') or [None])[0],gate_clean=gate,
+            measurement_kind='fresh_process_constructor_and_first_pair' if public['timing_phase']=='cold' else 'warm_zenbench_round_mean_per_call')
+        yield row
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('captures',type=Path)
     p.add_argument('private_aggregates',type=Path)
     p.add_argument('output',type=Path)
     a=p.parse_args();a.output.mkdir(exist_ok=False)
-    all_rows=[];provenance=[];coverage={}
+    all_rows=[];all_rounds=[];provenance=[];coverage={}
     for host in ('mac','i265','r7900x'):
         root=a.captures/host;receipt=json.loads((root/'capture-receipt.json').read_text())
         campaigns=[]
@@ -71,6 +97,7 @@ def main():
                     excluded['other_cold_repeat']+=1;continue
                 out=public_row(row,meta,host,campaign)
                 included.append(out);all_rows.append(out)
+                for sample in round_rows(out,row):all_rounds.append((out,sample))
                 states[(row['source'],row['cell_id'])]=row['cell_status']
             # Report snapshots and overlays are separate hashes, retained without paths.
             public_meta={k:meta.get(k) for k in ['campaign','manifest_sha256','binary_sha256','inputs','source_commit','build_receipt_sha256','policy','metrics','manifest_cells']}
@@ -98,6 +125,7 @@ def main():
             out['qualified_timing']=r['qualified_timing']=='True'
             for k in ('warm_rounds_clean','warm_rounds_flagged'):out[k]=int(r[k])
             all_rows.append(out)
+            for sample in round_rows(out,{}):all_rounds.append((out,sample))
         protocol=a.private_aggregates/(host+'-protocol.json')
         # The existing allowlisted protocol is copied intact; it contains no raw assets.
         (a.output/(host+'-private-protocol.json')).write_bytes(protocol.read_bytes())
@@ -109,11 +137,17 @@ def main():
         if qualified:
             best=max(qualified,key=lambda r:(r['capture_utc'] or '',int(r['attempt'])))
             best['preferred']=True
+    for public,sample in all_rounds:sample['preferred']=public['preferred']
     for host,meta in coverage.items():
         rows=[r for r in all_rows if r['host']==host]
         meta.update(saved_attempt_rows=len(rows),preferred_qualified_cells=sum(r['preferred'] for r in rows),
             exact_metric_names=sorted({r['metric_name'] for r in rows}),
             qualification_note='Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.')
+        host_rounds=[sample for public,sample in all_rounds if public['host']==host]
+        meta['individual_measurement_rows']=len(host_rounds)
+        meta['round_note']='Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates.'
+        with (a.output/(host+'-rounds.csv')).open('w') as f:
+            w=csv.DictWriter(f,fieldnames=ROUND_FIELDS,lineterminator='\n');w.writeheader();w.writerows(host_rounds)
         with (a.output/(host+'-observations.csv')).open('w') as f:
             w=csv.DictWriter(f,fieldnames=FIELDS,lineterminator='\n');w.writeheader();w.writerows(rows)
     (a.output/'sources.json').write_text(json.dumps(provenance,indent=2)+'\n')

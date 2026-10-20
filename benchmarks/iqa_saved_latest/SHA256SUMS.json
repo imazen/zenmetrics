@@ -1,4 +1,5 @@
 {
+  "README.md": "4be32967efbd707f4841d8c37d920429b2b4f762b703b8f266d6a94cae33f12f",
   "mac-private-protocol.json": "73f5d365bc2331c0cb2ee20604c381463d7c5f9f2767cccf95a42c46c885bc59",
   "i265-private-protocol.json": "da8f0b47c6fd95668fd1ab44e86a0259242e36f8ec4dbd1200af9f1fdf9e57fa",
   "r7900x-private-protocol.json": "e009e8a50d339e2bca51971870f19cae879efd51b1fd969072173b5e61650ed8",
@@ -6,6 +7,10 @@
   "i265-observations.csv": "5eafccfd4e9076887854b07050537a7f331df6613976385256a753d2032d58c0",
   "r7900x-observations.csv": "b6dbb41057dbdf35f9156695aa329af3c1d4ff16bcdeaf64eb567e2be0950d27",
   "sources.json": "02397bbd6edb538e0d4b821e0c6e1ec07eb6359d78530fa8fb535ec5b38bc25b",
-  "coverage.json": "55f16125a1a0ddf0288765fc2b8eeb07c7f740e4d1dd56800a9b01338962fb66",
-  "protocol.json": "83b88ca0cfd4e2cffe27073e520b844ab629e2194f816d97903f89b3152bbaed"
+  "coverage.json": "da597a27bcc569fd22fd250472e29393866be7700ff0338ca0e7d279fab2b5dd",
+  "protocol.json": "25c13f3a1b2cda586dbd6a260a9bd7670ea732865b5b12f74a747d6c0baf1d31",
+  "sync.json": "251d261d1693b08d53ef3115d6a93296631913882d232b15c1ec7a4e0027671d",
+  "mac-rounds.csv": "087938b188636b4cc17b0f96ec623a916ddd2a678f3a1d8296e9c59ceacebe2d",
+  "i265-rounds.csv": "f5348512ac2d65d890e40ec1783ae0a6836a332a292840b7cd86a381cdc76ed1",
+  "r7900x-rounds.csv": "c12a3d4a2c815cdc89da70748240df66c7e762f837222b3b4d7ee36708ea1f82"
 }

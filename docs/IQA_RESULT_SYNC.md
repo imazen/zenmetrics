@@ -32,3 +32,12 @@ and full push logs. A failed cycle preserves the previous remote export.
 The coordinator runs on efficiency cores at low CPU/I/O priority, with a 2 GiB
 service memory limit. This is result capture/publication, not a scoring process;
 benchmark workers retain their own shared heavy locks and placement gates.
+
+### Scatter measurements
+
+Each cycle also projects `*-rounds.csv`: one saved cold repeat or warm zenbench
+round per row, with `time_ns`, exact metric/host/binary/input/thread identities,
+phase, round index and qualification. A warm point is the measured per-call
+mean within a round, not an invented timing for each iteration. The sync's
+evidence fingerprint covers both attempt and round CSVs. No raw image-quality
+scores enter either table. Missing individual round arrays stay missing.

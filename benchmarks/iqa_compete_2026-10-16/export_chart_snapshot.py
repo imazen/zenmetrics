@@ -135,6 +135,9 @@ def export(root, output, host, include_sealed=False, record_rejected_overlays=Fa
                 value.update(resource_evidence(path.parent/'cells'/config['durable_cell_id']/
                     f"attempt-{attempt['attempt']:04d}"/'worker.log', attempt.get('log_sha256'), host))
                 samples = row.get('zenbench_samples', [])
+                value['zenbench_rounds'] = [dict(round_index=i, iterations=s.get('iterations'),
+                    elapsed_ns=s.get('elapsed_ns'), compensated_ns=s.get('compensated_ns'),
+                    gate_clean=s.get('gate_clean')) for i,s in enumerate(samples)]
                 value['warm_rounds_clean'] = sum(s.get('gate_clean') is True for s in samples)
                 value['warm_rounds_flagged'] = sum(s.get('gate_clean') is not True for s in samples)
                 value['qualified_timing'] = attempt['status']=='ok' and (config['timing_phase']=='cold' or

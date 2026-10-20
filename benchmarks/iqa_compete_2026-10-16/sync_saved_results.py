@@ -39,7 +39,7 @@ def fingerprint(folder):
     """Ignore capture timestamps/report identities; commit when measured evidence changes."""
     import csv
     digest = hashlib.sha256()
-    for path in sorted(folder.glob('*-observations.csv')):
+    for path in sorted(list(folder.glob('*-observations.csv'))+list(folder.glob('*-rounds.csv'))):
         digest.update(path.name.encode())
         rows = []
         with path.open() as stream:
