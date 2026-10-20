@@ -39,6 +39,16 @@ def resident_adapter(spec, metric):
         text = ast.unparse(node)
         if isinstance(node, (ast.For, ast.With)):
             break
+        # ast.unparse parenthesizes tuple targets. Match the actual input
+        # assignment instead of relying on its printed spelling.
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Tuple)
+                and [getattr(item, 'id', None) for item in node.targets[0].elts]
+                in (['r', 'd'], ['reference', 'distorted'])
+                and isinstance(node.value, ast.ListComp)
+                and any(isinstance(item, ast.Call) and isinstance(item.func, ast.Attribute)
+                        and item.func.attr == 'fromfile' for item in ast.walk(node.value))):
+            continue
         if (text.startswith(('p = argparse.', 'parser = argparse.', 'p.add_argument(', 'parser.add_argument(',
                              'a = p.parse_args()', 'args = parser.parse_args()', 'r, d = [np.fromfile(',
                              'reference, distorted = [np.fromfile(', 'if a.setup_only:', 'if args.setup_only:'))
