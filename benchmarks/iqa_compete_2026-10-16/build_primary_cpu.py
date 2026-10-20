@@ -16,7 +16,10 @@ from record_durable_build import verify_source_file
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('revision');p.add_argument('output',type=Path);a=p.parse_args()
+    p.add_argument('revision');p.add_argument('output',type=Path)
+    p.add_argument('--feature', action='append', default=[],
+                   help='Additional explicit Cargo feature, e.g. zenmetrics-cli/nr')
+    a=p.parse_args()
     repo=Path(__file__).resolve().parents[2]
     revision=subprocess.check_output(['git','-C',str(repo),'rev-parse',a.revision],text=True).strip()
     assert not a.output.exists() and not a.output.is_symlink()
@@ -32,7 +35,7 @@ def main():
     for name in files:
         original=subprocess.check_output(['git','-C',str(repo),'show',revision+':'+name])
         verify_source_file(name,original,tree/name,[]);hashes[name]=sha(tree/name)
-    features=['compete','metrics-parallel']
+    features=['compete','metrics-parallel',*a.feature]
     command=['cargo','build','--manifest-path',str(tree/'Cargo.toml'),'--locked','--release','-p','cpu-profile','--features',','.join(features),'--bin','iqa-compete']
     env.update(CARGO_TARGET_DIR=str(root/'target'),CARGO_PROFILE_RELEASE_LTO='thin')
     for key in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','CARGO_BUILD_RUSTFLAGS']:env.pop(key,None)

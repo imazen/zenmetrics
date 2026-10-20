@@ -2234,8 +2234,8 @@ bench-iqa-canonical-flag-profiles index:
 
 
 # Caller supplies heavy admission; exports the pinned revision before compiling.
-bench-iqa-canonical-cpu-revision-build revision output:
-    python3 -B benchmarks/iqa_compete_2026-10-16/build_primary_cpu.py '{{revision}}' '{{output}}'
+bench-iqa-canonical-cpu-revision-build revision output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/build_primary_cpu.py '{{revision}}' '{{output}}' {{options}}
 
 # Caller supplies heavy admission; checks NR reference-image auxiliary columns.
 bench-iqa-canonical-nr-auxiliary python manifest output:
