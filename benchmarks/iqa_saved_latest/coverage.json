@@ -40,12 +40,12 @@
       {
         "campaign": "changed-remaining2",
         "manifest_cells": 763,
-        "saved_attempt_rows": 430,
-        "qualified_attempt_rows": 430,
+        "saved_attempt_rows": 437,
+        "qualified_attempt_rows": 437,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 430,
-          "pending": 333
+          "ok": 437,
+          "pending": 326
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -117,11 +117,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T01:20:01.672616+00:00",
-      "2026-10-20T01:20:01.974751+00:00"
+      "2026-10-20T01:25:01.696146+00:00",
+      "2026-10-20T01:25:02.012870+00:00"
     ],
-    "saved_attempt_rows": 2585,
-    "preferred_qualified_cells": 2423,
+    "saved_attempt_rows": 2592,
+    "preferred_qualified_cells": 2430,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
@@ -304,8 +304,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T01:20:01.397185+00:00",
-      "2026-10-20T01:20:01.535207+00:00"
+      "2026-10-20T01:25:01.397532+00:00",
+      "2026-10-20T01:25:01.534153+00:00"
     ],
     "saved_attempt_rows": 3721,
     "preferred_qualified_cells": 3531,
@@ -414,12 +414,12 @@
       {
         "campaign": "ordinary-all",
         "manifest_cells": 4560,
-        "saved_attempt_rows": 3961,
-        "qualified_attempt_rows": 3786,
-        "gate_flagged_attempt_rows": 47,
+        "saved_attempt_rows": 4048,
+        "qualified_attempt_rows": 3870,
+        "gate_flagged_attempt_rows": 50,
         "observed_cell_statuses": {
-          "ok": 3833,
-          "pending": 727
+          "ok": 3920,
+          "pending": 640
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -431,11 +431,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T01:20:02.483369+00:00",
-      "2026-10-20T01:20:02.483369+00:00"
+      "2026-10-20T01:25:02.803062+00:00",
+      "2026-10-20T01:25:02.803062+00:00"
     ],
-    "saved_attempt_rows": 4009,
-    "preferred_qualified_cells": 3834,
+    "saved_attempt_rows": 4096,
+    "preferred_qualified_cells": 3918,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
