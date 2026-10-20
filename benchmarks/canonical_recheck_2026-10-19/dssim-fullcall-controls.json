@@ -1,0 +1,270 @@
+{
+  "build_receipt": {
+    "path": "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/build-receipt.json",
+    "sha256": "6dc642a850c2b00bf9de8db9efbebf964fe39b7cd5f84b38ec8e000c32f1628b"
+  },
+  "control_receipt": {
+    "path": "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/controls-v1/result.json",
+    "sha256": "080d43f1e141938792e258953924ad919936b84ac748d76138b991d9549b2e82"
+  },
+  "binary": {
+    "path": "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/dssim-fullcall-reference",
+    "resolved": "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/dssim-fullcall-reference",
+    "bytes": 6093152,
+    "sha256": "047e8f923ca8e319391eca7cf8111060a8da81ab4b22a6d0fec37227d111829a"
+  },
+  "source_hashes": {
+    "benchmarks/iqa_compete_2026-10-16/dssim_fullcall_reference.c": "cfb84e402ceb50a4bd48cc2c91e258b26b4b4cadd09667687d8807b43402f32d",
+    "benchmarks/iqa_compete_2026-10-16/build_dssim_fullcall_reference.py": "c58374ae88168b64a6aca66c669ba930af937c7d23143a73b76a62060c897f33",
+    "benchmarks/iqa_compete_2026-10-16/check_dssim_fullcall_reference.py": "ace9ec9477e82b909667e8cc56ce02b406ea195d92c62fdad6acaadf8eb54cd0"
+  },
+  "compiler_version": "x86_64-linux-gnu-gcc-11 (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "compiler_command": [
+    "/usr/bin/x86_64-linux-gnu-gcc-11",
+    "-O3",
+    "-std=c11",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-fno-fast-math",
+    "-ffp-contract=off",
+    "-I",
+    "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/inputs",
+    "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/inputs/dssim_fullcall_reference.c",
+    "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/inputs/libdssim_core.a",
+    "-ldl",
+    "-pthread",
+    "-lm",
+    "-o",
+    "/home/lilith/tmp/handoff/dssim-fullcall-oracle-20261020/build-v1/dssim-fullcall-reference"
+  ],
+  "library_sha256": "4de9551888ecdb2af6516543d108557d91950a0974f9cee104b1554d76d72ea1",
+  "header_sha256": "388252f7ed0972ef1b4ec42ea2e5872704649c93b9d75d279263f5317128fc87",
+  "comparisons": 24,
+  "child_processes": 48,
+  "scalar_observations": 144,
+  "cases": [
+    {
+      "case": "pairA-64-t1",
+      "threads": 1,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f555ae2237a5400",
+      "case_receipt_sha256": "03b5f9b7b0a09ad64f8f99a0b8d93247a6077305d78cbf35464f3324557d2050",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-64-t8",
+      "threads": 8,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f555ae2237a5400",
+      "case_receipt_sha256": "2de120699940f6af107500f869965432f7d3274e4e9729476ae0d2e51442c1d4",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-odd-t1",
+      "threads": 1,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f56590319be1800",
+      "case_receipt_sha256": "fc68a29a8ca6a3e419e7df64af0e0c9a4950624f730c1eceb013fec9f88639c5",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-odd-t8",
+      "threads": 8,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f56590319be1800",
+      "case_receipt_sha256": "bb304d375f940db0585c92abe9473e2e505177db4df0bbd1820e808d2e4dd9eb",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-1mp-t1",
+      "threads": 1,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f61114a2ba24600",
+      "case_receipt_sha256": "10e57f3682b427a604005a809d69c2b2e5a2c3407cc984706e89ce2df2d0d439",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-1mp-t8",
+      "threads": 8,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f61114a2ba24600",
+      "case_receipt_sha256": "9ba87fbc3a08bee7b69cf91b4767158a4b79d008e288847c859efb6612e898dd",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-4k-t1",
+      "threads": 1,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f67a7788cf31000",
+      "case_receipt_sha256": "a55f87d5b3e829e1115a7f4be1838fd7ba1457bfa5934deb94bb8b16fbfbae0b",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairA-4k-t8",
+      "threads": 8,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f67a7788cf31000",
+      "case_receipt_sha256": "547726c652cc5cf6243f2e113790dbb79543dd442d6c74e00a3ccc376d08e048",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-64-t1",
+      "threads": 1,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f7aa4470c24a700",
+      "case_receipt_sha256": "134adde5878151b040507049c6022407cc4e28e8df0b49c6c0239e90966274e1",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-64-t8",
+      "threads": 8,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f7aa4470c24a700",
+      "case_receipt_sha256": "003a6cfba4821e23ace3daf76c8f621da0093cffd5d12ebd55c0334715538ec8",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-odd-t1",
+      "threads": 1,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f7a534171527400",
+      "case_receipt_sha256": "066822fe85d6a0cd07ebfc3b8fa745a816a2d1e1b174369aef15c86dab704507",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-odd-t8",
+      "threads": 8,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f7a534171527400",
+      "case_receipt_sha256": "822ce415bc5546c8398702c7b4af9db8fca8c2f9ee717fff8c43bd2858ec45d0",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-1mp-t1",
+      "threads": 1,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f7a43502151d600",
+      "case_receipt_sha256": "3173fab154d66852f6d09cc6ff1edcaafb1c893ff6b1846efe54f8b5313daea7",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-1mp-t8",
+      "threads": 8,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f7a43502151d600",
+      "case_receipt_sha256": "14d528b9fb752a6a6d79340a87c7476453665d79cac15d93fd2e46835cbe8734",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-4k-t1",
+      "threads": 1,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f7e6831213fed00",
+      "case_receipt_sha256": "e821025c5b8f14de1c9c71142d90a335ea8669f2f81b19e0b42cd28aef25a398",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairB-4k-t8",
+      "threads": 8,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f7e6831213fed00",
+      "case_receipt_sha256": "e43c66f6765aa9a31192d2cadd50cefbf2c1d9a2a9339b2d79b4d9b4a12e1dd9",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-64-t1",
+      "threads": 1,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f79caf8c5b37600",
+      "case_receipt_sha256": "f84009c5f930fd5f6aab18161c1c155dda8f44d70b3c0cd468bdf80341da02d5",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-64-t8",
+      "threads": 8,
+      "width": 64,
+      "height": 64,
+      "exact_f64_bits": "3f79caf8c5b37600",
+      "case_receipt_sha256": "f889d64659c51094a11dda6110a1ced85f0ee1df70423130d668a95dbb227eab",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-odd-t1",
+      "threads": 1,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f7a0948e9388600",
+      "case_receipt_sha256": "720cba2508c04e1cd395c5db48303ad74557a0200016bf4a262747f442229075",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-odd-t8",
+      "threads": 8,
+      "width": 255,
+      "height": 257,
+      "exact_f64_bits": "3f7a0948e9388600",
+      "case_receipt_sha256": "8e8908afa207f4ac893e380b009932ac96e2c817681964532bba6c99fe6f4097",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-1mp-t1",
+      "threads": 1,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f7f353ebc81f800",
+      "case_receipt_sha256": "65f909ff5afc354e2a791e8b486049a89081c31a77f51e12da609ee7be15c64a",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-1mp-t8",
+      "threads": 8,
+      "width": 1024,
+      "height": 1024,
+      "exact_f64_bits": "3f7f353ebc81f800",
+      "case_receipt_sha256": "e8b67446a82e33f42f2b6026c24d3bc9acffb7405469dbc1db3a5dee38bb7a52",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-4k-t1",
+      "threads": 1,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f7dd7765fc7cd00",
+      "case_receipt_sha256": "969962c37b59d73c3564a3af54db01b1dbdc7de66a64c1b6ab6aa0b968b79c1f",
+      "scalar_observations": 6
+    },
+    {
+      "case": "pairC-4k-t8",
+      "threads": 8,
+      "width": 3840,
+      "height": 2160,
+      "exact_f64_bits": "3f7dd7765fc7cd00",
+      "case_receipt_sha256": "2bd11c75b1367869d06893309a9f4f6c0bacd6c0f42489e76ca48322081529cc",
+      "scalar_observations": 6
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 47s | peak-RSS 1.42GiB | min-avail 13980MiB | peak-load 5.61"
+  ],
+  "timing_qualified": false,
+  "old_wrapper_source_recovered": false,
+  "qualification": "Accuracy-only exact-bit old/new C-call controls over12rawpairs at1/8. Context/images/comparison/release all inside new C clock. Source-bound new binary; no old binary source recovery, assigned numerical bound, comparative timing ratio or accepted regression inferred. Raw B/C decode lineage remains unqualified."
+}

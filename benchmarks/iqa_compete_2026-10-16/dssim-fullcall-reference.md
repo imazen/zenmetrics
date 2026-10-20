@@ -1,5 +1,19 @@
 # DSSIM full-call reference successor
 
+## Root execution, 2026-10-20
+
+The frozen builder linked successfully, and all 24/24 pair/budget comparisons
+passed: 48 fresh children retained 144 finite scalar observations, with exact
+f64 bits across old/new COLD and SAMPLE values in each case. The C, Python and
+header bytes match the retained source bundle. The run completed in 47 s with
+peak-RSS 1.42 GiB, minimum available 13,980 MiB and peak load 5.61.
+
+The [control receipt](../canonical_recheck_2026-10-19/dssim-fullcall-controls.json)
+binds the new ELF, source, compiler, static archive and linked runtime. It does
+not recover the older executable's missing C-source witness or assign a new
+numerical bound. Separate paired timings on the ordinary current40 worker are
+in progress. The preparation notes below remain the record before execution.
+
 Source preparation only: this adapter has not been compiled or scored by this
 lane. Root admits the frozen build/control command separately. The old oracle,
 plans, scores and timing caveats remain unchanged.

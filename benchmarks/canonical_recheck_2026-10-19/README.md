@@ -1,5 +1,19 @@
 # Local canonical rechecks
 
+The [DSSIM full-call reference controls](dssim-fullcall-controls.json) passed
+24/24 pair/budget comparisons and 144 exact-bit old/new scalar observations.
+The new reference times context and image construction, comparison and release
+inside each sample; its C source, header, author archive, compiler and ELF are
+bound explicitly. Accuracy controls do not supply a comparative timing ratio.
+The 47 s run used peak-RSS 1.42 GiB, minimum available 13,980 MiB and peak load
+5.61. Older context-staged timings and their source-proof limit remain retained.
+
+The [three-route neural scope review](../iqa_compete_2026-10-16/nn-flag-scope-review-2026-10-20.md)
+finds no concrete clock-scope defect in the selected DeepDC/VGG first-call and
+PaQ2PiQ warm rows. Image conversion and both required evaluations are timed;
+model loading is staged. This is source review of those three rows, not runtime
+contamination, effective worker-count or transitive rebuild qualification.
+
 The [latest four CPU profiles](grid-flag-profiles-2026-10-20/index.json) cover
 three revised FLIP cells and one DSSIM-GPU submission path. Their binary,
 configuration, raw recording and report hashes were verified before publication.
