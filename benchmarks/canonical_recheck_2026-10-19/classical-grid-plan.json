@@ -1,0 +1,292 @@
+{
+  "schema": 1,
+  "status": "declared and started; completion is recorded by acquired case summaries",
+  "metrics": 84,
+  "cases": 2016,
+  "threads": [
+    1,
+    28
+  ],
+  "geometries": [
+    [
+      64,
+      64
+    ],
+    [
+      255,
+      257
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      3840,
+      2160
+    ]
+  ],
+  "content_pairs": [
+    "photo, AIC2026 S67",
+    "stained-glass artwork with strong outlines, AIC2026 S68",
+    "digital illustration, AIC2026 S58"
+  ],
+  "input_manifest_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+  "raw_root": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2",
+  "queue_sha256": "9edcd3d065397cdc104d5b6660673af16fc311618bba6c646c6d629eed5146c6",
+  "preparation_receipt_sha256": "1970f5f20e02fde271c5eb22118d5fd4d67f6bafcbbf84dd3420be49619c95aa",
+  "groups": [
+    {
+      "plan": "group-00.plan.json",
+      "sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 264,
+      "metrics": [
+        "vmaf",
+        "vmaf-neg",
+        "vmaf-4k",
+        "vmaf-v1",
+        "vmaf-studio601",
+        "vmaf-neg-studio601",
+        "psnr-y-libvmaf",
+        "cambi",
+        "cambi-aic2026",
+        "ssim-libvmaf",
+        "msssim-libvmaf"
+      ]
+    },
+    {
+      "plan": "group-01.plan.json",
+      "sha256": "8f8101278e89666055fcf8aa4efbd79db111fc46042a559a711b3d27312b75c8",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 288,
+      "metrics": [
+        "psnr",
+        "psnr-y",
+        "psnr-y601",
+        "psnr-y-studio601",
+        "ssimc",
+        "ws-hv",
+        "nlpd",
+        "nlpd-iqa",
+        "butteraugli",
+        "proposal-butteraugli",
+        "hdrvdp3-aic2026",
+        "hdrvdp-aic2026"
+      ]
+    },
+    {
+      "plan": "group-02.plan.json",
+      "sha256": "79817a74bc2b8e5bb18057b924596ffde39aafb59309bb5b703732301e817af1",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 72,
+      "metrics": [
+        "psnr-ycbcr611",
+        "psnr-cb",
+        "psnr-cr"
+      ]
+    },
+    {
+      "plan": "group-03.plan.json",
+      "sha256": "3d5210befcd3dbbe54ead8f1f91760ad0b74146b59b830d900f4096b7a49b192",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 48,
+      "metrics": [
+        "ciede2000",
+        "ssim"
+      ]
+    },
+    {
+      "plan": "group-04.plan.json",
+      "sha256": "ed164cdaa1531bfe315e51baa96943584767a94da33584e0ec2a50390bf32919",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "flip"
+      ]
+    },
+    {
+      "plan": "group-05.plan.json",
+      "sha256": "2358e383511ea3397b2bba5eabeac5db20fe3c1e155cbd39660c1630a8527294",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 120,
+      "metrics": [
+        "flip-v17",
+        "ssim2",
+        "piqe",
+        "niqe",
+        "brisque"
+      ]
+    },
+    {
+      "plan": "group-06.plan.json",
+      "sha256": "881f33a66d523d8a11dd796618952f92952e854207b3003a25f94cd2e88832a4",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "cw-ssim"
+      ]
+    },
+    {
+      "plan": "group-07.plan.json",
+      "sha256": "9c8f5c7a77900ac15a46dad1aa6ed6632a0641651a0a5e57c0f6d1d269e17a26",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "butteraugli-original"
+      ]
+    },
+    {
+      "plan": "group-08.plan.json",
+      "sha256": "3902f89d0f4d1c056f1032d8435531cc82ba5689acaf63d6b610c0552cee9c01",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "ssimulacra1"
+      ]
+    },
+    {
+      "plan": "group-09.plan.json",
+      "sha256": "0a082ae4621f1ed50e96f3836c1a62547885f6f56497dd6769b3f0c97d166778",
+      "rust_source": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+      "cases": 24,
+      "metrics": [
+        "dssim"
+      ]
+    },
+    {
+      "plan": "group-10.plan.json",
+      "sha256": "8ff1f5a21d998f11b8cc4339eda97d11509a1b57d016b735ddc988ca930dcd9d",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "cvvdp"
+      ]
+    },
+    {
+      "plan": "group-11.plan.json",
+      "sha256": "0724b0bcafbd0bff965a57a9fb0b2fb76c546eec1c0cc3cc4fe8fe38b22ffc0d",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "iwssim"
+      ]
+    },
+    {
+      "plan": "group-12.plan.json",
+      "sha256": "3ed0bb62e8c2e2acdc614b5403c6042261ba371dfee558d35494534884e49164",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "iwssim-piq"
+      ]
+    },
+    {
+      "plan": "group-13.plan.json",
+      "sha256": "85b1904ffc47e95e2c8df4fefc648fba529372da1310e0bd2e0c75f6f007b2c3",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "gmsd"
+      ]
+    },
+    {
+      "plan": "group-14.plan.json",
+      "sha256": "7f5140f1875c570350555b2a01d8b5595acecb2bef4000fb4aecd2060483ea43",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 360,
+      "metrics": [
+        "mdsi",
+        "haarpsi",
+        "haarpsi-y",
+        "fsim",
+        "fsim-k2",
+        "fsim-k3",
+        "fsim-k4",
+        "fsim-nodownscale",
+        "vsi",
+        "vsi-k2",
+        "vsi-k3",
+        "vsi-k4",
+        "vsi-nodownscale",
+        "msssim",
+        "vifvec"
+      ]
+    },
+    {
+      "plan": "group-15.plan.json",
+      "sha256": "a555bc711c7c8437ab4f3ba180ab7917bf2f53a806a64d3569c725f233b89a40",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 48,
+      "metrics": [
+        "psnrhvs",
+        "psnrhvs-y"
+      ]
+    },
+    {
+      "plan": "group-16.plan.json",
+      "sha256": "acdc8e3f4d3377d52ee16cc217bbc80a842afdcfcd76bf95f11d80c6f17e963c",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 480,
+      "metrics": [
+        "ssim-pyiqa",
+        "ssim-pyiqa-f32",
+        "ssim-pyiqa-f32-k2",
+        "ssim-pyiqa-f32-k3",
+        "ssim-pyiqa-f32-k4",
+        "ssim-pyiqa-f32-k5",
+        "ssim-pyiqa-f32-k6",
+        "ssimc-pyiqa-f32",
+        "ssimc-pyiqa-f32-k2",
+        "ssimc-pyiqa-f32-k3",
+        "ssimc-pyiqa-f32-k4",
+        "ssimc-pyiqa-f32-k5",
+        "ssimc-pyiqa-f32-k6",
+        "ms-ssim-pyiqa",
+        "ms-ssim-pyiqa-f32",
+        "ms-ssim-pyiqa-f32-k2",
+        "ms-ssim-pyiqa-f32-k3",
+        "ms-ssim-pyiqa-f32-k4",
+        "ms-ssim-pyiqa-f32-k5",
+        "ms-ssim-pyiqa-f32-k6"
+      ]
+    },
+    {
+      "plan": "group-17.plan.json",
+      "sha256": "bb23b6b0f433dc98c1fc8f490b0a443404b2295ab4519845cb41234b19896382",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 48,
+      "metrics": [
+        "fsim-y",
+        "mad"
+      ]
+    },
+    {
+      "plan": "group-18.plan.json",
+      "sha256": "69770d303563f793a2663257bbe9068e91a4b18be968e540f5683f072e4398e7",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "vif"
+      ]
+    },
+    {
+      "plan": "group-19.plan.json",
+      "sha256": "d4ffd12fa06a67593248bea7a2474a45e32db377687b6c5cdcefbb4e7ba052a7",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "psnrhvs-daala"
+      ]
+    },
+    {
+      "plan": "group-20.plan.json",
+      "sha256": "44fe7b5f89f4ab61bad76534e4942e24a8195ca30e0ec7198aac4e360fd89b21",
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "cases": 24,
+      "metrics": [
+        "mdctpsnr"
+      ]
+    }
+  ],
+  "qualification": "Warm scalar grid only; no inferred size refusals, map parity, cold comparability or regression acceptance"
+}

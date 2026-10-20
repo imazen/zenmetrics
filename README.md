@@ -67,7 +67,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
 | [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | original A-FINE / pin… | 2/2 pass | ≈0.95× R |
-| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | IIGROUP/AHIQ | prior | — |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | original AHIQ / pinne… | 1/2 pass | ≈0.55× R |
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.45× O |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
@@ -166,7 +166,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.096× |
 | [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.07× ! |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 3/3 pass | ≈1.06× R ! |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 4/4 pass | ≈1.06× R ! |
 | [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈0.958× R |
 | [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈1.05× O |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
@@ -215,7 +215,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, upstream-path nine-crop ensemble | not recorded | not recorded | MIT / unknown |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | original AHIQ / pinned source | 0.0000001390775044018966 | not recorded | MIT / unknown |
 
 </details>
 

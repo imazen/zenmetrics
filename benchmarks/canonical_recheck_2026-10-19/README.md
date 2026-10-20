@@ -9,6 +9,14 @@ Additional original MATLAB, corrected VIF and libvmaf cohorts are indexed in
 The per-case TSVs retain exact dimensions, threads, bounds, deltas and ratios.
 They do not replace multi-size or content validation.
 
+The [declared broader classical grid](classical-grid-plan.json) has started:
+84 CPU routes × four geometries × three content pairs × threads 1/28 = 2,016
+warm scalar cases. Its raw queue and frozen input/plan hashes are indexed there.
+Declaration is not completion; existing README ratios remain representative
+completed cohorts. One historical preparer was preserved byte-for-byte from git
+before moving its nonexecuted provenance binding to a retained path. Runtime
+commands, case contracts and numerical bounds remain unchanged.
+
 The frozen Rust build is upstream master `efae6b8fed9e57346157d92dffc3cdb57c44560e`
 (clean exported tree `f82b3614b385`). Binary SHA256:
 `7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0`.
@@ -434,3 +442,9 @@ successful native arms against all three representations of the ten-round
 contract: row count, timing observations and recorded round means. Its raw
 manifest and hashes remain outside git. This is a structural check of the
 acquired prefix, not an assertion of complete matrix coverage.
+
+## Current HaarPSI native maps
+
+The [current frozen-source recheck](haarpsi-current-maps/haarpsi-maps.json) completes all 24 map cases: four sizes, three content pairs and threads 1/28. On the 3840×2160 illustration, 41 native positions per thread setting are NaN where the original weighted map is finite. The other 22 cases have no nonfinite mismatches. The largest finite-pixel difference across all cases is 1.1233741833871491e-5; no external map bound is assigned. Each native map call also checks its scalar score bits against the scalar-only API. Scalar agreement does not establish pointwise map parity.
+
+The probe links the current frozen HaarPSI rlib from source efae6b8fed9e57346157d92dffc3cdb57c44560e, verifying original crate files and the recorded luma-map adapter. Its 38s wrapper receipt reports peak-RSS 1.12 GiB, minimum available 11755 MiB and peak load 3.34. Raw planes remain outside public git, with hashes in the linked index.

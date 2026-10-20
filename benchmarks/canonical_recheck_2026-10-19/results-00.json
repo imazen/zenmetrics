@@ -26,6 +26,33 @@
     ],
     "qualified": false
   },
+  "ahiq": {
+    "canonical": "original AHIQ / pinned source",
+    "check": "1/2 pass",
+    "ratio": 0.5532055831942069,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "9f9597b91a9764ebc99254a72e73d4aeaf47bd98eebebd032352636528cfdf54",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.5532055831942069,
+    "observed_cases": 1,
+    "expected_cases": 2,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.390775044018966e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "9f9597b91a9764ebc99254a72e73d4aeaf47bd98eebebd032352636528cfdf54"
+    ],
+    "qualified": false
+  },
   "ahiq-pyiqa": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
     "check": "2/2 pass",
@@ -693,34 +720,6 @@
     ],
     "plan_sha256": [
       "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
-    ],
-    "qualified": false
-  },
-  "fsim-y": {
-    "canonical": "author FeatureSIM.m first output",
-    "check": "3/3 pass",
-    "ratio": 0.04847927054562014,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.04847927054562014,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 3,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.4845701334920136e-09,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
-      "fb60975c2cfa9aad51ce41136f00ba45bf7274dd0f061c9b85a4aa4f22094b9d"
     ],
     "qualified": false
   }

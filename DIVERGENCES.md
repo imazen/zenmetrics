@@ -349,6 +349,15 @@ input is cropped and no C odd-size numerical or timing pass is claimed.
 - NaN on zero-weight inputs preserved exactly (cross-cutting #4).
 - `haarpsi-y` (luma-only) is an **EXTENSION** — the reference is the
   full RGB→YIQ path only.
+- **Observed native-map difference (2026-10-20)** — the current frozen
+  `efae6b8fed9e57346157d92dffc3cdb57c44560e` worker produces 41 NaN map
+  positions on a 3840×2160 illustration where the original similarity/weight
+  arrays yield a finite weighted map, at both 1 and 28 threads. The other
+  22 size/content/thread cases have no nonfinite mismatches. The largest
+  finite-pixel difference over all 24 cases is 1.1233741833871491e-5;
+  no external map bound is assigned. Map and scalar-only APIs return identical
+  scalar bits in every case. [Current evidence and raw-plane hashes](
+  benchmarks/canonical_recheck_2026-10-19/haarpsi-current-maps/haarpsi-maps.json).
 
 ### `fsim` / `fsimc` / `fsim-y` — vs `FR_FSIMc.m`
 

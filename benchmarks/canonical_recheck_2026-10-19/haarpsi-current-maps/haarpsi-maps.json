@@ -1,0 +1,38 @@
+{
+  "cases": 24,
+  "cells_with_nonfinite_mismatches": 2,
+  "max_finite_pixel_abs_delta": 1.1233741833871491e-05,
+  "bound": "UNBOUND",
+  "map_scope": "weighted mean of original primary orientation/chroma similarities using original weights; no logistic applied",
+  "raw_panel": "/home/lilith/tmp/local-canonical-20261019T2330/haarpsi-current-maps",
+  "completion_sha256": "1654779b133faeea0250a374d21f69c1e355f08de8205aaf1d19aa3d75a1ff6e",
+  "build_receipt_sha256": "a6e958f635c925ce988c6439878def22f416772bec5348873c745a84c96111b3",
+  "publisher_sha256": "2e6abc9332ecb9f8d61be0d87a29f275628e11634e8fe19b84f43d44a3998b3d",
+  "shards": [
+    {
+      "path": "haarpsi-map-pairA.tsv",
+      "sha256": "821b1039a3fcb7d45e069e25a516a3a9c1c217588809902093d2b83429385064",
+      "bytes": 2060,
+      "rows": 8
+    },
+    {
+      "path": "haarpsi-map-pairB.tsv",
+      "sha256": "a050ccc94929f1e8e284d5cb4d3a46d1a7be026a3ee1a973817fdb29053d7ccd",
+      "bytes": 2054,
+      "rows": 8
+    },
+    {
+      "path": "haarpsi-map-pairC.tsv",
+      "sha256": "b9c6dbac327503b7dcfe88bd706781b7810c2a27cc2fb727537f11b5099d047f",
+      "bytes": 2066,
+      "rows": 8
+    },
+    {
+      "path": "haarpsi-map-nonfinite.tsv",
+      "sha256": "fcba67c13a2fe4643bd4e8912c0f4aaf323d17ad77115d004dc15067ce0a05f6",
+      "bytes": 8149,
+      "rows": 82
+    }
+  ],
+  "qualified_timing_cells": 0
+}

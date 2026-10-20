@@ -1,4 +1,32 @@
 {
+  "fsim-y": {
+    "canonical": "author FeatureSIM.m first output",
+    "check": "3/3 pass",
+    "ratio": 0.04847927054562014,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.04847927054562014,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.4845701334920136e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
+      "fb60975c2cfa9aad51ce41136f00ba45bf7274dd0f061c9b85a4aa4f22094b9d"
+    ],
+    "qualified": false
+  },
   "gmsd": {
     "canonical": "Clunie libgmsd de646c9a / original rounded RGB ingress",
     "check": "2/2 pass",
@@ -692,34 +720,6 @@
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 6.519154935880067e-07,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-      "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
-    ],
-    "qualified": false
-  },
-  "nlpd-iqa": {
-    "canonical": "IQA_pytorch NLPD / quantized Y709",
-    "check": "\u0394 7.1e-08",
-    "ratio": 0.039819529074785164,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.2060977262778546,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 0,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 7.106362460637672e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

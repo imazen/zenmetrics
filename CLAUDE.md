@@ -594,6 +594,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 - **HaarPSI native map has nonfinite mismatches on a retained illustration pair (2026-10-19).** At 3840×2160, 41 positions at each of 1/28 threads return Rust NaN against a finite weighted mean of the original primary similarity/weight arrays. The primary's weight sums at those positions are between `2.1316282072803006e-14` and `3.410605131648481e-13`; the cause of Rust's NaNs is not established. Scalar results retain their earlier values and the existing scalar gate. Maps have no assigned external bound. Evidence and exact input/source bindings: [map observations](benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.md).
 
+  Rechecked 2026-10-20 against frozen master source `efae6b8fed9e57346157d92dffc3cdb57c44560e`: all 24 cases execute; the same 41 nonfinite mismatches persist at each thread count on the 4K illustration, with none in the other 22 cases. Scalar map/score APIs agree bit-for-bit in every case. [Current map evidence](benchmarks/canonical_recheck_2026-10-19/haarpsi-current-maps/haarpsi-maps.json).
+
 - **VIFp RGB luma precision, found 2026-10-19:** the frozen e2d414c3
   `vif` route misses the unchanged 1e-9 author-reference gate in 22/24 raw
   size/content/thread cases (largest difference 4.093188010756421e-9).
