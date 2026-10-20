@@ -1618,3 +1618,18 @@ benchmarks/canonical_recheck_2026-10-19/vmaf-plan-verifier-controls.json	ignored
 benchmarks/rebenchmark_since_f7668c7/local41-order-2026-10-20.json	ignored	Measured native scheduling insertion and source-lineage evidence; not a canonical timing comparison.
 benchmarks/rebenchmark_since_f7668c7/order_current_local41_2026-10-20.tsv	ignored	Measured native scheduling hints for41changed routes on one common local input; not canonical comparison timings.
 benchmarks/canonical_recheck_2026-10-19/local41-scoped-fullcall-command.json	ignored	Complete41route source-bound comparative command and timing qualifications; not82 acquired observations.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-06.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/lpips-vgg-first-pair-cid22-t1-first-combined60.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/grid-flip-v17-grid-pairA-255x257-t28-060d464f-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/grid-flip-grid-pairA-3840x2160-t28-060d464f-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/current40-remaining-comparative-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/vmaf-fullcall-current40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/vmaf-fullcall-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/msssim-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/daala-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-grid-pairA-3840x2160-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-v17-grid-pairA-255x257-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/ws-hv-current-512x512-t1-bb7819c0-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-author-cuda-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/results-05.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/cohorts-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

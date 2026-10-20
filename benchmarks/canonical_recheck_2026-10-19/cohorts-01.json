@@ -1,4 +1,76 @@
 {
+  "lpips-vgg-pair-cid22-t1-f525415f-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-vgg-pair-cid22-t1-f525415f/fixed-add40-run",
+    "plan_sha256": "7537d991f937770327341c798d4a58b8871c9a502ae6de2a74bead6f9321b08e",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "lpips-vgg-pair-cid22-t1-f525415f-fixed-add40-run.tsv",
+        "sha256": "54be5cb7d72ea46ebfea6c34da6033bb9192c0bb75d855ebafd0251f0b9f544d"
+      }
+    ]
+  },
+  "matlab-extra-rest-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/matlab-extra-rest-run",
+    "plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
+    "cases": 8,
+    "expected_cases": 10,
+    "artifacts": [
+      {
+        "file": "matlab-extra-rest-run.tsv",
+        "sha256": "a9d35e3a19705f8f145f0424036120158d62167f1925ec51af7024f92deaacc1"
+      }
+    ]
+  },
+  "matlab-extra-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/matlab-extra-run",
+    "plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
+    "cases": 1,
+    "expected_cases": 10,
+    "artifacts": [
+      {
+        "file": "matlab-extra-run.tsv",
+        "sha256": "208f73a47e51a7b3bde0683496fef634e3f6757475b425cf146073c0fc35fc4c"
+      }
+    ]
+  },
+  "mdctpsnr-rgb-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/mdctpsnr-rgb-run",
+    "plan_sha256": "5b4e87075257f7f19f7d8d71868cea209d964292965dc48b5ed9d63247e20048",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "mdctpsnr-rgb-run.tsv",
+        "sha256": "19090633d0aadf807e3d9c9e777b55eb6313512676b16954c40c296eb8d2e74d"
+      }
+    ]
+  },
+  "msssim-current-grid-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/msssim-current-grid-run",
+    "plan_sha256": "7b0ca6a027def87caf33b7e80ba35698bd48ae013767b557bd52b2bf5d805323",
+    "cases": 2,
+    "expected_cases": 72,
+    "artifacts": [
+      {
+        "file": "msssim-current-grid-run.tsv",
+        "sha256": "33d1b6de5929f5365351af2eed5b6df97d663334d74a54f1281ac7c687d16f93"
+      }
+    ]
+  },
+  "musiq-numpy125-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/musiq-numpy125-run",
+    "plan_sha256": "c541aa9c43b75c9b4e9d10ce97ca4e6c47fa6da3f39eee101281a371c12ef1a5",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "musiq-numpy125-run.tsv",
+        "sha256": "040f3d0c045369bfd8876be094d24c0ce14c175d7399557691f5e91414c3e0fe"
+      }
+    ]
+  },
   "niqe-resident-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/niqe-resident-run",
     "plan_sha256": "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d",
@@ -354,12 +426,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 28,
+    "cases": 33,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "597ab96ede4838416cdcaac58f29c39bd13986d5cc4e09d8883aed227dc4eb24"
+        "sha256": "d734d282f3da6e3626ef241ec348cc8cca4114e384732066a2ea0ec07efed31f"
       }
     ]
   },
@@ -472,14 +544,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },
@@ -582,36 +654,12 @@
   "vmaf-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-current-grid-run",
     "plan_sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
-    "cases": 3,
+    "cases": 8,
     "expected_cases": 168,
     "artifacts": [
       {
         "file": "vmaf-current-grid-run.tsv",
-        "sha256": "1d2ac2b56693a475487d97279131a15cf5a242332127e67e421321b1fca021ca"
-      }
-    ]
-  },
-  "vmaf-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-run",
-    "plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
-    "cases": 22,
-    "expected_cases": 22,
-    "artifacts": [
-      {
-        "file": "vmaf-run.tsv",
-        "sha256": "16af13c4a350d114fd93397e05ab5b5da8fde345f2c3b4c1ffb2259546a12a01"
-      }
-    ]
-  },
-  "ws-hv-current-512x512-t1-bb7819c0-confirmation-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/confirmation-run",
-    "plan_sha256": "cf20392c2ef22386fd533d7fee649b8fdf2b2f4e7474c1b4c25435bf6e25f9fb",
-    "cases": 1,
-    "expected_cases": 1,
-    "artifacts": [
-      {
-        "file": "ws-hv-current-512x512-t1-bb7819c0-confirmation-run.tsv",
-        "sha256": "9d98edc02e03f7c2f8d5879e797dda4209b607e8f17c16b0fef40bf208bc0ea6"
+        "sha256": "c98cf25a8f4090afed74a7fe3fbc365dab4d1bc23a44330db0a69e521e063f15"
       }
     ]
   }

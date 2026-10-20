@@ -1,0 +1,62 @@
+{
+  "vmaf-fullcall-current-grid-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run",
+    "plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+    "cases": 3,
+    "expected_cases": 144,
+    "artifacts": [
+      {
+        "file": "vmaf-fullcall-current-grid-run.tsv",
+        "sha256": "7acac99812492722479c554355b079f3e6b394ef46e0d355791a6ebd32c3fcd4"
+      }
+    ]
+  },
+  "vmaf-fullcall-current40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run",
+    "plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
+    "cases": 4,
+    "expected_cases": 12,
+    "artifacts": [
+      {
+        "file": "vmaf-fullcall-current40-run.tsv",
+        "sha256": "79b5ae5f347ff7784954a0add0ae53bf9f7e050bf2839aecc80aa26962dc72fa"
+      }
+    ]
+  },
+  "vmaf-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-run",
+    "plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "cases": 22,
+    "expected_cases": 22,
+    "artifacts": [
+      {
+        "file": "vmaf-run.tsv",
+        "sha256": "16af13c4a350d114fd93397e05ab5b5da8fde345f2c3b4c1ffb2259546a12a01"
+      }
+    ]
+  },
+  "ws-hv-current-512x512-t1-bb7819c0-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/confirmation-run",
+    "plan_sha256": "cf20392c2ef22386fd533d7fee649b8fdf2b2f4e7474c1b4c25435bf6e25f9fb",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ws-hv-current-512x512-t1-bb7819c0-confirmation-run.tsv",
+        "sha256": "9d98edc02e03f7c2f8d5879e797dda4209b607e8f17c16b0fef40bf208bc0ea6"
+      }
+    ]
+  },
+  "ws-hv-current-512x512-t1-bb7819c0-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/fixed-add40-run",
+    "plan_sha256": "f4f4892641c47ad2c705704b855ab815e8e42cc79a5fc1334d8cec710ce3ddcc",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ws-hv-current-512x512-t1-bb7819c0-fixed-add40-run.tsv",
+        "sha256": "2e56742d50ed5cf22f84fc8d99ac772df679c71af39e00b5dbfe403ed706ebcc"
+      }
+    ]
+  }
+}

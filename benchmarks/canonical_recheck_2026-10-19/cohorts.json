@@ -1,17 +1,22 @@
 {
   "schema": 2,
   "kind": "cohorts",
-  "cohorts": 99,
+  "cohorts": 108,
   "shards": [
     {
       "file": "cohorts-00.json",
       "cohorts": 53,
-      "sha256": "b9ae229bddb06670c709d8df000b47dd0ebf46d1807a1999b17a14e2e8bfd356"
+      "sha256": "d1b593d38f14867eba2525b87b71bb908d0ff85d12c1493b67a96f979f11c186"
     },
     {
       "file": "cohorts-01.json",
-      "cohorts": 46,
-      "sha256": "b0a4cc031f06ffe430f7d1667bcbf6301de680a9bedab446a32b747c622bf3dc"
+      "cohorts": 50,
+      "sha256": "fb20c7f35fa1224bbb094cabdf909894ba012277efaf50d0c5413d6f406ab658"
+    },
+    {
+      "file": "cohorts-02.json",
+      "cohorts": 5,
+      "sha256": "752a5117d2d1f7bb63eb956e2e78d18ebf57a461285e6a3d02e132730d322206"
     }
   ]
 }
