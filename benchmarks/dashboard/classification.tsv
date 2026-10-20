@@ -1312,3 +1312,6 @@ benchmarks/canonical_recheck_2026-10-19/rgb-variants-corrected-run.tsv	ignored	N
 benchmarks/canonical_recheck_2026-10-19/ssim1-confirm-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/ssim1-initial20-interval.json	ignored	Descriptive native reference block-ratio bootstrap intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/unmeasured.json	ignored	Explicit unmeasured native reference comparison inventory; pending coverage metadata, not timing observations.
+benchmarks/canonical_recheck_2026-10-19/flip-combined60-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/profiles.json	ignored	Native reference profiling provenance; not canonical multi-host timing observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-combined60-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
