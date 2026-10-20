@@ -1300,3 +1300,15 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/canonical_recheck_2026-10-19/daala-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-pr199-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-initial20-interval.json	ignored	Descriptive native reference block-ratio bootstrap intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/gmsd-rgb-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/iw-piq-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/matlab-extra-rest-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/psnr-planes-corrected-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/results-03.json	ignored	Native reference comparison summary shard; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/rgb-variants-corrected-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/ssim1-confirm-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/ssim1-initial20-interval.json	ignored	Descriptive native reference block-ratio bootstrap intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/unmeasured.json	ignored	Explicit unmeasured native reference comparison inventory; pending coverage metadata, not timing observations.
