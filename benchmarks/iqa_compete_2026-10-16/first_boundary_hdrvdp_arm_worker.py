@@ -7,8 +7,10 @@ Frozen original v3 scripts, metrics and preflight outputs are read only.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
+import struct
 
 from first_boundary_hdrvdp_resident import sha, verify, write
 from first_boundary_hdrvdp_resident_run import preflight_ok, scalar_bits
@@ -200,10 +202,51 @@ def verified_observation(directory, case, ordinal, cohort, expected_cohort, expe
             passed=True
         except ValueError:
             pass
+    if row['passed'] is True:
+        value=row.get('score_bits')
+        if (not isinstance(value,str) or len(value)!=16
+                or any(ch not in '0123456789abcdef' for ch in value)
+                or not math.isfinite(struct.unpack('>d',bytes.fromhex(value))[0])):
+            raise ValueError('passed retained observation requires finite explicit f64 bits')
     if row['passed'] is not passed or row.get('score_bits')!=bits:
         raise ValueError('prior arm scalar gate differs from original retained output')
     return dict(ordinal=ordinal,role=ORDER[ordinal],passed=passed,score_bits=bits,
                 result=str(directory/'result.json'),result_sha256=sha(directory/'result.json'))
+
+
+def audit(root, expected_cohort, expected_seal, case_id, ordinal, output):
+    """Read-only artifact audit under admission; never invokes an evaluator."""
+    cohort,plan=context(root,expected_cohort)
+    seal=checked_seal(root,cohort,expected_cohort,expected_seal)
+    selected=[case for case in selected_cases(cohort,plan) if case['id']==case_id]
+    if len(selected)!=1 or ordinal not in range(4):
+        raise ValueError('one exact retained case and ABBA ordinal required')
+    output=output.resolve()
+    if not output.is_relative_to(root/'admission') or output.name!='audit-result.json':
+        raise ValueError('new audit output must be inside owned admission directory')
+    case=selected[0]
+    observations=[verified_observation(arm_path(root,case,n),case,n,cohort,expected_cohort,
+        expected_seal,seal['baseline']) for n in range(ordinal+1)]
+    passed=all(row['passed'] is True for row in observations)
+    if ordinal==3:
+        bits=[row['score_bits'] for row in observations if row['passed'] is True]
+        exact=len(bits)==4 and len(set(bits))==1
+        expected=dict(case=case_id,cohort_sha256=expected_cohort,seal_sha256=expected_seal,
+            observations=observations,passed=exact,matched_scope=False,
+            qualified_timing_cells=0,qualification='unmatched_scope')
+        if load(root/'cases'/(case_id+'.json'))!=expected:
+            raise ValueError('retained ABBA case differs from audited original observations')
+        passed=passed and exact
+    # Recheck the source and sealed preflight closure before releasing admission.
+    context(root,expected_cohort)
+    checked_seal(root,cohort,expected_cohort,expected_seal)
+    record=dict(schema=1,operation='read-only-retained-audit',case=case_id,ordinal=ordinal,
+        cohort_sha256=expected_cohort,seal_sha256=expected_seal,observations=observations,
+        passed=passed,source_runtime_verified=True,metric_inference_executed=False,
+        matched_scope=False,qualified_timing_cells=0)
+    write(output,record)
+    print(json.dumps(record),flush=True)
+    return 0 if passed else 1
 
 
 def arm(root, expected_cohort, expected_seal, case_id, ordinal):
@@ -271,13 +314,14 @@ def arm(root, expected_cohort, expected_seal, case_id, ordinal):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation',choices=('seal','arm'))
+    parser.add_argument('operation',choices=('seal','arm','audit'))
     parser.add_argument('root',type=Path)
     parser.add_argument('--cohort-sha',required=True)
     parser.add_argument('--preflight-sha')
     parser.add_argument('--seal-sha')
     parser.add_argument('--case-id')
     parser.add_argument('--ordinal',type=int)
+    parser.add_argument('--audit-output',type=Path)
     args=parser.parse_args()
     if args.operation=='seal':
         if not args.preflight_sha:parser.error('explicit passed-preflight SHA256 required')
@@ -285,7 +329,12 @@ def main():
     else:
         if not args.seal_sha or not args.case_id or args.ordinal is None:
             parser.error('explicit seal SHA256, case ID and ABBA ordinal required')
-        code=arm(args.root.resolve(strict=True),args.cohort_sha,args.seal_sha,args.case_id,args.ordinal)
+        if args.operation=='audit':
+            if args.audit_output is None:parser.error('explicit new audit output required')
+            code=audit(args.root.resolve(strict=True),args.cohort_sha,args.seal_sha,
+                       args.case_id,args.ordinal,args.audit_output)
+        else:
+            code=arm(args.root.resolve(strict=True),args.cohort_sha,args.seal_sha,args.case_id,args.ordinal)
     raise SystemExit(code)
 
 

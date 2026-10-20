@@ -6,6 +6,16 @@ These findings concern reuse of retained observations. They do not establish a
 failure in newly executed arms or invalidate retained numerical observations.
 Active frozen cohorts and helpers must remain unchanged.
 
+The tracked successor now fixes both paths. Every retained arm dispatches a
+read-only admitted `audit` operation, including terminal single-arm reuse.
+That operation runs `context`, `checked_seal` and `verified_observation` on the
+retained prefix. A terminal audit also reconstructs the complete ABBA case and
+requires its retained receipt to agree. Source and preflight closure are checked
+again before writing a new audit receipt. Passed summaries must contain finite
+explicit f64 bits. Existing evaluator execution and numerical limits are
+unchanged. This tracked successor is separate from the active frozen v2 sources
+whose hashes appear below.
+
 ## Actionable findings
 
 1. `first_boundary_hdrvdp_arm_queue.py:242` accepts an existing arm after checking
@@ -29,6 +39,20 @@ The new `first_boundary_hdrvdp_queue_review.py` exercises these two paths with
 synthetic files only. It never starts a worker, Octave or a native scorer. Its
 admitted execution receipt belongs with the private review output, separately
 from metric or timing qualification.
+
+That old-source control passed: an altered synthetic raw artifact and four null
+bit fields were accepted by the old summary, reproducing both defects. All
+38 selected commands formatted explicit 1/8 budgets. Wrapper receipt: rc=0,
+0 seconds, peak RSS 0.02 GiB, minimum available 15238 MiB, peak load 2.41.
+The result SHA256 is
+`50cb763c6c62f3f0fbc09f643a22a4b72813463c69f10caaf85a5557e5468006`.
+
+`first_boundary_hdrvdp_queue_audit_check.py` supplies a separate file-only
+successor control: valid retained ABBA, changed raw log, null bits, NaN bits,
+changed preflight artifact and changed seal. It calls the actual audit function
+with a synthetic complete source/plan/receipt topology and never invokes an
+evaluator. Rejections must occur on the successor while the old summary accepts
+the same damaged fixtures; these controls do not qualify real metric scores.
 
 ## Fresh-arm admission and source stack
 

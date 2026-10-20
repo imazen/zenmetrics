@@ -10,10 +10,12 @@ from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import struct
 import sys
 
 
@@ -212,7 +214,13 @@ def checked_case(root,case,expected,seal):
                 or arm['role']!=ORDER[ordinal] or observation['passed'] is not arm['passed']
                 or observation['score_bits']!=arm.get('score_bits')):
             raise ValueError('retained ABBA observation or arm receipt hash differs')
-        if arm['passed'] is True:bits.append(arm['score_bits'])
+        if arm['passed'] is True:
+            value=arm.get('score_bits')
+            if (not isinstance(value,str) or len(value)!=16
+                    or any(ch not in '0123456789abcdef' for ch in value)
+                    or not math.isfinite(struct.unpack('>d',bytes.fromhex(value))[0])):
+                raise ValueError('retained passed arm requires finite explicit f64 bits')
+            bits.append(value)
     passed=len(bits)==4 and len(set(bits))==1
     if row['passed'] is not passed:raise ValueError('retained ABBA exact-bit gate differs')
     return row
@@ -240,15 +248,23 @@ def coordinate(args):
                 role=ORDER[ordinal]
                 result=root/'arms'/case['id']/f'{ordinal}-{role}'/'result.json'
                 if result.is_file():
-                    # Existing observations are never overwritten or inferred
-                    # to be newly verified. A later admitted arm revalidates
-                    # its predecessors before scoring.
+                    # Audit original artifacts inside shared admission even
+                    # when there will be no fresh arm in this selection.
                     event(root,'retained_arm_not_rerun',case=case['id'],ordinal=ordinal,result=str(result))
-                    row=load(result)
-                    if (row['cohort_sha256']!=args.cohort_sha or row['seal_sha256']!=args.seal_sha
-                            or row['case']!=case['id'] or row['ordinal']!=ordinal or row['role']!=role
-                            or row['source_runtime_verified'] is not True):
-                        raise ValueError('retained arm identity/source/runtime differs')
+                    audits=root/'admission'/'audits'
+                    number=len(list(audits.glob('*/*'))) if audits.exists() else 0
+                    label=f'audits/{case["id"]}/{ordinal}-{role}-{number:06d}'
+                    audit=root/'admission'/label/'audit-result.json'
+                    code=dispatch(root,cohort,args.cohort_sha,'audit',label,1,
+                        ['--seal-sha',args.seal_sha,'--case-id',case['id'],'--ordinal',str(ordinal),
+                         '--audit-output',str(audit)])
+                    if code not in (0,1) or not audit.is_file():
+                        raise ValueError('admitted retained audit failed; further arms refused')
+                    row=load(audit)
+                    if (row['source_runtime_verified'] is not True or row['case']!=case['id']
+                            or row['ordinal']!=ordinal or row['cohort_sha256']!=args.cohort_sha
+                            or row['seal_sha256']!=args.seal_sha or (code==0)!=(row['passed'] is True)):
+                        raise ValueError('retained audit identity or exit outcome differs')
                     failed |= row['passed'] is not True
                     print('HDR_ARM_RETAINED '+str(result),flush=True)
                     continue
