@@ -167,3 +167,18 @@ existing hash manifest. `bench-iqa-canonical-original-nn-plan` freezes original
 LPIPS, ST-LPIPS, DISTS and DeepDC callables, graph identities, source, reference
 weights and the existing JND/1000 bounds. Build and prepare under shared
 admission; run neural measurements after the classical comparisons.
+
+For a comparative run restricted to the 27 changed routes since `f7668c7`, use:
+
+```sh
+just bench-iqa-canonical-changed /absolute/reference-manifest.json /absolute/new-results
+```
+
+The manifest supplies `binary`, `rust_source` and `metric_plans` (one explicit
+reference-plan path for each changed name). The command verifies those bindings,
+freezes `new-results.plan.json`, then compares threads 1 and 8 in ascending
+retained historical duration. Each case keeps its valid geometry, input hashes,
+reference convention and existing numerical bound. This order comes from the
+committed changed-route timing list; it is not a prediction for a different host.
+Both output paths must be new. Use `--metrics NAME,...` to restrict execution of
+the frozen plan, or pass `--blocks N --samples N` for acquisition counts.

@@ -1658,6 +1658,15 @@ bench-iqa-canonical-resume output *options:
 bench-iqa-canonical-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_comparison.py {{options}}
 
+# Freeze and run the 27 changed routes in ascending retained duration.
+bench-iqa-canonical-changed manifest output *options:
+    just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'
+    just bench-iqa-canonical '{{output}}.plan.json' '{{output}}' {{options}}
+
+# One current native worker plus explicit original-reference plans, changed routes only.
+bench-iqa-canonical-changed-plan manifest output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_changed_canonical.py '{{manifest}}' '{{output}}' {{options}}
+
 bench-iqa-canonical-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical
 
@@ -1672,6 +1681,9 @@ bench-iqa-canonical-dssim-build source output:
 
 bench-iqa-canonical-ssim1-build source output:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_ssimulacra1_reference.py '{{source}}' '{{output}}'
+
+bench-iqa-canonical-gmsd-build archive output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_gmsd_reference.py '{{archive}}' '{{output}}'
 
 bench-iqa-canonical-gpu-build source target:
     CARGO_TARGET_DIR='{{target}}' CARGO_PROFILE_RELEASE_LTO=thin CUDARC_CUDA_VERSION=12000 RUSTFLAGS='--cfg iqa_compete_ingress --cfg iqa_compete_cached' cargo build --locked --release --manifest-path '{{source}}/Cargo.toml' -p cpu-profile --features compete,metrics-parallel,study-gpu-cuda --bin iqa-compete
@@ -1708,6 +1720,28 @@ bench-iqa-canonical-copy-assets manifest output:
 
 bench-iqa-canonical-original-nn-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_original_nn_comparison.py {{options}}
+
+bench-iqa-canonical-author-setup python config metric pairs *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/canonical_author_network_setup.py '{{python}}' '{{config}}' '{{metric}}' '{{pairs}}' {{options}}
+
+# Isolated legacy author runtime; invoke under shared resource admission.
+bench-iqa-canonical-wadiqam-env output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TMPDIR='{{env_var("HOME")}}/tmp'
+    test ! -e '{{output}}'
+    uv venv --python /usr/bin/python3 '{{output}}'
+    uv pip install --python '{{output}}/bin/python' setuptools==80.10.2 wheel numpy==1.23.5
+    uv pip install --python '{{output}}/bin/python' --no-build-isolation chainer==7.8.1 h5py==3.16.0 imageio==2.38.0
+
+bench-iqa-canonical-dreamsim-env python parent output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TMPDIR='{{env_var("HOME")}}/tmp'
+    test ! -e '{{output}}'
+    uv venv --python '{{python}}' '{{output}}'
+    printf '%s\n' '{{parent}}' > '{{output}}/lib/python3.12/site-packages/reference-parent.pth'
+    uv pip install --python '{{output}}/bin/python' --no-deps dreamsim==0.2.1 peft open_clip_torch
 
 # Link an explicitly supplied original libvmaf archive; no replacement kernel.
 bench-iqa-canonical-vmaf-build source library output:
