@@ -32,7 +32,7 @@ pub fn print_score(format: OutputFormat, kind: MetricKind, scores: &[(&'static s
         OutputFormat::Plain => {
             print!("metric={}", kind.name());
             for (col, value) in scores {
-                print!(" {col}={value:.6}");
+                print!(" {col}={value}");
             }
             println!();
         }
@@ -53,7 +53,7 @@ pub fn print_score(format: OutputFormat, kind: MetricKind, scores: &[(&'static s
             // columns (butteraugli emits both max + pnorm3).
             let header: Vec<&str> = scores.iter().map(|(col, _)| *col).collect();
             println!("{}", header.join("\t"));
-            let row: Vec<String> = scores.iter().map(|(_, v)| format!("{v:.6}")).collect();
+            let row: Vec<String> = scores.iter().map(|(_, v)| format!("{v}")).collect();
             println!("{}", row.join("\t"));
         }
     }
@@ -117,7 +117,7 @@ fn render_compare_plain(
             match score {
                 Ok(values) => {
                     for (col, v) in values {
-                        writeln!(w, "  {col:<name_width$}  {v:.6}")?;
+                        writeln!(w, "  {col:<name_width$}  {v}")?;
                     }
                 }
                 Err(reason) => {
@@ -212,7 +212,7 @@ fn render_compare_tsv(
             match score {
                 Ok(values) => {
                     for (_, v) in values {
-                        write!(w, "\t{v:.6}")?;
+                        write!(w, "\t{v}")?;
                     }
                 }
                 // NaN signals a failed cell in TSV mode — distinguishable
@@ -279,7 +279,7 @@ fn render_folder_scores_plain(
         match &row.scores {
             Ok(scores) => {
                 for (col, v) in scores {
-                    write!(w, " {col}={v:.6}")?;
+                    write!(w, " {col}={v}")?;
                     col_stats.entry(*col).or_default().push(*v);
                 }
             }
@@ -305,7 +305,7 @@ fn render_folder_scores_plain(
             let max = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
             writeln!(
                 w,
-                "{col}: count={} mean={mean:.6} min={min:.6} max={max:.6}",
+                "{col}: count={} mean={mean} min={min} max={max}",
                 vals.len()
             )?;
         }
@@ -331,7 +331,7 @@ fn render_folder_scores_tsv(
         match &row.scores {
             Ok(scores) => {
                 for (_, v) in scores {
-                    write!(w, "\t{v:.6}")?;
+                    write!(w, "\t{v}")?;
                 }
             }
             Err(_) => {
@@ -410,4 +410,38 @@ fn render_folder_scores_json(
     serde_json::to_writer_pretty(&mut *w, &doc)?;
     writeln!(w)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod precision_tests {
+    use super::*;
+
+    #[test]
+    fn compare_and_folder_tsv_preserve_f64_bits() {
+        for value in [0.123_456_789_012_345_66, 1e-100, 1e100, f64::MIN_POSITIVE] {
+            let row = CompareRow {
+                reference: "ref.png".into(),
+                variant: "dist.png".into(),
+                scores: vec![Ok(vec![("psnr", value)])],
+            };
+            let mut out = Vec::new();
+            render_compare(
+                &mut out,
+                OutputFormat::Tsv,
+                &[MetricKind::Psnr],
+                &[row],
+                None,
+            )
+            .unwrap();
+            let text = String::from_utf8(out).unwrap();
+            let emitted = text
+                .lines()
+                .nth(1)
+                .unwrap()
+                .split('\t')
+                .next_back()
+                .unwrap();
+            assert_eq!(emitted.parse::<f64>().unwrap().to_bits(), value.to_bits());
+        }
+    }
 }

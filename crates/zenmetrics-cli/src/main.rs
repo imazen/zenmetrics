@@ -3412,7 +3412,7 @@ fn cmd_batch(
             let jod =
                 scorer.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)?;
             let mut row: Vec<String> = record.iter().map(String::from).collect();
-            row.push(format!("{jod:.6}"));
+            row.push(jod.to_string());
             wtr.write_record(&row)?;
             continue;
         }
@@ -3460,7 +3460,7 @@ fn cmd_batch(
                 let rows = result?;
                 let mut row: Vec<String> = record.iter().map(String::from).collect();
                 for (_, v) in &rows {
-                    row.push(format!("{v:.6}"));
+                    row.push(v.to_string());
                 }
                 wtr.write_record(&row)?;
                 continue;
@@ -3516,14 +3516,14 @@ fn cmd_batch(
         #[cfg(feature = "cpu-cvvdp")]
         if let Some(scorer) = cpu_cvvdp_scorer.as_mut() {
             let jod = scorer.score(&reference, &distorted)?;
-            row.push(format!("{jod:.6}"));
+            row.push(jod.to_string());
             wtr.write_record(&row)?;
             continue;
         }
         #[cfg(feature = "gpu-cvvdp")]
         let scored_via_cvvdp = if let Some(scorer) = cvvdp_scorer.as_mut() {
             let jod = scorer.score(&reference, &distorted)?;
-            row.push(format!("{jod:.6}"));
+            row.push(jod.to_string());
             true
         } else {
             false
@@ -3552,19 +3552,7 @@ fn cmd_batch(
                 args.gpu_runtime,
             )?;
             for (_, value) in &scores {
-                row.push(
-                    if matches!(
-                        args.metric,
-                        MetricKind::HdrvdpAic2026
-                            | MetricKind::Hdrvdp3Aic2026
-                            | MetricKind::CambiAic2026
-                            | MetricKind::ProposalButteraugli
-                    ) {
-                        value.to_string()
-                    } else {
-                        format!("{value:.6}")
-                    },
-                );
+                row.push(value.to_string());
             }
         }
         wtr.write_record(&row)?;

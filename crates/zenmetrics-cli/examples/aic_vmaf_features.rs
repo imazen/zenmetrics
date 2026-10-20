@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let f = &s[0].features;
                 let vif_vmaf: f64 = f.vif_scales.iter().sum();
                 format!(
-                    "{}\t{}\t{}\t{:.6}\t{:.6}\t{:.6}\t{:.6}\t{:.6}\t{:.6}\t{:.6}\t{:.6}",
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                     name, rp, dp,
                     s[0].score, ng[0].score, f.adm2, vif_vmaf,
                     f.vif_scales[0], f.vif_scales[1], f.vif_scales[2], f.vif_scales[3]

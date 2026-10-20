@@ -28,4 +28,4 @@ zenmetrics compare --reference ref.png --variant distorted.png \
   --metric fsim --metric vsi --output json
 ```
 
-Select the required metrics explicitly for the new panel. Use JSON to retain full precision; the display TSV rounds to six decimals. FSIM emits both FSIM and FSIMc columns. Keep new results and their executable/source identities separate from this frozen panel; expected refusals must remain explicit. Reusing decoded RGB8 does not imply all metric-specific luma conversions or reference features are shared.
+Select the required metrics explicitly for the new panel. The original panel used JSON because that CLI rounded display TSV values to six decimals. Current CLI score, compare and batch text outputs use round-trip precision; JSON remains the rescorer protocol. FSIM emits both FSIM and FSIMc columns. Keep new results and their executable/source identities separate from this frozen panel; expected refusals must remain explicit. Reusing decoded RGB8 does not imply all metric-specific luma conversions or reference features are shared.
