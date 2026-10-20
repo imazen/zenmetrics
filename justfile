@@ -1655,6 +1655,15 @@ bench-iqa-canonical plan output *options:
 bench-iqa-canonical-classical-first plan output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/compare_classical_first.py '{{plan}}' '{{output}}' {{options}}
 
+# Same clocks and content checks; plans must also bind the successor controller.
+bench-iqa-canonical-classical-first-verified plan output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py '{{plan}}' '{{output}}' {{options}}
+
+# Caller supplies shared heavy admission; these controls execute no scorers.
+bench-iqa-canonical-classical-first-verified-check:
+    python3 -B benchmarks/iqa_compete_2026-10-16/test_classical_first_verified.py -v
+    python3 -O -B benchmarks/iqa_compete_2026-10-16/test_classical_first_verified.py -v
+
 # Caller admits setup/check/cell/finish; queue admits each cell itself.
 bench-iqa-canonical-hdr-numerical +options:
     python3 -I -B benchmarks/iqa_compete_2026-10-16/hdr_original_grid_numerical.py {{options}}

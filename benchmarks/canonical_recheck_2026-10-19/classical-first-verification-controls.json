@@ -1,0 +1,33 @@
+{
+  "source_only": true,
+  "scorer_children_acquired": 0,
+  "controls": {
+    "normal_methods": 20,
+    "optimized_methods": 20,
+    "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/controls-v1/result.json",
+    "sha256": "ed921fe8c823f75f2e7ab8e111e69caf8eb3a2a0a6d58b930faa0e2fa5651c2d"
+  },
+  "real_metadata": {
+    "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/real-verification-v1/result.json",
+    "sha256": "cd7da6c5e98f1d9d6f0835c2a8aa129dd9f0032497bbde42ca6d9d81b3a091e5",
+    "plan_sha256": "96d97e6a07134966137e4c16620b57328350b4b6c332c4964dddaf6d77d230d6",
+    "cases": 24,
+    "old_and_new_accepted_same_metadata": true
+  },
+  "public_tests": {
+    "log": "/home/lilith/tmp/local-canonical-20261019T2330/first-verification-public-tests.log",
+    "sha256": "dc2081e6323c84a041a10a71132b2db3154695aa85a43c87ac97ffee5d750d53",
+    "normal_methods": 20,
+    "optimized_methods": 20
+  },
+  "source_sha256": {
+    "compare_classical_first.py": "fc3533936d46acc60526c3c599f89509d3a9cc648f748002894e6f822bbc1b32",
+    "compare_classical_first_verified.py": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16",
+    "test_classical_first_verified.py": "828db46e26c1f6f13aed5df21d394380765121379b51311f00ac83c4790604fc"
+  },
+  "resource_receipts": [
+    "run-heavy: done rc=0 2s | peak-RSS 0.03GiB | min-avail 14312MiB | peak-load 4.05",
+    "run-heavy: done rc=0 8s | peak-RSS 0.10GiB | min-avail 14805MiB | peak-load 4.15"
+  ],
+  "qualification": "Invocation-local JSON/case-map caching only. Every original content hash and all six per-block verification points remain. No mtime/cross-call hash cache, metric code, numerical bound, arm clock or active old runner changed. These are controls and real metadata validation, not acquired first calls or a verifier speed claim."
+}

@@ -36,3 +36,10 @@ for the outer command and admitted block children. Freeze a NEW request/output
 with the prior request/plan hashes bound; do not edit existing requests or
 replace a selected large case with a smaller fixture. Metadata caching does
 not authorize narrowing bindings or reducing any verification frequency.
+
+Use `just bench-iqa-canonical-classical-first-verified-check` under shared heavy
+admission to run the inert controls normally and with assertions disabled.
+`just bench-iqa-canonical-classical-first-verified PLAN NEW_OUTPUT` runs a
+prepared successor plan; each block admits itself, so give the coordinator no
+outer heavy lock. The plan must bind the successor as well as every original
+helper and source artifact.
