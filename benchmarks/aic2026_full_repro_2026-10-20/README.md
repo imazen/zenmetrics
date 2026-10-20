@@ -2,10 +2,24 @@
 
 All 9,618 distorted images of the July 2026 AIC2026 cropped set (840×944)
 scored with zenmetrics and compared against the published oracle columns.
-Same binary, same routes throughout; per-metric scores and the assembled
-`metrics_cropped.zenmetrics.csv` (identical header + row order, nine
-metadata columns copied, `JND_*` recomputed from our raw values via the
-site-config mapping) live outside git — see `metrics.pointer.md`.
+Same binary, same routes throughout. The assembled `metrics_cropped.zenmetrics.csv`
+(identical header + row order, nine metadata columns copied, `JND_*` recomputed from our
+raw values via the site-config mapping) is committed here gzipped:
+[`metrics_cropped.zenmetrics.csv.gz`](metrics_cropped.zenmetrics.csv.gz), with
+[`provenance_cropped.json`](provenance_cropped.json). It holds only our own values: columns
+produced by unpublished implementations (dvifmish, private ports) stay empty, which
+`repro_check.py` enforces. Per-metric score tables and the fullres CSV are in `metrics.pointer.md`.
+
+Licence: derived from AIC2026 (DaRUS, doi:10.18419/DARUS-6156), released under CC BY-SA 4.0;
+this CSV is distributed under the same licence. Source-image attribution:
+`AIC2026_sources.csv` in that release.
+
+Tools (`scripts/aic2026/`): `assemble.py` builds the CSV from per-metric batch TSVs (moved from
+the lane's scratch; column table in `aic_columns.py`), `july_diff.py` diffs any assembled CSV
+against the published `metrics_<set>.csv`, and `repro_check.py` checks the committed files
+(`just aic-repro-check`; add `--published DIR` where the July CSVs are available to re-derive
+`compare_cropped.tsv` exactly). `compare_cropped.tsv` was re-derived with `july_diff.py`; it is
+the lane's table plus two `nodata` rows (HDR_VDP_2/3, not yet scored).
 
 Binary: `zenmetrics` (zenmetrics-cli) v0.6.0 built from the CI-pinned
 sibling snapshot of master `4d833195` + the `aic_vmaf_features` example
@@ -31,8 +45,8 @@ Exact-level columns (median |Δ| at float-representation scale):
 
 Every miss is a small raw residual amplified by a near-vertical site-JND
 curve, or a documented variant difference — none are route/option errors.
-Worst-five rows per column are in `compare_cropped.worst.txt` next to the
-scores (not committed; per-image values stay out of git).
+Worst-five rows per column: `july_diff.py` writes them next to its report
+(not committed: they contain published values).
 
 | column | route | median \|dJND\| | diagnosis |
 |---|---|---:|---|

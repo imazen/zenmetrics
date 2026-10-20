@@ -21,7 +21,6 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `A-FINE` | `afine` (upstream-verified `afine_all`) | not reproduced. No pyiqa release scores these 840×944 crops as given (0.1.15 and 0.1.16 assert H and W divisible by 32). Upstream and pyiqa inference across crop/pad/resize to a multiple of 32, tiling, every output term, input scaling and normalisation variants, CPU and CUDA: best Spearman 0.94 (fidelity term), best median 0.11 site-JND. On near-lossless pairs the column implies a raw fidelity ≈ 0.097 where every variant gives ≈ 0.015 (2026-10-17) | which A-FINE entry point and output, how inputs were brought to a multiple of 32, which checkpoint | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [afine_aic_2026-10-16](../benchmarks/afine_aic_2026-10-16/README.md), [afine_aic_probe](../benchmarks/afine_aic_probe/README.md) |
 | `WD_s1`–`WD_s5` | `wd` (`wd_s1`–`wd_s5`, Cool-Chic convention) | not reproduced. A 4,480-row grid over the Cool-Chic and google/codex conventions (input normalisation, squared or √ distance, variance floor, σ rescale, VGG taps, pixels as a layer, image pyramid, log2σ 0–6) reaches Spearman 0.98–0.99 with a near-constant scale (published/ours ≈ 0.25), but the best log2σ does not follow the column index (s1→1, s2→3, s3→4, s4→5, s5→6); best median 0.13–0.20 site-JND (2026-10-17) | which implementation, layers, normalisation and pyramid, and how the five columns map to σ | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [wd_port_2026-10-16](../benchmarks/wd_port_2026-10-16/README.md) |
 | `proposal-IDFIQA` | private `idfiqa` port | median 4.2e-6, max 3.33e-4 JND, Spearman 1.0 on rten; native oracle 1e-3 JND gate passes on rten, ORT CPU and CUDA | upstream code licence; no code or weights published | aggregate card verified 2026-10-18 |
-| FSIM/FSIMc/VSI fixed-factor and SSIM-family f32 variants | `fsim-k2/k3/k4/nodownscale` (both FSIM outputs), `vsi-k*`, `ssim-pyiqa-f32-k2`–`k6`, `ssimc-pyiqa-f32-k2`–`k6`, `ms-ssim-pyiqa-f32-k2`–`k6` | implemented, counted and timed; published parity unverifiable because no per-image values are available | per-image values for the fixed-factor variants | [CLI](../crates/zenmetrics-cli/src/metrics/mod.rs), [counts and timings](../benchmarks/iqa_complexity_2026-10-17/README.md) |
 
 ## Identified by configuration search (ports need the option exposed)
 
@@ -60,7 +59,7 @@ See [the port receipt](../crates/zenmetrics-pyiqa-ports/README.md).
 | `CKDN` | `ckdn` | 4.0e-5 | 1.4e-4 | 0.9999 | `ckdn` matches to the same residual |
 | `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim-pyiqa` passes 1e-3 JND (worst 5.4e-13 JND); `cw-ssim` remains distinct |
 
-Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6, Spearman 1.0000):
+Controls scored the same way also match their columns on that 61-pair panel (median \|Δ\| ≤ 3.4e-6, Spearman 1.0000; the full 9,618-crop run moves `NLPD` and `VSI` over the site-JND gate, see Close but not exact):
 `DISTS`, `DeepDC`, `LPIPS-alex`, `LPIPS-VGG`, `STLPIPS`, `STLPIPS-VGG`, `SSIM-pyiqa`,
 `MS-SSIM-pyiqa`, `NLPD`, `VSI`, `GMSD`, `VIF`, `PSNR`, `SSIMc`.
 
@@ -70,7 +69,9 @@ Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6,
 |---|---|---|---|
 | `SSIMULACRA1` | `ssimulacra1` | native max 1.9e-5 | exact published convention |
 | `WS-HV` | `ws-hv` | native max 0.021 | exact published convention |
-| `FSIM`, `FSIMc` | `fsim-y`, `fsim` | one JPEG tail pair at 0.3 JND | corresponding fixed-factor per-image values; semantics settled below |
+| `FSIM`, `FSIMc` | `fsim-y`, `fsim` | full set (9,618 crops, 2026-10-20): raw median 4.7e-5 / 4.9e-5, max 9.7e-3; median site-JND 1.05e-2 / 9.8e-3, over the 1e-3 gate; ours higher on every differing row, all at scores above 0.96. Ours matches the authors' FSIM.m to a 4.5e-8 maximum on 61 pairs, so the column most likely came from another implementation | which FSIM implementation produced the column; pyiqa `fsim` on all crops is being run to test it ([full-set diff](../benchmarks/aic2026_full_repro_2026-10-20/README.md)) |
+| `VSI` | `vsi` | full set: raw median 1.5e-5, max 4.2e-3; median site-JND 7.4e-3 (the 61-pair panel matched at ≤ 3.4e-6). Ours matches the authors' VSI.m to a 1.1e-8 maximum on 61 pairs, with the resize noted in the VSI known-bug entry | which implementation and resize produced the column |
+| `VMAF` | `vmaf-studio601` | full set: raw median 6.5e-3, median site-JND 1.07e-3, just over the 1e-3 gate; Pearson 1.00000 | libvmaf version used for the column |
 | `CKDN` | `ckdn` | median 4.0e-5, max 1.4e-4 (0.026 JND) | resize implementation (pyiqa defaults give the same residual). The published column itself shows no agreement with the AIC2026 subjective JND (within-source Spearman −0.005); our port reproduces it, so that is a property of the method on this data, not of the port |
 | `NLPD` | `nlpd-iqa` | median 2.6e-3, 2.6 % relative (f32 order and bilinear edges) | none needed |
 | `PSNR-Cb`, `PSNR-Cr` | `psnr-cb`, `psnr-cr` | max 1.7e-2 / 5.7e-2 dB | chroma conversion details |
@@ -80,7 +81,8 @@ Controls scored the same way also match their columns (median \|Δ\| ≤ 3.4e-6,
 
 - FSIM/FSIMc and VSI `-kN` replace only `kernel_size = max(1, round(min(H,W)/256))` with `kernel_size = k`; every other pipeline step is unchanged.
 - The pyiqa SSIM-family `-kN` variants set `downsample=True` and `kernel_size=k`; every other pipeline step is unchanged.
-- These are the settled definitions. Branch and implementation qualification belong to the separate verification lane; this docs/site update changes no metric implementation or numerical gate. Published-column parity still needs the corresponding per-image values.
+- These are the settled definitions. Branch and implementation qualification belong to the separate verification lane; this docs/site update changes no metric implementation or numerical gate.
+- Verified 2026-10-20 against the primary oracles patched exactly as above: 1,952 scalar comparisons on all 61 staged crop pairs, 0 above bound (FSIM/FSIMc `-kN` maximum |Δ| 1.1e-6, VSI `-kN` 1.1e-8, pyiqa SSIM family 1.3e-5; MS-SSIM `-k5`/`-k6` refuse every pair because the 11×11 window does not fit their last pooled view) ([aic61](../benchmarks/fixed_factor_verify_2026-10-20/aic61/README.md), [retained evidence](../benchmarks/fixed_factor_verify_2026-10-20/README.md)). The July CSV has no fixed-factor columns, so there is nothing to ask the authors here; these variants are settled.
 
 ## Not yet compared against the published column
 
@@ -103,8 +105,8 @@ None: every implemented column has been compared (2026-10-17).
 
 `PSNR`, `PSNR-Y` (studio-601), `SSIM` (libvmaf), `MS-SSIM` (libvmaf),
 `SSIM-pyiqa`, `MS-SSIM-pyiqa`, `SSIMc`, `PSNR-HVS` family (Daala),
-`VIF` (vifvec), `VIF_vmaf`, `VMAF`, `VMAF-neg`, `ADM2`, `CVVDP` (with the
-`standard_fhd` display), `SSIMULACRA2`, `GMSD`, `HaarPSI`, `VSI`, `DSSIM`,
+`VIF` (vifvec), `VIF_vmaf`, `VMAF-neg`, `ADM2`, `CVVDP` (with the
+`standard_fhd` display), `SSIMULACRA2`, `GMSD`, `HaarPSI`, `DSSIM`,
 `IW-SSIM` (piq convention), `mDCT-PSNR`, `proposal-mDCTPSNR`, `FLIP`
 (`flip-v17` exact), `CIEDE2000`, `Butteraugli-original`, `LPIPS-alex`,
 `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC`, `DreamSim`.

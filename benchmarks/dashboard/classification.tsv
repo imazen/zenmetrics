@@ -1342,6 +1342,7 @@ benchmarks/canonical_recheck_2026-10-19/native-warm-round-audit.json	ignored	Nat
 benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t8-f525415f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/aic2026_full_repro_2026-10-20/compare_cropped.tsv	ignored	AIC2026 full-set column-reproduction aggregates vs published oracle; summarized in the directory README, not a dashboard panel.
 benchmarks/aic2026_full_repro_2026-10-20/metrics.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic2026_full_repro_2026-10-20/provenance_cropped.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/canonical_recheck_2026-10-19/dists-pair-cid22-t1-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t8-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/original-afine-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

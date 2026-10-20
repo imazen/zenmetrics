@@ -1823,6 +1823,10 @@ brief-deploy:
 brief-watch workspace="../zenmetrics--brief-watch":
     scripts/complexity/brief_watch.sh {{workspace}}
 
+# Integrity of the committed AIC2026 reproduction; add --published DIR to re-derive the compare tables.
+aic-repro-check *args:
+    python3 scripts/aic2026/repro_check.py {{args}}
+
 # Browser check of a built dashboard: every tab at two sizes, every control button, drawer, print mode.
 brief-check site="~/tmp/metric-brief/site" shots="~/tmp/metric-brief/check":
     uv run -q --with playwright scripts/complexity/brief_check.py {{site}} --shots {{shots}} ${BRIEF_CHROME:+--chrome "$BRIEF_CHROME"}

@@ -1,0 +1,276 @@
+{
+ "batch_flags": "--pairs <tsv> --output <tsv> --jobs 16 --group-by-ref",
+ "binary": {
+  "path": "/home/lilith/tmp/aic-full-repro/lock-snap/target/release/zenmetrics",
+  "sha256": "68d0ab9aac2353e8492b5fa4d3514cb2b41f932c17ba6cadc31cea58b716ba3f",
+  "version": "zenmetrics-cli 0.6.0"
+ },
+ "columns": {
+  "ADM2": {
+   "options": "vmaf crate feature",
+   "route": "aic_vmaf_features",
+   "score_col": "adm2"
+  },
+  "CAMBI": {
+   "options": "studio-601 distorted-only even-crop",
+   "route": "cambi",
+   "score_col": "cambi"
+  },
+  "CIEDE2000": {
+   "options": "",
+   "route": "ciede2000",
+   "score_col": "ciede2000"
+  },
+  "CVVDP": {
+   "options": "--display-model standard_fhd",
+   "route": "cvvdp",
+   "score_col": "cvvdp_imazen_v*"
+  },
+  "CW-SSIM": {
+   "options": "pyiqa-derived convention",
+   "route": "cw-ssim",
+   "score_col": "cw_ssim"
+  },
+  "DSSIM": {
+   "options": "",
+   "route": "dssim",
+   "score_col": "dssim"
+  },
+  "FLIP": {
+   "options": "flip-evaluator 1.7 row-major f32 sum",
+   "route": "flip-v17",
+   "score_col": "flip_v17"
+  },
+  "FSIM": {
+   "options": "",
+   "route": "fsim-y",
+   "score_col": "fsim_y_imazen_v*"
+  },
+  "FSIMc": {
+   "options": "",
+   "route": "fsim",
+   "score_col": "fsimc_imazen_v*"
+  },
+  "GMSD": {
+   "options": "",
+   "route": "gmsd",
+   "score_col": "gmsd_cpu_imazen_v*"
+  },
+  "HaarPSI": {
+   "options": "",
+   "route": "haarpsi",
+   "score_col": "haarpsi_imazen_v*"
+  },
+  "IW-SSIM": {
+   "options": "",
+   "route": "iwssim-piq",
+   "score_col": "iwssim_piq_imazen_v*"
+  },
+  "JND_CVVDP": {
+   "options": "a*|sign*(x-b)|^c site-config.json",
+   "route": "site-map",
+   "score_col": "CVVDP"
+  },
+  "JND_MS-SSIM": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "MS-SSIM"
+  },
+  "JND_PSNR-HVS": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "PSNR-HVS-vmaf"
+  },
+  "JND_PSNR-Y": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "PSNR-Y"
+  },
+  "JND_SSIM": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "SSIM"
+  },
+  "JND_SSIMULACRA2": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "SSIMULACRA2"
+  },
+  "JND_VMAF-neg": {
+   "options": "",
+   "route": "site-map",
+   "score_col": "VMAF-neg"
+  },
+  "MS-SSIM": {
+   "options": "",
+   "route": "msssim-libvmaf",
+   "score_col": "msssim_libvmaf"
+  },
+  "MS-SSIM-pyiqa": {
+   "options": "",
+   "route": "ms-ssim-pyiqa",
+   "score_col": "ms_ssim_pyiqa"
+  },
+  "NLPD": {
+   "options": "",
+   "route": "nlpd-iqa",
+   "score_col": "nlpd_iqa"
+  },
+  "PSNR": {
+   "options": "",
+   "route": "psnr",
+   "score_col": "psnr"
+  },
+  "PSNR-Cb": {
+   "options": "",
+   "route": "psnr-cb",
+   "score_col": "psnr_cb"
+  },
+  "PSNR-Cr": {
+   "options": "",
+   "route": "psnr-cr",
+   "score_col": "psnr_cr"
+  },
+  "PSNR-HVS": {
+   "options": "studio-601 YUV444",
+   "route": "psnrhvs-daala",
+   "score_col": "psnrhvs_daala"
+  },
+  "PSNR-HVS-Cb": {
+   "options": "",
+   "route": "psnrhvs-daala",
+   "score_col": "psnrhvs_daala_cb"
+  },
+  "PSNR-HVS-Cr": {
+   "options": "",
+   "route": "psnrhvs-daala",
+   "score_col": "psnrhvs_daala_cr"
+  },
+  "PSNR-HVS-Y": {
+   "options": "",
+   "route": "psnrhvs-daala",
+   "score_col": "psnrhvs_daala_y"
+  },
+  "PSNR-Y": {
+   "options": "",
+   "route": "psnr-y-studio601",
+   "score_col": "psnr_y_studio601"
+  },
+  "PSNR-YCbCr611": {
+   "options": "",
+   "route": "psnr-ycbcr611",
+   "score_col": "psnr_ycbcr611"
+  },
+  "SSIM": {
+   "options": "",
+   "route": "ssim-libvmaf",
+   "score_col": "ssim_libvmaf"
+  },
+  "SSIM-pyiqa": {
+   "options": "",
+   "route": "ssim-pyiqa",
+   "score_col": "ssim_pyiqa"
+  },
+  "SSIMULACRA2": {
+   "options": "",
+   "route": "ssim2",
+   "score_col": "ssim2"
+  },
+  "SSIMc": {
+   "options": "",
+   "route": "ssimc",
+   "score_col": "ssimc"
+  },
+  "VIF": {
+   "options": "",
+   "route": "vifvec",
+   "score_col": "vifvec_imazen_v*"
+  },
+  "VIF_vmaf": {
+   "options": "sum of vif_scales[0..3]",
+   "route": "aic_vmaf_features",
+   "score_col": "vif_vmaf"
+  },
+  "VMAF": {
+   "options": "",
+   "route": "vmaf-studio601",
+   "score_col": "vmaf_studio601"
+  },
+  "VMAF-neg": {
+   "options": "",
+   "route": "vmaf-neg-studio601",
+   "score_col": "vmaf_neg_studio601"
+  },
+  "VSI": {
+   "options": "",
+   "route": "vsi",
+   "score_col": "vsi_imazen_v*"
+  },
+  "mDCT-PSNR": {
+   "options": "",
+   "route": "mdctpsnr",
+   "score_col": "mdctpsnr_imazen_v*"
+  },
+  "proposal-Butteraugli": {
+   "options": "raw pnorm-3; no affine",
+   "route": "butteraugli",
+   "score_col": "butteraugli_pnorm3"
+  },
+  "proposal-mDCTPSNR": {
+   "options": "0.000475997802*max(0,80-mDCT-PSNR)^2.3182",
+   "route": "derived",
+   "score_col": "mdctpsnr"
+  }
+ },
+ "commands": {
+  "aic_vmaf_features": "example aic_vmaf_features (vmaf::score_v0_420 Standard+StandardNeg, studio-601 Y ingress)",
+  "butteraugli": "batch --metric butteraugli",
+  "cambi": "batch --metric cambi",
+  "ciede2000": "batch --metric ciede2000",
+  "cvvdp": "batch --metric cvvdp --display-model standard_fhd",
+  "cw-ssim": "batch --metric cw-ssim",
+  "dssim": "batch --metric dssim",
+  "flip-v17": "batch --metric flip-v17",
+  "fsim": "batch --metric fsim",
+  "fsim-y": "batch --metric fsim-y",
+  "gmsd": "batch --metric gmsd",
+  "haarpsi": "batch --metric haarpsi",
+  "iwssim-piq": "batch --metric iwssim-piq",
+  "mdctpsnr": "batch --metric mdctpsnr",
+  "ms-ssim-pyiqa": "batch --metric ms-ssim-pyiqa",
+  "msssim-libvmaf": "batch --metric msssim-libvmaf",
+  "nlpd-iqa": "batch --metric nlpd-iqa",
+  "psnr": "batch --metric psnr",
+  "psnr-cb": "batch --metric psnr-cb",
+  "psnr-cr": "batch --metric psnr-cr",
+  "psnr-y-studio601": "batch --metric psnr-y-studio601",
+  "psnr-ycbcr611": "batch --metric psnr-ycbcr611",
+  "psnrhvs-daala": "batch --metric psnrhvs-daala",
+  "ssim-libvmaf": "batch --metric ssim-libvmaf",
+  "ssim-pyiqa": "batch --metric ssim-pyiqa",
+  "ssim2": "batch --metric ssim2",
+  "ssimc": "batch --metric ssimc",
+  "vifvec": "batch --metric vifvec",
+  "vmaf-neg-studio601": "batch --metric vmaf-neg-studio601",
+  "vmaf-studio601": "batch --metric vmaf-studio601",
+  "vsi": "batch --metric vsi"
+ },
+ "generated": "2026-10-20T06:51:46.008463+00:00",
+ "host": "dev",
+ "images": {
+  "cropped": "/mnt/v/datasets/aic2026/extracted-cropped/PTC-crops-all/ (AIC2026-dataset-cropped.zip)",
+  "fullres": "streamed per-source from AIC2026-dataset-complete.zip"
+ },
+ "jnd": "JND_<col> recomputed from our value via site mapping jnd(x)=a*|sign*(x-b)|^c (~/tmp/aic-full-repro/site-config.json mappings)",
+ "oracle": {
+  "cropped": "/mnt/v/datasets/aic2026/metrics_cropped.csv",
+  "dataset": "AIC2026 July 2026, DaRUS doi:10.18419/DARUS-6156",
+  "fullres": "/mnt/v/datasets/aic2026/metrics_fullres.csv"
+ },
+ "run_wrapper": "~/work/claudehints/scripts/run-heavy --mem 24G --jobs 16",
+ "source": {
+  "commit": "4d8331955f96b558be0094e98ad10e2863105135 data: synchronize three-host IQA results 20261020T041500957563Z",
+  "repo": "imazen/zenmetrics",
+  "workspace": "zenmetrics--aicfull"
+ }
+}

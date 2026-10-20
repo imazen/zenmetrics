@@ -1,7 +1,10 @@
 # aic2026_full_repro_2026-10-20 — pointer
 
 Assembled reproduction CSVs for the July 2026 AIC2026 published metric
-columns. Not in git: each CSV is 9,618 rows × 70 columns.
+columns, 9,618 rows × 70 columns each. The cropped CSV is also committed here, gzipped
+(`gzip -n -9`, deterministic), as `metrics_cropped.zenmetrics.csv.gz`; its provenance is
+`provenance_cropped.json`. `scripts/aic2026/repro_check.py` verifies both against the sha256
+values below.
 
 ## Where
 
@@ -15,7 +18,7 @@ columns. Not in git: each CSV is 9,618 rows × 70 columns.
 | file | bytes | sha256 |
 |---|--:|---|
 | `metrics_cropped.zenmetrics.csv` | 5614750 | `289e1a5c291d32549b802c18d9eadbfb2df351b445649459298eb1e66a455236` |
-| `provenance.json` | 6941 | `76e0fa7c6a6a488d00231477f36f458eb6842a18e5235df75aae22cd357f8b10` |
+| `provenance.json` (committed as `provenance_cropped.json`) | 6941 | `76e0fa7c6a6a488d00231477f36f458eb6842a18e5235df75aae22cd357f8b10` |
 | `metrics_fullres.zenmetrics.csv` | — | pending fullres pass |
 
 `provenance.json` records the binary sha256, source commit `4d833195`,
