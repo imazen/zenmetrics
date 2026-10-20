@@ -2238,6 +2238,10 @@ bench-iqa-canonical-flag-profiles index:
 bench-iqa-canonical-cpu-revision-build revision output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/build_primary_cpu.py '{{revision}}' '{{output}}' {{options}}
 
+# Caller supplies heavy admission; verify every tracked in-tree compiled input.
+bench-iqa-canonical-worker-verify build output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/verify_classical_worker.py '{{build}}' '{{output}}'
+
 # Caller supplies heavy admission; checks NR reference-image auxiliary columns.
 bench-iqa-canonical-nr-auxiliary python manifest output:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_nr_auxiliary.py '{{manifest}}' '{{output}}'
