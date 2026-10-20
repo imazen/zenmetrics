@@ -6,6 +6,17 @@
 
 use crate::decode::Rgb8Image;
 
+mod psnr_kernels;
+
+/// True while an integer-valued squared-error sum of `count` terms (each
+/// at most 255²) stays within f64's exact-integer range — below the bound
+/// the SIMD integer accumulation equals the legacy sequential f64 sum
+/// bit-for-bit; above it the scalar path keeps its historical rounding.
+#[inline]
+fn sse_fits_f64(count: usize) -> bool {
+    (count as u128) * 65025 <= (1u128 << 53)
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum Kind {
     Psnr,
@@ -50,31 +61,36 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
     }
     match kind {
         Kind::Psnr => {
-            let mse = r
-                .pixels
-                .iter()
-                .zip(&d.pixels)
-                .map(|(&a, &b)| {
-                    let delta = f64::from(a) - f64::from(b);
-                    delta * delta
-                })
-                .sum::<f64>()
-                / (3 * n) as f64;
+            let mse = if sse_fits_f64(r.pixels.len()) {
+                // Exact integer SSE (SIMD): identical to the f64 sum
+                // while the total stays under 2^53.
+                psnr_kernels::rgb_sse(&r.pixels, &d.pixels) as f64 / (3 * n) as f64
+            } else {
+                r.pixels
+                    .iter()
+                    .zip(&d.pixels)
+                    .map(|(&a, &b)| {
+                        let delta = f64::from(a) - f64::from(b);
+                        delta * delta
+                    })
+                    .sum::<f64>()
+                    / (3 * n) as f64
+            };
             Ok(psnr(mse))
         }
         Kind::PsnrY => {
             // BT.709 full-range luma on encoded RGB values.
-            Ok(psnr(luma_mse(r, d, |x| {
-                0.2126 * f64::from(x[0]) + 0.7152 * f64::from(x[1]) + 0.0722 * f64::from(x[2])
-            })))
+            Ok(psnr(
+                psnr_kernels::luma_sqerr(&r.pixels, &d.pixels, 0.2126, 0.7152, 0.0722) / n as f64,
+            ))
         }
         Kind::PsnrY601 => {
             // BT.601 full-range luma — the MATLAB `rgb2gray` weights
             // (0.299/0.587/0.114), the most common "PSNR-Y" convention
             // in the literature. NOT the same numbers as `PsnrY`.
-            Ok(psnr(luma_mse(r, d, |x| {
-                0.299 * f64::from(x[0]) + 0.587 * f64::from(x[1]) + 0.114 * f64::from(x[2])
-            })))
+            Ok(psnr(
+                psnr_kernels::luma_sqerr(&r.pixels, &d.pixels, 0.299, 0.587, 0.114) / n as f64,
+            ))
         }
         Kind::PsnrYStudio601 => {
             // Studio-swing BT.601 Y, u8-rounded: `round(16 +
@@ -82,15 +98,20 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
             // YUV420 luma convention, the ffmpeg/libvmaf Y plane, and
             // the JPEG AIC-4 `PSNR-Y` column. Same per-pixel formula
             // (and f32 arithmetic) as `studio601_y_plane`.
-            Ok(psnr(luma_mse(r, d, |x| {
-                f64::from(
-                    (16.0
-                        + (65.481 * x[0] as f32 + 128.553 * x[1] as f32 + 24.966 * x[2] as f32)
-                            / 255.0)
-                        .round()
-                        .clamp(0.0, 255.0) as u8,
-                )
-            })))
+            let mse = if sse_fits_f64(n) {
+                psnr_kernels::studio601_y_sse(&r.pixels, &d.pixels) as f64 / n as f64
+            } else {
+                luma_mse(r, d, |x| {
+                    f64::from(
+                        (16.0
+                            + (65.481 * x[0] as f32 + 128.553 * x[1] as f32 + 24.966 * x[2] as f32)
+                                / 255.0)
+                            .round()
+                            .clamp(0.0, 255.0) as u8,
+                    )
+                })
+            };
+            Ok(psnr(mse))
         }
         Kind::PsnrYLibvmaf => {
             // Studio-swing BT.709 Y, u8-rounded — the `to_yuv420` Y
@@ -98,27 +119,46 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
             // normalized RGB), i.e. what libvmaf's `psnr` aux feature
             // reported under the removed exec adapter. f64 arithmetic
             // and operation order match `to_yuv420` exactly.
-            Ok(psnr(luma_mse(r, d, |x| {
-                let lum = 0.2126 * (f64::from(x[0]) / 255.0)
-                    + 0.7152 * (f64::from(x[1]) / 255.0)
-                    + 0.0722 * (f64::from(x[2]) / 255.0);
-                f64::from((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8)
-            })))
+            let mse = if sse_fits_f64(n) {
+                psnr_kernels::libvmaf_y_sse(&r.pixels, &d.pixels) / n as f64
+            } else {
+                luma_mse(r, d, |x| {
+                    let lum = 0.2126 * (f64::from(x[0]) / 255.0)
+                        + 0.7152 * (f64::from(x[1]) / 255.0)
+                        + 0.0722 * (f64::from(x[2]) / 255.0);
+                    f64::from((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8)
+                })
+            };
+            Ok(psnr(mse))
         }
         Kind::PsnrYCbCr611 => {
             // 6:1:1 weighted PSNR on studio-swing BT.601 YCbCr —
             // `(6·PSNR_Y + PSNR_Cb + PSNR_Cr) / 8` computed in the MSE
             // domain (weighted MSE average, then converted to dB).
             // Matches JPEG AIC-4 `PSNR-YCbCr611` column.
-            let (mse_y, mse_cb, mse_cr) = yuv444_studio601_mse(r, d);
+            let (mse_y, mse_cb, mse_cr) = if sse_fits_f64(n) {
+                let (sy, scb, scr) = psnr_kernels::studio601_yuv_sse(&r.pixels, &d.pixels);
+                let n_f = n as f64;
+                (sy / n_f, scb / n_f, scr / n_f)
+            } else {
+                yuv444_studio601_mse(r, d)
+            };
             let mse = (6.0 * mse_y + mse_cb + mse_cr) / 8.0;
             Ok(psnr(mse))
         }
         // PSNR of one full-resolution studio-swing BT.601 chroma plane, the
         // same per-pixel conversion as `PsnrYCbCr611`. JPEG AIC-4 `PSNR-Cb`
         // and `PSNR-Cr`.
-        Kind::PsnrCb => Ok(psnr(studio601_plane_mse(r, d, 1))),
-        Kind::PsnrCr => Ok(psnr(studio601_plane_mse(r, d, 2))),
+        Kind::PsnrCb => Ok(psnr(if sse_fits_f64(n) {
+            psnr_kernels::studio601_chroma_sse(&r.pixels, &d.pixels, 1) / n as f64
+        } else {
+            studio601_plane_mse(r, d, 1)
+        })),
+        Kind::PsnrCr => Ok(psnr(if sse_fits_f64(n) {
+            psnr_kernels::studio601_chroma_sse(&r.pixels, &d.pixels, 2) / n as f64
+        } else {
+            studio601_plane_mse(r, d, 2)
+        })),
         Kind::Ssim => {
             Ok(ssim_streamed(&r.pixels, &d.pixels, r.width as usize, r.height as usize) / 3.0)
         }
