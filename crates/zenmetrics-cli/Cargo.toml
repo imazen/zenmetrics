@@ -453,7 +453,7 @@ feature-rev = ["feature-jobs"]
 # Opt-in AVX-512 tier for the in-tree SIMD metrics (ssimulacra1's blur
 # kernels gain a `_v4x` dispatch arm); same opt-in posture as the metric
 # crates' own `avx512` features.
-avx512 = ["archmage/avx512", "magetypes/avx512"]
+avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512"]
 
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
@@ -484,6 +484,9 @@ rayon = "1"
 # (ssimulacra1's separable blur); the same pinned rev every metric crate uses.
 archmage = { workspace = true }
 magetypes = { workspace = true }
+# Bit-exact glibc `powf` SIMD lanes (zenmetrics-math::glibc) for the flip
+# transcendental sweeps — identical bits to `f32::powf` on every input.
+zenmetrics-math = { path = "../zenmetrics-math", features = ["std"] }
 
 # zen image decoders — all path deps to sibling worktrees so we
 # always link the in-flight local versions. User confirmed

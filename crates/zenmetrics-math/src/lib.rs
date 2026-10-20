@@ -23,6 +23,11 @@ pub use {
 pub mod fdlibm;
 /// Bit-exact `f64x4` lane ports of `libm` functions (opt-in).
 pub mod fdlibm64;
+/// Bit-exact port of glibc `__powf` (the Szabolcs Nagy `e_powf.c`
+/// algorithm, glibc >= 2.28 — what `f32::powf` calls on linux-gnu).
+/// Distinct convention from [`fdlibm`]: that module mirrors `libm` the
+/// crate (FreeBSD msun), this one mirrors glibc.
+pub mod glibc;
 pub mod par;
 #[macro_use]
 mod kernels;

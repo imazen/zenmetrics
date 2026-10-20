@@ -8053,6 +8053,7 @@ dependencies = [
  "zenjxl",
  "zenmetrics-abstractions",
  "zenmetrics-api",
+ "zenmetrics-math",
  "zenmetrics-nn",
  "zenmetrics-orchestrator",
  "zenmetrics-pyiqa-ports",

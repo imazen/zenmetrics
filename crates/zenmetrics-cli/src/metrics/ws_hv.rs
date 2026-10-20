@@ -3,6 +3,11 @@
 //! horizontal/vertical Haar similarities, diagonal-detail weighted pooling.
 //! The author notebook at IVP-Lab/WS_HV is an external validation oracle only.
 //! Uses OpenCV-compatible 15-bit RGB-to-gray and cubic (A=-0.75) interpolation.
+/// Parallel engage point (pixels) for the row-parallel stages. Outputs
+/// below this stay serial — the per-row work is a pure function of the
+/// input rows, so parallel output is bit-identical.
+const PAR_MIN_PX: usize = 1 << 18;
+
 #[derive(Clone)]
 struct Image {
     v: Vec<f64>,
@@ -18,27 +23,42 @@ struct Bands {
 fn haar(a: &Image) -> Bands {
     let w = a.w.div_ceil(2);
     let h = a.h.div_ceil(2);
-    let mut values: [Vec<f64>; 4] = std::array::from_fn(|_| Vec::with_capacity(w * h));
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    for y in 0..h {
-        for x in 0..w {
+    let row = |y: usize, out: &mut [(f64, f64, f64, f64)]| {
+        let y0 = 2 * y;
+        let y1 = (y0 + 1).min(a.h - 1);
+        for (o, x) in out.iter_mut().zip(0..w) {
             let x0 = 2 * x;
             let x1 = (x0 + 1).min(a.w - 1);
-            let y0 = 2 * y;
-            let y1 = (y0 + 1).min(a.h - 1);
             let lo0 = (a.v[y0 * a.w + x0] + a.v[y0 * a.w + x1]) * c;
             let lo1 = (a.v[y1 * a.w + x0] + a.v[y1 * a.w + x1]) * c;
             let hi0 = (a.v[y0 * a.w + x0] - a.v[y0 * a.w + x1]) * c;
             let hi1 = (a.v[y1 * a.w + x0] - a.v[y1 * a.w + x1]) * c;
-            for (out, v) in values.iter_mut().zip([
+            *o = (
                 (lo0 + lo1) * c,
                 (lo0 - lo1) * c,
                 (hi0 + hi1) * c,
                 (hi0 - hi1) * c,
-            ]) {
-                out.push(v);
-            }
+            );
         }
+    };
+    let mut quad = vec![(0.0, 0.0, 0.0, 0.0); w * h];
+    if w * h >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        quad.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(y, o)| row(y, o));
+    } else {
+        for (y, o) in quad.chunks_mut(w).enumerate() {
+            row(y, o);
+        }
+    }
+    let mut values: [Vec<f64>; 4] = std::array::from_fn(|_| Vec::with_capacity(w * h));
+    for q in quad {
+        values[0].push(q.0);
+        values[1].push(q.1);
+        values[2].push(q.2);
+        values[3].push(q.3);
     }
     let [ll, horizontal, vertical, diagonal] = values.map(|v| Image { v, w, h });
     Bands {
@@ -87,21 +107,31 @@ fn resize(a: &Image, w: usize, h: usize, is_cubic: bool) -> Image {
             (sy, wy)
         })
         .collect();
-    for y in 0..h {
+    let row = |y: usize, out: &mut [f64]| {
         let (sy, wy) = rows[y];
-        for x in 0..w {
+        for (o, x) in out.iter_mut().zip(0..w) {
             let (sx, wx) = columns[x];
             let mut value = 0.0;
             for (j, &ky) in wy.iter().enumerate() {
                 let iy = (sy + j as isize - 1).clamp(0, a.h as isize - 1) as usize;
-                let mut row = 0.0;
+                let mut r = 0.0;
                 for (i, &kx) in wx.iter().enumerate() {
                     let ix = (sx + i as isize - 1).clamp(0, a.w as isize - 1) as usize;
-                    row += a.v[iy * a.w + ix] * f64::from(kx);
+                    r += a.v[iy * a.w + ix] * f64::from(kx);
                 }
-                value += row * f64::from(ky);
+                value += r * f64::from(ky);
             }
-            out[y * w + x] = value;
+            *o = value;
+        }
+    };
+    if w * h >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(y, o)| row(y, o));
+    } else {
+        for (y, o) in out.chunks_mut(w).enumerate() {
+            row(y, o);
         }
     }
     Image { v: out, w, h }
@@ -117,14 +147,35 @@ fn ingress(a: &[u8], w: usize, h: usize, stride: usize, swap: bool) -> Result<Im
     if w == 0 || h == 0 || stride < w.saturating_mul(3) || need.is_none_or(|n| a.len() < n) {
         return Err("WS-HV: invalid RGB geometry");
     }
-    let mut out = Vec::with_capacity(w * h);
-    for y in 0..h {
-        for p in a[y * stride..y * stride + w * 3].as_chunks::<3>().0 {
+    let row = |y: usize, out: &mut [f64]| {
+        for (o, p) in out
+            .iter_mut()
+            .zip(a[y * stride..y * stride + w * 3].as_chunks::<3>().0)
+        {
             let (r, b) = if swap { (p[2], p[0]) } else { (p[0], p[2]) };
-            out.push(f64::from(
+            *o = f64::from(
                 (u32::from(r) * 9798 + u32::from(p[1]) * 19235 + u32::from(b) * 3735 + 16384) >> 15,
-            ));
+            );
         }
+    };
+    let mut out = vec![0.0; w * h];
+    if w * h >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(y, o)| row(y, o));
+    } else {
+        let mut out = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for p in a[y * stride..y * stride + w * 3].as_chunks::<3>().0 {
+                let (r, b) = if swap { (p[2], p[0]) } else { (p[0], p[2]) };
+                out.push(f64::from(
+                    (u32::from(r) * 9798 + u32::from(p[1]) * 19235 + u32::from(b) * 3735 + 16384)
+                        >> 15,
+                ));
+            }
+        }
+        return Ok(Image { v: out, w, h });
     }
     Ok(Image { v: out, w, h })
 }
@@ -170,8 +221,13 @@ pub(super) fn score_order(
     ds: usize,
     swap: bool,
 ) -> Result<f64, &'static str> {
-    let (a, sa) = details(&ingress(r, w, h, rs, swap)?);
-    let (b, sb) = details(&ingress(d, w, h, ds, swap)?);
+    let (ra, db) = (ingress(r, w, h, rs, swap)?, ingress(d, w, h, ds, swap)?);
+    let ((a, sa), (b, sb)) = if rayon::current_num_threads() > 1 {
+        let (x, y) = rayon::join(|| details(&ra), || details(&db));
+        (x, y)
+    } else {
+        (details(&ra), details(&db))
+    };
     let mw = a
         .iter()
         .chain(&b)
@@ -189,9 +245,10 @@ pub(super) fn score_order(
     let f = ((w.max(h) as f64 / 512.0 + 5e-16).round_ties_even() as i32).min(3);
     let t = 10.0 * 2.0f64.powi(f);
     let constants = [3.0 * t, 3.0 * t, t, t, 2.0 * t, 2.0 * t];
-    let mut numerator = 0.0;
-    let mut denominator = 0.0;
-    for x in 0..mw {
+    // Column-major accumulation is the reference order. Lane-parallel
+    // columns keep each column's y-order chain (identical bits); the
+    // per-column totals are then combined left-to-right as before.
+    let col_pair = |x: usize| -> (f64, f64) {
         let mut column = 0.0;
         let mut weight_col = 0.0;
         for y in 0..mh {
@@ -205,8 +262,22 @@ pub(super) fn score_order(
             column += similarity * weight;
             weight_col += weight;
         }
-        numerator += column;
-        denominator += weight_col;
+        (column, weight_col)
+    };
+    let mut numerator = 0.0;
+    let mut denominator = 0.0;
+    let cols: Vec<(f64, f64)> = if mw * mh >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        // Per-column totals are pure functions of the column, so they can
+        // be computed in parallel; combining them left-to-right preserves
+        // the scalar accumulation order and its bits exactly.
+        (0..mw).into_par_iter().map(col_pair).collect()
+    } else {
+        (0..mw).map(col_pair).collect()
+    };
+    for (c, w) in cols {
+        numerator += c;
+        denominator += w;
     }
     // The original metric assigns zero when the diagonal saliency is zero,
     // including an identical perfectly flat pair.
