@@ -12,6 +12,14 @@ minimum available 14,903 MiB and peak load 7.43.
 `just bench-iqa-canonical-profiles-publish INDEX NEW_DIRECTORY` reproduces the
 projection under caller-held heavy admission and refuses existing output paths.
 
+The [40-route timing-source review](../iqa_compete_2026-10-16/current40-timing-audit/matrix.md)
+records exact selected commands, source hashes, timed preparation and thread
+controls. It finds parameter-preparation differences for four HDR routes and
+six VMAF model routes, plus DSSIM context/provenance limits. These are scope
+qualifications without human-approved exceptions or measured overhead estimates.
+SSIMULACRA2 and FLIP retain explicit wrapper/package provenance and thread-control
+limits. Reviewing 40/40 entry points does not qualify 40/40 timing comparisons.
+
 Missing: the full multi-size per-name grid, remaining learned comparisons,
 map comparisons and qualified regression acceptance. The initial classical
 RGB8 cohorts are complete; explicit route/input exceptions remain below. These are scalar checks on
