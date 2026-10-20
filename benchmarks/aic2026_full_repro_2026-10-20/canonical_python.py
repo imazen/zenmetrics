@@ -78,6 +78,16 @@ def resident_adapter(spec, metric):
         return score
     if 'single' in namespace:
         return lambda r, d: float(namespace['single'](d))
+    if metric == 'lpips-squeeze' and 'model' in namespace:
+        # This established adapter spells its public model call inside the
+        # timing loop rather than defining a score closure.
+        torch = namespace['torch']
+        model = namespace['model']
+        def score(r, d):
+            x, y = [torch.from_numpy(rgb.copy()).permute(2, 0, 1).unsqueeze(0)
+                    .contiguous().float()/255 for rgb in (r, d)]
+            return float(model(x*2-1, y*2-1).flatten()[0].item())
+        return score
     raise ValueError('adapter did not expose its score or single callable')
 
 
