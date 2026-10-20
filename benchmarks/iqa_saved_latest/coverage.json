@@ -159,12 +159,12 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 244,
-        "qualified_attempt_rows": 186,
+        "saved_attempt_rows": 247,
+        "qualified_attempt_rows": 189,
         "gate_flagged_attempt_rows": 10,
         "observed_cell_statuses": {
-          "ok": 196,
-          "pending": 112
+          "ok": 199,
+          "pending": 109
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -175,11 +175,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T05:25:01.764907+00:00",
-      "2026-10-20T05:25:02.110379+00:00"
+      "2026-10-20T05:30:01.767491+00:00",
+      "2026-10-20T05:30:02.115058+00:00"
     ],
-    "saved_attempt_rows": 3192,
-    "preferred_qualified_cells": 2971,
+    "saved_attempt_rows": 3195,
+    "preferred_qualified_cells": 2974,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -286,7 +286,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 9689,
+    "individual_measurement_rows": 9692,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -431,8 +431,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T05:25:01.440386+00:00",
-      "2026-10-20T05:25:01.631491+00:00"
+      "2026-10-20T05:30:01.429288+00:00",
+      "2026-10-20T05:30:01.617193+00:00"
     ],
     "saved_attempt_rows": 4129,
     "preferred_qualified_cells": 3921,
@@ -624,8 +624,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T05:25:02.237786+00:00",
-      "2026-10-20T05:25:02.409179+00:00"
+      "2026-10-20T05:30:02.150342+00:00",
+      "2026-10-20T05:30:02.316544+00:00"
     ],
     "saved_attempt_rows": 5110,
     "preferred_qualified_cells": 4741,
