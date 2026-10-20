@@ -38,7 +38,7 @@ def load(path):
     return json.loads(Path(path).read_text())
 
 
-def prepare(plan_path, preflight, output, wrapper, locks, supplement=False):
+def prepare(plan_path, preflight, output, wrapper, locks, supplement=False, warm=False):
     plan_path=plan_path.resolve(strict=True)
     plan=load(plan_path)
     if (len(plan['cases'])!=104 or len(plan['preflight'])!=9 or plan['expected_control_order']!=ORDER
@@ -64,6 +64,39 @@ def prepare(plan_path, preflight, output, wrapper, locks, supplement=False):
     flock=Path('/usr/bin/flock').resolve(strict=True)
     for path in (wrapper,python,flock):bindings[str(path)]=sha(path)
     cases=copy.deepcopy(plan['cases'])
+    if supplement and warm:raise ValueError('one explicit supplement kind required')
+    if warm:
+        originals=[c for c in cases if c['panel']=='photo512' and c['threads']==1 and c['phase']=='warm']
+        if len(originals)!=2 or plan.get('headless') is not True:
+            raise ValueError('two warm photo predecessors and new headless parent required')
+        cases=[]
+        scripts=root/'warm-photo-scripts';scripts.mkdir()
+        configs=root/'warm-photo-native';configs.mkdir()
+        for old in originals:
+            for threads in (1,8):
+                case=copy.deepcopy(old)
+                case['derived_from_case_id']=old['id']
+                case['id']=old['id'].replace('-t1-',f'-t{threads}-',1)+'-headless-warm'
+                case['threads']=threads
+                case['environment']={key:str(threads) for key in old['environment']}
+                for role in ORDER[:2]:
+                    command=old['arms'][role]['command']
+                    if command.count('--no-window-system')!=1 or command.count('--no-gui')!=1:
+                        raise ValueError('explicit headless original command required')
+                    original=Path(command[-1])
+                    if sha(original)!=plan['bindings'][str(original)]:
+                        raise ValueError('warm predecessor script changed')
+                    dest=scripts/(case['id']+'-'+role+'.m');shutil.copy2(original,dest)
+                    bindings[str(dest)]=sha(dest);dest.chmod(0o444)
+                    case['arms'][role]['command']=[*command[:-1],str(dest)]
+                original=Path(old['native_config'])
+                if sha(original)!=plan['bindings'][str(original)]:
+                    raise ValueError('warm predecessor native config changed')
+                dest=configs/(case['id']+'.json')
+                write(dest,dict(load(original),threads=threads));bindings[str(dest)]=sha(dest);dest.chmod(0o444)
+                case['native_config']=str(dest)
+                case['native']['command']=[old['binary'],str(dest)]
+                cases.append(case)
     if supplement:
         originals=[c for c in cases if c['panel']=='photo512' and c['threads']==1]
         if len(originals)!=4:raise ValueError('four one-thread photo predecessors required')
@@ -104,7 +137,7 @@ def prepare(plan_path, preflight, output, wrapper, locks, supplement=False):
     bindings[str(catalog_path)]=sha(catalog_path)
     cohort=dict(schema=1,parent_plan=str(plan_path),parent_plan_sha256=sha(plan_path),
         preflight_receipt=str(preflight.resolve()),bindings=bindings,catalog=str(catalog_path),case_specs=str(case_specs),
-        kind='photo512-t8-supplement' if supplement else 'original104',
+        kind='photo512-warm-t1-t8' if warm else 'photo512-t8-supplement' if supplement else 'original104',
         admission=dict(wrapper=str(wrapper),locks=[str(p.resolve()) for p in locks],
                        python=str(python),flock=str(flock),memory='12G'),
         expected_control_order=ORDER,seconds_per_stage=1100,automatic_retries=0,
@@ -305,7 +338,9 @@ def main():
     for name in ('plan','preflight','output'):prep.add_argument(name,type=Path)
     prep.add_argument('--heavy-wrapper',type=Path,required=True)
     prep.add_argument('--lock',type=Path,action='append',required=True)
-    prep.add_argument('--photo512-threads8',action='store_true')
+    kinds=prep.add_mutually_exclusive_group()
+    kinds.add_argument('--photo512-threads8',action='store_true')
+    kinds.add_argument('--photo512-warm-threads1-8',action='store_true')
     for mode in ('seal','queue'):
         active=sub.add_parser(mode);active.add_argument('root',type=Path)
         active.add_argument('--cohort-sha',type=digest,required=True)
@@ -317,7 +352,8 @@ def main():
     status=sub.add_parser('status');status.add_argument('root',type=Path)
     args=parser.parse_args()
     if args.mode=='prepare':
-        print(json.dumps(prepare(args.plan,args.preflight,args.output,args.heavy_wrapper,args.lock,args.photo512_threads8)))
+        print(json.dumps(prepare(args.plan,args.preflight,args.output,args.heavy_wrapper,args.lock,
+                                 args.photo512_threads8,args.photo512_warm_threads1_8)))
     elif args.mode=='status':
         print((args.root/'queue-status.json').read_text())
     else:

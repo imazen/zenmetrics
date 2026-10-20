@@ -70,14 +70,21 @@ def selected_cases(cohort,plan):
         if cases!=plan['cases']:
             raise ValueError('original 104-case contract differs')
         return cases
-    if cohort['kind']!='photo512-t8-supplement' or len(cases)!=4:
+    warm=cohort['kind']=='photo512-warm-t1-t8'
+    if cohort['kind'] not in ('photo512-t8-supplement','photo512-warm-t1-t8') or len(cases)!=4:
         raise ValueError('explicit original104 or four-case eight-thread supplement required')
+    if warm and plan.get('headless') is not True:
+        raise ValueError('new headless parent required for warm one/eight supplement')
     originals={case['id']:case for case in plan['cases']}
     identities=set()
     for case in cases:
         old=originals[case['derived_from_case_id']]
+        threads=case['threads'] if warm else 8
+        expected_id=(old['id'].replace('-t1-',f'-t{threads}-',1)+'-headless-warm' if warm
+                     else old['id'].replace('-t1-','-t8-',1)+'-supplement')
         if (old['panel']!='photo512' or old['threads']!=1 or old['width']!=512 or old['height']!=512
-                or case['threads']!=8 or case['id']!=old['id'].replace('-t1-','-t8-',1)+'-supplement'):
+                or case['threads']!=threads or case['id']!=expected_id
+                or (warm and (threads not in (1,8) or old['phase']!='warm'))):
             raise ValueError('eight-thread photo source/identity differs')
         for key in ('panel','metric','phase','width','height','samples','reference','distorted',
                     'absolute_bound','relative_bound','matched_scope','evaluator_body_sha256'):
@@ -86,13 +93,17 @@ def selected_cases(cohort,plan):
             new_command=case['arms'][role]['command'];old_command=old['arms'][role]['command']
             if new_command[:-1]!=old_command[:-1] or sha(new_command[-1])!=sha(old_command[-1]):
                 raise ValueError('eight-thread reference script/body changed')
-        expected_native=dict(load(old['native_config']),threads=8)
+            if warm and (new_command.count('--no-window-system')!=1 or new_command.count('--no-gui')!=1):
+                raise ValueError('headless invocation differs')
+        expected_native=dict(load(old['native_config']),threads=threads)
         if load(case['native_config'])!=expected_native or case['native']['command']!=[old['binary'],case['native_config']]:
             raise ValueError('explicit eight-thread native configuration differs')
-        if case['environment']!={key:'8' for key in old['environment']}:
+        if case['environment']!={key:str(threads) for key in old['environment']}:
             raise ValueError('eight-thread environment differs')
-        identities.add((case['metric'],case['phase']))
-    if identities!={('hdrvdp','first'),('hdrvdp','warm'),('hdrvdp3','first'),('hdrvdp3','warm')}:
+        identities.add((case['metric'],case['phase'],threads) if warm else (case['metric'],case['phase']))
+    expected=({(metric,'warm',threads) for metric in ('hdrvdp','hdrvdp3') for threads in (1,8)} if warm
+              else {('hdrvdp','first'),('hdrvdp','warm'),('hdrvdp3','first'),('hdrvdp3','warm')})
+    if identities!=expected:
         raise ValueError('both base metrics and first/warm required at eight threads')
     return cases
 
