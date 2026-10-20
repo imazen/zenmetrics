@@ -2257,3 +2257,6 @@ aic-canonical-check python:
 # Partial files survive 9p ENOMEM; repeat this recipe after memory compaction.
 aic-canonical-inputs source destination:
     ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 12 -- rsync -a --partial --bwlimit=12000 {{source}} {{destination}}
+
+aic-canonical-fsim-vsi python manifest summary:
+    {{python}} benchmarks/aic2026_full_repro_2026-10-20/compare_fsim_vsi.py {{manifest}} {{summary}}

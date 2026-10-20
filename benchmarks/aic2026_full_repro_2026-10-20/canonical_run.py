@@ -81,7 +81,7 @@ def main():
                    str(home/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '12', '--', *command]
         env = dict(os.environ, TMPDIR=str(root/'scratch'), RAYON_NUM_THREADS='1', RTEN_NUM_THREADS='12',
                    OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
-                   ZENMETRICS_NN_MODEL_DIR=manifest.get('models', ''), ZENMETRICS_NN_ENGINE='rten',
+                   ZENMETRICS_NN_MODEL_DIR=spec.get('models', manifest.get('models', '')), ZENMETRICS_NN_ENGINE='rten',
                    ZENMETRICS_NN_ACCEPT_WEIGHTS=manifest.get('accept_weights', ''),
                    TORCH_HOME=manifest.get('torch_home', str(home/'.cache/torch')),
                    SETUPTOOLS_USE_DISTUTILS='stdlib')

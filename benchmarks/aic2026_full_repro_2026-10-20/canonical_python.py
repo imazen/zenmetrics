@@ -53,6 +53,8 @@ def resident_adapter(spec, metric):
             setattr(args, key, Path(value))
     namespace.update(a=args, args=args)
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), 'exec'), namespace)
+    if metric in ('arniqa', 'maniqa', 'liqe', 'hyperiqa', 'paq2piq') and 'single' in namespace:
+        return lambda r, d: float(namespace['single'](d))
     if 'score' in namespace:
         fn = namespace['score']
         def score(r, d):
@@ -71,6 +73,15 @@ def resident_adapter(spec, metric):
 
 def scorer(metric, config):
     import numpy as np
+    if metric.startswith('wadiqam-'):
+        spec = config['resident_adapters'][metric]
+        path = Path(spec['path'])
+        module = load(path, 'aic_original_wadiqam')
+        module.chainer.global_config.enable_backprop = False
+        module.chainer.global_config.train = False
+        model, oracle = module.load_model(json.loads(Path(spec['args']['config']).read_text()), metric)
+        return lambda r, d: float(oracle.score_image(model, d, r) if '-fr-' in metric
+                                 else oracle.score_image(model, d))
     import torch
     if metric in config.get('resident_adapters', {}):
         return resident_adapter(config['resident_adapters'][metric], metric)
@@ -161,7 +172,7 @@ def main():
     a = p.parse_args()
     import numpy as np
     torch = None
-    if a.metric != 'musiq':
+    if a.metric != 'musiq' and not a.metric.startswith('wadiqam-'):
         import torch
     from PIL import Image
     if torch is not None:
