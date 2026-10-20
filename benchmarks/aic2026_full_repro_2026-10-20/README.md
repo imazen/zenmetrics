@@ -170,3 +170,9 @@ or an assigned acceptance bound. The production scorer remains unchanged.
 [MATLAB](https://www.mathworks.com/help/matlab/ref/double.gt.html) document
 the differing comparison rules. The large raw tail alone does not establish
 a native port regression.
+
+`canonical_provenance.py --runtime-qualifications <inventory.json>` retains
+reference-runtime limitations beside each affected metric and verifies every
+linked diagnostic artifact hash. These notes do not change numerical gates.
+The exported provenance also records the execution schedule and its predecessor
+so retained rows remain distinguishable from successor bundles.

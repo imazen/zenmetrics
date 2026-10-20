@@ -30,6 +30,18 @@ def checked_document(path, methods=False):
     return dict(path=str(path), sha256=sha(path), entries=values)
 
 
+def checked_runtime_qualifications(path):
+    """Keep runtime limitations bound to their retained diagnostic artifacts."""
+    values = json.loads(path.read_text())
+    for name, entry in values.items():
+        if not entry.get('qualification') or not entry.get('artifacts'):
+            raise ValueError('runtime qualification requires a note and artifacts: '+name)
+        for source, expected in entry['artifacts'].items():
+            if sha(source) != expected:
+                raise ValueError('runtime qualification artifact changed: '+source)
+    return dict(path=str(path), sha256=sha(path), entries=values)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('manifest', type=Path)
@@ -37,6 +49,7 @@ def main():
     parser.add_argument('--source-bindings', type=Path)
     parser.add_argument('--reference-methods', type=Path)
     parser.add_argument('--input-bindings', type=Path)
+    parser.add_argument('--runtime-qualifications', type=Path)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     config = json.loads(Path(manifest['config']).read_text())
@@ -55,6 +68,8 @@ def main():
                   driver_source=manifest['driver_source'],
                   report_writer=dict(path=str(Path(__file__).resolve()), sha256=sha(__file__)),
                   bindings=manifest['bindings'],
+                  execution=manifest.get('execution'),
+                  schedule_predecessor=manifest.get('schedule_predecessor'),
                   metrics={}, addendum={}, exports={})
     report['published_reference_plan'] = manifest.get('published_comparison')
     published = root/'fsim-vsi-reference.json'
@@ -64,10 +79,22 @@ def main():
     report['supplementary_reference_methods'] = (checked_document(args.reference_methods, methods=True)
                                                 if args.reference_methods else None)
     report['input_bindings'] = checked_document(args.input_bindings) if args.input_bindings else None
+    report['reference_runtime_qualifications'] = (
+        checked_runtime_qualifications(args.runtime_qualifications)
+        if args.runtime_qualifications else None)
+    qualifications = (report['reference_runtime_qualifications'] or {}).get('entries', {})
+    unknown = qualifications.keys() - (manifest['metrics'].keys() | manifest['addendum'].keys())
+    if unknown:
+        raise ValueError('runtime qualifications name unplanned metrics: '+str(sorted(unknown)))
     for group in ('metrics', 'addendum'):
         for name, spec in manifest[group].items():
             entry = dict(spec)
+            if name in qualifications:
+                entry['reference_runtime_qualification'] = qualifications[name]
             entry['installed_runtime_metadata'] = versions.get(spec.get('python', 'python3'))
+            if spec.get('kind') == 'octave':
+                entry['adapter_runtime_metadata'] = entry['installed_runtime_metadata']
+                entry['installed_runtime_metadata'] = versions.get('octave-cli')
             entry['adapter'] = (config.get('resident_adapters', {}).get(name)
                                 or config.get('octave', {}).get(name))
             if name in ('brisque', 'niqe', 'piqe'):
