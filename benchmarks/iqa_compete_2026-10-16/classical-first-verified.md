@@ -62,3 +62,17 @@ bindings. The analysis retains every block, verifies order and numerical gate
 records, and needs at least twenty blocks. A missing bound produces an explicit
 unqualified numerical result. These intervals describe acquired first-call
 variability and never accept a regression or establish runtime cleanliness.
+
+`just bench-iqa-canonical-classical-first-profile PLAN CASE NEW_OUTPUT` captures
+CPU stacks from the unchanged worker in fresh processes. Supply shared heavy
+admission, disk-backed `TMPDIR`, and explicit `--repeats`/`--frequency` when
+profiling short calls. The recording includes process startup, input loading
+and teardown; sampled percentages do not isolate the internal cold clock.
+Instrumented wall times must stay outside comparison results.
+
+If capture succeeded but postprocessing failed, `--adopt CAPTURE_DIRECTORY`
+validates the retained request, configuration and complete cold observations
+before processing the existing data. It runs no additional scorer. Original
+files remain intact. Per-task recordings may lack a CPU field; the helper does
+not infer CPU placement from them. Recordings are capped at 32 MiB, with a
+1500 MiB free-disk guard before each invocation.

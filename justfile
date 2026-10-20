@@ -1694,6 +1694,10 @@ bench-iqa-canonical-classical-first-interval-check:
     python3 -I -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_classical_first_intervals.py -v
     python3 -I -O -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_classical_first_intervals.py -v
 
+# Caller supplies shared heavy admission; complete cold-worker CPU stack capture.
+bench-iqa-canonical-classical-first-profile plan case output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/profile_classical_first.py '{{plan}}' '{{case}}' '{{output}}' {{options}}
+
 # Explicit CUDA scalar first calls; each block acquires shared admission.
 bench-iqa-canonical-gpu-first plan output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/compare_gpu_first_verified.py '{{plan}}' '{{output}}' {{options}}
