@@ -40,12 +40,12 @@
       {
         "campaign": "changed-remaining2",
         "manifest_cells": 763,
-        "saved_attempt_rows": 99,
-        "qualified_attempt_rows": 99,
+        "saved_attempt_rows": 430,
+        "qualified_attempt_rows": 430,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 99,
-          "pending": 664
+          "ok": 430,
+          "pending": 333
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -117,11 +117,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T00:57:16.479033+00:00",
-      "2026-10-20T00:57:41.577354+00:00"
+      "2026-10-20T01:15:00.071886+00:00",
+      "2026-10-20T01:15:00.371292+00:00"
     ],
-    "saved_attempt_rows": 2254,
-    "preferred_qualified_cells": 2092,
+    "saved_attempt_rows": 2585,
+    "preferred_qualified_cells": 2423,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
@@ -262,12 +262,12 @@
       {
         "campaign": "changed-remaining2",
         "manifest_cells": 352,
-        "saved_attempt_rows": 19,
-        "qualified_attempt_rows": 18,
-        "gate_flagged_attempt_rows": 1,
+        "saved_attempt_rows": 223,
+        "qualified_attempt_rows": 205,
+        "gate_flagged_attempt_rows": 18,
         "observed_cell_statuses": {
-          "ok": 19,
-          "pending": 333
+          "ok": 223,
+          "pending": 129
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -304,11 +304,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T00:57:16.477510+00:00",
-      "2026-10-20T00:57:41.287565+00:00"
+      "2026-10-20T01:14:59.906751+00:00",
+      "2026-10-20T01:15:00.055341+00:00"
     ],
-    "saved_attempt_rows": 3505,
-    "preferred_qualified_cells": 3332,
+    "saved_attempt_rows": 3709,
+    "preferred_qualified_cells": 3519,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
@@ -414,28 +414,28 @@
       {
         "campaign": "ordinary-all",
         "manifest_cells": 4560,
-        "saved_attempt_rows": 3595,
-        "qualified_attempt_rows": 3439,
-        "gate_flagged_attempt_rows": 44,
+        "saved_attempt_rows": 3931,
+        "qualified_attempt_rows": 3756,
+        "gate_flagged_attempt_rows": 47,
         "observed_cell_statuses": {
-          "ok": 3483,
-          "pending": 1077
+          "ok": 3803,
+          "pending": 757
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
         "failure_class_attempts": {
           "input_contract_fixed_window": 48,
-          "input_contract_absolute_luminance": 64
+          "input_contract_absolute_luminance": 80
         },
         "exhausted_saved_cells": 0
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T00:57:17.163762+00:00",
-      "2026-10-20T00:57:17.163762+00:00"
+      "2026-10-20T01:15:00.883837+00:00",
+      "2026-10-20T01:15:00.883837+00:00"
     ],
-    "saved_attempt_rows": 3643,
-    "preferred_qualified_cells": 3487,
+    "saved_attempt_rows": 3979,
+    "preferred_qualified_cells": 3804,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
