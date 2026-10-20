@@ -170,8 +170,18 @@ benchmarks/butter_multires_strip_2026-05-22.meta	ignored	Provenance or external-
 benchmarks/butter_strip_drift_2026-08-28.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/butter_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/butter_strip_wall_task158_2026-05-31.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/canonical_recheck_2026-10-19/butter-original-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/cohorts.json	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-0-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-1-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-2-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/cw-mex-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/cw-pyiqa-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/flip-confirm-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/flip-v17-eight-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/gpu-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/iw-compat-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/matlab-extra-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/nr-goldens.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/nr-inputs-sha256.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
@@ -193,9 +203,13 @@ benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k4.tsv	ignored	Native ora
 benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/octave-run-vsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/octave-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/psnrhvs64-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/pyiqa-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/results-00.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/results-01.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
+benchmarks/canonical_recheck_2026-10-19/results-02.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
 benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.
 benchmarks/canonical_recheck_2026-10-19/retry-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/source-equivalence.json	ignored	Source-identity provenance for the native oracle recheck; metadata, not a measurement table.
@@ -269,6 +283,8 @@ benchmarks/dmm_aic_probe/aic_dmm.tsv	ignored	AHIQ/DMM AIC-4 convention probe evi
 benchmarks/dmm_aic_probe/dmm_ladder_ort.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
 benchmarks/dmm_aic_probe/dmm_ladder_rten.tsv	ignored	AHIQ/DMM AIC-4 convention probe evidence (port validation); not a dashboard panel.
 benchmarks/dssim_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/fixed_factor_verify_2026-10-20/aggregates.tsv	ignored	Aggregate of previously committed fixed-factor numerical checks; no new timing observations.
+benchmarks/fixed_factor_verify_2026-10-20/provenance.json	ignored	Aggregate of previously committed fixed-factor numerical checks; no new timing observations.
 benchmarks/fleet-fits_v9_tier_timing_2026-09-26.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fsim_fusion_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/fsim_fusion_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -542,11 +558,14 @@ benchmarks/iqa_saved_latest/SHA256SUMS.json	ignored	Recurring allowlisted canoni
 benchmarks/iqa_saved_latest/coverage.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/i265-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/i265-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/i265-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
 benchmarks/iqa_saved_latest/mac-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/mac-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/mac-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
 benchmarks/iqa_saved_latest/protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/r7900x-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/r7900x-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/r7900x-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
 benchmarks/iqa_saved_latest/sources.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iqa_saved_latest/sync.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iwssim_cachedref_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -1279,20 +1298,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_saved_latest/mac-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
-benchmarks/iqa_saved_latest/i265-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
-benchmarks/iqa_saved_latest/r7900x-rounds.csv	ignored	Individual canonical cold-repeat/warm-round timing observations for scatter plots; timing qualification and exact series identities retained.
-benchmarks/canonical_recheck_2026-10-19/butter-original-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-0-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-1-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/coverage-first-20261020-2-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/cw-mex-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/cw-pyiqa-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/flip-confirm-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/flip-v17-eight-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/gpu-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/iw-compat-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/psnrhvs64-run.tsv	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/results-00.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/results-01.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
-benchmarks/canonical_recheck_2026-10-19/results-02.json	ignored	Native reference comparison cohort or summary shard; separate from canonical multi-host timing series and published-column agreement.
