@@ -332,42 +332,46 @@ def chart_perf(d, key):
     ms = sorted((m for m in d['metrics'] if m.get(key)), key=lambda m: m[key])
     k, lab, frac = clusters_of([m[key] for m in ms])
     groups = [[m for m, l in zip(ms, lab) if l == c] for c in range(k)]
-    W_, LBL, LX0, LX1, RX0, RX1, rowh, head = 940, 196, 206, 560, 600, 924, 15, 40
-    H_ = 34 + sum(head + rowh * len(g) + 6 for g in groups) + 30
+    # columns: name | interval text | log panel | linear panel
+    W_, NAME, CIX, LX0, LX1, RX0, RX1, rowh, head, foot = 980, 168, 176, 330, 640, 668, 960, 15, 30, 26
+    H_ = 22 + sum(head + rowh * len(g) + foot + 8 for g in groups)
     lo, hi = log_dom([m[key] for m in ms])
     X = lambda v: LX0 + (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (LX1 - LX0)
+    decades = [10 ** e for e in range(math.ceil(math.log10(lo) - 1e-9), math.floor(math.log10(hi) + 1e-9) + 1)]
+    minors = [m_ * dd for dd in decades for m_ in (2, 5) if lo <= m_ * dd <= hi]
     p = []
     th = '1 thread' if key.endswith('1t') else '8 threads'
-    p.append(f'<text class="pl-title" x="{LX0}" y="14">all metrics, log axis (CPU ns/px, {th})</text>'
-             f'<text class="pl-title" x="{RX0}" y="14">within cluster, linear axis</text>')
-    e = math.ceil(math.log10(lo) - 1e-9)
-    while 10 ** e <= hi * 1.0001:
-        x = X(10 ** e)
-        p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="22" x2="{x:.1f}" y2="{H_-26}"/><text class="pl-tick" x="{x:.1f}" y="{H_-12}" text-anchor="middle">{fmt_num(10**e)}</text>'
-                 f'<text class="pl-tick" x="{x:.1f}" y="32" text-anchor="middle">{fmt_num(10**e)}</text>')
-        e += 1
-    y = 40
+    p.append(f'<text class="pl-title" x="{CIX}" y="14">95 % interval</text><text class="pl-title" x="{LX0}" y="14">all metrics, log axis (CPU ns/px, {th})</text>'
+             f'<text class="pl-title" x="{RX0}" y="14">within cluster, linear axis (ns/px)</text>')
+    y = 22
     narrow = 0
     for ci_, g in enumerate(groups):
-        gmax = max(max((rep_ci(m.get(reps_key)) or (0, 0, m[key]))[2], m[key]) for m in g) * 1.05
-        step = nice_step(gmax, 4)
+        cis = [rep_ci(m.get(reps_key)) for m in g]
+        gmax = max(max((c[2] if c else 0), m[key]) for m, c in zip(g, cis)) * 1.05
+        step = nice_step(gmax, 6)
         RX = lambda v: RX0 + v / gmax * (RX1 - RX0)
-        top = y
-        p.append(f'<rect class="pl-cluster" x="4" y="{y:.1f}" width="{W_-8}" height="{head + rowh*len(g) - 6:.1f}" rx="4"/>')
-        p.append(f'<text class="pl-row" x="10" y="{y+16:.1f}" font-weight="600">Cluster {ci_+1}: {fmt_num(float(f'{g[0][key]:.3g}'))}–{fmt_num(float(f'{g[-1][key]:.3g}'))} ns/px, {len(g)} metrics</text>')
+        y0, y1 = y + head, y + head + rowh * len(g)
+        p.append(f'<rect class="pl-cluster" x="4" y="{y:.1f}" width="{W_-8}" height="{y1 + foot - y:.1f}" rx="4"/>')
+        p.append(f'<text class="pl-row" x="10" y="{y+18:.1f}" font-weight="600">Cluster {ci_+1}: {fmt_num(float(f"{g[0][key]:.3g}"))}–{fmt_num(float(f"{g[-1][key]:.3g}"))} ns/px, {len(g)} metrics</text>')
+        # vertical gridlines and x-axis numbers under each cluster, both panels
+        for v in minors:
+            p.append(f'<line class="pl-vgrid-minor" x1="{X(v):.1f}" y1="{y0-4:.1f}" x2="{X(v):.1f}" y2="{y1:.1f}"/>')
+        for v in decades:
+            p.append(f'<line class="pl-vgrid" x1="{X(v):.1f}" y1="{y0-4:.1f}" x2="{X(v):.1f}" y2="{y1:.1f}"/><text class="pl-tick" x="{X(v):.1f}" y="{y1+14:.1f}" text-anchor="middle">{fmt_num(v)}</text>')
         v = 0.0
         while v <= gmax + 1e-12:
-            x = RX(v)
-            p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="{y+22:.1f}" x2="{x:.1f}" y2="{y+head+rowh*len(g)-10:.1f}"/><text class="pl-tick" x="{x:.1f}" y="{y+32:.1f}" text-anchor="middle">{fmt_num(v)}</text>')
+            p.append(f'<line class="pl-vgrid" x1="{RX(v):.1f}" y1="{y0-4:.1f}" x2="{RX(v):.1f}" y2="{y1:.1f}"/><text class="pl-tick" x="{RX(v):.1f}" y="{y1+14:.1f}" text-anchor="middle">{fmt_num(round(v, 10))}</text>')
             v += step
-        y += head
+        p.append(f'<line class="pl-axisline" x1="{LX0}" y1="{y1:.1f}" x2="{LX1}" y2="{y1:.1f}"/><line class="pl-axisline" x1="{RX0}" y1="{y1:.1f}" x2="{RX1}" y2="{y1:.1f}"/>')
+        y = y0
         prev = None
-        for m in g:
+        for m, c in zip(g, cis):
             yy = y + rowh / 2
-            c = rep_ci(m.get(reps_key))
             cls = 'pt-nn' if m['kind'].startswith('nn') else 'pt-cl'
-            tip = f'{m["metric"]}: median {m[key]:.4g} ns/px' + (f', mean {c[0]:.4g} [95 % {c[1]:.4g}, {c[2]:.4g}], n={len(m[reps_key])}' if c else '')
-            p.append(f'<text class="pl-lab perf-lab" x="{LBL}" y="{yy+4:.1f}" text-anchor="end">{E(m["metric"])}</text>')
+            n = len(m.get(reps_key) or [])
+            tip = f'{m["metric"]}: median {m[key]:.4g} ns/px' + (f', mean {c[0]:.4g} [95 % {c[1]:.4g}, {c[2]:.4g}], n={n}' if c else '')
+            p.append(f'<text class="perf-lab" x="{NAME}" y="{yy+4:.1f}" text-anchor="end">{E(m["metric"])}</text>')
+            p.append(f'<text class="perf-ci" x="{CIX}" y="{yy+4:.1f}">' + (f'{c[1]:.3g}–{c[2]:.3g} (n={n})' if c else f'{m[key]:.3g} (n={n})') + '</text>')
             for XX in (X, RX):
                 if c:
                     p.append(f'<line class="pl-ci-h" x1="{XX(max(c[1], lo if XX is X else 0)):.1f}" y1="{yy:.1f}" x2="{XX(c[2]):.1f}" y2="{yy:.1f}"/>')
@@ -382,7 +386,7 @@ def chart_perf(d, key):
                 narrow += 1
             prev = c
             y += rowh
-        y += 6
+        y = y1 + foot + 8
     svg = f'<svg class="chart perf" viewBox="0 0 {W_} {H_}" role="img" aria-label="CPU time per metric with 95 % intervals, {th}" xmlns="http://www.w3.org/2000/svg">{"".join(p)}</svg>'
     return svg, k, frac, narrow, len(ms)
 
