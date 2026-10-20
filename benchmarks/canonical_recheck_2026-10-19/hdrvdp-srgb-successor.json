@@ -7,6 +7,8 @@
   "build_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
   "build_directory": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build",
   "old_worker_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
-  "comparison_status": "Native worker queued; official sRGB-display adapters under independent review; no acquired revised-route ratio yet",
+  "comparison_status": "Native current40 worker independently source-verified; original24 v2 goldens and nine parameter preflights passed; default/resident score controls executing; no acquired revised-route ratio yet",
+  "worker_evidence": "benchmarks/canonical_recheck_2026-10-19/current40-worker.json",
+  "reference_controls": "benchmarks/canonical_recheck_2026-10-19/hdrvdp-reference-controls/controls.json",
   "qualification": "New base-route source; preserve separate AIC2026 200-nit convention and every older result"
 }

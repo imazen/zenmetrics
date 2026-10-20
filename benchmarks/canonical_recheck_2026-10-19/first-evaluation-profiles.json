@@ -85,6 +85,49 @@
       "wrapper_receipts": [
         "run-heavy: done rc=0 27s | peak-RSS 0.43GiB | min-avail 14685MiB | peak-load 1.89"
       ]
+    },
+    {
+      "receipt": {
+        "metric": "deepdc",
+        "case": "deepdc-first-pair-cid22-t1",
+        "threads": 1,
+        "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+        "worker_sha256": "90f4e56910d2c01ca2544883e6a3a362504eec9bec38343a2e835ab5b5b0a99c",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-profile/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "-e",
+          "cycles:P",
+          "--call-graph",
+          "dwarf,8192",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+          "original",
+          "deepdc",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1"
+        ],
+        "profile_sha256": "69535ef0121a5131c62bc9fedd0933eb76ff4081c6c90e6712994e67fea90790",
+        "report_sha256": "9120e59c3f4c82ee5d162663f4aeef1c4407314a295e55fa915252f3f3e96e99",
+        "scope": "Complete native probe process, including immutable-model priming, first evaluation and second score-stability control; sampled shares do not isolate the timed first evaluation"
+      },
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 30s | peak-RSS 0.43GiB | min-avail 15081MiB | peak-load 1.69"
+      ]
     }
   ],
   "qualification": "Complete probe CPU profiles including priming and score-stability controls; do not isolate the timed first evaluation"
