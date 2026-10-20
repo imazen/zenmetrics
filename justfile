@@ -2242,6 +2242,10 @@ bench-iqa-canonical-cpu-revision-build revision output *options:
 bench-iqa-canonical-worker-verify build output:
     python3 -B benchmarks/iqa_compete_2026-10-16/verify_classical_worker.py '{{build}}' '{{output}}'
 
+# Caller supplies heavy admission; common raw crop, native warm timing only.
+bench-iqa-native-order plan output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/measure_native_order.py '{{plan}}' '{{output}}'
+
 # Caller supplies heavy admission; checks NR reference-image auxiliary columns.
 bench-iqa-canonical-nr-auxiliary python manifest output:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_nr_auxiliary.py '{{manifest}}' '{{output}}'
