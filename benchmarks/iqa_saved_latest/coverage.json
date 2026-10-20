@@ -175,8 +175,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T06:35:01.778722+00:00",
-      "2026-10-20T06:35:02.141802+00:00"
+      "2026-10-20T06:40:01.729858+00:00",
+      "2026-10-20T06:40:02.073489+00:00"
     ],
     "saved_attempt_rows": 3251,
     "preferred_qualified_cells": 3012,
@@ -444,8 +444,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T06:35:01.433189+00:00",
-      "2026-10-20T06:35:01.591156+00:00"
+      "2026-10-20T06:40:01.428170+00:00",
+      "2026-10-20T06:40:01.585516+00:00"
     ],
     "saved_attempt_rows": 4161,
     "preferred_qualified_cells": 3952,
@@ -637,12 +637,12 @@
       {
         "campaign": "private-nn-production-gate-retry",
         "manifest_cells": 12,
-        "saved_attempt_rows": 6,
-        "qualified_attempt_rows": 5,
+        "saved_attempt_rows": 8,
+        "qualified_attempt_rows": 7,
         "gate_flagged_attempt_rows": 1,
         "observed_cell_statuses": {
-          "ok": 6,
-          "pending": 6
+          "ok": 8,
+          "pending": 4
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -651,11 +651,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T06:35:02.115350+00:00",
-      "2026-10-20T06:35:02.257119+00:00"
+      "2026-10-20T06:40:02.172250+00:00",
+      "2026-10-20T06:40:02.390323+00:00"
     ],
-    "saved_attempt_rows": 5153,
-    "preferred_qualified_cells": 4782,
+    "saved_attempt_rows": 5155,
+    "preferred_qualified_cells": 4784,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -762,7 +762,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 16130,
+    "individual_measurement_rows": 16150,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   }
 }
