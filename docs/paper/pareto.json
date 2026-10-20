@@ -66,8 +66,8 @@
    "overall": 0.9257,
    "cpu_1t": null,
    "cpu_8t": null,
-   "estimate": null,
-   "kind": "classic",
+   "estimate": 1160.7333641244886,
+   "kind": "classic-fr",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,
@@ -134,8 +134,8 @@
    "overall": 0.8128,
    "cpu_1t": null,
    "cpu_8t": null,
-   "estimate": null,
-   "kind": "classic",
+   "estimate": 2365.8778443166734,
+   "kind": "classic-fr",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,
@@ -236,8 +236,8 @@
    "overall": 0.6547,
    "cpu_1t": null,
    "cpu_8t": null,
-   "estimate": null,
-   "kind": "classic",
+   "estimate": 2558.330834689941,
+   "kind": "classic-fr",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,
@@ -780,8 +780,8 @@
    "overall": 0.2522,
    "cpu_1t": null,
    "cpu_8t": null,
-   "estimate": null,
-   "kind": "classic",
+   "estimate": 36.10151775674821,
+   "kind": "classic-nr",
    "on_front": {
     "cpu_1t": false,
     "cpu_8t": false,

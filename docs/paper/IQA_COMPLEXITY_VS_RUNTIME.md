@@ -10,7 +10,7 @@ Can a source-grounded count of operations per pixel, weighted by per-operation c
 
 Counting follows the approach of M. Pedzisz (Nokia), *Complexity Assessment of Full-Reference Image Quality Metrics*, a JPEG AIC-4 contribution circulated as a preliminary draft dated 2026-10-07; only part of that draft was seen (screenshots), and no accuracy is claimed for the values transcribed from it. Conventions, halo and parallel-structure extensions: [IQA_COMPLEXITY.md](../IQA_COMPLEXITY.md).
 
-- Tallies: 120 of 126 CLI metric names, counted from zenmetrics source; measured on 112 metrics.
+- Tallies: 124 of 126 CLI metric names, counted from zenmetrics source; measured on 116 metrics.
 - Measurements: i265 (Intel Core Ultra 7 265K), per-call deltas under `perf stat`, decode and setup excluded, 1024×1024, one content pair, three repeats; 1 thread pinned to a P-core, and 8 threads on P-cores 0-7 from a build with each metric crate's threading enabled. Exception: HDR-VDP 2 and 3 have no route in the timing driver; they are timed through `zenmetrics batch --hdr` as (T(4 rows) − T(1 row))/3, which includes the extra rows' 16-bit PNG decode (`measured/i265_hdr_1024.meta`).
 - Weight tables: flop count; the draft's declared weights; measured scalar throughput and latency on the i265 P-core; LLVM 22 cost model (`print<cost-model>`) for arrowlake and, as a different-CPU control, znver5; llvm-mca per-instruction throughput (`-mcpu=arrowlake` uses the Alder Lake model).
 - Halo variants: none; padded domain (W+2h_x)(H+2h_y)/(WH); strip recomputation 1+2h_y/64.
@@ -127,17 +127,17 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 |---|---|---|---:|---:|---:|---:|---|
 | ssim2 | SSIMULACRA2 | 0.948 (0.937–0.957) | 0.898 | 97.79 | 162.5 | 452.5 | ★ |
 | haarpsi | HaarPSI | 0.941 (0.924–0.954) | 0.911 | 13.85 | 20.93 | 57.68 | ★ |
-| proposal-butteraugli | proposal-Butteraugli | 0.936 (0.921–0.948) | 0.926 | – | – | – |  |
+| proposal-butteraugli | proposal-Butteraugli | 0.936 (0.921–0.948) | 0.926 | – | – | 1161 |  |
 | dssim | DSSIM | 0.936 (0.916–0.952) | 0.848 | 26.06 | 34.52 | 263.7 |  |
 | psnrhvs-daala | PSNR-HVS | 0.936 (0.918–0.951) | 0.878 | 33.55 | 34.12 | 131.4 |  |
 | dmm-pyiqa | DMM | 0.930 (0.917–0.941) | 0.846 | 6916 | 7413 | 1.149e+05 |  |
-| hdrvdp-aic2026 | HDR_VDP_2 | 0.920 (0.896–0.941) | 0.813 | – | – | – |  |
+| hdrvdp-aic2026 | HDR_VDP_2 | 0.920 (0.896–0.941) | 0.813 | – | – | 2366 |  |
 | nlpd-iqa | NLPD | 0.920 (0.893–0.942) | 0.706 | 4.989 | 7.793 | 54.81 | ★ |
 | flip-v17 | FLIP | 0.918 (0.903–0.931) | 0.742 | 184.8 | 186.9 | 726.2 |  |
 | topiq-fr-pipal | TOPIQ-PIPAL | 0.915 (0.895–0.932) | 0.591 | – | – | – |  |
 | gmsd | GMSD | 0.913 (0.889–0.932) | 0.889 | 0.6821 | 0.8448 | 22.66 | ★ |
 | fsim | FSIMc | 0.912 (0.895–0.927) | 0.706 | 15.79 | 25.71 | 103 |  |
-| hdrvdp3-aic2026 | HDR_VDP_3 | 0.912 (0.883–0.936) | 0.655 | – | – | – |  |
+| hdrvdp3-aic2026 | HDR_VDP_3 | 0.912 (0.883–0.936) | 0.655 | – | – | 2558 |  |
 | iwssim-piq | IW-SSIM | 0.910 (0.881–0.935) | 0.809 | 33.42 | 47.53 | 354.9 |  |
 | cvvdp | CVVDP | 0.909 (0.878–0.936) | 0.824 | 75.95 | 98.67 | 739.6 |  |
 | vsi | VSI | 0.909 (0.887–0.926) | 0.726 | 43.01 | 59.13 | 111.2 |  |
@@ -169,7 +169,7 @@ Against tallied cost (measured-throughput weights): psnr, ssim-libvmaf, gmsd, nl
 | psnr-cr | PSNR-Cr | 0.767 (0.737–0.794) | 0.483 | 3.768 | 3.723 | 44.8 |  |
 | dreamsim | DreamSim | 0.753 (0.724–0.782) | 0.637 | 1551 | 1853 | 2.265e+04 |  |
 | psnr-cb | PSNR-Cb | 0.727 (0.697–0.756) | 0.413 | 3.93 | 3.932 | 44.8 |  |
-| cambi-aic2026 | CAMBI | 0.371 (0.280–0.458) | 0.252 | – | – | – |  |
+| cambi-aic2026 | CAMBI | 0.371 (0.280–0.458) | 0.252 | – | – | 36.1 |  |
 | ckdn | CKDN | -0.005 (-0.106–0.100) | 0.054 | 73.75 | 103.2 | 2786 |  |
 
 ## Where the work is
@@ -208,14 +208,18 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | ckdn | 1.043e+04 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 0 | 0 |
 | liqe | 8441 | 0% | 0% | 0% | 100% | 0% | 0% | 0% | 0 | 0 |
 | hdrvdp | 6403 | 0% | 46% | 43% | 0% | 3% | 7% | 0% | 357.3 | 0 |
+| hdrvdp-aic2026 | 6391 | 0% | 46% | 44% | 0% | 3% | 7% | 0% | 357.3 | 0 |
 | mad | 5211 | 1% | 0% | 96% | 0% | 0% | 0% | 3% | 657.2 | 0 |
+| hdrvdp3-aic2026 | 5068 | 0% | 19% | 55% | 0% | 21% | 5% | 0% | 457.1 | 0 |
 | hdrvdp3 | 4108 | 0% | 23% | 68% | 0% | 3% | 6% | 0% | 457.1 | 0 |
 | fsim-nodownscale | 4029 | 0% | 2% | 0% | 0% | 6% | 92% | 0% | 0 | 0 |
 | ssimulacra1 | 3846 | 96% | 0% | 0% | 0% | 3% | 0% | 0% | 396.9 | 0 |
 | butteraugli-gpu | 3840 | 56% | 0% | 0% | 0% | 44% | 0% | 0% | 0 | 0 |
+| proposal-butteraugli | 3447 | 54% | 31% | 0% | 0% | 15% | 0% | 0% | 964 | 0 |
 | butteraugli | 3447 | 54% | 31% | 0% | 0% | 15% | 0% | 0% | 964 | 0 |
 | butteraugli-original | 2610 | 49% | 0% | 0% | 0% | 18% | 0% | 33% | 448 | 0 |
 | vifvec | 1657 | 0% | 55% | 0% | 0% | 2% | 6% | 37% | 107.9 | 0 |
+| fsim-y-k2 | 1374 | 0% | 1% | 86% | 0% | 13% | 0% | 0% | 502 | 0 |
 | flip | 1371 | 95% | 0% | 0% | 0% | 5% | 0% | 0% | 116 | 0 |
 | flip-v17 | 1371 | 95% | 0% | 0% | 0% | 5% | 0% | 0% | 116 | 0 |
 | ssim2 | 1364 | 66% | 0% | 0% | 0% | 33% | 1% | 0% | 236 | 0 |
@@ -234,6 +238,7 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | cvvdp-gpu | 690.7 | 36% | 19% | 0% | 0% | 45% | 0% | 0% | 0 | 0 |
 | cvvdp | 680 | 30% | 0% | 0% | 0% | 38% | 27% | 5% | 192 | 0 |
 | dssim-gpu | 658.8 | 0% | 80% | 0% | 0% | 19% | 1% | 0% | 0 | 0 |
+| fsim-y-k3 | 586.3 | 0% | 1% | 84% | 0% | 14% | 0% | 0% | 228.4 | 0 |
 | ms-ssim-pyiqa | 564.5 | 98% | 0% | 0% | 0% | 2% | 0% | 0% | 127.9 | 0 |
 | ms-ssim-pyiqa-f32 | 564.5 | 98% | 0% | 0% | 0% | 2% | 0% | 0% | 127.9 | 0 |
 | cw-ssim | 502 | 0% | 0% | 87% | 0% | 11% | 0% | 2% | 275.6 | 0 |
@@ -246,6 +251,7 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | ssimc-pyiqa-f32-k2 | 380 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
 | ssimc-pyiqa-f32-k3 | 326.9 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
 | fsim-y | 320.2 | 0% | 1% | 82% | 0% | 16% | 0% | 0% | 131.5 | 0 |
+| fsim-y-k4 | 320.2 | 0% | 1% | 82% | 0% | 16% | 0% | 0% | 131.5 | 0 |
 | ssimc-pyiqa-f32-k4 | 308.6 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
 | brisque | 303.3 | 0% | 81% | 0% | 0% | 19% | 0% | 0% | 0 | 0 |
 | ssimc-pyiqa-f32-k5 | 300 | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 80 | 0 |
@@ -293,6 +299,7 @@ Share of each metric's flops by access class (separable 1-D passes vs 2D windows
 | psnr-y-libvmaf | 20 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 0 | 0 |
 | vmaf | 17.65 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 136.8 | 0 |
 | vmaf-neg | 17.65 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 136.8 | 0 |
+| cambi-aic2026 | 17.32 | 0% | 0% | 0% | 0% | 0% | 0% | 100% | 16.98 | 0 |
 | psnr-y-studio601 | 16 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 0 | 0 |
 | psnr-y | 13 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 0 | 0 |
 | psnr-y601 | 13 | 0% | 0% | 0% | 0% | 100% | 0% | 0% | 0 | 0 |
