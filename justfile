@@ -1668,7 +1668,7 @@ bench-iqa-canonical-changed-plan manifest output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_changed_canonical.py '{{manifest}}' '{{output}}' {{options}}
 
 bench-iqa-canonical-check:
-    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical test_reference_publication
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical test_reference_publication test_canonical_rounds
 
 bench-iqa-canonical-interval results output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}' {{options}}
@@ -2174,6 +2174,9 @@ bench-iqa-canonical-queue manifest *options:
 
 bench-iqa-canonical-status manifest *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/status_canonical_queue.py '{{manifest}}' {{options}}
+
+bench-iqa-canonical-round-audit output raw-manifest +cohorts:
+    python3 -B benchmarks/iqa_compete_2026-10-16/audit_canonical_rounds.py '{{output}}' '{{raw-manifest}}' {{cohorts}}
 
 bench-iqa-canonical-wadiqam-inference python manifest receipt:
     SETUPTOOLS_USE_DISTUTILS=stdlib '{{python}}' -B benchmarks/iqa_compete_2026-10-16/prepare_wadiqam_inference.py '{{manifest}}' '{{receipt}}'

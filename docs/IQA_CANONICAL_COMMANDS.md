@@ -202,6 +202,13 @@ counts, pending cases and retained process/numerical findings. It starts no
 workers and does not qualify results; historical setup failures remain counted
 even when a separate replacement cohort succeeds.
 
+`bench-iqa-canonical-round-audit PUBLIC_JSON NEW_RAW_MANIFEST COHORT...` checks
+that every retained successful Rust arm records exactly ten warm observations
+in its count, timing list and round means. Short or inconsistent arms fail the
+audit. Missing arms remain explicitly counted. The small publication binds a
+fresh raw hash manifest; neither a zero-finding prefix nor its arm count proves
+complete metric coverage or performance qualification.
+
 Use `canonical_wadiqam_inference_cell.py` for original Chainer WaDIQaM
 references. Its CPU aliases live in the author modules, preserving Chainer's
 own backend dispatch, and gradient recording is disabled. The unchanged
