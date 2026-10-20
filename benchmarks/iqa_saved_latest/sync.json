@@ -1,10 +1,10 @@
 {
-  "updated_utc": "2026-10-20T07:15:06.780080+00:00",
-  "evidence_fingerprint": "87c82e348cbf01d217b4a7f2001067b00815a028293497ce8c127eed7294e9ed",
+  "updated_utc": "2026-10-20T07:20:06.738287+00:00",
+  "evidence_fingerprint": "7cf725597f50e3cc10c23949568ea8d4b3e31c2f6a1d2e5ca714f83dfb4f7fad",
   "capture_windows": {
-    "mac": "2026-10-20T07:15:02.768898+00:00",
-    "i265": "2026-10-20T07:15:01.582113+00:00",
-    "r7900x": "2026-10-20T07:15:02.340904+00:00"
+    "mac": "2026-10-20T07:20:02.751926+00:00",
+    "i265": "2026-10-20T07:20:01.589028+00:00",
+    "r7900x": "2026-10-20T07:20:02.293006+00:00"
   },
   "qualification": "Use preferred=True qualified rows; gaps remain explicit; no implementation/protocol pooling"
 }
