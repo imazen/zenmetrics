@@ -359,3 +359,25 @@ on October 20, for 35 routes total. Its separate scheduling table preserves
 [the original table](../rebenchmark_since_f7668c7/order.tsv) for retained
 comparison plans. Both tables use recorded historical durations as scheduling
 hints; their values are not current speed measurements.
+
+## Resident first evaluation and live regression auditing
+
+`just bench-iqa-canonical-nn-first-build PLAN NN_TARGET NEW_OUTPUT` links a
+probe to the plan's frozen original-NN and PyIQA libraries. The builder checks
+the worker and reference bindings, retains source and library hashes, and
+primes the existing model cache before timing the first evaluation. RGB inputs
+and weights are resident. The probe uses the stock scoring body and existing
+`cold_call` timer, then checks a second score's bits outside the clock.
+This measures first evaluation after construction; constructor time and outer
+CLI dispatch are excluded. It does not qualify full cold startup.
+
+Real 512×512 one-thread controls passed for DISTS (absolute difference 0) and
+TOPIQ-FR (1.1920928955078125e-7), within their existing bounds. Both probes
+matched their retained native warm scores bit for bit. These are setup and
+accuracy controls, not coverage of the requested cold matrix.
+
+`just bench-iqa-canonical-watch MANIFEST FLAGS REGRESSIONS PROGRESS_LOG PID`
+audits an existing queue on every scored-case completion, including an initial
+and final catch-up. It records cells above 1.08 immediately without launching
+additional inference. Follow-up measurements and profiles remain explicit
+queued jobs.

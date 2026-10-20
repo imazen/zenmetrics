@@ -2231,3 +2231,11 @@ bench-iqa-canonical-ordered-plan manifest output *options:
 
 bench-iqa-canonical-ordered-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 TMPDIR="$HOME/tmp" python3 -B -m unittest test_ordered_canonical
+
+# Caller supplies heavy admission; immutable models load before the first-evaluation timer.
+bench-iqa-canonical-nn-first-build plan target output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/build_resident_nn_first.py '{{plan}}' '{{target}}' '{{output}}'
+
+# Observe an existing queue; each scored-case completion is audited without starting inference.
+bench-iqa-canonical-watch manifest output regression-log progress-log pid:
+    python3 -B benchmarks/iqa_compete_2026-10-16/watch_canonical_flags.py '{{manifest}}' '{{output}}' '{{regression-log}}' '{{progress-log}}' '{{pid}}'
