@@ -1,7 +1,8 @@
 # Local canonical rechecks
 
-Missing: the full per-name grid, remaining classical and learned references,
-map comparisons and qualified regression intervals. These are scalar checks on
+Missing: the full multi-size per-name grid, remaining learned comparisons,
+map comparisons and qualified regression acceptance. The declared classical
+RGB8 cohorts are complete; explicit route/input exceptions remain below. These are scalar checks on
 Ryzen 9 7950X / WSL2. The first six-name panel uses one 512×512 photo pair.
 Additional original MATLAB, corrected VIF and libvmaf cohorts are indexed in
 [cohorts.json](cohorts.json); its observed/expected counts expose partial runs.
@@ -253,3 +254,19 @@ Octave value 72.6269108964876; v3 Q is 9.780021042500268 versus
 9.780312182285215. Their observed deltas remain visible without an assigned
 route-specific bound. They must not be presented as the strict-mode golden
 validation results or as reproducing a dataset's unpublished invocation.
+
+The full 60-case revised PyIQA SSIM/MS-SSIM grid is complete: 20 names on three
+1152×1152 content pairs, all passing their assigned bounds. The corrected
+fixed-factor names are included; the maximum across the whole grid is
+2.0900847584881532e-6 (bounds differ by named convention). These are headline
+scalar checks; auxiliary output columns and maps require separate validation.
+
+The [independent FLIP-v17 20-block result](flip-v17-confirm20-interval.json)
+is 1.9073448386822038, interval [1.873063545529841, 1.9386291310864587],
+within ±3% precision. Its 23 flagged native observations among 200 remain
+recorded. The eight-thread slowdown remains a descriptive flag.
+
+Initial neural plans with a 1200-second budget were refused by the unchanged
+1100-second supervisor before either arm executed. These setup refusals remain
+in the raw cohort and explicit dispositions. Replacement plans use 1100 seconds
+and new output paths; they do not relax a numerical or native sampling gate.

@@ -365,8 +365,8 @@
     "ratio_plan_sha256": "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
     "ratio_blocks": 3,
     "worst_ratio": 2.0289245567679464,
-    "observed_cases": 3,
-    "expected_cases": 3,
+    "observed_cases": 4,
+    "expected_cases": 4,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -375,6 +375,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "5082f0021bb8548e259719470aafd60dc42beacff3f2adccc6bc9e8f50cd223d",
       "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
       "b9d19f48bb37503308f57f27c481704cd8559d709995eb544e67dbaf657673a8"
     ],
@@ -391,9 +392,9 @@
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
     "ratio_plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
     "ratio_blocks": 3,
-    "worst_ratio": 1.891036050578694,
-    "observed_cases": 2,
-    "expected_cases": 2,
+    "worst_ratio": 1.9073448386822038,
+    "observed_cases": 3,
+    "expected_cases": 3,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -403,6 +404,7 @@
     ],
     "plan_sha256": [
       "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
+      "3e0d5e2ea2d617aa34654e46838c16d6521e5e9783c769612a3241551c73c497",
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
     ],
     "qualified": false

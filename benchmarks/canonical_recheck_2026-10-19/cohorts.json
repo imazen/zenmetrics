@@ -120,12 +120,12 @@
   },
   "pyiqa1152-run": {
     "plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "cases": 39,
+    "cases": 60,
     "expected_cases": 60,
     "artifacts": [
       {
         "file": "pyiqa1152-run.tsv",
-        "sha256": "87eeeb2f5a46742f28355dc23636670998708af60f40dc9e4cbc64a081b1cd0a"
+        "sha256": "02612ca2d61336e2c9eae3f0e8d06712bd6e199ec56da2cc5bddbc932e76ddee"
       }
     ]
   },
@@ -206,6 +206,17 @@
       }
     ]
   },
+  "ssim1-confirm40-run": {
+    "plan_sha256": "6466873cd2442a97b9c7f42f795b1322d6e96fcecf33f2efbce919a55dc464f2",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ssim1-confirm40-run.tsv",
+        "sha256": "87cda991341f2b504071f67a4b91f9ca260529740a127b6c721b4015e4089167"
+      }
+    ]
+  },
   "flip-f64-run": {
     "plan_sha256": "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
     "cases": 2,
@@ -236,6 +247,28 @@
       {
         "file": "flip-confirm-run.tsv",
         "sha256": "8bf86bd8b7d82d63dadb36bb50668d4e8eca3a6efb553f7c5f8f29795ceb7028"
+      }
+    ]
+  },
+  "flip-confirm40-run": {
+    "plan_sha256": "5082f0021bb8548e259719470aafd60dc42beacff3f2adccc6bc9e8f50cd223d",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "flip-confirm40-run.tsv",
+        "sha256": "7b693c62c1c67cc8554ecdd6ba7fc9a9699023c0004f7418016673fa935ce584"
+      }
+    ]
+  },
+  "flip-v17-confirm20-run": {
+    "plan_sha256": "3e0d5e2ea2d617aa34654e46838c16d6521e5e9783c769612a3241551c73c497",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "flip-v17-confirm20-run.tsv",
+        "sha256": "de215302da1ac1577c2d3b2a98dd2fb8ab2eabbf33a08c3aa11cbbff1b3ed18c"
       }
     ]
   },
@@ -349,6 +382,17 @@
       }
     ]
   },
+  "mdctpsnr-rgb-run": {
+    "plan_sha256": "5b4e87075257f7f19f7d8d71868cea209d964292965dc48b5ed9d63247e20048",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "mdctpsnr-rgb-run.tsv",
+        "sha256": "75f4b208a6cb86106d7faa6ae33f2b84bbd3f6400068367f3148caa4e5d92cbe"
+      }
+    ]
+  },
   "coverage-first-20261020-0-run": {
     "plan_sha256": "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875",
     "cases": 13,
@@ -379,6 +423,28 @@
       {
         "file": "coverage-first-20261020-2-run.tsv",
         "sha256": "46909103fd19d326c637705a4220db4f2e39ad04b15a3029e2ab052fe74a6c97"
+      }
+    ]
+  },
+  "original-seven-run": {
+    "plan_sha256": "2ec92142204f459696bcd2326508fc2887502c88c5de45b5372a99b9ad9884a3",
+    "cases": 8,
+    "expected_cases": 14,
+    "artifacts": [
+      {
+        "file": "original-seven-run.tsv",
+        "sha256": "ae574776b397b05f39d2bfe2824ebe30a53d31b0b391ed018bbb2c0fb830c246"
+      }
+    ]
+  },
+  "original-seven-1100-run": {
+    "plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+    "cases": 2,
+    "expected_cases": 14,
+    "artifacts": [
+      {
+        "file": "original-seven-1100-run.tsv",
+        "sha256": "3961e6143f51616e0e748d912ea14468277eae7f0cc7b420d27b1429e3c84c2d"
       }
     ]
   }

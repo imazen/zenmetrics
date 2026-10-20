@@ -1,4 +1,56 @@
 {
+  "vmaf-4k": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 0.8947246019462416,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.8947246019462416,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-neg": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.8732582806645126,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.8732582806645126,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0002482166810153785,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
   "vmaf-neg-studio601": {
     "canonical": "libvmaf 3.2.0 / named RGB ingress",
     "check": "2/2 pass",
