@@ -2239,3 +2239,17 @@ bench-iqa-canonical-nn-first-build plan target output:
 # Observe an existing queue; each scored-case completion is audited without starting inference.
 bench-iqa-canonical-watch manifest output regression-log progress-log pid:
     python3 -B benchmarks/iqa_compete_2026-10-16/watch_canonical_flags.py '{{manifest}}' '{{output}}' '{{regression-log}}' '{{progress-log}}' '{{pid}}'
+
+# Full cropped-set canonical score evaluation; supply the immutable local manifest.
+aic-canonical-run manifest *options:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_run.py {{manifest}} {{options}}
+
+aic-canonical-compare python manifest summary:
+    {{python}} benchmarks/aic2026_full_repro_2026-10-20/canonical_compare.py {{manifest}} --summary {{summary}}
+
+aic-canonical-check python:
+    {{python}} -m unittest discover -s benchmarks/aic2026_full_repro_2026-10-20 -p 'test_canonical_*.py'
+
+# Partial files survive 9p ENOMEM; repeat this recipe after memory compaction.
+aic-canonical-inputs source destination:
+    ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 12 -- rsync -a --partial --bwlimit=12000 {{source}} {{destination}}
