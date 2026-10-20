@@ -2417,3 +2417,14 @@ bench-iqa-canonical-hdr-cell-controls manifest output:
 bench-iqa-canonical-vmaf-fullcall driver +options:
     mkdir -p "$HOME/tmp"
     flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 8 -- env TMPDIR="$HOME/tmp" python3 -B '{{driver}}' --admitted {{options}}
+
+# Verify retained VMAF evidence and freeze a new reference plan without scoring.
+bench-iqa-canonical-vmaf-plan *options:
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/prepare_vmaf_fullcall_plan.py {{options}}
+
+# Pure receipt fixtures, including optimized-Python gate controls.
+bench-iqa-canonical-vmaf-plan-check:
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_vmaf_fullcall_plan
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -O -B -m unittest test_vmaf_fullcall_plan

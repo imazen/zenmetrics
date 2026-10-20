@@ -697,3 +697,18 @@ caveats; all original numerical bounds remain unchanged. The source-reviewed
 plan has eighty declared cases, with the remaining current-worker measurements
 acquiring separately from historical sources. Preparation does not establish
 eighty completed comparisons.
+
+## Strict VMAF plan verification completed, 2026-10-20
+
+The [receipt-verifier controls](vmaf-plan-verifier-controls.json) pass 22 synthetic
+cases in normal and optimized Python and verify the actual retained reference
+evidence. The new twelve-case plan preserves every active case, argument, input
+and numerical bound while binding the fuller retained evidence. The combined
+wrapper reports 6s, peak-RSS0.03GiB, minimum available14924MiB, peak load2.87.
+The earlier source-JSON parsing failure remains recorded.
+
+The [frozen original preparer](../iqa_compete_2026-10-16/frozen_vmaf_fullcall_plan_20261020.py)
+is an exact historical source copy for the active cohort, whose actual records
+passed independent full protocol review. It is not the general strict verifier;
+new preparation uses [the strict successor](../iqa_compete_2026-10-16/vmaf-fullcall-plan.md).
+No active plan or measured result is replaced.

@@ -1,0 +1,30 @@
+{
+  "synthetic_controls": {
+    "normal": 22,
+    "optimized": 22,
+    "log_hashes": {
+      "receipt-controls-v3.log": "531875a59de0b8916c1b12d8f798a6906054bc11bcf2a61cf65c716c2190715c",
+      "receipt-controls-v3-optimized.log": "1445ce43cace9523f7ae137f28d53eee0617bcc4ef3eacbb92752660d35f9c4e"
+    }
+  },
+  "retained_reference_cases": 12,
+  "case_contracts_identical_to_active_plan": true,
+  "original_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-plan.json",
+    "sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4"
+  },
+  "new_plan": {
+    "path": "/home/lilith/tmp/handoff/vmaf-plan-verifier-v2-20261020/prepared-plan-v3.json",
+    "sha256": "fac06109160b69875dd87c2e875b8f11a6945c6705474948b7b288bf1e9575ec"
+  },
+  "verifier_sha256": "762c1e8210c21b2cef535f086fc39796c3fd592c4614698fc226dafd2b09f29b",
+  "fixture_sha256": "e3c3eb2ea03b21d21db274c42d58f46fe6c01a27f0267d7e675035e0cb230bb7",
+  "wrapper": [
+    "run-heavy: done rc=0 6s | peak-RSS 0.03GiB | min-avail 14924MiB | peak-load 2.87"
+  ],
+  "earlier_attempt": {
+    "raw_directory": "/home/lilith/tmp/handoff/vmaf-plan-verifier-v2-20261020",
+    "result": "Both original21controlmodes passed; real preparation rejected an intentionally malformed native-source JSON fixture. Opaque source hashing corrected in a new immutable source version; original logs retained."
+  },
+  "qualification": "Receipt/source verification only. No new numerical threshold, model/scorer execution, native parity or performance acceptance. All active plans/results retained unchanged."
+}

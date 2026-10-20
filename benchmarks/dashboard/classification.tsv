@@ -1614,3 +1614,4 @@ benchmarks/canonical_recheck_2026-10-19/grid-4k-profiles-2026-10-20/profile-01.j
 benchmarks/canonical_recheck_2026-10-19/grid-4k-profiles-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/vmaf-fullcall-controls.json	ignored	Exact original-reference score controls and source/build identities; not native timing observations.
 benchmarks/canonical_recheck_2026-10-19/local40-scoped-fullcall-command.json	ignored	Current source-bound comparison command and remaining timing-scope caveats; not acquired timings.
+benchmarks/canonical_recheck_2026-10-19/vmaf-plan-verifier-controls.json	ignored	Synthetic receipt controls and retained reference contract verification; not new model timings.
