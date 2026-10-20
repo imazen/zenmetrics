@@ -223,3 +223,33 @@ P6 view of identical RGB8 bytes; file I/O and process launch are excluded.
 The compiler retains the documented fast-math contract with portable Highway
 dispatch. Build receipt: 10s, peak-RSS 0.36 GiB, minimum available 12209 MiB,
 peak load 0.96. Scalar/map and broader-size coverage remain separate questions.
+
+## Fixed-stage interval results
+
+The [combined 60-block SSIMULACRA1 result](ssim1-combined60-interval.json)
+is 1.0716442661769214, 95% interval [1.0618754401254606, 1.0960947055896795]
+(±2.28%). It remains borderline against 1.08. All 600 native observations stay
+in the primary result; 105 carry resource flags. The 40 entirely clean blocks
+have a separate diagnostic median 1.0841294481188646, interval
+[1.0620697994564496, 1.101185716322878], also borderline.
+
+The [combined 60-block FLIP result](flip-combined60-interval.json) at eight
+threads is 1.957927961720583, 95% interval
+[1.917466421937279, 1.973160062353411] (±2.07%). There are 49 resource-flagged
+observations among 600. Its 40 entirely clean blocks have diagnostic median
+1.950251670583271 and interval [1.9129967018465255, 1.9761492467288064].
+The slowdown flag persists in that subset. These are descriptive intervals;
+neither canonical contamination nor complete runtime closure is independently
+qualified. Every original and follow-up block remains retained.
+
+An independent FLIP-v17 perf sample places 38.48% of cycles in the same
+convolution function. Receipt: 9s, peak-RSS 0.11 GiB, minimum available
+12421 MiB, load 1.26. [Profile hashes](profiles.json) preserve the raw
+approximately 65 MB recordings outside public git. No optimization is merged.
+
+The explicit SDR HDR-VDP aliases use the current native relaxed arithmetic.
+On this 512×512 photo, v2 Q is 72.71885993948507 versus the adapted original
+Octave value 72.6269108964876; v3 Q is 9.780021042500268 versus
+9.780312182285215. Their observed deltas remain visible without an assigned
+route-specific bound. They must not be presented as the strict-mode golden
+validation results or as reproducing a dataset's unpublished invocation.

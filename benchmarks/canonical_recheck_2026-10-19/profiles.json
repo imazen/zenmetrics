@@ -1,0 +1,26 @@
+{
+  "flip-profile.data": {
+    "sha256": "bdac7d8676b0e3ec8e883c44f0431585fd3feceea9e493ab9bbf1ecf8fd170b0",
+    "bytes": 66444252
+  },
+  "flip-profile.txt": {
+    "sha256": "f1a3c9642dc792158bbd2fbf95a7cf8f0a88e29c5dafab453542f5d0c23f2b5a",
+    "bytes": 137336
+  },
+  "ssim1-profile-focused.data": {
+    "sha256": "f5f0627b750efe303dd561fb2f23c3f119fd84f9031cf701773ee15b165d6ea7",
+    "bytes": 68810052
+  },
+  "ssim1-profile-focused.txt": {
+    "sha256": "95b3a8898c99b2badaa70be1f842e862362bec45d8888a12fca83027d1683fa6",
+    "bytes": 163240
+  },
+  "flip-v17-profile.data": {
+    "sha256": "80c5f901509833c6b030405115e8b688e0752ba3d4e4a79df31588cadbc39793",
+    "bytes": 68105920
+  },
+  "flip-v17-profile.txt": {
+    "sha256": "cedff9ce982d1329d0d68ac6f0a0ea840ce08f95d8af3a88bde473a93bb2f573",
+    "bytes": 151473
+  }
+}
