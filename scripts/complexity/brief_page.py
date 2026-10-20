@@ -81,6 +81,21 @@ def metric_meta(d):
             meta[name] = {'fam': family('classic-fr', origin), 'kind': 'classic-fr', 'origin': origin, 'col': None, 'ref': None,
                           'family': None, 'parity': None, 'aic': None, 'spot': None, 'status': 'unchecked', 'why': [],
                           'tuned': False, 'est': {}, 'c1': None, 'c8': None}
+    repro = d.get('repro') or {}
+    cols_of = {}
+    for col, ms in (repro.get('routes') or {}).items():
+        for m in ms:
+            cols_of.setdefault(m, set()).add(col)
+    for name, mm in meta.items():
+        key = mm.get('alias', name)
+        cols = cols_of.get(key, set()) | ({mm['col']} if mm.get('col') else set())
+        in_csv = set(repro.get('july_columns') or cols)
+        mm['july_cols'] = sorted(cols & in_csv)
+        mm['site_cols'] = sorted(cols - in_csv)
+        mm['code_changed'] = sorted({f for st in repro.get('sets', []) for f in (st.get('affected') or {}).get(key, [])})
+        mm['july'] = [dict(set=st['set'], **{k: r[k] for k in ('column', 'cli', 'n', 'median_d', 'max_d', 'median_dJND', 'max_dJND', 'spearman', 'match')})
+                      for st in repro.get('sets', []) for r in st['rows'] if r['cli'] == key]
+        mm['canon'] = [dict(set=st['set'], **r) for st in repro.get('canonical', []) for r in st['rows'] if r.get('cli') == key]
     return meta
 
 
@@ -154,7 +169,8 @@ def build(data_path, out):
         'perf': perf, 'meta': meta, 'tables': d['tables'], 'stats': stats, 'best_table': best, 'seed': d['seed'],
         'fit_host': d.get('host'), 'fit_shape': d.get('shape'),
         'aic': aic_categories((ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()),
-        'dvifm': d.get('dvifmish_versions') or [], 'sources': d['sources'], 'notes': d.get('notes') or []}
+        'dvifm': d.get('dvifmish_versions') or [], 'sources': d['sources'], 'notes': d.get('notes') or [],
+        'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': d.get('checks') or []}
     out.mkdir(parents=True, exist_ok=True)
     write_csvs(d, meta, out)
     built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')

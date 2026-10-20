@@ -111,7 +111,7 @@
   }
   const PIN_DEFAULT = ['psnr-y', 'ssim2', 'butteraugli', 'vmaf', 'lpips-alex', 'dvifmish-port-lap-v0.2'].filter(m => NAMES.includes(m)).map((m, i) => `${m}:${i + 1}`).join(',');
   const DEF = { v: 'overview', host: defaultHost(), size: SIZE['aic-small'] ? 'aic-small' : SIZES[0].name, th: 'both', ph: 'warm', show: 'spread', ax: 'log',
-    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', sort: '' };
+    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', jf: 'all', sort: '' };
   let S = { ...DEF };
   function readHash() {
     const [v, ...kv] = location.hash.slice(1).split('&');
@@ -203,6 +203,18 @@
     else if (mm.status === 'unchecked') tip.append(h('div', 'note', '° no parity check against the reference recorded yet'));
     if (mm.tuned) tip.append(h('div', 'note', '† released DVIFM variant, retuned on AIC2026 data'));
   }
+  function openChecks() {
+    hideTip();
+    const d = DRAWER; d.replaceChildren();
+    const close = h('button', 'icon close', '✕'); close.onclick = () => { d.hidden = true; };
+    d.append(close, h('h3', null, 'Data checks at build time'),
+      h('div', 'hint', 'Run on every rebuild by scripts/complexity/brief_data.py and scripts/aic2026/repro_check.py: hashes of committed data, routes against the column map, the status doc against the full-set reproduction, code changed since a reproduction, timing sync age. Errors also fail `just aic-repro-check`.'));
+    const ul = h('ul');
+    for (const c of (D.checks || []).slice().sort((a, b) => ({ error: 0, warn: 1, info: 2 }[a.level] - { error: 0, warn: 1, info: 2 }[b.level]))) {
+      const li = h('li'); li.append(h('b', c.level === 'error' ? 'mark-dev' : c.level === 'warn' ? null : 'mark-un', `${c.level}: ${c.check}. `), document.createTextNode(c.detail)); ul.append(li);
+    }
+    d.append(ul); d.hidden = false;
+  }
   function openDrawer(m) {
     hideTip();
     const mm = meta(m), d = DRAWER;
@@ -223,6 +235,18 @@
     if (mm.est && mm.est.flops) row('Counted flops per pixel', fmt(mm.est.flops));
     if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU ns/px (perf stat)`, `${fmt(mm.c1)} at 1 thread, ${fmt(mm.c8)} at 8 threads`);
     d.append(dl);
+    if (mm.july.length || mm.canon.length || mm.july_cols.length) {
+      d.append(h('h4', null, 'Full-set diff (9,618 crops)'));
+      if (!mm.july.length && mm.july_cols.length) d.append(h('div', 'hint', `Maps to ${mm.july_cols.join(', ')}, but the full-set run scored that column with another route or has not reached it.`));
+      const t = h('table'), tr = h('tr');
+      ['set', 'against', 'n', 'median |Δ|', 'max |Δ|', 'median |Δ JND|', 'max |Δ JND|', 'Spearman', 'result'].forEach(x => tr.append(h('th', null, x)));
+      const th = h('thead'); th.append(tr); t.append(th); const tb = h('tbody');
+      for (const r of mm.july) { const q = h('tr'); [r.set, `July ${r.column}`, r.n, r.median_d, r.max_d, r.median_dJND, r.max_dJND, r.spearman, r.match].forEach(x => q.append(h('td', null, x))); tb.append(q); }
+      for (const r of mm.canon) { const q = h('tr'); [r.set, r.reference, r.n, r.median_d, r.max_d, `rel ${r.median_rel}`, `rel ${r.max_rel}`, r.spearman, `${r.match} (gate ${r.gate})`].forEach(x => q.append(h('td', null, x))); tb.append(q); }
+      t.append(tb); const w = h('div', 'scroll'); w.append(t); d.append(w);
+      const st = (D.repro.sets || [])[0];
+      if (mm.code_changed.length) d.append(h('div', 'mark-dev', `Code for this route changed after the reproduction's source commit ${st ? st.commit : ''}: ${mm.code_changed.join(', ')}. Rescore, or confirm the change is bit-exact.`));
+    }
     d.append(h('div', 'hint', `Wall time per call, ${S.ph} phase, median ns per pixel [95 % interval of the mean]; empty cells are not measured yet.`));
     const tbl = h('table'), thead = h('thead'), tr = h('tr');
     tr.append(h('th', null, 'size'));
@@ -241,6 +265,50 @@
     }
     tbl.append(tb); const wrap = h('div', 'scroll'); wrap.append(tbl); d.append(wrap);
     d.hidden = false;
+  }
+
+  // ------------------------------------------------------------------ pan and zoom
+  // Wheel zooms around the pointer, drag pans, double-click resets. The view lives in ZOOM[key], where the key
+  // includes every control that changes the axes, so switching tables, threads or axes starts from the default.
+  const ZOOM = {};
+  let DRAG = null;
+  function zoomable(body, key, axes) {
+    const tf = (ax, v) => ax.log ? Math.log10(v) : v, itf = (ax, t) => ax.log ? 10 ** t : t;
+    const shift = (ax, frac0, scale, dt) => {
+      const t0 = tf(ax, ax.dom[0]), t1 = tf(ax, ax.dom[1]), tc = t0 + frac0 * (t1 - t0);
+      return [itf(ax, tc - (tc - t0) * scale + dt * (t1 - t0)), itf(ax, tc + (t1 - tc) * scale + dt * (t1 - t0))];
+    };
+    body.style.touchAction = 'none';
+    body.onwheel = ev => {
+      ev.preventDefault();
+      const b = body.getBoundingClientRect(), f = Math.exp(Math.max(-60, Math.min(60, ev.deltaY)) * 0.004), z = {};
+      for (const [k, ax] of Object.entries(axes))
+        z[k] = shift(ax, ((k === 'x' ? ev.clientX - b.left : ev.clientY - b.top) - ax.p0) / (ax.p1 - ax.p0), f, 0);
+      ZOOM[key] = { ...ZOOM[key], ...z }; hideTip(); draw();
+    };
+    body.onpointerdown = ev => { if (ev.button === 0) DRAG = { key, x: ev.clientX, y: ev.clientY, axes, id: ev.pointerId, moved: false }; };
+    body.onpointermove = ev => {
+      if (!DRAG || DRAG.key !== key) return;
+      const dx = ev.clientX - DRAG.x, dy = ev.clientY - DRAG.y;
+      if (!DRAG.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      if (!DRAG.moved) { DRAG.moved = true; body.setPointerCapture?.(DRAG.id); }
+      const z = {};
+      for (const [k, ax] of Object.entries(DRAG.axes)) z[k] = shift(ax, 0, 1, -(k === 'x' ? dx : dy) / (ax.p1 - ax.p0));
+      ZOOM[key] = { ...ZOOM[key], ...z }; hideTip(); draw();
+    };
+    body.onpointerup = () => { if (DRAG && DRAG.moved) body._dragged = true; DRAG = null; };
+    body.ondblclick = () => { delete ZOOM[key]; draw(); };
+  }
+  function zoomButtons() {
+    const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'View'));
+    const row = h('div', 'seg');
+    for (const [k, text] of [['all', 'All points'], ['bulk', 'Bulk (90 %)'], ['reset', 'Reset']]) {
+      const b = h('button', null, text); b.type = 'button';
+      b.onclick = () => { const f = CUR && CUR.body && CUR.body._fit; if (!f) return; if (k === 'reset') delete ZOOM[f.key]; else ZOOM[f.key] = f[k]; draw(); };
+      row.append(b);
+    }
+    box.append(row, h('div', 'hint', 'Scroll to zoom, drag to pan, double-click to reset.'));
+    return box;
   }
 
   // ------------------------------------------------------------------ views
@@ -475,7 +543,7 @@
     rail.append(hostSeg(false), seg('Threads', 'th', [['1', '1 thread'], ['8', '8 threads']], { pressed: v => (S.th === '8' ? '8' : '1') === v }), phaseSeg(),
       seg('Show', 'show', [['spread', 'Median'], ['fast', 'Fastest']]), famSeg(), search('Find and pin'));
     const pins = h('div', 'ctl'); pins.id = 'pins'; rail.append(pins);
-    rail.append(h('div', 'hint', 'Gray: every other metric. Hover any line for its values; click to pin (up to 8) or unpin.'));
+    rail.append(h('div', 'hint', 'Gray: every other metric. Hover any line for its values; click to pin (up to 8) or unpin. Scroll to zoom, drag to pan, double-click to reset.'));
   }
   function drawScaling(head, body) {
     const host = S.host, t = S.th === '8' ? 8 : 1, pins = pinList(), pinned = new Map(pins.map(p => [p.m, p.slot]));
@@ -499,9 +567,10 @@
     const W = body.clientWidth, H = body.clientHeight, fs = rem();
     const L = fs * 3.6, R = fs * 12, T = fs * 0.8, B = fs * 2.8;
     const all = lines.flatMap(l => l.pts.map(p => p.v));
-    const lo = Math.min(...all) / 1.2, hi = Math.max(...all) * 1.2, l0 = Math.log10(lo), l1 = Math.log10(hi);
+    const zkey = `scaling|${host}|${t}|${S.ph}|${S.show}|${S.fam}|${S.q}`;
+    const [lo, hi] = (ZOOM[zkey] || {}).y || [Math.min(...all) / 1.2, Math.max(...all) * 1.2], l0 = Math.log10(lo), l1 = Math.log10(hi);
     const X = i => L + (i + 0.5) / SIZES.length * (W - L - R), Y = v => T + (1 - (Math.log10(v) - l0) / (l1 - l0)) * (H - T - B);
-    const p = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="time per pixel against image size">`];
+    const p = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="time per pixel against image size"><defs><clipPath id="sc"><rect x="${L - 6}" y="${T}" width="${W - L - R + 12}" height="${H - T - B}"/></clipPath></defs>`];
     for (const tk of logTicks(lo, hi, (H - T - B) / (fs * 1.6))) {
       const y = Y(tk.v);
       p.push(`<line class="${tk.major ? 'g-grid' : 'g-grid-minor'}" x1="${L}" y1="${y}" x2="${W - R}" y2="${y}"/>`);
@@ -514,14 +583,16 @@
     });
     p.push(`<text class="g-tick" transform="translate(${fs * 0.9},${(T + H - B) / 2}) rotate(-90)" text-anchor="middle" font-size="${fs * 0.75}">ns per pixel</text>`);
     const path = l => l.pts.map((q, j) => `${j ? 'L' : 'M'}${X(q.i).toFixed(1)},${Y(q.v).toFixed(1)}`).join('');
+    p.push('<g clip-path="url(#sc)">');
     for (const l of lines) if (!l.slot) p.push(`<path class="g-bg-line" d="${path(l)}"/>`);
     p.push('<path id="hot" class="g-bg-line hot" d=""/>');
     const labels = [];
     for (const l of lines.filter(l => l.slot)) {
       p.push(`<path class="g-line" stroke="var(--s${l.slot})" d="${path(l)}"/>`);
       for (const q of l.pts) p.push(`<circle class="g-dot" cx="${X(q.i)}" cy="${Y(q.v)}" r="${fs * 0.22}" fill="var(--s${l.slot})"/>`);
-      const last = l.pts.at(-1); labels.push({ y: Y(last.v), x: X(last.i), l });
+      const last = l.pts.at(-1); if (last.v >= lo && last.v <= hi) labels.push({ y: Y(last.v), x: X(last.i), l });
     }
+    p.push('</g>');
     labels.sort((a, b) => a.y - b.y);
     for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + fs * 0.95);
     for (const lb of labels) p.push(`<text class="g-lab" x="${lb.x + fs * 0.5}" y="${lb.y + fs * 0.3}" font-size="${fs * 0.8}">${esc(lb.l.m)}${flagTspans(lb.l.m)}</text>`);
@@ -552,7 +623,8 @@
       });
     };
     svg.onpointerleave = () => { hot.setAttribute('d', ''); hideTip(); };
-    svg.onclick = ev => { const l = nearest(ev); if (l) togglePin(l.m); };
+    svg.onclick = ev => { if (body._dragged) { body._dragged = false; return; } const l = nearest(ev); if (l) togglePin(l.m); };
+    zoomable(body, zkey, { y: { log: true, dom: [lo, hi], p0: H - B, p1: T } });
   }
 
   // ---- counted cost
@@ -560,7 +632,7 @@
   function railCost(rail) {
     rail.append(seg('Weight table', 'tb', D.tables.filter(t => statOf(t.id, 1)).map(t => [t.id, SHORT_T[t.id] || t.label, t.label])),
       seg('Threads', 'cth', [['1', '1 thread'], ['8', '8 threads', 'CPU time summed over the 8 threads, not wall time']]),
-      seg('Axes', 'cax', [['log', 'Log–log'], ['lin', 'Linear']]), famSeg());
+      seg('Axes', 'cax', [['log', 'Log–log'], ['lin', 'Linear']]), famSeg(), zoomButtons());
     const card = h('div', 'card'); card.id = 'coststats'; rail.append(card);
     const rank = h('div', 'card'); rank.id = 'costrank'; rail.append(rank);
     rail.append(h('div', 'hint', 'Counts ignore SIMD width, memory traffic, caches and threading; time is one implementation per metric on one CPU, so a point\'s distance from the line is that implementation\'s efficiency as much as the metric\'s cost.'));
@@ -598,13 +670,16 @@
       + (lin ? '<span>dashed: through-origin fit; band: its 95 % interval</span>' : '<span>dashed: single scale (unit slope), band ±2×; solid: least-squares log–log line</span>'));
     if (!pts.length || !s) return empty(body, 'No counted costs for this selection.');
     const W = body.clientWidth, H = body.clientHeight, fs = rem(), L = fs * 4.2, R = fs * 1.2, T = fs * 0.8, B = fs * 2.6;
-    let X, Y, xd, yd;
-    if (lin) { xd = [0, Math.max(...pts.map(q => q.x)) * 1.05]; yd = [0, Math.max(...pts.map(q => q.y)) * 1.05]; X = v => L + v / xd[1] * (W - L - R); Y = v => T + (1 - v / yd[1]) * (H - T - B); }
-    else {
-      xd = [Math.min(...pts.map(q => q.x)) / 1.5, Math.max(...pts.map(q => q.x)) * 1.5]; yd = [Math.min(...pts.map(q => q.y)) / 1.5, Math.max(...pts.map(q => q.y)) * 1.5];
-      const lx = xd.map(Math.log10), ly = yd.map(Math.log10);
-      X = v => L + (Math.log10(v) - lx[0]) / (lx[1] - lx[0]) * (W - L - R); Y = v => T + (1 - (Math.log10(v) - ly[0]) / (ly[1] - ly[0])) * (H - T - B);
-    }
+    // view: zoom/pan state per (table, threads, axes, families); linear axes start on the bulk (90th percentile)
+    const xs = pts.map(q => q.x), ys = pts.map(q => q.y), qt = (a, f) => a.slice().sort((u, v) => u - v)[Math.floor(f * (a.length - 1))];
+    const all = lin ? { x: [0, Math.max(...xs) * 1.05], y: [0, Math.max(...ys) * 1.05] }
+      : { x: [Math.min(...xs) / 1.5, Math.max(...xs) * 1.5], y: [Math.min(...ys) / 1.5, Math.max(...ys) * 1.5] };
+    const bulk = lin ? { x: [0, qt(xs, 0.9) * 1.3], y: [0, qt(ys, 0.9) * 1.3] } : all;
+    const zkey = `cost|${S.tb}|${th}|${S.cax}|${S.fam}`, view = ZOOM[zkey] || (lin ? bulk : all);
+    const xd = view.x, yd = view.y, tf = v => lin ? v : Math.log10(v);
+    const X = v => L + (tf(v) - tf(xd[0])) / (tf(xd[1]) - tf(xd[0])) * (W - L - R);
+    const Y = v => T + (1 - (tf(v) - tf(yd[0])) / (tf(yd[1]) - tf(yd[0]))) * (H - T - B);
+    body._fit = { key: zkey, all, bulk };
     const p = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="counted cost against CPU time"><defs><clipPath id="pc"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>`];
     const xt = lin ? linTicks(xd[0], xd[1], (W - L - R) / (fs * 5)) : logTicks(xd[0], xd[1], (W - L - R) / (fs * 3));
     const yt = lin ? linTicks(yd[0], yd[1], (H - T - B) / (fs * 2.5)) : logTicks(yd[0], yd[1], (H - T - B) / (fs * 1.6));
@@ -625,10 +700,20 @@
       p.push(`<path class="g-ols" d="M${X(a)},${Y(ols(a))}L${X(b)},${Y(ols(b))}"/>`);
     }
     p.push('</g>');
-    const r0 = fs * 0.3;
+    const r0 = fs * 0.3, inView = q => q.x >= xd[0] && q.x <= xd[1] && q.y >= yd[0] && q.y <= yd[1];
+    let nOut = 0;
     for (const q of pts) {
-      const cx = X(q.x), cy = Y(q.y), col = q.mm.fam === 'neural' || (q.mm.kind || '').startsWith('nn') ? 'var(--s2)' : 'var(--s1)';
-      q.cx = cx; q.cy = cy;
+      let cx = X(q.x), cy = Y(q.y);
+      const col = q.mm.fam === 'neural' || (q.mm.kind || '').startsWith('nn') ? 'var(--s2)' : 'var(--s1)';
+      if (!inView(q)) {  // off-view point: a small arrowhead on the plot edge, pointing towards it
+        nOut++;
+        const ex = Math.min(Math.max(cx, L + 4), W - R - 4), ey = Math.min(Math.max(cy, T + 4), H - B - 4), ang = Math.atan2(cy - ey, cx - ex);
+        const k = r0 * 1.6, pt = (a, rr) => `${ex + Math.cos(ang + a) * rr},${ey + Math.sin(ang + a) * rr}`;
+        p.push(`<path class="g-out" d="M${pt(0, k)}L${pt(2.5, k * 0.8)}L${pt(-2.5, k * 0.8)}Z" fill="${col}"/>`);
+        q.cx = ex; q.cy = ey; q.out = true;
+        continue;
+      }
+      q.cx = cx; q.cy = cy; q.out = false;
       if (q.mm.origin === 'private') p.push(`<rect class="g-pt" x="${cx - r0}" y="${cy - r0}" width="${2 * r0}" height="${2 * r0}" fill="${col}"/>`);
       else if (q.mm.origin === 'dvifmish') p.push(`<path class="g-pt" d="M${cx},${cy - r0 * 1.3}L${cx + r0 * 1.3},${cy}L${cx},${cy + r0 * 1.3}L${cx - r0 * 1.3},${cy}Z" fill="${col}"/>`);
       else p.push(`<circle class="g-pt" cx="${cx}" cy="${cy}" r="${r0}" fill="${col}"/>`);
@@ -637,6 +722,7 @@
     const boxes = [];
     const order = lin ? pts.slice().sort((a, b) => b.y - a.y).slice(0, 8) : pts.slice().sort((a, b) => Math.abs(Math.log10(b.y / (s.scale * b.x))) - Math.abs(Math.log10(a.y / (s.scale * a.x)))).filter(q => Math.abs(Math.log10(q.y / (s.scale * q.x))) > Math.log10(3));
     for (const q of order) {
+      if (q.out) continue;
       const w = q.m.length * fs * 0.42, x = q.cx + r0 + 3, y = q.cy + fs * 0.25;
       const bx = x + w > W - R ? [q.cx - r0 - 3 - w, q.cx - r0 - 3] : [x, x + w];
       const box = [bx[0] - 2, y - fs * 0.78, bx[1] + 2, y + fs * 0.22];
@@ -657,18 +743,36 @@
         tipRow(tip, null, `${fmt(q.y)} ns/px`, `CPU time, ${th} thread${th > 1 ? 's' : ''}`);
         tipRow(tip, null, fmt(q.x), `counted cost (${SHORT_T[S.tb] || S.tb})`);
         tipRow(tip, null, `${(q.y / (s.scale * q.x)).toFixed(2)}×`, 'measured ÷ fitted scale');
+        if (q.out) tip.append(h('div', 'note', 'Outside the current view.'));
         tip.append(h('div', 'note', 'Click for details.'));
       });
     };
     svg.onpointerleave = () => { hot.setAttribute('r', 0); hideTip(); };
-    svg.onclick = ev => { const q = near(ev); if (q) openDrawer(q.m); };
+    svg.onclick = ev => { if (body._dragged) { body._dragged = false; return; } const q = near(ev); if (q) openDrawer(q.m); };
+    if (nOut) head.querySelector('.legend').insertAdjacentHTML('beforeend', `<span class="mark-dev">${nOut} point${nOut > 1 ? 's' : ''} outside this view (edge arrows): scroll out or press “All points”</span>`);
+    zoomable(body, zkey, { x: { log: !lin, dom: xd, p0: L, p1: W - R }, y: { log: !lin, dom: yd, p0: H - B, p1: T } });
   }
 
   // ---- reproduction
   function railRepro(rail) {
     const cnt = st => Object.values(M).filter(x => !x.alias && (st === 'all' || x.status === st)).length;
-    rail.append(seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`]]),
+    const jn = j => Object.values(M).filter(x => !x.alias && (j === 'all' || (x.july_cols.length > 0) === (j === 'in'))).length;
+    rail.append(seg('July AIC2026 CSV', 'jf', [['all', `All (${jn('all')})`], ['in', `Has a column (${jn('in')})`], ['out', `No column (${jn('out')})`]]),
+      seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`]]),
       famSeg(), search());
+    const links = h('div', 'ctl'); links.append(h('div', 'ctl-label', 'Full-set diff against the July CSV'));
+    const lseg = h('div', 'card');
+    for (const st of D.repro.sets || []) {
+      const ok = st.rows.filter(r => r.match === 'MATCH').length, miss = st.rows.filter(r => r.match === 'MISS').length;
+      lseg.append(h('div', null, `${st.set}: ${ok} columns match, ${miss} miss the 1e-3 site-JND gate; source ${st.commit || '?'}`));
+      const row = h('div', 'seg');
+      for (const [href, text] of [[st.csv_url, 'Our scores (CSV.gz)'], [st.url, 'Per-column diff (TSV)']]) if (href) { const a = h('a', 'icon', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; row.append(a); }
+      lseg.append(row);
+    }
+    for (const st of D.repro.canonical || []) { const a = h('a', 'icon', `Reference implementations, ${st.set} (TSV)`); a.href = st.url; a.target = '_blank'; a.rel = 'noopener'; lseg.append(a); }
+    const pub = h('a', 'icon', 'Published July CSV (DaRUS)'); pub.href = 'https://doi.org/10.18419/DARUS-6156'; pub.target = '_blank'; pub.rel = 'noopener';
+    lseg.append(pub, h('div', 'hint', 'Diff locally: python3 scripts/aic2026/july_diff.py OURS.csv.gz metrics_cropped.csv report.tsv worst.txt'));
+    links.append(lseg); rail.append(links);
     const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'Published AIC2026 columns'));
     for (const [cat, cls, names] of D.aic) {
       const c = h('details', 'card'), s = h('summary');
@@ -701,10 +805,19 @@
   const evidenceCell = (m, td) => { const mm = meta(m); td.append(h('span', mm.status === 'deviation' ? 'mark-dev' : mm.status === 'checked' ? 'mark-ok' : 'mark-un', mm.status === 'deviation' ? '* deviation' : mm.status === 'checked' ? '✓ checked' : '° none yet')); if (mm.why.length) td.title = mm.why.join('; '); };
   function drawRepro(head, body) {
     const host = S.host === 'all' ? DEF.host : S.host;
-    const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].status === S.rf));
+    const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].status === S.rf)
+      && (S.jf === 'all' || (M[m].july_cols.length > 0) === (S.jf === 'in')));
     setHead(head, 'Ours against the reference implementations',
-      `${rows.length} metrics. Three separate records: reference parity (a comparison with the upstream code in the provenance ledger or a model card), AIC2026 match (our output reproduces the per-image values the dataset authors published) and the primary-oracle spot check (passing cases of expected).`,
+      `${rows.length} metrics. Full-set diff: our score on all 9,618 crops against the July CSV column (median |Δ site-JND|, gate 1e-3) or, where the CSV has no column, against the reference implementation. Status doc: docs/AIC2026_REPRODUCTION_STATUS.md. Reference parity: the provenance ledger or model card. Oracle check: primary-oracle spot check.`,
       MARKS_LEGEND);
+    const diffv = m => { const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0]; return j ? +j.median_dJND : null; };
+    const diffCell = (m, td) => {
+      const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0], c = M[m].canon[0];
+      if (j) { td.append(h('span', j.match === 'MATCH' ? 'mark-ok' : 'mark-dev', (j.match === 'MATCH' ? '✓ ' : '✗ ') + j.median_dJND)); td.append(h('div', 'ci', `${j.column} · ρ ${j.spearman}`)); }
+      else if (c) { td.append(h('span', c.match === 'MATCH' ? 'mark-ok' : c.match === 'MISS' ? 'mark-dev' : null, `${c.match === 'MATCH' ? '✓' : c.match === 'MISS' ? '✗' : ''} rel ${c.median_rel}`)); td.append(h('div', 'ci', `vs ${c.reference} · ρ ${c.spearman}`)); }
+      else if (M[m].july_cols.length) { td.textContent = 'not scored'; td.title = `${M[m].july_cols.join(', ')}: the full-set run used a different route or has not reached this column`; }
+      else td.textContent = '–';
+    };
     const speed = m => { const c = cell(host, m, DEF.size, 1, 'warm'); return c ? c.median * perPx(DEF.size) : null; };
     const txt = (f) => (r, td) => { td.textContent = f(r) ?? '–'; };
     sortable(body, [
@@ -713,8 +826,9 @@
       { id: 'ev', label: 'evidence', cell: evidenceCell, sortv: m => M[m].status },
       { id: 'ref', label: 'reference implementation', cell: txt(m => M[m].ref || 'not recorded'), sortv: m => M[m].ref },
       { id: 'par', label: 'reference parity', cell: txt(m => M[m].parity === 'Not documented' ? 'none recorded' : M[m].parity), sortv: m => M[m].parity },
-      { id: 'col', label: 'AIC2026 column', cell: txt(m => M[m].col), sortv: m => M[m].col },
-      { id: 'aic', label: 'AIC2026 match', cell: txt(m => M[m].aic), sortv: m => M[m].aic },
+      { id: 'col', label: 'July column', title: 'columns of the published July CSV; AIC-site-only columns in grey', cell: (m, td) => { td.textContent = M[m].july_cols.join(', ') || (M[m].site_cols.length ? '' : '–'); if (M[m].site_cols.length) td.append(h('div', 'ci', 'site only: ' + M[m].site_cols.join(', '))); }, sortv: m => M[m].july_cols[0] },
+      { id: 'diff', label: 'full-set diff', title: 'median |Δ site-JND| against the published column (✓ ≤ 1e-3), or median relative difference from the reference implementation', cell: (m, td) => diffCell(m, td), sortv: diffv },
+      { id: 'aic', label: 'status doc', cell: txt(m => M[m].aic), sortv: m => M[m].aic },
       { id: 'spot', label: 'oracle check', cell: txt(m => M[m].spot === 'missing' ? 'not run' : M[m].spot), sortv: m => M[m].spot },
       { id: 'ns', label: 'ns/px', num: true, title: `${hostName(host)}, ${sizeName(DEF.size)}, 1 thread, warm median`, cell: (m, td) => { td.textContent = fmt(speed(m)); }, sortv: speed },
     ], rows, openDrawer);
@@ -801,6 +915,12 @@
     const pill = $('#datapill'); pill.textContent = `unfinished · ${cells ? Math.round(100 * ok / cells) : 0} % of cells · synced ${(P.synced_utc || '').slice(11, 16)} UTC`;
     pill.title = HOSTS.map(x => `${P.hosts[x]}: ${cov[x] ? cov[x].ok + ' of ' + cov[x].cells : '?'} cells`).join('\n');
     $('#fullscreen').onclick = toggleFs;
+    const ck = D.checks || [], nerr = ck.filter(c => c.level === 'error').length, nwarn = ck.filter(c => c.level === 'warn').length;
+    if (nerr || nwarn) {
+      const b = $('#checkpill'); b.hidden = false; b.classList.toggle('err', nerr > 0);
+      b.textContent = (nerr ? `${nerr} error${nerr > 1 ? 's' : ''} · ` : '') + `${nwarn} data warning${nwarn === 1 ? '' : 's'}`;
+      b.onclick = openChecks;
+    }
     document.addEventListener('keydown', ev => {
       if (ev.target.closest && ev.target.closest('input')) return;
       if (ev.key === 'Escape') { DRAWER.hidden = true; return; }

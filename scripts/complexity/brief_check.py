@@ -60,6 +60,18 @@ def main():
                         problems.append(f'{tab}: button "{label}" changed nothing')
                 page.goto(f'{url}#{tab}')
                 page.wait_for_timeout(100)
+                if tab in ('cost', 'scaling'):  # wheel zoom and drag pan must each redraw the chart
+                    plot = page.locator('.plot'); box = plot.bounding_box()
+                    cx, cy = box['x'] + box['width'] * 0.5, box['y'] + box['height'] * 0.5
+                    html = lambda: page.evaluate("document.querySelector('.plot').innerHTML")
+                    before = html(); page.mouse.move(cx, cy); page.mouse.wheel(0, -300); page.wait_for_timeout(80)
+                    if html() == before:
+                        problems.append(f'{tab}: wheel zoom changed nothing')
+                    before = html(); page.mouse.down(); page.mouse.move(cx + 60, cy + 40, steps=4); page.mouse.up(); page.wait_for_timeout(80)
+                    if html() == before:
+                        problems.append(f'{tab}: drag pan changed nothing')
+                    page.mouse.dblclick(cx, cy); page.wait_for_timeout(60)
+                    page.screenshot(path=str(a.shots / f'{tab}_zoomed_reset.png'))
                 if tab in ('speed', 'cost'):
                     target = page.locator('.plot .g-pt' if tab == 'cost' else '.plot svg').first
                     box = target.bounding_box()
