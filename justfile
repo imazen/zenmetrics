@@ -2378,3 +2378,10 @@ aic-canonical-successor predecessor scratch output freeze lock1 lock2:
 # Retained original/resident HDR controls; no new numerical or timing qualification.
 bench-iqa-canonical-hdr-controls-publish golden preflight output:
     python3 -B benchmarks/iqa_compete_2026-10-16/publish_hdr_reference_controls.py '{{golden}}' '{{preflight}}' '{{output}}'
+
+# Exact retained warm cases for the site; caller supplies shared heavy admission.
+bench-iqa-canonical-summary source inventory output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_spotcheck_summary.py '{{source}}' '{{inventory}}' '{{output}}'
+
+bench-iqa-canonical-summary-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_spotcheck_summary
