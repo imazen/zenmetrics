@@ -190,12 +190,12 @@
       {
         "campaign": "remaining-remaining2",
         "manifest_cells": 1504,
-        "saved_attempt_rows": 972,
-        "qualified_attempt_rows": 934,
+        "saved_attempt_rows": 974,
+        "qualified_attempt_rows": 936,
         "gate_flagged_attempt_rows": 6,
         "observed_cell_statuses": {
-          "ok": 940,
-          "pending": 564
+          "ok": 942,
+          "pending": 562
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -265,12 +265,12 @@
       {
         "campaign": "opt-4f89155c",
         "manifest_cells": 480,
-        "saved_attempt_rows": 151,
-        "qualified_attempt_rows": 150,
-        "gate_flagged_attempt_rows": 1,
+        "saved_attempt_rows": 351,
+        "qualified_attempt_rows": 349,
+        "gate_flagged_attempt_rows": 2,
         "observed_cell_statuses": {
-          "ok": 151,
-          "pending": 329
+          "ok": 351,
+          "pending": 129
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -279,11 +279,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:40:01.712673+00:00",
-      "2026-10-20T14:40:02.676408+00:00"
+      "2026-10-20T14:45:01.741448+00:00",
+      "2026-10-20T14:45:02.794658+00:00"
     ],
-    "saved_attempt_rows": 5420,
-    "preferred_qualified_cells": 4827,
+    "saved_attempt_rows": 5622,
+    "preferred_qualified_cells": 5028,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -390,7 +390,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 16523,
+    "individual_measurement_rows": 17175,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -549,12 +549,12 @@
       {
         "campaign": "remaining-remaining2",
         "manifest_cells": 731,
-        "saved_attempt_rows": 699,
-        "qualified_attempt_rows": 676,
+        "saved_attempt_rows": 706,
+        "qualified_attempt_rows": 683,
         "gate_flagged_attempt_rows": 7,
         "observed_cell_statuses": {
-          "ok": 683,
-          "pending": 48
+          "ok": 690,
+          "pending": 41
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -583,12 +583,12 @@
       {
         "campaign": "changed12-master",
         "manifest_cells": 576,
-        "saved_attempt_rows": 535,
-        "qualified_attempt_rows": 527,
+        "saved_attempt_rows": 555,
+        "qualified_attempt_rows": 547,
         "gate_flagged_attempt_rows": 8,
         "observed_cell_statuses": {
-          "ok": 535,
-          "pending": 41
+          "ok": 555,
+          "pending": 21
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -598,12 +598,12 @@
       {
         "campaign": "hdrvdp-srgb",
         "manifest_cells": 96,
-        "saved_attempt_rows": 91,
-        "qualified_attempt_rows": 89,
+        "saved_attempt_rows": 95,
+        "qualified_attempt_rows": 93,
         "gate_flagged_attempt_rows": 2,
         "observed_cell_statuses": {
-          "ok": 91,
-          "pending": 5
+          "ok": 95,
+          "pending": 1
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -613,12 +613,12 @@
       {
         "campaign": "opt-4f89155c",
         "manifest_cells": 480,
-        "saved_attempt_rows": 65,
-        "qualified_attempt_rows": 65,
+        "saved_attempt_rows": 69,
+        "qualified_attempt_rows": 69,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 65,
-          "pending": 415
+          "ok": 69,
+          "pending": 411
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -641,11 +641,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:40:01.419792+00:00",
-      "2026-10-20T14:40:01.965167+00:00"
+      "2026-10-20T14:45:01.418631+00:00",
+      "2026-10-20T14:45:01.974403+00:00"
     ],
-    "saved_attempt_rows": 5664,
-    "preferred_qualified_cells": 5357,
+    "saved_attempt_rows": 5699,
+    "preferred_qualified_cells": 5392,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -752,7 +752,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 17674,
+    "individual_measurement_rows": 17781,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "r7900x": {
@@ -903,8 +903,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:40:02.120001+00:00",
-      "2026-10-20T14:40:02.405710+00:00"
+      "2026-10-20T14:45:02.141725+00:00",
+      "2026-10-20T14:45:02.425355+00:00"
     ],
     "saved_attempt_rows": 6359,
     "preferred_qualified_cells": 5937,
