@@ -423,7 +423,7 @@ def affected_metrics(files, names):
 def reproduction(names):
     """Committed AIC2026 reproduction sets (compare TSVs, provenance) and canonical-implementation comparisons."""
     sys.path.insert(0, str(ROOT / 'scripts/aic2026'))
-    from aic_columns import COLS
+    from aic_columns import COLS, REFERENCE, REF_META
     import repro_check
     out = dict(sets=[], canonical=[], routes={}, july_columns=[], checks=repro_check.run())
     cmap = json.loads((HERE / 'aic2026_columns.json').read_text())['map']
@@ -434,11 +434,9 @@ def reproduction(names):
         routes.setdefault(c, set()).update(ms)
     for c, (tag, _, _) in COLS.items():
         routes[c].add(tag)
-    for d in sorted(ROOT.glob('benchmarks/aic2026_full_repro_*')):
-        for gz in sorted(d.glob('metrics_*.zenmetrics.csv.gz')):
-            import gzip
-            head = gzip.open(gz, 'rt').readline().strip().split(',')
-            out['july_columns'] = [c for c in head[9:] if not c.startswith('JND_')]
+    out['july_columns'] = [c for c in REFERENCE['columns'] if c not in REF_META and not c.startswith('JND_')]
+    out['reference'] = {k: REFERENCE[k] for k in ('name', 'sha256', 'url')}
+    for d in sorted(ROOT.glob('benchmarks/aic2026_*')):
         for cmp in sorted(d.glob('compare_*.tsv')):
             kind = cmp.stem.removeprefix('compare_')
             rows = list(csv.DictReader(cmp.open(), delimiter='\t'))
@@ -492,7 +490,7 @@ def coherence(metrics, perf, repro, aic):
             add('warn', f"{s['set']} reproduction", f"could not diff crates/ against its source commit {s['commit']}")
     for c in sorted(set(aic) - july):
         if july:
-            add('info', 'status doc column not in the July CSV', f'{c} is classified in the status doc (an AIC site column) but is not a column of the published CSV')
+            add('info', 'status doc column not in the published tables', f'{c} is classified in the status doc but is not a column of the July/drop published tables')
     if perf and perf.get('synced_utc'):
         import datetime
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(perf['synced_utc'])

@@ -1823,7 +1823,7 @@ brief-deploy:
 brief-watch workspace="../zenmetrics--brief-watch":
     scripts/complexity/brief_watch.sh {{workspace}}
 
-# Integrity of the committed AIC2026 reproduction; add --published DIR to re-derive the compare tables.
+# Integrity of the committed AIC2026 reproduction; add --reference combined.csv to re-derive the compare tables.
 aic-repro-check *args:
     python3 scripts/aic2026/repro_check.py {{args}}
 

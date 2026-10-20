@@ -241,7 +241,7 @@
       const t = h('table'), tr = h('tr');
       ['set', 'against', 'n', 'median |Δ|', 'max |Δ|', 'median |Δ JND|', 'max |Δ JND|', 'Spearman', 'result'].forEach(x => tr.append(h('th', null, x)));
       const th = h('thead'); th.append(tr); t.append(th); const tb = h('tbody');
-      for (const r of mm.july) { const q = h('tr'); [r.set, `July ${r.column}`, r.n, r.median_d, r.max_d, r.median_dJND, r.max_dJND, r.spearman, r.match].forEach(x => q.append(h('td', null, x))); tb.append(q); }
+      for (const r of mm.july) { const q = h('tr'); [r.set, `published ${r.column}`, r.n, r.median_d, r.max_d, r.median_dJND, r.max_dJND, r.spearman, r.match].forEach(x => q.append(h('td', null, x))); tb.append(q); }
       for (const r of mm.canon) { const q = h('tr'); [r.set, r.reference, r.n, r.median_d, r.max_d, `rel ${r.median_rel}`, `rel ${r.max_rel}`, r.spearman, `${r.match} (gate ${r.gate})`].forEach(x => q.append(h('td', null, x))); tb.append(q); }
       t.append(tb); const w = h('div', 'scroll'); w.append(t); d.append(w);
       const st = (D.repro.sets || [])[0];
@@ -757,10 +757,10 @@
   function railRepro(rail) {
     const cnt = st => Object.values(M).filter(x => !x.alias && (st === 'all' || x.status === st)).length;
     const jn = j => Object.values(M).filter(x => !x.alias && (j === 'all' || (x.july_cols.length > 0) === (j === 'in'))).length;
-    rail.append(seg('July AIC2026 CSV', 'jf', [['all', `All (${jn('all')})`], ['in', `Has a column (${jn('in')})`], ['out', `No column (${jn('out')})`]]),
+    rail.append(seg('Published AIC2026 column', 'jf', [['all', `All (${jn('all')})`], ['in', `Has a column (${jn('in')})`], ['out', `No column (${jn('out')})`]]),
       seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`]]),
       famSeg(), search());
-    const links = h('div', 'ctl'); links.append(h('div', 'ctl-label', 'Full-set diff against the July CSV'));
+    const links = h('div', 'ctl'); links.append(h('div', 'ctl-label', 'Full-set diff against the published scores'));
     const lseg = h('div', 'card');
     for (const st of D.repro.sets || []) {
       const ok = st.rows.filter(r => r.match === 'MATCH').length, miss = st.rows.filter(r => r.match === 'MISS').length;
@@ -770,8 +770,10 @@
       lseg.append(row);
     }
     for (const st of D.repro.canonical || []) { const a = h('a', 'icon', `Reference implementations, ${st.set} (TSV)`); a.href = st.url; a.target = '_blank'; a.rel = 'noopener'; lseg.append(a); }
-    const pub = h('a', 'icon', 'Published July CSV (DaRUS)'); pub.href = 'https://doi.org/10.18419/DARUS-6156'; pub.target = '_blank'; pub.rel = 'noopener';
-    lseg.append(pub, h('div', 'hint', 'Diff locally: python3 scripts/aic2026/july_diff.py OURS.csv.gz metrics_cropped.csv report.tsv worst.txt'));
+    const ref = D.repro.reference || {};
+    const pub = h('a', 'icon', 'Reference: July/drop combined CSV'); pub.href = ref.url || 'https://doi.org/10.18419/DARUS-6156'; pub.target = '_blank'; pub.rel = 'noopener';
+    const dar = h('a', 'icon', 'July release (DaRUS)'); dar.href = 'https://doi.org/10.18419/DARUS-6156'; dar.target = '_blank'; dar.rel = 'noopener';
+    lseg.append(pub, dar, h('div', 'hint', `Reference sha256 ${(ref.sha256 || '').slice(0, 12)}…, the July release plus the online-dashboard export. Diff locally: python3 scripts/aic2026/july_diff.py OURS.csv.gz combined.csv report.tsv worst.txt --view cropped`));
     links.append(lseg); rail.append(links);
     const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'Published AIC2026 columns'));
     for (const [cat, cls, names] of D.aic) {
@@ -808,7 +810,7 @@
     const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].status === S.rf)
       && (S.jf === 'all' || (M[m].july_cols.length > 0) === (S.jf === 'in')));
     setHead(head, 'Ours against the reference implementations',
-      `${rows.length} metrics. Full-set diff: our score on all 9,618 crops against the July CSV column (median |Δ site-JND|, gate 1e-3) or, where the CSV has no column, against the reference implementation. Status doc: docs/AIC2026_REPRODUCTION_STATUS.md. Reference parity: the provenance ledger or model card. Oracle check: primary-oracle spot check.`,
+      `${rows.length} metrics. Full-set diff: our score on all 9,618 crops against the published column (July/drop union; median |Δ site-JND|, gate 1e-3) or, where the CSV has no column, against the reference implementation. Status doc: docs/AIC2026_REPRODUCTION_STATUS.md. Reference parity: the provenance ledger or model card. Oracle check: primary-oracle spot check.`,
       MARKS_LEGEND);
     const diffv = m => { const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0]; return j ? +j.median_dJND : null; };
     const diffCell = (m, td) => {
@@ -826,7 +828,7 @@
       { id: 'ev', label: 'evidence', cell: evidenceCell, sortv: m => M[m].status },
       { id: 'ref', label: 'reference implementation', cell: txt(m => M[m].ref || 'not recorded'), sortv: m => M[m].ref },
       { id: 'par', label: 'reference parity', cell: txt(m => M[m].parity === 'Not documented' ? 'none recorded' : M[m].parity), sortv: m => M[m].parity },
-      { id: 'col', label: 'July column', title: 'columns of the published July CSV; AIC-site-only columns in grey', cell: (m, td) => { td.textContent = M[m].july_cols.join(', ') || (M[m].site_cols.length ? '' : '–'); if (M[m].site_cols.length) td.append(h('div', 'ci', 'site only: ' + M[m].site_cols.join(', '))); }, sortv: m => M[m].july_cols[0] },
+      { id: 'col', label: 'published column', title: 'columns of the July/drop published tables; columns only named on the AIC site in grey', cell: (m, td) => { td.textContent = M[m].july_cols.join(', ') || (M[m].site_cols.length ? '' : '–'); if (M[m].site_cols.length) td.append(h('div', 'ci', 'site only: ' + M[m].site_cols.join(', '))); }, sortv: m => M[m].july_cols[0] },
       { id: 'diff', label: 'full-set diff', title: 'median |Δ site-JND| against the published column (✓ ≤ 1e-3), or median relative difference from the reference implementation', cell: (m, td) => diffCell(m, td), sortv: diffv },
       { id: 'aic', label: 'status doc', cell: txt(m => M[m].aic), sortv: m => M[m].aic },
       { id: 'spot', label: 'oracle check', cell: txt(m => M[m].spot === 'missing' ? 'not run' : M[m].spot), sortv: m => M[m].spot },

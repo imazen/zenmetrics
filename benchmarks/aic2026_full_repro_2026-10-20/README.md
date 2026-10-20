@@ -17,9 +17,16 @@ this CSV is distributed under the same licence. Source-image attribution:
 Tools (`scripts/aic2026/`): `assemble.py` builds the CSV from per-metric batch TSVs (moved from
 the lane's scratch; column table in `aic_columns.py`), `july_diff.py` diffs any assembled CSV
 against the published `metrics_<set>.csv`, and `repro_check.py` checks the committed files
-(`just aic-repro-check`; add `--published DIR` where the July CSVs are available to re-derive
-`compare_cropped.tsv` exactly). `compare_cropped.tsv` was re-derived with `july_diff.py`; it is
-the lane's table plus two `nodata` rows (HDR_VDP_2/3, not yet scored).
+(`just aic-repro-check`; add `--reference combined.csv` to re-derive `compare_cropped.tsv` exactly).
+
+Reference: the July/drop union `combined.csv` (sha256 `91d7c2df…`,
+https://zentrain.r2.imazen.org/aic2026/csv/july-drop-2026-10-20/combined.csv,
+[reconciliation](../aic_csv_reconcile_2026-10-20/README.md)), cropped view. Its July columns agree numerically
+with the July `metrics_cropped.csv` the lane first compared against: re-deriving against it changes no statistic,
+only CAMBI's exact-string count (2,503 → 1,050, the union keeps the later export's decimal strings).
+`compare_cropped.tsv` is that re-derivation; it adds two `nodata` rows (HDR_VDP_2/3, not scored in this set).
+These values came from the CLI's six-decimal batch text; full-precision rescoring uses `just aic-rescore`
+([docs/AIC_RESCORE.md](../../docs/AIC_RESCORE.md)).
 
 Binary: `zenmetrics` (zenmetrics-cli) v0.6.0 built from the CI-pinned
 sibling snapshot of master `4d833195` + the `aic_vmaf_features` example

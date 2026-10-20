@@ -95,23 +95,151 @@ def pear(a, b):
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(sa * sb)
 
 
-def write_report(pub, header, ours, report, worst_path):
+# The published reference: union of the July DaRUS release and the later online-dashboard export
+# (benchmarks/aic_csv_reconcile_2026-10-20). Header recorded so the dashboard knows every published column.
+REFERENCE = {
+ "name": "July/drop union combined.csv",
+ "sha256": "91d7c2df86f6ac973288f511b1bb625890d8b4a2c35fbe8b3199d28c76836866",
+ "url": "https://zentrain.r2.imazen.org/aic2026/csv/july-drop-2026-10-20/combined.csv",
+ "columns": [
+  "view",
+  "ptc_subset",
+  "distorted",
+  "source",
+  "codec",
+  "codec_acronym",
+  "distortion_level",
+  "bpp",
+  "codec_id",
+  "enc_setting",
+  "enc_value",
+  "CVVDP",
+  "JND_CVVDP",
+  "SSIMULACRA2",
+  "JND_SSIMULACRA2",
+  "PSNR-Y",
+  "JND_PSNR-Y",
+  "SSIM",
+  "JND_SSIM",
+  "MS-SSIM",
+  "JND_MS-SSIM",
+  "PSNR-HVS",
+  "JND_PSNR-HVS",
+  "VMAF-neg",
+  "JND_VMAF-neg",
+  "proposal-Butteraugli",
+  "proposal-DVIFM",
+  "proposal-mDCTPSNR",
+  "proposal-IDFIQA",
+  "proposal-DVIFM-0.2",
+  "proposal-DVIFM-0.2-use_chroma",
+  "IW-SSIM",
+  "VIF",
+  "GMSD",
+  "NLPD",
+  "LPIPS-alex",
+  "HaarPSI",
+  "FSIM",
+  "FSIMc",
+  "WD_s1",
+  "WD_s2",
+  "WD_s4",
+  "WD_s3",
+  "WD_s5",
+  "TOPIQ",
+  "DISTS",
+  "AHIQ",
+  "LPIPS-VGG",
+  "DSSIM",
+  "VMAF",
+  "PSNR-HVS-Y",
+  "CAMBI",
+  "PSNR-Cb",
+  "PSNR-Cr",
+  "PSNR-HVS-Cb",
+  "PSNR-HVS-Cr",
+  "ADM2",
+  "VIF_vmaf",
+  "CIEDE2000",
+  "HDR_VDP_2",
+  "HDR_VDP_3",
+  "PSNR",
+  "SSIM-pyiqa",
+  "MS-SSIM-pyiqa",
+  "PieAPP",
+  "CKDN",
+  "STLPIPS",
+  "STLPIPS-VGG",
+  "WaDIQaM",
+  "MSSWD",
+  "TOPIQ-PIPAL",
+  "AIMOS",
+  "CW-SSIM",
+  "VSI",
+  "SSIMc",
+  "FLIP",
+  "DMM",
+  "DeepDC",
+  "A-FINE",
+  "DreamSim",
+  "PSNR-YCbCr611",
+  "mDCT-PSNR",
+  "PSNR-HVS-vmaf",
+  "JND_PSNR-HVS-vmaf",
+  "proposal-DVIFM-2d",
+  "proposal-DVIFM-min",
+  "WS-HV",
+  "PSNR-HVS-Y-vmaf",
+  "VMAF v1",
+  "VMAF v0",
+  "VMAF-neg v0",
+  "Butteraugli-max",
+  "Butteraugli-3norm",
+  "SSIMULACRA1",
+  "Butteraugli-original",
+  "VIF-vmaf-scale0",
+  "VIF-vmaf-scale1",
+  "VIF-vmaf-scale2",
+  "VIF-vmaf-scale3"
+ ]
+}
+
+
+REF_META = set(META) | {'view', 'ptc_subset'}
+
+
+def route_table(header, ours, routes=None):
+    """(column, route, site-JND key) for every reference metric column we can compare.
+
+    COLS columns always appear (empty ones report `nodata`); any other non-JND reference column appears when we
+    have values for it. The route comes from `routes` (e.g. an aic-rescore plan) when given, else COLS.
+    The site-JND key is COLS's, else the column name when the site mapping has it."""
+    out = []
+    for c in header:
+        if c in REF_META or c.startswith('JND_'):
+            continue
+        if c not in COLS and not ours.get(c):
+            continue
+        tag = (routes or {}).get(c) or (COLS[c][0] if c in COLS else '?')
+        mk = COLS[c][2] if c in COLS else (c if c in MAP else None)
+        out.append((c, tag, mk))
+    return out
+
+
+def write_report(pub, header, ours, report, worst_path, routes=None):
     """Per-column comparison of our values (ours[col][distorted] -> float) with the published rows."""
     rep = open(report, 'w')
     rep.write('column\tcli\tn\texact_eq\tmedian_d\tmax_d\tmedian_dJND\tmax_dJND\tpearson\tspearman\tmatch\n')
     worst = open(worst_path, 'w')
     jnd_report_cols = set(JNDS)
-    for c in header:
-        if c in META or c not in COLS:
-            continue
-        tag, _, mk = COLS[c]
+    for c, tag, mk in route_table(header, ours, routes):
         pairs = []
         dec = 0
         for row in pub:
             pv = row[c]
             if pv in ('', 'nan', 'NaN'):
                 continue
-            ov = ours[c].get(row['distorted'])
+            ov = ours.get(c, {}).get(row['distorted'])
             if ov is None:
                 continue
             # published decimal precision
@@ -125,7 +253,7 @@ def write_report(pub, header, ours, report, worst_path):
         dd = [abs(o - p) for _, o, p, _ in pairs]
         dj = []
         for _, o, p, _ in pairs:
-            jo, jp = sitejnd(mk, o), sitejnd(mk, p)
+            jo, jp = (sitejnd(mk, o), sitejnd(mk, p)) if mk else (None, None)
             dj.append(abs(jo - jp) if jo is not None else float('nan'))
         djok = [x for x in dj if x == x]
         pj = pear([p[1] for p in pairs], [p[2] for p in pairs])
@@ -144,6 +272,8 @@ def write_report(pub, header, ours, report, worst_path):
     # JND_ columns are recomputed-by-construction (site map); report their raw deltas vs published
     for c in sorted(jnd_report_cols):
         base, mk = JNDS[c]
+        if c not in header or base not in ours:
+            continue
         pairs = []
         for row in pub:
             ov = ours[base].get(row['distorted'])

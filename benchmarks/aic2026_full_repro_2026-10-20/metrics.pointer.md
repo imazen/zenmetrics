@@ -25,6 +25,14 @@ values below.
 the CLI metric name + options used for every published column, and the
 exact batch commands.
 
+## Reference table
+
+Compared against the July/drop union (published scores only), cropped view: reference
+`combined.csv` sha256 `91d7c2df86f6ac973288f511b1bb625890d8b4a2c35fbe8b3199d28c76836866`
+(s3://zentrain/aic2026/csv/july-drop-2026-10-20/, https://zentrain.r2.imazen.org/aic2026/csv/july-drop-2026-10-20/combined.csv;
+[reconciliation](../aic_csv_reconcile_2026-10-20/README.md)). Its July columns agree numerically with the July
+`metrics_cropped.csv` this set was first compared with.
+
 ## Contents
 
 Each CSV keeps the published header and row order verbatim, copies the
