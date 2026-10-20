@@ -721,3 +721,21 @@ verifier, and preserves the measured ascending scheduling order. It declares
 82 one/eight-thread cases, with eight HDR scope caveats. Preparation passed
 in 4s, peak-RSS0.08GiB, minimum available14955MiB, peak load1.47; these are
 not82completed measurements. Every previous manifest and result remains retained.
+
+## Additional first-call and original HDR diagnostics, 2026-10-20
+
+Missing: the new cold cohorts and fixed-stage confirmations remain incomplete;
+the original HDR runtime/direct-call and parameter-storage gates remain open.
+The [initial classical cold flags](classical-first-initial-flags.json) retain
+eleven cells above 1.08 across GMSD, FLIP and FLIP v1.7. These three-block ratios
+are separate from warm observations. Fixed twenty-block confirmations have been
+queued for all eleven cases; no regression is accepted from these initial data.
+
+The [partial original HDR grid](hdr-original-partial12.json) records 12 of 48
+declared cases. HDR-VDP v2's 1024×1024 photo difference is 0.009351851113351017
+at both worker budgets, above the retained 0.005 golden-check level. V3's largest
+completed difference is 7.105427357601002e-15, with no assigned bound. The local
+Octave 6.4/image 2.12 runtime carries two reviewed upstream resize M-file overlays.
+Native parity and every timing ratio remain withheld; this does not identify
+the cause of the v2 difference. Per-case resource receipts and raw artifact
+hashes are retained in both projections.

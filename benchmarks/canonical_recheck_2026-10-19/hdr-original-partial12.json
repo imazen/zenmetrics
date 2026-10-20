@@ -1,0 +1,253 @@
+{
+  "capture": "2026-10-20",
+  "completed": 12,
+  "declared": 48,
+  "raw_directory": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3",
+  "cohort_sha256": "37835de1275b0838fa3f56401b1f95de24e8a40335125dfe2c5f3f22a91eac22",
+  "setup_sha256": "64efb2d5f7289445e21fc23fc1ed803168c7683767c1f3db9495e0b542289936",
+  "runtime": "Octave6.4.0/image2.12 with two reviewed upstream image2.20.1 resize M-file overlays; not a complete package upgrade",
+  "qualification": "Partial numerical diagnostics only. Original/default versus independent direct controls and resident/default ABBA remain incomplete; parameter-file versus embedded-data scope differs; every timing ratio and native parity qualification remains withheld. V2 .005 is retained as an existing golden-check level, not established as a universal bound; v3 bound remains null.",
+  "rows": [
+    {
+      "id": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
+      "index": 8,
+      "observation_complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": false,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "1b4c5a9e9a8eb2d8906280bc93445ef189229a8ba3e8150e3e31e418dd95d095",
+      "resource_receipts": [
+        "run-heavy: done rc=1 69s | peak-RSS 0.57GiB | min-avail 14711MiB | peak-load 3.46"
+      ],
+      "native_score": 61.701629129628834,
+      "original_score": 61.710980980742185
+    },
+    {
+      "id": "original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40",
+      "index": 10,
+      "observation_complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": false,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "622c13c34db6ed4771e4f7e0a6c5919a1664210b45161e37bd9a6f216a760491",
+      "resource_receipts": [
+        "run-heavy: done rc=1 53s | peak-RSS 0.67GiB | min-avail 14640MiB | peak-load 1.25"
+      ],
+      "native_score": 61.701629129628834,
+      "original_score": 61.710980980742185
+    },
+    {
+      "id": "original12-hdrvdp-grid-pairA-255x257-t1-warm-current40",
+      "index": 4,
+      "observation_complete": true,
+      "absolute_difference": 4.4966493675246966e-06,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": true,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "42bab70b386b884dbc38b2c500d3c841196c37c49d27e63543c524db6ef19fe4",
+      "resource_receipts": [
+        "run-heavy: done rc=0 20s | peak-RSS 0.11GiB | min-avail 14833MiB | peak-load 1.48"
+      ],
+      "native_score": 59.62320734086805,
+      "original_score": 59.62320284421868
+    },
+    {
+      "id": "original12-hdrvdp-grid-pairA-255x257-t28-warm-current40",
+      "index": 6,
+      "observation_complete": true,
+      "absolute_difference": 4.4966493675246966e-06,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": true,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "00f04550acc7832b10e0c936b7c23dd33b1dc4e5ce15591e6cf0aa361d4cc43f",
+      "resource_receipts": [
+        "run-heavy: done rc=0 21s | peak-RSS 0.15GiB | min-avail 14193MiB | peak-load 4.59"
+      ],
+      "native_score": 59.62320734086805,
+      "original_score": 59.62320284421868
+    },
+    {
+      "id": "original12-hdrvdp-grid-pairA-64x64-t1-warm-current40",
+      "index": 0,
+      "observation_complete": true,
+      "absolute_difference": 1.596125044756036e-05,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": true,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "bd733b572457869da9628d2936fdb45799258eb0f932b4ee0892751d21094802",
+      "resource_receipts": [
+        "run-heavy: done rc=0 17s | peak-RSS 0.11GiB | min-avail 15208MiB | peak-load 1.43"
+      ],
+      "native_score": 60.56309768178813,
+      "original_score": 60.56308172053768
+    },
+    {
+      "id": "original12-hdrvdp-grid-pairA-64x64-t28-warm-current40",
+      "index": 2,
+      "observation_complete": true,
+      "absolute_difference": 1.596125044756036e-05,
+      "absolute_bound": 0.005,
+      "relative_bound": 0,
+      "bound_pass": true,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "adb92e3a20271f98c76a4b3873f9b64d2429ec3ba16392dd4d71dad9c41b7e98",
+      "resource_receipts": [
+        "run-heavy: done rc=0 18s | peak-RSS 0.11GiB | min-avail 15196MiB | peak-load 1.81"
+      ],
+      "native_score": 60.56309768178813,
+      "original_score": 60.56308172053768
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40",
+      "index": 9,
+      "observation_complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "694a5db4ed86b38b8a58189df5db65b9a7984d3091cb312228d0892f69676105",
+      "resource_receipts": [
+        "run-heavy: done rc=0 85s | peak-RSS 0.60GiB | min-avail 14682MiB | peak-load 2.69"
+      ],
+      "native_score": 8.431053192297762,
+      "original_score": 8.431053192297767
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40",
+      "index": 11,
+      "observation_complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "b0d658a49b3627412721ef83e8ff7666bb522e765d24e5a0b452ae9c0d0335ef",
+      "resource_receipts": [
+        "run-heavy: done rc=0 61s | peak-RSS 1.72GiB | min-avail 13227MiB | peak-load 3.52"
+      ],
+      "native_score": 8.431053192297762,
+      "original_score": 8.431053192297767
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40",
+      "index": 5,
+      "observation_complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "ba70f8a133ac00d539d6324c42a839cf5486f0d5e97f01988ef2e37223bde736",
+      "resource_receipts": [
+        "run-heavy: done rc=0 22s | peak-RSS 0.13GiB | min-avail 13178MiB | peak-load 5.11"
+      ],
+      "native_score": 8.1361268377944,
+      "original_score": 8.136126837794407
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-255x257-t28-warm-current40",
+      "index": 7,
+      "observation_complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "b51a743c1933f78709d7876bcbda06c2de185ef7ebe1de6ad770e5318bb29393",
+      "resource_receipts": [
+        "run-heavy: done rc=0 22s | peak-RSS 0.22GiB | min-avail 15026MiB | peak-load 3.00"
+      ],
+      "native_score": 8.1361268377944,
+      "original_score": 8.136126837794407
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-64x64-t1-warm-current40",
+      "index": 1,
+      "observation_complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "370e170a35227d92ad0dc760ed53608ec1a8492c3a362de3c525e8b251a0cdd0",
+      "resource_receipts": [
+        "run-heavy: done rc=0 18s | peak-RSS 0.11GiB | min-avail 15237MiB | peak-load 1.11"
+      ],
+      "native_score": 8.01066400284578,
+      "original_score": 8.010664002845774
+    },
+    {
+      "id": "original12-hdrvdp3-grid-pairA-64x64-t28-warm-current40",
+      "index": 3,
+      "observation_complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "bound_pass": null,
+      "native_parity_qualified": false,
+      "ratio": null,
+      "matched_scope": false,
+      "qualified_timing_cells": 0,
+      "fatal": false,
+      "result_sha256": "a08886e2c6ca27f77389e0ceeb51a6955cf9204b2dc4316559bd44450e35369b",
+      "resource_receipts": [
+        "run-heavy: done rc=0 19s | peak-RSS 0.12GiB | min-avail 15002MiB | peak-load 2.14"
+      ],
+      "native_score": 8.01066400284578,
+      "original_score": 8.010664002845774
+    }
+  ],
+  "native_score_observation": "Observed initialization/warmup scalar; timed native return values are not individually observed by this frozen worker. No per-timed-call numerical gate is claimed."
+}

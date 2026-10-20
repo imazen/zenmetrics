@@ -144,6 +144,23 @@ Deep docs: `crates/cvvdp-gpu/docs/DIFFMAP_DIVERGENCES.md`,
 - **EXTENSION** — v1 column names retained for back-compat with existing
   sidecars while the canonical sRGB parity tests run the current API.
 
+### Local original HDR numerical diagnostics (2026-10-20)
+
+The [partial 12-of-48-case grid](benchmarks/canonical_recheck_2026-10-19/hdr-original-partial12.json)
+compares the base sRGB-display routes with the original official functions.
+HDR-VDP v2 differs by 0.009351851113351017 on the 1024×1024 photo at both worker
+budgets, above the retained 0.005 golden-check level. That level is an existing
+fixture check, not a newly established universal bound. V3 differs by at most
+7.105427357601002e-15 in these completed cases; its bound remains unassigned.
+
+These are numerical diagnostics under Octave 6.4/image 2.12 with two reviewed
+upstream image 2.20.1 resize M-file overlays. Full original/direct controls,
+runtime qualification and the original-file/native-embedded parameter boundary
+remain incomplete. Every ratio and native parity qualification is withheld.
+This finding does not change the historical validation below; its cause remains
+unresolved. The 1024×1024 v2 one-worker wrapper recorded 69 s / 0.57 GiB peak RSS;
+v3 recorded 85 s / 0.60 GiB.
+
 ### `hdrvdp` — vs official HDR-VDP 2.2.2
 
 Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,

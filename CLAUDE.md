@@ -11,6 +11,18 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+### Known Bugs: HDR-VDP v2 original-call diagnostic difference (2026-10-20)
+
+The partial [original HDR numerical grid](benchmarks/canonical_recheck_2026-10-19/hdr-original-partial12.json)
+records `hdrvdp` versus the unchanged official sRGB-display call differing by
+0.009351851113351017 on the 1024×1024 photo at both one and 28 workers. This
+exceeds the retained 0.005 golden-check level; it does not establish a universal
+bound violation or a new Rust regression. The local reference uses Octave 6.4 /
+image 2.12 with two reviewed image 2.20.1 resize M-file overlays. Full original
+versus direct-call controls, runtime qualification and parameter-storage scope
+are incomplete. Root cause is unresolved; native parity and all timing ratios
+remain unqualified. No metric code or numerical expectation was changed.
+
 ## Crate naming (owner decision 2026-10-11)
 
 - **Image quality metrics we publish first and canonically keep bare names**:
