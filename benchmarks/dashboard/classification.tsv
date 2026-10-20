@@ -1337,3 +1337,6 @@ benchmarks/canonical_recheck_2026-10-19/neural-profiles.json	ignored	Native refe
 benchmarks/canonical_recheck_2026-10-19/lpips-alex-t8-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t1-1d3aa20e-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t1-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/wadiqam-inference-control.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/native-warm-round-audit.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t8-f525415f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

@@ -68,7 +68,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | --- | --- | --- | --- | ---: |
 | [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | ChrisDud0257/AFINE | prior | — |
 | [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | IIGROUP/AHIQ | prior | — |
-| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
+| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.45× O |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl 0.12.0 origina… | Δ 5e-05 | ≈0.39× |
@@ -82,7 +82,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.021× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.084× |
-| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 2/2 pass | ≈1.23× R ! |
+| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 3/3 pass | ≈1.23× R ! |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | DISTS-pytorch 0.1 | 2/2 pass | ≈1.13× R ! |
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
@@ -224,7 +224,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
+| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.000000011920928910669204 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
 
 </details>
 

@@ -1,4 +1,31 @@
 {
+  "haarpsi-y": {
+    "canonical": "original HaarPSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.1332953846594191,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.3434548809569723,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.6168560379448138e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "hdrvdp-aic2026": {
     "canonical": "official HDR-VDP 2.2.2 / Octave FFT adaptation",
     "check": "\u0394 0.092",
@@ -687,33 +714,5 @@
       "test_source_sha256": "307d14e40acf4e5f595ac7258d2029e250641a40a63e2edaf9b88291b59af48f"
     },
     "golden_receipt_sha256": "98899a680fdf6faa62b5d193da1b16c93e02be92757ce338ce6e4aa2692a55a4"
-  },
-  "proposal-butteraugli": {
-    "canonical": "libjxl 0.12.0 original comparator",
-    "check": "\u0394 1.6e-08",
-    "ratio": 0.4150274352258679,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.4150274352258679,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 0,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.636376642695503e-08,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-      "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
-    ],
-    "qualified": false
   }
 }

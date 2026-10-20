@@ -354,3 +354,27 @@ eight-thread follow-up remains separate. The last block's resource receipt is:
 ```text
 run-heavy: done rc=0 26s | peak-RSS 0.97GiB | min-avail 12094MiB | peak-load 1.77
 ```
+
+## Original WaDIQaM reference setup
+
+The four original Chainer references now use an explicit inference wrapper.
+Its NumPy device aliases live only in the author modules; Chainer's CUDA
+backend remains intact. The initial control exposed a global-CuPy-slot shim
+failure before producing scalar results or replacing plans. That failed
+control and its source remain in the raw evidence.
+
+The corrected control evaluates all four unchanged author models on the
+512×512 pair. All six scalar outputs (two full-reference scores and distorted/
+reference scores for both no-reference models) are bit-identical with gradient
+recording enabled and disabled. [Control provenance](wadiqam-inference-control.json)
+binds both policies, weights and source helpers. This validates the reference
+fixture, not Rust parity; the actual Rust comparisons remain separate jobs.
+
+Only four still-unexecuted plan files were replaced. Their author-default
+versions remain as backups, and every existing input, bound, native setting
+and budget is preserved. The queue reads their new identities when those jobs
+start. Resource receipt:
+
+```text
+run-heavy: done rc=0 37s | peak-RSS 1.20GiB | min-avail 11974MiB | peak-load 3.14
+```

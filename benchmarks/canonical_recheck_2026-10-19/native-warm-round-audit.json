@@ -1,0 +1,8 @@
+{
+  "successful_native_arms": 1315,
+  "required_rounds": 10,
+  "findings": 0,
+  "raw_manifest": "~/tmp/local-canonical-20261019T2330/native-warm-round-audit-20261020T061535Z.json",
+  "raw_manifest_sha256": "25311b704d96d65d30ab29fe5198eb1f24748d965ade5f989e0048560f115568",
+  "qualification": "structural audit of retained successful arms; not a parity or performance acceptance decision"
+}

@@ -2136,3 +2136,15 @@ not independently qualified regression acceptance. No optimization is merged.
 The [local ledger](benchmarks/canonical_recheck_2026-10-19/README.md) owns the
 full intervals, per-case process RSS, resource-wrapper receipts and profile
 hashes. Its raw cohorts remain separate from the multi-host benchmark series.
+
+### Resolved: original WaDIQaM benchmark CPU fixture (2026-10-20)
+
+The first forward control caught the legacy reference's global
+`chainer.cuda.cupy = numpy` alias confusing Chainer's own device dispatch.
+Constructor-only readiness did not establish forward execution. The new
+reference wrapper applies CPU aliases in the original author modules, with
+gradient recording disabled. All six scalar outputs across the four models
+on one 512×512 pair match bit-for-bit between gradient policies. Four
+unexecuted plans were replaced with new identities and retained backups;
+native settings, budgets and numerical bounds are preserved. See the
+[reference-fixture control](benchmarks/canonical_recheck_2026-10-19/README.md#original-wadiqam-reference-setup).

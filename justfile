@@ -2175,6 +2175,9 @@ bench-iqa-canonical-queue manifest *options:
 bench-iqa-canonical-status manifest *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/status_canonical_queue.py '{{manifest}}' {{options}}
 
+bench-iqa-canonical-wadiqam-inference python manifest receipt:
+    SETUPTOOLS_USE_DISTUTILS=stdlib '{{python}}' -B benchmarks/iqa_compete_2026-10-16/prepare_wadiqam_inference.py '{{manifest}}' '{{receipt}}'
+
 bench-iqa-canonical-warm-profile binary config output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/profile_canonical_warm.py '{{binary}}' '{{config}}' '{{output}}' {{options}}
 

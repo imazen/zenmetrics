@@ -510,12 +510,12 @@
   "pyiqa-five-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/pyiqa-five-1100-run",
     "plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
-    "cases": 6,
+    "cases": 8,
     "expected_cases": 10,
     "artifacts": [
       {
         "file": "pyiqa-five-1100-run.tsv",
-        "sha256": "b79258323243f16483d072efb77eed2bf45f1b5f7f98fd9c2ef3015d7dd61a6b"
+        "sha256": "e86f26c5bcdbcc491890a969f6d076b516df87bbb70e61947597cf6d86ef19c8"
       }
     ]
   },
@@ -564,6 +564,18 @@
       {
         "file": "stlpips-alex-pair-cid22-t1-1d3aa20e-confirmation-run.tsv",
         "sha256": "667860ffc9fcc5913a77f29c354dd2b91d37249c92182a09309d34e0aab8df16"
+      }
+    ]
+  },
+  "deepdc-pair-cid22-t8-f525415f-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/confirmation-run",
+    "plan_sha256": "c1640c02d1767e34c32aa5799052ff6207c24c09405e240b41d7f1a2df046d2d",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "deepdc-pair-cid22-t8-f525415f-confirmation-run.tsv",
+        "sha256": "9a84ec3f72052efa86aa9a053de175b1433a0c492286e232ab92870786566bf7"
       }
     ]
   }

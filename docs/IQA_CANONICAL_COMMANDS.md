@@ -202,6 +202,16 @@ counts, pending cases and retained process/numerical findings. It starts no
 workers and does not qualify results; historical setup failures remain counted
 even when a separate replacement cohort succeeds.
 
+Use `canonical_wadiqam_inference_cell.py` for original Chainer WaDIQaM
+references. Its CPU aliases live in the author modules, preserving Chainer's
+own backend dispatch, and gradient recording is disabled. The unchanged
+original model classes and oracle pooling functions supply the scalar.
+`bench-iqa-canonical-wadiqam-inference PYTHON QUEUE NEW_RECEIPT`, under shared
+heavy admission, checks all four models against gradient-enabled calls before
+replacing unexecuted reference plans. It retains the old plan files and refuses
+acquired outputs or plans already backed up. Existing numerical bounds, native
+settings and budgets remain intact.
+
 `bench-iqa-canonical-interval RESULTS NEW_JSON --additional SUCCESSOR_RESULTS`
 combines a completed fixed follow-up only when its recorded parent plan, source,
 worker and case contract agree. All blocks remain in the primary estimate. A

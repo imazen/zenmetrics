@@ -1,0 +1,152 @@
+{
+  "default_enable_backprop": true,
+  "chainer": "7.8.1",
+  "numpy": "1.23.5",
+  "source_sha256": "9a7465d429eb4a1e61c17edaf0521e81118470f52faabfea17138d3c2d6f8ed3",
+  "original_helper_sha256": "06ec00235d6c5b978d962b8b0956ec89d39917a4d853c1a830ee697437170c15",
+  "inference_helper_sha256": "52ebe3de82e2a1e3ef02e4e2a4c3f66579b4dc594a7558e0d64a282a548f25ac",
+  "config_sha256": "9f022911bc7429ce947f9ab2e34f391f09d50c32dd668da231b886dd553b2a75",
+  "oracle_sha256": "d323db6f08e133b65075076f5e2796fadd43e169952cec141f4fb578c461e54d",
+  "controls": [
+    {
+      "metric": "wadiqam-fr-live",
+      "old_plan_sha256": "0cf73fd1d223d67f24fc85990c5c951d5f6036b9c3774c8ee8a056939da536b1",
+      "inference_setup_stdout": "REFERENCE_INFERENCE enable_backprop=false\n{\"metric\": \"wadiqam-fr-live\", \"setup\": \"ready\", \"chainer\": \"7.8.1\", \"numpy\": \"1.23.5\"}\n",
+      "true": {
+        "scores": [
+          21.55776023864746
+        ],
+        "bits": [
+          "40358ec960000000"
+        ]
+      },
+      "false": {
+        "scores": [
+          21.55776023864746
+        ],
+        "bits": [
+          "40358ec960000000"
+        ]
+      }
+    },
+    {
+      "metric": "wadiqam-fr-tid",
+      "old_plan_sha256": "1eceea542a2c43b640ba856c43e7c3e3592506ac019a12ffc0c3a98dad0de104",
+      "inference_setup_stdout": "REFERENCE_INFERENCE enable_backprop=false\n{\"metric\": \"wadiqam-fr-tid\", \"setup\": \"ready\", \"chainer\": \"7.8.1\", \"numpy\": \"1.23.5\"}\n",
+      "true": {
+        "scores": [
+          13.384376525878906
+        ],
+        "bits": [
+          "402ac4cd00000000"
+        ]
+      },
+      "false": {
+        "scores": [
+          13.384376525878906
+        ],
+        "bits": [
+          "402ac4cd00000000"
+        ]
+      }
+    },
+    {
+      "metric": "wadiqam-nr-live",
+      "old_plan_sha256": "34e36e9beceb5344b60d7c853d91f3e9965412360d7c3e6babad90ae01cdc79e",
+      "inference_setup_stdout": "REFERENCE_INFERENCE enable_backprop=false\n{\"metric\": \"wadiqam-nr-live\", \"setup\": \"ready\", \"chainer\": \"7.8.1\", \"numpy\": \"1.23.5\"}\n",
+      "true": {
+        "scores": [
+          3.893784999847412,
+          1.2270405292510986
+        ],
+        "bits": [
+          "400f2678c0000000",
+          "3ff3a1f540000000"
+        ]
+      },
+      "false": {
+        "scores": [
+          3.893784999847412,
+          1.2270405292510986
+        ],
+        "bits": [
+          "400f2678c0000000",
+          "3ff3a1f540000000"
+        ]
+      }
+    },
+    {
+      "metric": "wadiqam-nr-tid",
+      "old_plan_sha256": "278b296c15df97ee8d8257d642bd54896afff9283a76f8e01c51b74a903cebae",
+      "inference_setup_stdout": "REFERENCE_INFERENCE enable_backprop=false\n{\"metric\": \"wadiqam-nr-tid\", \"setup\": \"ready\", \"chainer\": \"7.8.1\", \"numpy\": \"1.23.5\"}\n",
+      "true": {
+        "scores": [
+          41.26095199584961,
+          41.18251419067383
+        ],
+        "bits": [
+          "4044a166e0000000",
+          "4044975ca0000000"
+        ]
+      },
+      "false": {
+        "scores": [
+          41.26095199584961,
+          41.18251419067383
+        ],
+        "bits": [
+          "4044a166e0000000",
+          "4044975ca0000000"
+        ]
+      }
+    }
+  ],
+  "cpu_overlay": "NumPy aliases in author modules; Chainer CUDA backend unchanged",
+  "scope": "same original models and RGB input; only gradient recording differs between control arms",
+  "raw_control_sha256": "2b97fa6f2c5f862957c6c33b6dd913fc75c06e4b08d68fe4f1352422ed9b52f1",
+  "raw_plan_changes_sha256": "b1e23d45e7494922ca6f5f5ac11c99651e0295f343e288d58552bd4194c4cf08",
+  "raw_control": "~/tmp/local-canonical-20261019T2330/wadiqam-inference-control-v2.json",
+  "weights": {
+    "fr_live_weighted.model": "18d671a0d6e11a1c6d198c8b03c516e8d1f33484f4732ad118d5cf57fdc04b63",
+    "fr_tid_weighted.model": "942ee94414331c8541ee94dc679f67bf7375cfa0676e9e9fe6fe24718873e83c",
+    "nr_live_weighted.model": "cc0328e0fabdc41b0d7a251066bd844d362e0fae422c3114aecc774b76679b9b",
+    "nr_tid_weighted.model": "b1e86eefc47a177897abf6c1e2a5f638b82f8682011926c2cdf4a070fba22b98"
+  },
+  "inputs": {
+    "cid22-reference.rgb": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+    "cid22-distorted.rgb": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f"
+  },
+  "plans": [
+    {
+      "plan": "wadiqam-fr-live.plan.json",
+      "backup": "wadiqam-fr-live.plan.json.author-default.bak",
+      "old_sha256": "0cf73fd1d223d67f24fc85990c5c951d5f6036b9c3774c8ee8a056939da536b1",
+      "new_sha256": "acc1c981a7ea605ceb3d2e6f01e83440f5618f6028e248fdc0910b9c46fef983"
+    },
+    {
+      "plan": "wadiqam-fr-tid.plan.json",
+      "backup": "wadiqam-fr-tid.plan.json.author-default.bak",
+      "old_sha256": "1eceea542a2c43b640ba856c43e7c3e3592506ac019a12ffc0c3a98dad0de104",
+      "new_sha256": "046a3407298f865b37b00c9fd33589a8abb19f7f0c416db60db1af9db5d24026"
+    },
+    {
+      "plan": "wadiqam-nr-live.plan.json",
+      "backup": "wadiqam-nr-live.plan.json.author-default.bak",
+      "old_sha256": "34e36e9beceb5344b60d7c853d91f3e9965412360d7c3e6babad90ae01cdc79e",
+      "new_sha256": "567092530804c539c830525e43d01fa81cf789f2fde7ffbdebd877256d8c799a"
+    },
+    {
+      "plan": "wadiqam-nr-tid.plan.json",
+      "backup": "wadiqam-nr-tid.plan.json.author-default.bak",
+      "old_sha256": "278b296c15df97ee8d8257d642bd54896afff9283a76f8e01c51b74a903cebae",
+      "new_sha256": "721d1c308ea90534e0d23f12a655689ea6ca34020251189a55f9793d6c38b48b"
+    }
+  ],
+  "wrapper_receipt": "run-heavy: done rc=0 37s | peak-RSS 1.20GiB | min-avail 11974MiB | peak-load 3.14",
+  "failed_control": {
+    "log_sha256": "479599e2f37c47330a5454f00f622a6e60a2bd22d2f3d69aeb8b4e2e217cfaa6",
+    "source_identity_sha256": "442ccb4b1ec932216588d1edbf1266675021fb5580b32da4db040dd793a424ba",
+    "raw_sources": "~/tmp/local-canonical-20261019T2330/historical-tools/wadiqam-global-cupy-control-v1",
+    "outcome": "constructor refusal; no scalar receipt or plan changes"
+  }
+}
