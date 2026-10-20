@@ -643,3 +643,16 @@ remains retained. The four-case score-control batch reports rc=0, 235s,
 peak-RSS 0.20GiB, minimum available 15026MiB and peak load 1.82. The actual cell
 protocol batch reports rc=0, 40s, peak-RSS 0.19GiB, minimum available 15331MiB
 and peak load 6.88. Both retain per-child process memory receipts.
+
+## RTEN configured thread budgets, 2026-10-20
+
+The [source review](../iqa_compete_2026-10-16/rten-thread-budget-review/README.md)
+binds RTEN 0.27.0, Rayon 1.12.0 and rayon-core 1.13.0 to retained dependency
+fingerprints. The coordinator independently verified all four registry archives,
+the nine inspected dependency files and every recorded local helper hash.
+The warm wrapper and resident first-evaluation comparator set RTEN_NUM_THREADS
+before model construction. PaQ2PiQ uses that default pool; paired DeepDC and
+LPIPS use two explicit half-width pools when more than one worker is requested.
+No configured-cap mismatch was found. Actual utilization, pool creation success
+and canonical runtime cleanliness remain unmeasured by this source review;
+existing timing flags and numerical decisions retain their qualifications.

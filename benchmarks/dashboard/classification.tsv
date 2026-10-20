@@ -1600,3 +1600,4 @@ benchmarks/canonical_recheck_2026-10-19/grid-flip-grid-pairA-255x257-t28-060d464
 benchmarks/canonical_recheck_2026-10-19/vmaf-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/flip-grid-pairA-255x257-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/dssim-fullcall-current40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/iqa_compete_2026-10-16/rten-thread-budget-review/source-evidence.json	ignored	Exact dependency and wrapper source identities for configured RTEN thread budgets; not timing observations.
