@@ -93,6 +93,11 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(result['check'],'1 process errors')
         self.assertEqual(result['ratio'],.5)
         self.assertEqual(result['process_error_cases'],1)
+        numerical=dict(row,plan_sha256='numerical',passed=False,ratio=None,max_abs_delta=.5)
+        mixed=project([row,error,numerical])['example']
+        self.assertIn('1 findings',mixed['check'])
+        self.assertIn('1 errors',mixed['check'])
+        self.assertIsNone(mixed['ratio'])
 
     def test_revised_source_selection_keeps_historical_cases(self):
         from publish_canonical_comparison import project

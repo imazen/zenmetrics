@@ -130,10 +130,10 @@ def project(rows, preferred_sources=None):
         failed=sum(r['passed'] is False and not r.get('process_errors') for r in entries)
         passed=sum(r['passed'] is True for r in entries)
         deltas=[r['max_abs_delta'] for r in entries if r['max_abs_delta'] is not None]
-        if errored:
+        if failed:
+            check=f'{failed} findings'+(f'; {errored} errors' if errored else '')
+        elif errored:
             check=f'{errored} process errors'
-        elif failed:
-            check=f'{failed} findings'
         elif passed==len(entries):
             check=f'{passed}/{expected} pass'
         else:
