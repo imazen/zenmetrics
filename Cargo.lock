@@ -1712,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "dssim-core"
 version = "3.5.1"
-source = "git+https://github.com/lilith/dssim?rev=331b56cf8998d89c3c89444880f8a0f51f046fb8#331b56cf8998d89c3c89444880f8a0f51f046fb8"
+source = "git+https://github.com/lilith/dssim?rev=22e9ab033d5e5ac41ee961de00e7ae9bd959b634#22e9ab033d5e5ac41ee961de00e7ae9bd959b634"
 dependencies = [
  "imgref",
  "itertools 0.15.0",

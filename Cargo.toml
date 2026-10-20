@@ -170,13 +170,13 @@ butteraugli = { version = "0.9.4" }
 # `paths = [...]` override rather than re-adding a committed [patch] -- a
 # committed patch is what made the workspace unresolvable everywhere the
 # sibling was absent or the wrong version.
-# Pinned to the lilith/dssim perf stack (kornelski/dssim PRs #197–#200,
-# cumulative tip perf/memory-optin-197): runtime-dispatched AVX2/AVX-512
-# kernels, fused input prep, streamed comparison moments, opt-in caching —
-# same math as 3.4.0. A git dep resolves identically on every box, unlike
+# Pinned to the exact head of kornelski/dssim PR 199 for rebenchmarking:
+# runtime-dispatched AVX2/AVX-512 kernels, fused input prep and streamed
+# comparison moments. The later opt-in caching commit is excluded.
+# A git dep resolves identically on every box, unlike
 # the removed [patch]/path override that made the workspace unresolvable
 # where the sibling checkout was absent (#43).
-dssim-core = { git = "https://github.com/lilith/dssim", rev = "331b56cf8998d89c3c89444880f8a0f51f046fb8", default-features = false, features = ["threads"] }
+dssim-core = { git = "https://github.com/lilith/dssim", rev = "22e9ab033d5e5ac41ee961de00e7ae9bd959b634", default-features = false, features = ["threads"] }
 ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
