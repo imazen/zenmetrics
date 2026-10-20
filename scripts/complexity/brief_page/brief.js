@@ -1,23 +1,30 @@
-// View controls for the brief: weight-table selector, 1/8-thread toggle, and slide mode.
+// View controls for the brief: weight-table buttons, one shared 1/8-thread state, and slide mode.
 (function () {
   const root = document.documentElement;
-  const sel = document.getElementById('tbl');
-  const threads = document.getElementById('threads');
+  const tbl = document.getElementById('tbl');
   const slides = () => [...document.querySelectorAll('section.slide')];
   let cur = 0;
 
   function showTable(id) {
     document.querySelectorAll('.coefset').forEach(e => { e.hidden = e.dataset.table !== id; });
-    const name = sel.options[sel.selectedIndex].text;
-    document.querySelectorAll('.tblname').forEach(e => { e.textContent = name; });
+    tbl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.table === id)));
+    const b = tbl.querySelector(`button[data-table="${id}"]`);
+    document.querySelectorAll('.tblname').forEach(e => { e.textContent = b ? b.title : id; });
   }
-  sel.addEventListener('change', () => showTable(sel.value));
+  tbl.addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTable(b.dataset.table); });
+  const tableIds = () => [...tbl.querySelectorAll('button')].map(b => b.dataset.table);
+  const curTable = () => (tbl.querySelector('button[aria-pressed="true"]') || tbl.querySelector('button')).dataset.table;
 
+  // Every .threads-seg holds the same two buttons; all charts follow one state.
+  document.querySelectorAll('.threads-seg').forEach(seg => {
+    seg.innerHTML = '<button type="button" data-t="1">1 thread</button><button type="button" data-t="8">8 threads</button>';
+    seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setThreads(b.dataset.t === '8'); });
+  });
   function setThreads(eight) {
     root.classList.toggle('t8', eight);
-    threads.setAttribute('aria-pressed', String(eight));
+    document.querySelectorAll('.threads-seg button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.t === '8') === eight)));
+    document.dispatchEvent(new Event('threadschange'));
   }
-  threads.addEventListener('click', () => setThreads(!root.classList.contains('t8')));
 
   function go(i) {
     const s = slides();
@@ -33,23 +40,24 @@
   document.getElementById('present').addEventListener('click', () => present(!root.classList.contains('slides')));
 
   document.addEventListener('keydown', e => {
-    if (!root.classList.contains('slides') || e.target.tagName === 'SELECT' || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     const k = e.key.toLowerCase();
+    if (k === 't') { setThreads(!root.classList.contains('t8')); return; }
+    if (k === 'w') { const ids = tableIds(); showTable(ids[(ids.indexOf(curTable()) + 1) % ids.length]); return; }
+    if (!root.classList.contains('slides')) return;
     if (['arrowright', 'pagedown', ' ', 'arrowdown'].includes(k)) { go(cur + 1); e.preventDefault(); }
     else if (['arrowleft', 'pageup', 'arrowup'].includes(k)) { go(cur - 1); e.preventDefault(); }
     else if (k === 'home') go(0);
     else if (k === 'end') go(slides().length - 1);
-    else if (k === 't') setThreads(!root.classList.contains('t8'));
-    else if (k === 'w') { sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length; showTable(sel.value); }
     else if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen && root.requestFullscreen(); }
     else if (k === 'escape') present(false);
   });
-  // Track the visible slide when the presenter scrolls instead of using keys.
   const io = new IntersectionObserver(es => es.forEach(x => { if (x.isIntersecting && x.intersectionRatio > 0.6) cur = slides().indexOf(x.target); }), { threshold: [0.6] });
   slides().forEach(s => io.observe(s));
 
   window.addEventListener('beforeprint', () => document.querySelectorAll('details').forEach(d => { d.dataset.wasOpen = d.open; d.open = true; }));
   window.addEventListener('afterprint', () => document.querySelectorAll('details').forEach(d => { d.open = d.dataset.wasOpen === 'true'; }));
   if (location.hash === '#slides') present(true);
-  showTable(sel.value);
+  setThreads(false);
+  showTable(curTable());
 })();

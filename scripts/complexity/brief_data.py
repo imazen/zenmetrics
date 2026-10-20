@@ -243,6 +243,59 @@ def fit_stats(pts):
                 pearson_linear=lin[0], pearson_linear_p=lin[1])
 
 
+HOSTS = {'i265': 'Intel Core Ultra 7 265K', 'r7900x': 'AMD Ryzen 9 7900X', 'mac': 'Apple M4 Pro'}
+
+
+def sig(v, n=4):
+    return float(f'{v:.{n}g}')
+
+
+def canonical_perf():
+    """Cross-host canonical timings (benchmarks/iqa_saved_latest): preferred, qualified, ok rows only.
+
+    Warm cells keep the published summary of their rounds (median, mean, p10, p90, n); cold cells keep
+    each fresh-process repeat. Different binaries are never pooled: each (host, metric, size, threads,
+    phase) must come from one implementation identity, otherwise the cell is dropped and counted.
+    """
+    d = ROOT / 'benchmarks/iqa_saved_latest'
+    if not d.exists():
+        return None
+    cells, ident, conflicts = {}, {}, 0
+    sizes = {}
+    for f in sorted(d.glob('*-observations.csv')):
+        for r in csv.DictReader(f.open()):
+            if r['status'] != 'ok' or r['preferred'] != 'True' or r['qualified_timing'] != 'True' or r['only_mode'] != 'score':
+                continue
+            key = (r['host'], r['metric_name'], r['size_name'], int(r['threads']), r['timing_phase'])
+            sizes[r['size_name']] = (int(r['width']), int(r['height']))
+            idn = (r['impl_binary_sha'], r['engine'], r['reference_sha256'], r['distorted_sha256'])
+            if ident.setdefault(key, idn) != idn:
+                conflicts += 1
+                continue
+            c = cells.setdefault(key, {})
+            if r['timing_phase'] == 'warm':
+                c.update(med=sig(float(r['median_ns']) / 1e6), mean=sig(float(r['mean_ns']) / 1e6) if r['mean_ns'] else None,
+                         p10=sig(float(r['p10_ns']) / 1e6) if r['p10_ns'] else None, p90=sig(float(r['p90_ns']) / 1e6) if r['p90_ns'] else None,
+                         n=int(r['n']))
+            else:
+                c.setdefault('reps', []).append(sig(float(r['median_ns']) / 1e6))
+    rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps')]
+            for (h, m, s, t, ph), c in sorted(cells.items())]
+    cov = json.loads((d / 'coverage.json').read_text()) if (d / 'coverage.json').exists() else {}
+    coverage = {}
+    for h, v in cov.items():
+        ok = sum(c.get('observed_cell_statuses', {}).get('ok', 0) for c in v.get('campaigns', []))
+        total = sum(c.get('manifest_cells', 0) for c in v.get('campaigns', []))
+        coverage[h] = dict(ok=ok, cells=total)
+    sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
+    order = sorted(sizes, key=lambda s: sizes[s][0] * sizes[s][1])
+    return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms'],
+                rows=rows, hosts={h: HOSTS.get(h, h) for h in sorted({r[0] for r in rows})},
+                sizes=[dict(name=s, w=sizes[s][0], h=sizes[s][1]) for s in order],
+                coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts,
+                protocol=json.loads((d / 'protocol.json').read_text()).get('protocol') if (d / 'protocol.json').exists() else None)
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -330,7 +383,7 @@ def main():
                             dvifmish=git_rev(Path.home() / 'work/dvifmish', 'origin/main'),
                             extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement]),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
-               tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes)
+               tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=canonical_perf())
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(doc, indent=1, allow_nan=False))
     n1 = sum(1 for r in metrics if r['estimate'] and r['cpu_1t'])

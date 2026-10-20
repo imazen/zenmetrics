@@ -165,7 +165,7 @@ def chart_pareto(d, key, ylo=0.70):
     shown = [m for m in ms if m['agreement']['agreement'] >= ylo]
     for m in shown:
         a = m['agreement']; x = pl.X(m[key])
-        pl.parts.append(f'<line class="pl-ci" x1="{x:.1f}" y1="{pl.Y(max(a["lo"], ylo)):.1f}" x2="{x:.1f}" y2="{pl.Y(min(a["hi"], 0.97)):.1f}"/>')
+        pl.parts.append(vwhisker(x, pl.Y(max(a["lo"], ylo)), pl.Y(min(a["hi"], 0.97)), 3.5))
     fp_ = sorted((m for m in shown if m['metric'] in front), key=lambda m: m[key])
     if fp_:
         path = f'M{pl.X(fp_[0][key]):.1f},{pl.Y(fp_[0]["agreement"]["agreement"]):.1f}'
@@ -253,8 +253,8 @@ def chart_rho(d):
     for i, (label, a, b) in enumerate(rows):
         y = top + rowh * i + rowh / 2
         p.append(f'<text class="pl-row" x="{L-12}" y="{y+4:.1f}" text-anchor="end">{E(label)}</text>')
-        p.append(f'<line class="pl-ci-h" x1="{pl.X(a["spearman_lo"]):.1f}" y1="{y-5:.1f}" x2="{pl.X(a["spearman_hi"]):.1f}" y2="{y-5:.1f}"/><circle class="pt-cl" cx="{pl.X(a["spearman"]):.1f}" cy="{y-5:.1f}" r="5"/>')
-        p.append(f'<line class="pl-ci-h" x1="{pl.X(b["spearman_lo"]):.1f}" y1="{y+6:.1f}" x2="{pl.X(b["spearman_hi"]):.1f}" y2="{y+6:.1f}"/><rect class="pt-8t" x="{pl.X(b["spearman"])-4:.1f}" y="{y+2:.1f}" width="8" height="8"/>')
+        p.append(hwhisker(pl.X(a["spearman_lo"]), pl.X(a["spearman_hi"]), y - 5, 4) + f'<circle class="pt-cl" cx="{pl.X(a["spearman"]):.1f}" cy="{y-5:.1f}" r="5"/>')
+        p.append(hwhisker(pl.X(b["spearman_lo"]), pl.X(b["spearman_hi"]), y + 6, 4) + f'<rect class="pt-8t" x="{pl.X(b["spearman"])-4:.1f}" y="{y+2:.1f}" width="8" height="8"/>')
     p.append(f'<circle class="pt-cl" cx="{L+5}" cy="12" r="5"/><text class="pl-tick" x="{L+14}" y="16">1 thread</text><rect class="pt-8t" x="{L+90}" y="8" width="8" height="8"/><text class="pl-tick" x="{L+104}" y="16">8 threads</text>')
     return pl.svg('Rank correlation of counted cost with CPU time, per weight table')
 
@@ -279,116 +279,18 @@ def chart_scaling(d):
     return pl.svg('Per-pixel time at 3840x2160 relative to 1024x1024'), len(pts), flat, out
 
 
-T975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
+def hwhisker(x1, x2, y, cap=4.5, cls='pl-ci-h'):
+    """Horizontal interval with end caps."""
+    return (f'<line class="{cls}" x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}"/>'
+            f'<line class="{cls}" x1="{x1:.1f}" y1="{y-cap:.1f}" x2="{x1:.1f}" y2="{y+cap:.1f}"/>'
+            f'<line class="{cls}" x1="{x2:.1f}" y1="{y-cap:.1f}" x2="{x2:.1f}" y2="{y+cap:.1f}"/>')
 
 
-def rep_ci(reps):
-    """Mean and 95 % t-interval over timing repeats (run-to-run noise on one pair), or None."""
-    if not reps or len(reps) < 2:
-        return None
-    n = len(reps); m = sum(reps) / n
-    sd = math.sqrt(sum((v - m) ** 2 for v in reps) / (n - 1))
-    h = T975.get(n - 1, 1.96) * sd / math.sqrt(n)
-    return m, max(m - h, min(reps) * 0.5), m + h
-
-
-def kmeans1d(xs, k):
-    """Exact 1-D k-means (dynamic programming) on sorted xs; returns the cluster index of each x."""
-    n = len(xs)
-    pre = [0.0]; pre2 = [0.0]
-    for x in xs:
-        pre.append(pre[-1] + x); pre2.append(pre2[-1] + x * x)
-    cost = lambda i, j: (pre2[j] - pre2[i]) - (pre[j] - pre[i]) ** 2 / (j - i)  # SS of xs[i:j]
-    INF = float('inf')
-    D = [[INF] * (n + 1) for _ in range(k + 1)]; arg = [[0] * (n + 1) for _ in range(k + 1)]
-    D[0][0] = 0.0
-    for c in range(1, k + 1):
-        for j in range(c, n + 1):
-            for i in range(c - 1, j):
-                v = D[c - 1][i] + cost(i, j)
-                if v < D[c][j]:
-                    D[c][j], arg[c][j] = v, i
-    lab, j = [0] * n, n
-    for c in range(k, 0, -1):
-        i = arg[c][j]
-        for t in range(i, j): lab[t] = c - 1
-        j = i
-    return lab, D[k][n]
-
-
-def clusters_of(vals, max_k=7, keep=0.06):
-    """Smallest k whose within-cluster sum of squares (log10 time) is at most `keep` of the total."""
-    xs = sorted(math.log10(v) for v in vals)
-    total = kmeans1d(xs, 1)[1] or 1.0
-    for k in range(2, max_k + 1):
-        lab, ss = kmeans1d(xs, k)
-        if ss <= keep * total:
-            break
-    return k, lab, ss / total
-
-
-def chart_perf(d, key):
-    reps_key = key + '_reps'
-    ms = sorted((m for m in d['metrics'] if m.get(key)), key=lambda m: m[key])
-    k, lab, frac = clusters_of([m[key] for m in ms])
-    groups = [[m for m, l in zip(ms, lab) if l == c] for c in range(k)]
-    # columns: name | interval text | log panel | linear panel
-    W_, NAME, CIX, LX0, LX1, RX0, RX1, rowh, head, foot = 980, 168, 176, 330, 640, 668, 960, 15, 30, 26
-    H_ = 22 + sum(head + rowh * len(g) + foot + 8 for g in groups)
-    lo, hi = log_dom([m[key] for m in ms])
-    X = lambda v: LX0 + (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (LX1 - LX0)
-    decades = [10 ** e for e in range(math.ceil(math.log10(lo) - 1e-9), math.floor(math.log10(hi) + 1e-9) + 1)]
-    minors = [m_ * dd for dd in decades for m_ in (2, 5) if lo <= m_ * dd <= hi]
-    p = []
-    th = '1 thread' if key.endswith('1t') else '8 threads'
-    p.append(f'<text class="pl-title" x="{CIX}" y="14">95 % interval</text><text class="pl-title" x="{LX0}" y="14">all metrics, log axis (CPU ns/px, {th})</text>'
-             f'<text class="pl-title" x="{RX0}" y="14">within cluster, linear axis (ns/px)</text>')
-    y = 22
-    narrow = 0
-    for ci_, g in enumerate(groups):
-        cis = [rep_ci(m.get(reps_key)) for m in g]
-        gmax = max(max((c[2] if c else 0), m[key]) for m, c in zip(g, cis)) * 1.05
-        step = nice_step(gmax, 6)
-        RX = lambda v: RX0 + v / gmax * (RX1 - RX0)
-        y0, y1 = y + head, y + head + rowh * len(g)
-        p.append(f'<rect class="pl-cluster" x="4" y="{y:.1f}" width="{W_-8}" height="{y1 + foot - y:.1f}" rx="4"/>')
-        p.append(f'<text class="pl-row" x="10" y="{y+18:.1f}" font-weight="600">Cluster {ci_+1}: {fmt_num(float(f"{g[0][key]:.3g}"))}–{fmt_num(float(f"{g[-1][key]:.3g}"))} ns/px, {len(g)} metrics</text>')
-        # vertical gridlines and x-axis numbers under each cluster, both panels
-        for v in minors:
-            p.append(f'<line class="pl-vgrid-minor" x1="{X(v):.1f}" y1="{y0-4:.1f}" x2="{X(v):.1f}" y2="{y1:.1f}"/>')
-        for v in decades:
-            p.append(f'<line class="pl-vgrid" x1="{X(v):.1f}" y1="{y0-4:.1f}" x2="{X(v):.1f}" y2="{y1:.1f}"/><text class="pl-tick" x="{X(v):.1f}" y="{y1+14:.1f}" text-anchor="middle">{fmt_num(v)}</text>')
-        v = 0.0
-        while v <= gmax + 1e-12:
-            p.append(f'<line class="pl-vgrid" x1="{RX(v):.1f}" y1="{y0-4:.1f}" x2="{RX(v):.1f}" y2="{y1:.1f}"/><text class="pl-tick" x="{RX(v):.1f}" y="{y1+14:.1f}" text-anchor="middle">{fmt_num(round(v, 10))}</text>')
-            v += step
-        p.append(f'<line class="pl-axisline" x1="{LX0}" y1="{y1:.1f}" x2="{LX1}" y2="{y1:.1f}"/><line class="pl-axisline" x1="{RX0}" y1="{y1:.1f}" x2="{RX1}" y2="{y1:.1f}"/>')
-        y = y0
-        prev = None
-        for m, c in zip(g, cis):
-            yy = y + rowh / 2
-            cls = 'pt-nn' if m['kind'].startswith('nn') else 'pt-cl'
-            n = len(m.get(reps_key) or [])
-            tip = f'{m["metric"]}: median {m[key]:.4g} ns/px' + (f', mean {c[0]:.4g} [95 % {c[1]:.4g}, {c[2]:.4g}], n={n}' if c else '')
-            p.append(f'<text class="perf-lab" x="{NAME}" y="{yy+4:.1f}" text-anchor="end">{E(m["metric"])}</text>')
-            p.append(f'<text class="perf-ci" x="{CIX}" y="{yy+4:.1f}">' + (f'{c[1]:.3g}–{c[2]:.3g} (n={n})' if c else f'{m[key]:.3g} (n={n})') + '</text>')
-            for XX in (X, RX):
-                if c:
-                    p.append(f'<line class="pl-ci-h" x1="{XX(max(c[1], lo if XX is X else 0)):.1f}" y1="{yy:.1f}" x2="{XX(c[2]):.1f}" y2="{yy:.1f}"/>')
-                cx = XX(m[key])
-                if m['origin'] == 'private':
-                    p.append(f'<rect class="{cls}" x="{cx-3.5:.1f}" y="{yy-3.5:.1f}" width="7" height="7"><title>{E(tip)}</title></rect>')
-                elif m['origin'] == 'dvifmish':
-                    p.append(f'<path class="{cls}" d="M{cx:.1f},{yy-4.5:.1f} L{cx+4.5:.1f},{yy:.1f} L{cx:.1f},{yy+4.5:.1f} L{cx-4.5:.1f},{yy:.1f} Z"><title>{E(tip)}</title></path>')
-                else:
-                    p.append(f'<circle class="{cls}" cx="{cx:.1f}" cy="{yy:.1f}" r="3.6"><title>{E(tip)}</title></circle>')
-            if c and prev and prev[2] >= c[1]:
-                narrow += 1
-            prev = c
-            y += rowh
-        y = y1 + foot + 8
-    svg = f'<svg class="chart perf" viewBox="0 0 {W_} {H_}" role="img" aria-label="CPU time per metric with 95 % intervals, {th}" xmlns="http://www.w3.org/2000/svg">{"".join(p)}</svg>'
-    return svg, k, frac, narrow, len(ms)
+def vwhisker(x, y1, y2, cap=4.5, cls='pl-ci'):
+    """Vertical interval with end caps."""
+    return (f'<line class="{cls}" x1="{x:.1f}" y1="{y1:.1f}" x2="{x:.1f}" y2="{y2:.1f}"/>'
+            f'<line class="{cls}" x1="{x-cap:.1f}" y1="{y1:.1f}" x2="{x+cap:.1f}" y2="{y1:.1f}"/>'
+            f'<line class="{cls}" x1="{x-cap:.1f}" y1="{y2:.1f}" x2="{x+cap:.1f}" y2="{y2:.1f}"/>')
 
 
 # ---------------------------------------------------------------- tables
@@ -436,6 +338,7 @@ def build(data_path, out):
     d = json.loads(Path(data_path).read_text())
     css = (HERE / 'style.css').read_text()
     js = (HERE / 'brief.js').read_text()
+    perf_js = (HERE / 'perf.js').read_text()
     tables = d['tables']
     by = {m['metric']: m for m in d['metrics']}
     s1 = {t['id']: stat_of(d, t['id'], 1) for t in tables}
@@ -450,8 +353,6 @@ def build(data_path, out):
     typ = [s1[t]['typical'] for t in s1 if s1[t]]
     w2 = [(s1[t]['within2'], s1[t]['n']) for t in s1 if s1[t]]
 
-    perf1 = chart_perf(d, 'cpu_1t')
-    perf8 = chart_perf(d, 'cpu_8t')
     par1, below1 = chart_pareto(d, 'cpu_1t')
     par8, below8 = chart_pareto(d, 'cpu_8t')
     rho_svg = chart_rho(d)
@@ -460,7 +361,10 @@ def build(data_path, out):
         f'<div class="t1 log">{chart_coef(d, t["id"], 1, False)}</div><div class="t1 lin">{chart_coef(d, t["id"], 1, True)}</div>'
         f'<div class="t8 log">{chart_coef(d, t["id"], 8, False)}</div><div class="t8 lin">{chart_coef(d, t["id"], 8, True)}</div></div>'
         for t in tables if s1[t['id']] and s8[t['id']])
-    options = ''.join(f'<option value="{t["id"]}"{" selected" if t["id"] == best else ""}>{E(t["label"])}</option>' for t in tables)
+    short = {'flops': 'flops', 'pedzisz_2026_draft': 'Pedzisz draft', 'i265_P_rthroughput': 'i265 thr.', 'i265_P_latency': 'i265 lat.',
+             'llvm_tti_arrowlake_throughput': 'LLVM ARL thr.', 'llvm_tti_arrowlake_latency': 'LLVM ARL lat.',
+             'llvm_mca_arrowlake_rthroughput': 'llvm-mca', 'llvm_tti_znver5_throughput': 'LLVM Zen 5'}
+    options = ''.join(f'<button type="button" data-table="{t["id"]}" title="{E(t["label"])}" aria-pressed="{str(t["id"] == best).lower()}">{E(short.get(t["id"], t["label"]))}</button>' for t in tables)
     sc_svg, sc_n, sc_flat, sc_out = chart_scaling(d)
 
     top = sorted((m for m in d['metrics'] if m['agreement'] and m.get('cpu_1t')), key=lambda m: -m['agreement']['agreement'])[:4]
@@ -500,6 +404,10 @@ def build(data_path, out):
                            f'{m["agreement"]["agreement"]:.3f}' if m['agreement'] else '–', ns(m.get('cpu_1t')), ns(m.get('cpu_8t'))])
 
     status_md = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()
+    perf = d.get('perf') or {}
+    cov_txt = '; '.join(f"{h} {c['ok']:,} of {c['cells']:,} cells" for h, c in (perf.get('coverage') or {}).items()) or 'coverage unknown'
+    synced = (perf.get('synced_utc') or 'unknown')[:16].replace('T', ' ') + ' UTC'
+    kinds_js = json.dumps({m['metric']: [m['kind'], m['origin']] for m in d['metrics']})
     src = d['sources']
     below_txt = ', '.join(f'{m["metric"]} ({m["agreement"]["agreement"]:.2f})' for m in below1) or 'none'
     no_time = ', '.join(m['metric'] for m in d['metrics'] if m['agreement'] and not m.get('cpu_1t')) or 'none'
@@ -508,20 +416,24 @@ def build(data_path, out):
 <meta name="color-scheme" content="light dark"><title>Metric Cost Brief</title>
 <style>{css}</style></head><body>
 <nav class="toolbar" aria-label="View"><button type="button" id="present">Present</button>
-<label>Weights <select id="tbl">{options}</select></label>
-<button type="button" id="threads" aria-pressed="false">8 threads</button><span class="hint">Slides: ← → move · T 1/8 threads · W weights · F fullscreen · Esc exit</span></nav>
+<span class="seg-label">Threads</span><div class="seg threads-seg"></div>
+<span class="seg-label">Weights</span><div class="seg" id="tbl">{options}</div>
+<span class="hint">Slides: ← → move · T threads · W weights · F fullscreen · Esc exit</span></nav>
 <main>
 <section class="slide title-slide">
 <p class="eyebrow">JPEG AIC-4 · image-quality metric complexity · draft</p>
 <h1>Counted cost vs measured runtime for image-quality metrics</h1>
+<p class="status unfinished"><strong>Unfinished data, updated as it comes in.</strong> Timing campaigns are still running ({E(cov_txt)}); neural metrics at 4K, several counts and the agreement data are incomplete or preliminary. This page rebuilds every five minutes from the latest committed results: data revision <code>{E(src["public"])}</code>, timings synced {E(synced)}.</p>
 <p class="status"><strong>Provisional.</strong> One host (Intel Core Ultra 7 265K), one image pair at 1024×1024 for the fits. Agreement uses the preliminary AIC2026 subjective JND reconstruction (public split: 42 sources, 5,768 images). Most operation counts have one counter so far. Includes {n_priv} private ports and {len(dv)} dvifmish versions.</p>
 <ul class="findings">{"".join(f"<li>{f}</li>" for f in findings)}</ul>
 </section>
 
-<section class="slide" id="perf"><h2>CPU time per metric, with 95 % intervals</h2>
-<p class="slide-note">Performance only, no agreement scores. Each row is one metric: median CPU time per pixel at 1024×1024 (i265), and a 95 % t-interval over its timing repeats, which measures run-to-run noise on one image pair, not variation across images. Clusters: exact 1-D k-means on log time, the smallest k that leaves at most 6 % of the variance within clusters. Left: one log axis for every metric. Right: each cluster on its own linear axis, so neighbours can be compared directly. Press T (or the 8 threads button) to switch thread count.</p>
-<figure><div class="t1">{perf1[0]}<figcaption>1 thread: {perf1[4]} metrics in {perf1[1]} clusters ({perf1[2]*100:.1f} % of log-time variance within clusters); {perf1[3]} adjacent pairs have overlapping intervals.</figcaption></div>
-<div class="t8">{perf8[0]}<figcaption>8 threads (CPU time summed over threads): {perf8[4]} metrics in {perf8[1]} clusters ({perf8[2]*100:.1f} % within); {perf8[3]} adjacent pairs overlap.</figcaption></div>{legend_html(False)}</figure>
+<section class="slide" id="perf"><h2>CPU time per metric</h2>
+<p class="slide-note">Performance only. Canonical timing campaign: the same frozen binaries and inputs on three CPUs. Each row: box = 95 % interval of the mean, whiskers = spread (warm: p10–p90 of 10 rounds; cold: min–max of 3 fresh processes), tick = median, tiny dots = single cold runs. Clusters: exact 1-D k-means on log time. Left: one log axis for every metric; right: each cluster on its own linear axis.</p>
+<div class="seg-row"><span class="seg-label">CPU</span><div class="seg" id="perf-host"></div></div>
+<div class="seg-row"><span class="seg-label">Image</span><div class="seg" id="perf-size"></div></div>
+<div class="seg-row"><span class="seg-label">Threads</span><div class="seg threads-seg"></div><span class="seg-label">Phase</span><div class="seg" id="perf-phase"></div></div>
+<figure><div id="perfchart"></div><figcaption id="perfinfo"></figcaption>{legend_html(False)}</figure>
 </section>
 
 <section class="slide" id="pareto"><h2>Agreement with subjective scores vs CPU time</h2>
@@ -536,6 +448,12 @@ def build(data_path, out):
 <section class="slide" id="coef"><h2>The coefficient: counted cost vs time, 1 and 8 threads</h2>
 <p class="slide-note">Weights: <b class="tblname">{E(label[best])}</b>. Log axes (left): dashed is the single scale (unit slope) with a ±2× band, solid is the least-squares log–log line. Linear axes (right): least squares through the origin with its 95 % bootstrap band; on linear axes the few most expensive metrics decide the fit, which is why that band is wide.</p>
 <div class="coefgrid">{coef}</div>
+<div class="quals"><b>What this comparison does and does not show.</b><ul>
+<li>Counts are operations per pixel tallied from source, weighted by a cost table; they ignore vectorization, memory traffic, caches and threading. Time is one implementation of each metric on one CPU, so a point's distance from the line is that implementation's efficiency as much as the metric's cost.</li>
+<li>The high rank correlation is driven by the four-decade spread between the cheapest and costliest metrics; within a factor of ten, counts order metrics much less reliably. Do not rank two similar metrics by their counts.</li>
+<li>A log–log slope below 1 means expensive metrics run cheaper per counted operation (dense, vectorized network layers versus branchy classical code); the single scale is a summary, not a law.</li>
+<li>Most tallies have one counter so far; several neural tallies fail a physical bound and await recounts. dvifmish counts are core-only aggregates.</li>
+<li>8-thread CPU time is total work across threads, not wall time; it rises where threading adds overhead.</li></ul></div>
 {legend_html(False)}
 </section>
 
@@ -574,7 +492,7 @@ def build(data_path, out):
 <p class="note">Sources: zenmetrics <code>{E(src["public"])}</code>, zenmetrics-private <code>{E(src.get("private") or "not included")}</code>, dvifmish <code>{E(src.get("dvifmish") or "–")}</code>; extra timing: {E(", ".join(src.get("extra_timing") or []) or "none")}; extra agreement: {E(", ".join(src.get("agreement") or []) or "none")}. Generated by <code>scripts/complexity/brief_data.py</code> and <code>brief_page.py</code>; this file makes no network requests.{(" Notes: " + E("; ".join(d["notes"]))) if d["notes"] else ""}</p>
 </section>
 </main>
-<script>{js}</script></body></html>'''
+<script>window.PERF={json.dumps(perf, separators=(',', ':'))};window.KINDS={kinds_js};</script><script>{js}</script><script>{perf_js}</script></body></html>'''
     out.mkdir(parents=True, exist_ok=True)
     (out / 'index.html').write_text(page)
     print(f'wrote {out}/index.html ({len(page)//1024} KiB); default weights {best}')
