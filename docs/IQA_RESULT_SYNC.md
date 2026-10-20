@@ -29,6 +29,12 @@ The user service `iqa-results-sync.service` is driven by
 root contains `status.json`, `last-published.json`, immutable raw capture cycles
 and full push logs. A failed cycle preserves the previous remote export.
 
+Concurrent forward updates are retried at both rejection stages: the initial
+ancestry check and the final push. A final push failure triggers rebase only
+when a fresh fetch proves that remote master advanced forward. An unchanged or
+sideways remote, transport failure, or hygiene/lock/dashboard refusal remains a
+failure. At most three guarded pushes run, without bypassing any guard.
+
 After fixing a guard rejection and completing the normal guarded push, run
 `just iqa-results-sync-recover CONFIG FULL_COMMIT`. It verifies that commit is
 on remote master, checks the public projection, and requires every saved-data

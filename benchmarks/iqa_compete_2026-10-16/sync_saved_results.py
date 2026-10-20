@@ -103,6 +103,30 @@ def recover_published(repo, revision):
                 evidence_fingerprint=fingerprint(folder), recovery='exact committed data and remote ancestry verified')
 
 
+def guarded_push(repo, revision, log):
+    """Retry a forward master race even when it happens after guard validation."""
+    with log.open('w') as stream:
+        for attempt in range(3):
+            before = run(['git', 'rev-parse', 'origin/master'], cwd=repo)
+            pushed = subprocess.run(['bash', 'scripts/safe_push.sh', '-r', revision],
+                                    cwd=repo, stdout=stream, stderr=subprocess.STDOUT)
+            if pushed.returncode == 0:
+                return revision
+            error = subprocess.CalledProcessError(pushed.returncode, 'safe_push; inspect ' + str(log))
+            if pushed.returncode not in (3, 5) or attempt == 2:
+                raise error
+            run(['jj', 'git', 'fetch'], cwd=repo)
+            after = run(['git', 'rev-parse', 'origin/master'], cwd=repo)
+            if pushed.returncode == 5:
+                # Exit5 also covers transport failures. Rebase only a proved
+                # forward remote advance; unrelated push failures stay visible.
+                if before == after or subprocess.run(
+                        ['git', 'merge-base', '--is-ancestor', before, after], cwd=repo).returncode:
+                    raise error
+            run(['jj', 'rebase', '-r', revision, '-d', 'master@origin'], cwd=repo)
+            revision = run(['jj', 'log', '-r', '@', '--no-graph', '-T', 'commit_id'], cwd=repo)
+
+
 def publish(repo, projection, digest, cycle):
     lock = repo / '.workongoing'
     try:
@@ -131,16 +155,7 @@ def publish(repo, projection, digest, cycle):
         (destination / 'sync.json').write_text(json.dumps(index, indent=2) + '\n')
         run(['jj', 'describe', '-m', 'data: synchronize three-host IQA results ' + cycle.name], cwd=repo)
         revision = run(['jj', 'log', '-r', '@', '--no-graph', '-T', 'commit_id'], cwd=repo)
-        with (cycle / 'push.log').open('w') as stream:
-            for attempt in range(3):
-                pushed = subprocess.run(['bash', 'scripts/safe_push.sh', '-r', revision], cwd=repo, stdout=stream, stderr=subprocess.STDOUT)
-                if pushed.returncode == 0:
-                    break
-                if pushed.returncode != 3 or attempt == 2:
-                    raise subprocess.CalledProcessError(pushed.returncode, 'safe_push; inspect ' + str(cycle / 'push.log'))
-                run(['jj', 'git', 'fetch'], cwd=repo)
-                run(['jj', 'rebase', '-r', revision, '-d', 'master@origin'], cwd=repo)
-                revision = run(['jj', 'log', '-r', '@', '--no-graph', '-T', 'commit_id'], cwd=repo)
+        revision = guarded_push(repo, revision, cycle / 'push.log')
         subprocess.run(['git', 'merge-base', '--is-ancestor', revision, 'origin/master'], cwd=repo, check=True)
         run(['jj', 'new', 'master@origin'], cwd=repo)
         return dict(state='committed and remote verified', revision=revision, updated_utc=now(), evidence_fingerprint=digest)

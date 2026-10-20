@@ -6,10 +6,67 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_saved_results import DESTINATION, FILES, fingerprint, public_checks, publish, recover_published
+from sync_saved_results import DESTINATION, FILES, fingerprint, public_checks, publish, recover_published, guarded_push
 
 
 class SyncControls(unittest.TestCase):
+    def test_initial_stale_tip_retains_forward_rebase_recovery(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            with patch('sync_saved_results.run', side_effect=['new', '', 'new', '', 'rebased', 'new']), patch(
+                    'sync_saved_results.subprocess.run', side_effect=[subprocess.CompletedProcess([], 3),
+                    subprocess.CompletedProcess([], 0)]):
+                self.assertEqual(guarded_push(repo, 'snapshot', repo / 'push.log'), 'rebased')
+
+    def test_post_guard_remote_advance_retries_every_guard(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            with patch('sync_saved_results.run', side_effect=['old', '', 'new', '', 'rebased', 'new']) as commands, patch(
+                    'sync_saved_results.subprocess.run', side_effect=[subprocess.CompletedProcess([], 5),
+                    subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0)]) as child:
+                self.assertEqual(guarded_push(repo, 'snapshot', repo / 'push.log'), 'rebased')
+                self.assertEqual(child.call_args_list[0].args[0], ['bash', 'scripts/safe_push.sh', '-r', 'snapshot'])
+                self.assertEqual(child.call_args_list[-1].args[0], ['bash', 'scripts/safe_push.sh', '-r', 'rebased'])
+                self.assertIn(['jj', 'rebase', '-r', 'snapshot', '-d', 'master@origin'],
+                              [c.args[0] for c in commands.call_args_list])
+
+    def test_transport_failure_and_nonforward_remote_never_rebase(self):
+        import subprocess
+        for after, ancestry in [('old', 0), ('sideways', 1)]:
+            with self.subTest(after=after), tempfile.TemporaryDirectory() as d:
+                repo = Path(d)
+                with patch('sync_saved_results.run', side_effect=['old', '', after]) as commands, patch(
+                        'sync_saved_results.subprocess.run', side_effect=[subprocess.CompletedProcess([], 5),
+                        subprocess.CompletedProcess([], ancestry)]):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        guarded_push(repo, 'snapshot', repo / 'push.log')
+                    self.assertFalse(any(c.args[0][:2] == ['jj', 'rebase'] for c in commands.call_args_list))
+
+    def test_guard_refusals_are_never_retried(self):
+        import subprocess
+        for code in (7, 8, 9):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as d:
+                repo = Path(d)
+                with patch('sync_saved_results.run', return_value='old') as commands, patch(
+                        'sync_saved_results.subprocess.run', return_value=subprocess.CompletedProcess([], code)) as child:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        guarded_push(repo, 'snapshot', repo / 'push.log')
+                    self.assertEqual(commands.call_count, 1)
+                    self.assertEqual(child.call_count, 1)
+
+    def test_repeated_races_stop_after_three_guarded_attempts(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            with patch('sync_saved_results.run', side_effect=['a', '', 'b', '', 'v2', 'b', '', 'c', '', 'v3', 'c']), patch(
+                    'sync_saved_results.subprocess.run', side_effect=[subprocess.CompletedProcess([], c)
+                    for c in (5, 0, 5, 0, 5)]) as child:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    guarded_push(repo, 'snapshot', repo / 'push.log')
+                self.assertEqual(sum(c.args[0][0] == 'bash' for c in child.call_args_list), 3)
+
     def test_recovery_requires_exact_published_bytes_and_remote_ancestry(self):
         import subprocess
         with tempfile.TemporaryDirectory() as d:
