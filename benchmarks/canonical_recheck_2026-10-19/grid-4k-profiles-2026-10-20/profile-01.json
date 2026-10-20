@@ -1,0 +1,117 @@
+{
+  "case": "ws-hv-grid-pairA-3840x2160-t1-060d464f",
+  "threads": 1,
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile",
+  "receipt": {
+    "command": [
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "--call-graph",
+      "dwarf",
+      "--delay=-1",
+      "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile/ack.fifo",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+      "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile-config.json"
+    ],
+    "binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+    "config_sha256": "0ab53745bd1912ee9a4e53a61aad7688f5fd93ed9dd2e3df2c4522680812b80e",
+    "profile_sha256": "82977bfed78c787bd179cea578e3c7b0aefb7a04c3fbd581abce52f95ad11822",
+    "report_sha256": "773850f42401da7d24a85d8addcb2352c15796cc127bf521404eb56808f48d26",
+    "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+  },
+  "receipt_sha256": "73c1cdaef48aa255f8f2a9a6d314fb9b36e8cacbbe1452bae01efb5854ce50e6",
+  "top_self_symbols": [
+    {
+      "self_percent": 25.86,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv6resizes0_0B7_.llvm.431255288122055924"
+    },
+    {
+      "self_percent": 15.16,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvXs0_NtNtNtCsevLNFiNqfJP_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_3ops5range5RangejENCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv11score_orders2_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2x_8for_each4callTddENCINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB3N_3VecB3A_E14extend_trustedBN_E0E0EB1x_"
+    },
+    {
+      "self_percent": 2.92,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv7ingress"
+    },
+    {
+      "self_percent": 2.54,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv4haar"
+    },
+    {
+      "self_percent": 2.07,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "exc_page_fault"
+    },
+    {
+      "self_percent": 1.99,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv4haar0B7_.llvm.431255288122055924"
+    },
+    {
+      "self_percent": 1.74,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "clear_page_erms"
+    },
+    {
+      "self_percent": 1.57,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vsnprintf"
+    },
+    {
+      "self_percent": 1.27,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "do_anonymous_page"
+    },
+    {
+      "self_percent": 0.92,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "entry_SYSRETQ_unsafe_stack"
+    },
+    {
+      "self_percent": 0.79,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "srso_alias_safe_ret"
+    },
+    {
+      "self_percent": 0.71,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "get_mem_cgroup_from_mm"
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 11s | peak-RSS 0.59GiB | min-avail 14363MiB | peak-load 4.25"
+  ]
+}

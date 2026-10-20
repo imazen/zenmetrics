@@ -1,0 +1,19 @@
+{
+  "source_index": "/home/lilith/tmp/local-canonical-20261019T2330/current-grid-4k-two-profile-index.json",
+  "source_index_sha256": "538d1e6f9555f26704ebd9d9a241ba5a6243d4afe71c377f889d2fac7e027625",
+  "exporter_sha256": "fa0a4abeb642841309d7084bf60ccb3f067ac7bcf4ac30286e289da43b87dd81",
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "sha256": "de03a2b2bd47080fe99d3a3c73f319af4b5194477032e136791a9e2d38af7b2e",
+      "case": "flip-v17-grid-pairA-3840x2160-t28-060d464f"
+    },
+    {
+      "file": "profile-01.json",
+      "sha256": "57823a202c05b2d123b4cf858742dda3b70a569923ccf5a7787de350e8381dec",
+      "case": "ws-hv-grid-pairA-3840x2160-t1-060d464f"
+    }
+  ],
+  "reference_note": "Current revised FLIP-v17 and WS-HV native CPU profiles; does not establish the complete cause of their comparative timing gaps.",
+  "qualification": "CPU cycle samples after warmup, including calibration and measured rounds. No GPU-kernel profile, causal share of a timing gap, or qualified regression decision."
+}

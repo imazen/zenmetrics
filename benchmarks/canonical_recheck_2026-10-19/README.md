@@ -666,3 +666,14 @@ The [new command receipt](local40-scoped-fullcall-dssim-command.json) selects th
 ## Canonical runtime evidence limits, 2026-10-20
 
 The [bounded three-route source review](runtime-cleanliness-review.md) finds no independent canonical foreign-CPU observations in the selected retained PaQ2PiQ warm and DeepDC/VGG first-call arms. Whole-process memory/time receipts and admission locks do not establish call-local cleanliness. Numerical observations remain unchanged; timing intervals retain their descriptive qualification.
+
+## VMAF full-call reference source, 2026-10-20
+
+The [new reference source and control driver](../iqa_compete_2026-10-16/vmaf-fullcall-reference.md)
+move embedded model loading and destruction into each original scoring clock.
+The coordinator independently reviewed the C++ relocation, Python syntax,
+frozen bundle hashes and original compiler flags. Actual linking and twelve
+old/new exact-score controls are queued separately; this source review does
+not promote the six model routes or change any existing plan, result or bound.
+
+[Two additional 4K CPU profiles](grid-4k-profiles-2026-10-20/index.json) retain the FLIP-v17/28-worker and WS-HV/one-worker flags. Each projection binds its unchanged binary/configuration and raw recording, and includes the resource-wrapper receipt. CPU samples do not establish the complete cause of the Rust/canonical timing gaps. Fixed twenty-block confirmations remain separate.
