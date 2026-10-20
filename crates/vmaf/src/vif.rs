@@ -3507,13 +3507,19 @@ fn v3_token() -> Option<X64V3Token> {
 static V3_DISABLED_FOR_TEST: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-fn statistics(
+/// Per-row-range worker for [`statistics`]: runs the vertical+horizontal
+/// filter and finalize chain over `rows`, accumulating the four i64
+/// counters locally. Scratch comes from the calling thread's local
+/// pool, so each worker keeps its own buffers.
+#[allow(clippy::too_many_arguments)]
+fn stat_rows(
     image: &VifImage<'_>,
     bit_depth: u8,
     scale: usize,
     gain_limit: f64,
     table: &[u16; 65536],
-) -> (f32, f32) {
+    rows: core::ops::Range<usize>,
+) -> (i64, i64, i64, i64) {
     let filter = FILTERS[scale];
     let half = (filter.len() / 2) as isize;
     let (width, height) = (image.width, image.height);
@@ -3544,7 +3550,7 @@ fn statistics(
     let mut den_non_log = 0i64;
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     let x64v3 = v3_token();
-    for row in 0..height {
+    for row in rows {
         let mut row_offsets = [0usize; 17];
         for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
             *slot = mirror(row as isize + tap as isize - half, height) * width;
@@ -3920,14 +3926,65 @@ fn statistics(
             );
         }
     }
-    let num = (num_log as f64 / 2048.0
-        + (den_non_log as f64 - num_non_log as f64 / 16384.0 / 65025.0)) as f32;
-    let den = (den_log as f64 / 2048.0 + den_non_log as f64) as f32;
     pool::give_u32(vertical_ref_mean);
     pool::give_u32(vertical_dis_mean);
     pool::give_u32(vertical_ref_sq);
     pool::give_u32(vertical_dis_sq);
     pool::give_u32(vertical_ref_dis);
+    (num_log, den_log, num_non_log, den_non_log)
+}
+
+fn statistics(
+    image: &VifImage<'_>,
+    bit_depth: u8,
+    scale: usize,
+    gain_limit: f64,
+    table: &[u16; 65536],
+) -> (f32, f32) {
+    #[cfg(feature = "parallel")]
+    let bands = if image.height >= 64 && rayon::current_num_threads() > 1 {
+        // Row bands accumulate disjoint i64 partials — integer addition
+        // is order-free, so banded and serial results are bit-identical.
+        rayon::current_num_threads().min(16)
+    } else {
+        1
+    };
+    #[cfg(feature = "parallel")]
+    let (num_log, den_log, num_non_log, den_non_log) = if bands > 1 {
+        let mut accs = vec![(0i64, 0i64, 0i64, 0i64); bands];
+        let per = image.height.div_ceil(bands);
+        let (first, rest) = accs.split_first_mut().unwrap();
+        rayon::in_place_scope(|s| {
+            for (i, acc) in rest.iter_mut().enumerate() {
+                let start = ((i + 1) * per).min(image.height);
+                let end = (start + per).min(image.height);
+                s.spawn(move |_| {
+                    if start < end {
+                        *acc = stat_rows(image, bit_depth, scale, gain_limit, table, start..end);
+                    }
+                });
+            }
+            *first = stat_rows(
+                image,
+                bit_depth,
+                scale,
+                gain_limit,
+                table,
+                0..per.min(image.height),
+            );
+        });
+        accs.iter().fold((0, 0, 0, 0), |a, &b| {
+            (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3)
+        })
+    } else {
+        stat_rows(image, bit_depth, scale, gain_limit, table, 0..image.height)
+    };
+    #[cfg(not(feature = "parallel"))]
+    let (num_log, den_log, num_non_log, den_non_log) =
+        stat_rows(image, bit_depth, scale, gain_limit, table, 0..image.height);
+    let num = (num_log as f64 / 2048.0
+        + (den_non_log as f64 - num_non_log as f64 / 16384.0 / 65025.0)) as f32;
+    let den = (den_log as f64 / 2048.0 + den_non_log as f64) as f32;
     (num, den)
 }
 
