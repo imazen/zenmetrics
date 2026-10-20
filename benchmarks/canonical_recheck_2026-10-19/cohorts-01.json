@@ -1,4 +1,16 @@
 {
+  "original-dmm-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-dmm-1100-run",
+    "plan_sha256": "0f892468ed89bb8fb1607212971bc1d4a6807af286666c614b909d614bd54f5b",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-dmm-1100-run.tsv",
+        "sha256": "a3561a5911a38269b0e43edc413e8811d9abfb1fede2090b786252cfc737da57"
+      }
+    ]
+  },
   "original-dreamsim-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-dreamsim-1100-run",
     "plan_sha256": "468905d1865acd24021f5813db5359841e1d9426f43753eaaf1aaf27475aece8",
@@ -182,12 +194,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 3,
+    "cases": 4,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "ca9cb58765197d79c88fcfb9e4d172a78df97f5228c8c526715c85f8dc4c623f"
+        "sha256": "c14742a79248b8847004b250a2a62ee2cf7cda6ce1002314a6240d1e687f775a"
       }
     ]
   },
@@ -300,14 +312,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
-    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
-    "cases": 24,
-    "expected_cases": 24,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 17,
+    "expected_cases": 120,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
+        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
       }
     ]
   },

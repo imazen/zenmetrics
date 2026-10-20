@@ -79,7 +79,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | scikit-image CIEDE200… | Δ 9.2e-15 | ≈0.6× |
 | [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | original CKDN / pinne… | 2/2 pass | ≈0.49× R |
 | [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.031× |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 6/49 pass | ≈0.021× |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | CUDA pycvvdp 0.5.7 /… | 7/49 pass | ≈0.12× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / weight… | 26/26 pass | ≈0.11× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 5/5 pass | ≈1.21× R ! |
@@ -106,7 +106,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | official HDR-VDP 3.0.… | Δ 0.00029 | ≈0.18× |
 | [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | original HyperIQA / f… | 3/3 pass | ≈0.74× R ! |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.084× |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.088× |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | CUDA Python-IW-SSIM f… | 3 process errors | ≈0.14× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | original LIQE / pinne… | 2/2 pass | ≈0.088× R |
 | [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 5/5 pass | ≈1.16× R ! |
@@ -157,7 +157,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.16× |
 | [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.28× |
 | [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR | primary SSIMULACRA2 v2.1 | Δ 0 | ≈0.58× |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | primary SSIMULACRA2 v… | Δ 6 | ≈0.12× |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | primary SSIMULACRA2 v… | Δ 6 | ≈0.063× |
 | [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | scikit-image 0.26 / d… | Δ 1.2e-15 | ≈0.24× |
 | [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.013× |
 | [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.023× |
@@ -307,7 +307,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 CPU / standard_fhd | 0.000026702880859375 | not recorded | not recorded / not applicable |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 / PyTorch CUDA | 0.000026702880859375 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -478,7 +478,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | Python-IW-SSIM f9de37c / torch.linalg API compatibility | 0.0000006861363495147543 | not recorded | not recorded / not applicable |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | Python-IW-SSIM f9de37c / torch.linalg API compatibility | 0.000025359321661477807 | not recorded | not recorded / not applicable |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | Python-IW-SSIM f9de37c / PyTorch CUDA | 0.000025359321661477807 | not recorded | not recorded / not applicable |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | author IW-SSIM / PIQ 0.8 rgb2yiq Y | 0.0000003003878045193531 | not recorded | not recorded / not applicable |
 
 </details>

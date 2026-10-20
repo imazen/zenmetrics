@@ -343,19 +343,19 @@
   "ssim2-gpu": {
     "canonical": "primary SSIMULACRA2 v2.1 / CPU reference",
     "check": "\u0394 6",
-    "ratio": 0.1229156226750189,
-    "ratio_width": 512,
-    "ratio_height": 512,
+    "ratio": 0.06260996851110785,
+    "ratio_width": 1024,
+    "ratio_height": 1024,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
+    "ratio_plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 1.0142464305870769,
-    "observed_cases": 5,
-    "expected_cases": 25,
+    "observed_cases": 6,
+    "expected_cases": 45,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -365,6 +365,7 @@
     ],
     "plan_sha256": [
       "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false

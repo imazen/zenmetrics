@@ -541,3 +541,9 @@ The initial learned pass has observations for all 28 requested non-PieAPP names.
 [Revised FLIP maps](flip-current-maps/index.json) are bit-identical in all 24 cases. Their f64 and row-major f32 scalar means remain separate. Wrapper: 116s, peak-RSS 1.22 GiB, minimum available 11447 MiB, load 4.82. These are accuracy observations, without new map bounds or speed claims.
 
 The [current 38-route worker](current38-worker.json) verifies the published Rust inputs, runtime AVX-512 and NR feature coverage, with the declared existing benchmark adapters. Its manifest uses the corrected author DSSIM reference; both earlier scheduling manifests remain retained.
+
+## Completed CUDA author-reference controls, 2026-10-20
+
+[Reference-device selection](cuda-reference-headline-selection.json) retains both measured devices. At the same 512² photo pair and one host thread, canonical medians were 33.176356 ms CUDA versus 226.122096 ms CPU for CVVDP, and 59.358956 ms CUDA versus 109.837588 ms CPU for IW-SSIM. The headline uses the measured CUDA cohort: Rust/canonical 0.12406038505253561 for CVVDP and 0.1429021679559189 for IW-SSIM. These are descriptive acquisition medians, without a device-selection confidence claim or extrapolation to other cells. Both 1/28-thread CUDA cases completed for both methods. CVVDP maximum score difference is 9.5367431640625e-7 against its unchanged 0.001 bound; IW-SSIM difference is 1.4385154963880709e-6 without an assigned bound. Final block resource receipt: rc=0, 8s, peak-RSS 1.58 GiB, minimum available 12387 MiB, peak load 2.37.
+
+The complete CW-SSIM/PyIQA grid passes all 24 cases; maximum absolute difference is 5.551115123125783e-15. Final block resource receipt: rc=0, 67s, peak-RSS 5.80 GiB, minimum available 7927 MiB, peak load 10.64. The declared broader matrices remain incomplete.

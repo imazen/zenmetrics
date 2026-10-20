@@ -1,0 +1,39 @@
+{
+  "scope": "Same retained 512x512 photo pair and one declared host thread; observed canonical callable medians, not confidence-qualified device superiority",
+  "selected_headline_device": "cuda",
+  "comparisons": {
+    "iwssim-gpu": {
+      "cuda": {
+        "median_canonical_ms": 59.358956,
+        "rust_to_canonical": 0.1429021679559189,
+        "canonical": "Python-IW-SSIM f9de37c / PyTorch CUDA",
+        "summary": "/home/lilith/tmp/local-canonical-20261019T2330/cuda-reference-run/iwssim-gpu-cuda-reference-pair-cid22-t1/summary.json",
+        "summary_sha256": "5f39d6ddc927800d0f5e121e4ed90f41cd51572a65f640d9b7584db992c87488"
+      },
+      "cpu": {
+        "median_canonical_ms": 109.837588,
+        "rust_to_canonical": 0.08777759212993642,
+        "canonical": "Python-IW-SSIM f9de37c / torch.linalg API compatibility",
+        "summary": "/home/lilith/tmp/local-canonical-20261019T2330/iw-compat-run/iwssim-gpu-pair-cid22-t1/summary.json",
+        "summary_sha256": "ebb7e7bdccfc089ab92524736d8ff9520f53336a8e06d7b338e9f7a021d503d1"
+      }
+    },
+    "cvvdp-gpu": {
+      "cuda": {
+        "median_canonical_ms": 33.176356,
+        "rust_to_canonical": 0.12406038505253561,
+        "canonical": "pycvvdp 0.5.7 / PyTorch CUDA",
+        "summary": "/home/lilith/tmp/local-canonical-20261019T2330/cuda-reference-run/cvvdp-gpu-cuda-reference-pair-cid22-t1/summary.json",
+        "summary_sha256": "9b05ee723ff7f280c9e52c0d2c7ec87f7c6effa3f4ed534ae42c227dcc8e4e4e"
+      },
+      "cpu": {
+        "median_canonical_ms": 226.122096,
+        "rust_to_canonical": 0.021438893589516016,
+        "canonical": "pycvvdp 0.5.7 CPU / standard_fhd",
+        "summary": "/home/lilith/tmp/local-canonical-20261019T2330/gpu-run/cvvdp-gpu-pair-cid22-t1/summary.json",
+        "summary_sha256": "430716c6d0c5919a8f950ad56fde54ee7db75c6ff72985b330be0d5c6f6ec382"
+      }
+    }
+  },
+  "qualification": "CPU and CUDA scores and ratio cohorts remain separately retained. No inference about other inputs or thread budgets."
+}
