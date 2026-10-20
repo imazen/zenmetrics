@@ -1823,6 +1823,10 @@ brief-deploy:
 brief-watch workspace="../zenmetrics--brief-watch":
     scripts/complexity/brief_watch.sh {{workspace}}
 
+# Browser check of a built dashboard: every tab at two sizes, every control button, drawer, print mode.
+brief-check site="~/tmp/metric-brief/site" shots="~/tmp/metric-brief/check":
+    uv run -q --with playwright scripts/complexity/brief_check.py {{site}} --shots {{shots}} ${BRIEF_CHROME:+--chrome "$BRIEF_CHROME"}
+
 # Run one integration-test module per process on the native wgpu backend.
 mac-validation-module package module:
     cargo test --locked -p {{package}} --no-default-features --features wgpu --test it {{module}} -- --nocapture --test-threads=1

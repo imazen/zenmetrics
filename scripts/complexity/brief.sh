@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build (and optionally deploy) the metric-cost brief from the current data.
+# Build (and optionally deploy) the metric-cost dashboard from the current data.
 #
 #   scripts/complexity/brief.sh            # regenerate the paper, collect, render, print PDF
 #   scripts/complexity/brief.sh --deploy   # ... then upload to Cloudflare Pages
@@ -16,7 +16,7 @@ OUT=${BRIEF_OUT:-$HOME/tmp/metric-brief}
 PRIVATE=${BRIEF_PRIVATE:-$(cd .. && pwd)/zenmetrics-private}
 [ -d "$PRIVATE" ] || PRIVATE=$HOME/work/zen/zenmetrics-private
 AGREE=${BRIEF_AGREEMENT:-"$HOME/tmp/iqa-cx-lead/aic2026/agreement.json $HOME/tmp/iqa-cx-lead/dvifm-agree/dvifm_agreement.json"}
-rm -rf "$OUT/site"; mkdir -p "$OUT/site"  # only the page and its PDF are deployed
+rm -rf "$OUT/site"; mkdir -p "$OUT/site"  # only the page, its CSV downloads and the PDF are deployed
 
 python3 scripts/complexity/paper.py >/dev/null
 args=()
@@ -26,7 +26,8 @@ python3 scripts/complexity/brief_page.py --data "$OUT/brief_data.json" --out "$O
 
 CHROME=${BRIEF_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium_headless_shell-*/*/chrome-headless-shell 2>/dev/null | tail -1)}
 if [ -x "${CHROME:-}" ]; then
-  "$CHROME" --no-sandbox --no-pdf-header-footer --print-to-pdf="$OUT/site/brief.pdf" "file://$OUT/site/index.html" 2>/dev/null
+  "$CHROME" --no-sandbox --no-pdf-header-footer --window-size=1536,960 --virtual-time-budget=5000 \
+    --print-to-pdf="$OUT/site/brief.pdf" "file://$OUT/site/index.html?print=1" 2>/dev/null
   echo "brief: $OUT/site/brief.pdf"
 else
   echo "brief: no headless Chromium found (set BRIEF_CHROME); PDF skipped" >&2
