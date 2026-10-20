@@ -198,6 +198,7 @@ benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle 
 benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.
 benchmarks/canonical_recheck_2026-10-19/retry-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/source-equivalence.json	ignored	Source-identity provenance for the native oracle recheck; metadata, not a measurement table.
 benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/vif-corrected-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/vmaf-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
@@ -537,6 +538,17 @@ benchmarks/iqa_saved_2026-10-20T0056Z/protocol.json	ignored	Canonical saved timi
 benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
 benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
 benchmarks/iqa_saved_2026-10-20T0056Z/sources.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_latest/SHA256SUMS.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/coverage.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/i265-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/i265-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/mac-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/mac-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/r7900x-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/r7900x-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/sources.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/sync.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
 benchmarks/iwssim_cachedref_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/iwssim_cachedref_strip_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iwssim_cachedref_strip_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -1267,14 +1279,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_saved_latest/mac-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/i265-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/r7900x-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/mac-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/i265-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/r7900x-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/sources.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/coverage.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/SHA256SUMS.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
-benchmarks/iqa_saved_latest/sync.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.

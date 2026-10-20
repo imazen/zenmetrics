@@ -12,7 +12,7 @@ FIELDS=('host campaign source source_commit build_receipt_sha256 metric_name siz
         'cell_id attempt status cell_status qualified_timing warm_rounds_clean warm_rounds_flagged '
         'median_ns mean_ns p10_ns p90_ns n peak_rss_gib_rounded peak_rss_precision_gib '
         'os_time_max_rss_bytes memory_evidence_status config_sha256 log_sha256 sealed_result_sha256 '
-        'capture_utc protocol failure_class preferred').split()
+        'capture_utc protocol failure_class preferred round_means_ns').split()
 
 
 def key(row):
@@ -30,6 +30,9 @@ def public_row(row, meta, host, campaign):
     out.update(failure_class=failure,host=host,campaign=campaign,source_commit=meta.get('source_commit'),
         build_receipt_sha256=meta.get('build_receipt_sha256'),capture_utc=meta['capture']['captured_utc'],
         protocol='canonical-cold3-warm10-100ms-scalar',preferred=False)
+    # Warm cells: each zenbench round's batch mean (ns), ';'-joined; timing only, no scores.
+    rounds=row.get('round_means_ns')
+    out['round_means_ns']=';'.join(str(round(float(v))) for v in rounds) if isinstance(rounds,list) and rounds else None
     return out
 
 
