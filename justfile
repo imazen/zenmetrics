@@ -1666,6 +1666,13 @@ bench-iqa-canonical-grid-plan source pairs output +options:
 bench-iqa-canonical-haarpsi-maps python +options:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_haarpsi_maps.py {{options}}
 
+# Includes a bit-exact original-loader control before resident-parameter timing.
+bench-iqa-canonical-niqe-resident python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/canonical_niqe_resident_cell.py {{options}}
+
+bench-iqa-canonical-niqe-plan +options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_niqe_resident.py {{options}}
+
 # Freeze and run the 27 changed routes in ascending retained duration.
 bench-iqa-canonical-changed manifest output *options:
     just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'

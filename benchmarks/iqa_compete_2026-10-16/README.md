@@ -279,3 +279,23 @@ The closing checks pass 102 Python harness controls and 10 inventory controls.
 The inherited formatter findings were corrected and the six affected files
 pass rustfmt check. Remaining queued build gates were cancelled before
 admission at the owner's stop directive; they are not claimed as passing.
+## Resident NIQE reference parameters
+
+`canonical_niqe_resident_cell.py` uses the unchanged BasicSR 1.4.2 NIQE
+callable with its parameter archive loaded before timing. Each callable still
+receives owned parameter-array copies with their original memory order.
+Before recording samples, every process checks both images against the original
+archive loader and requires identical score bits. Only `SAMPLE` observations
+are warm timings; its initial `COLD` token follows those controls and does not
+qualify a cold-call measurement.
+
+```sh
+just bench-iqa-canonical-niqe-resident PYTHON niqe WIDTH HEIGHT \
+  REFERENCE_RGB DISTORTED_RGB THREADS SAMPLES --extra-path BASICSR_PARENT
+```
+
+`bench-iqa-canonical-niqe-plan` requires a successful control receipt, preserves
+the caller-identified future plan in a backup, and refuses a plan whose output
+directory already exists. It retains native settings and numerical bounds.
+Earlier archive-loading observations remain diagnostic evidence for that
+different timing boundary.
