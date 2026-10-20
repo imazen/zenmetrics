@@ -18,7 +18,8 @@ import shutil
 import subprocess
 import sys
 
-FILES = ('capture_saved_results.py', 'export_chart_snapshot.py', 'publish_saved_results.py')
+FILES = ('capture_saved_results.py', 'export_chart_snapshot.py', 'publish_saved_results.py',
+         'durable.py', 'admission_recovery.py')
 DESTINATION = 'benchmarks/iqa_saved_latest'
 
 

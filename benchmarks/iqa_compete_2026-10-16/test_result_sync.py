@@ -6,10 +6,21 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_saved_results import fingerprint, public_checks, publish
+from sync_saved_results import FILES, fingerprint, public_checks, publish
 
 
 class SyncControls(unittest.TestCase):
+    def test_staged_capture_has_its_sealed_validation_dependencies(self):
+        import shutil
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for name in FILES:
+                shutil.copy2(Path(__file__).parent / name, root / name)
+            subprocess.run([sys.executable, '-c', 'import capture_saved_results; import durable'],
+                           cwd=root, check=True)
+
     def test_capture_time_alone_does_not_create_another_commit(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
