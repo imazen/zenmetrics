@@ -1,0 +1,19 @@
+{
+  "command": "just bench-iqa-canonical-compare \"/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40-scoped-v4.json\" /absolute/new-results 1,8",
+  "manifest": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40-scoped-v4.json",
+    "sha256": "b13225fb6775d9776f634d7a31919e355835f72dfeb136676e611f6be5b5a337"
+  },
+  "prepared_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-scoped-comparative-plan-v4.json",
+    "sha256": "583aa958a62547f88dec0f6744e7db7527d798d6b8716cbe25ac08aa169ed142"
+  },
+  "routes": 40,
+  "cases": 80,
+  "scope_caveated_cases": 20,
+  "dssim_source_controls": "dssim-fullcall-controls.json",
+  "preparation_wrapper": [
+    "run-heavy: done rc=0 3s | peak-RSS 0.08GiB | min-avail 15175MiB | peak-load 1.48"
+  ],
+  "qualification": "Preparation/source contract only; not80 completed comparisons. Full-call DSSIM reference has exact score controls. Four HDR and six VMAF model routes retain timing caveats. All old manifests/plans/results remain unchanged."
+}

@@ -1,0 +1,117 @@
+{
+  "case": "ssim2-gpu-grid-pairB-64x64-t1-c5f16e49",
+  "threads": 1,
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile",
+  "receipt": {
+    "command": [
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "--call-graph",
+      "dwarf",
+      "--delay=-1",
+      "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile/ack.fifo",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/gpu-worker",
+      "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile-config.json"
+    ],
+    "binary_sha256": "6a9e1e1657268ae719e95f7ec2028a132cd34b997d090390153b29ad44470d9f",
+    "config_sha256": "821bf720c91442929717e620de1b64fff5d0b94c52eb9f738d22f796578582a6",
+    "profile_sha256": "52ca4a875de4f4fa81fb4ab42d7300e5cf6502281d5504eb811a46dcabcfc393",
+    "report_sha256": "9b682dcc4b6c7bd563a8db638a0a32aef881fac7cd6fa0948e54c7671aaabdde",
+    "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+  },
+  "receipt_sha256": "fa1c0207475629227421739e9c29216fd2cd9a26604ce823b92da806ba9b497f",
+  "top_self_symbols": [
+    {
+      "self_percent": 27.48,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvMs_NtNtNtNtCsbcXUjlNwSJo_13cubecl_common6device6handle7channel14custom_channelNtB5_12DeviceClient7enqueueNCINvMs_B7_INtB7_19ChannelDeviceHandleNtNtNtCsbEJqQOSqtzw_11cubecl_cuda7compute6server10CudaServerE12submit_innerNCNvMs_NtCs8YGOPjKvAX6_14cubecl_runtime6clientINtB3F_13ComputeClientNtNtB2r_7runtime11CudaRuntimeE12launch_inner0Kb0_E0ECs5D5Jr2RIrzw_9ssim2_gpu"
+    },
+    {
+      "self_percent": 1.71,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vsnprintf"
+    },
+    {
+      "self_percent": 1.53,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtCsgHYyB3hU8Ec_3std2fs24buffer_capacity_required.llvm.9621187620753702693"
+    },
+    {
+      "self_percent": 1.41,
+      "process": "DSD-0-0",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtNtCsgHYyB3hU8Ec_3std3sys9backtrace28___rust_begin_short_backtraceNCINvMs_NtNtNtNtCsbcXUjlNwSJo_13cubecl_common6device6handle7channel14custom_channelNtB1f_12DeviceClient3newNCNvMs2_B1h_NtB1h_12DeviceRunner5start0E0uEB1n_"
+    },
+    {
+      "self_percent": 1.38,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vsnprintf"
+    },
+    {
+      "self_percent": 1.21,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "proc_pid_status"
+    },
+    {
+      "self_percent": 0.96,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs6CDObAzfddW_4sha26sha2567x86_sha8compress"
+    },
+    {
+      "self_percent": 0.96,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtCsdfLQDdQNEiB_8zenbench11calibration15run_calibration"
+    },
+    {
+      "self_percent": 0.87,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "srso_alias_safe_ret"
+    },
+    {
+      "self_percent": 0.73,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "entry_SYSCALL_64"
+    },
+    {
+      "self_percent": 0.68,
+      "process": "resource-sample",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB6_3VecReE16extend_desugaredNtNtNtCsevLNFiNqfJP_4core3str4iter15SplitWhitespaceECsqZHn4AwUHd_7sysinfo"
+    },
+    {
+      "self_percent": 0.67,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtNtCsqZHn4AwUHd_7sysinfo4unix5linux7process14copy_from_file"
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 7s | peak-RSS 0.35GiB | min-avail 14677MiB | peak-load 5.03"
+  ]
+}

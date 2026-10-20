@@ -1,0 +1,117 @@
+{
+  "case": "flip-grid-pairA-3840x2160-t28-060d464f",
+  "threads": 28,
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-3840x2160-t28-060d464f/profile",
+  "receipt": {
+    "command": [
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "--call-graph",
+      "dwarf",
+      "--delay=-1",
+      "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-3840x2160-t28-060d464f/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-3840x2160-t28-060d464f/profile/ack.fifo",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-3840x2160-t28-060d464f/profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+      "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-3840x2160-t28-060d464f/profile-config.json"
+    ],
+    "binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+    "config_sha256": "969e675aabb082d32d5ecf5912196ab303517cfb1b2ba6ffcc7ff6e3bc3e3e46",
+    "profile_sha256": "c9c539d65a5a7463cf2b0aff8dda239bcde49e973255b4241536ea2f0eb03c4e",
+    "report_sha256": "9db7bf824169c4d0c91ccc04b698ad3cde8d92a50f734ba302832bc0513ad50c",
+    "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+  },
+  "receipt_sha256": "5e7ea6f281db2120901590caa0a4080b84aa5ef5ddf0407f78965fed44c69da9",
+  "top_self_symbols": [
+    {
+      "self_percent": 10.79,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip24___attune_conv_band_t_v4x"
+    },
+    {
+      "self_percent": 5.2,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "clear_page_erms"
+    },
+    {
+      "self_percent": 4.37,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtCslMXYMTtvUmW_15zenmetrics_math5glibc27___attune_powf_glibc_8x_t_v3"
+    },
+    {
+      "self_percent": 3.26,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8convolveKj4_EB6_"
+    },
+    {
+      "self_percent": 2.93,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "exc_page_fault"
+    },
+    {
+      "self_percent": 2.68,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "asm_exc_page_fault"
+    },
+    {
+      "self_percent": 2.58,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvXs_NtNtNtCsevLNFiNqfJP_4core3ops8function5implsRNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip6colorsKb0_Es0_0INtB6_5FnMutTTQSfRAfj4_EEE8call_mutBW_"
+    },
+    {
+      "self_percent": 2.22,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvXs0_NtNtNtCsevLNFiNqfJP_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_3ops5range5RangejENCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip11from_planesKj4_E0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2z_8for_each4callAfB2t_NCINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB3R_3VecB3C_E14extend_trustedBN_E0E0EB1y_"
+    },
+    {
+      "self_percent": 2.2,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__pv_queued_spin_lock_slowpath"
+    },
+    {
+      "self_percent": 2.08,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rmqueue_pcplist"
+    },
+    {
+      "self_percent": 1.89,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8features"
+    },
+    {
+      "self_percent": 1.82,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNvNtNtCs1D7iEf8vUdy_5rayon4iter8plumbing24bridge_producer_consumer6helperINtNtB8_5range12IterProducerjEINtNtB6_3map11MapConsumerINtNtNtB6_7collect8consumer15CollectConsumerAfj3_ERNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip6colorsKb0_Es1_0EEB34_"
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 29s | peak-RSS 1.26GiB | min-avail 14090MiB | peak-load 5.52"
+  ]
+}

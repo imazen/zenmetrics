@@ -656,3 +656,9 @@ LPIPS use two explicit half-width pools when more than one worker is requested.
 No configured-cap mismatch was found. Actual utilization, pool creation success
 and canonical runtime cleanliness remain unmeasured by this source review;
 existing timing flags and numerical decisions retain their qualifications.
+
+## Full-call DSSIM comparative command, 2026-10-20
+
+The [new command receipt](local40-scoped-fullcall-dssim-command.json) selects the source-bound author DSSIM reference with context construction and destruction inside each call. It preserves the forty-route ascending scheduling order and every numerical bound; four HDR and six VMAF model routes still withhold comparable timing ratios. Earlier plans and results remain unchanged.
+
+[Three further CPU profiles](grid-latest-profiles-2026-10-20/index.json) retain FLIP at 4K/28 workers and the small screen-pair DSSIM/SSIMULACRA2 GPU flags. CPU samples describe host execution and do not measure GPU kernel time or establish the full cause of a timing gap. Resource receipts accompany every profile.

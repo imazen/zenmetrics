@@ -1601,3 +1601,8 @@ benchmarks/canonical_recheck_2026-10-19/vmaf-current-grid-run.tsv	ignored	Native
 benchmarks/canonical_recheck_2026-10-19/flip-grid-pairA-255x257-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/dssim-fullcall-current40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/iqa_compete_2026-10-16/rten-thread-budget-review/source-evidence.json	ignored	Exact dependency and wrapper source identities for configured RTEN thread budgets; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/local40-scoped-fullcall-dssim-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

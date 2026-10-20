@@ -1,0 +1,24 @@
+{
+  "source_index": "/home/lilith/tmp/local-canonical-20261019T2330/current-grid-latest-three-profile-index.json",
+  "source_index_sha256": "827055e4539bfb97a3315ae9784b41b85453765f05f0525d447e34f14141592c",
+  "exporter_sha256": "fa0a4abeb642841309d7084bf60ccb3f067ac7bcf4ac30286e289da43b87dd81",
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "sha256": "ead1eae8ce8947313940befef521927f539f02b545ff2068f63d4979c2c490bc",
+      "case": "flip-grid-pairA-3840x2160-t28-060d464f"
+    },
+    {
+      "file": "profile-01.json",
+      "sha256": "0e72e58443405ec4319837e772fd4efd5d032aaf7a0d0c45c4e6d737dcd8fe2c",
+      "case": "dssim-gpu-grid-pairB-64x64-t28-c5f16e49"
+    },
+    {
+      "file": "profile-02.json",
+      "sha256": "01423b826d5d0cc274b1b6bc25583f166305a5e28773a5bbe66d63dd48efe99e",
+      "case": "ssim2-gpu-grid-pairB-64x64-t1-c5f16e49"
+    }
+  ],
+  "reference_note": "DSSIM-GPU profiles retain older CPU-fork alternative disposition; CPU samples are not GPU kernel measurements.",
+  "qualification": "CPU cycle samples after warmup, including calibration and measured rounds. No GPU-kernel profile, causal share of a timing gap, or qualified regression decision."
+}
