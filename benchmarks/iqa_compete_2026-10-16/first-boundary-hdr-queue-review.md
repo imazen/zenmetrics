@@ -117,7 +117,10 @@ current default or existing numerical gate was changed.
 
 ## Separate overhead observation
 
-Root reports a 901-second preflight wrapper with 75–96-second child elapsed
-times and 0.07–0.13-second child CPU times. This remains unprofiled fixture
-overhead. No attribution to Windows/network paths or metric cost is established.
-Startup source investigation is secondary to admission/correctness review.
+Root initially reported a 901-second preflight wrapper with 75–96-second child
+elapsed times and 0.07–0.13-second child CPU times. That observation alone did
+not identify a cause. Its subsequent detailed trace identifies an X11 UNIX
+connection followed by a 35.774787-second poll; the headless version has no X11
+connection and the same array control passes in one second. Broad file-rescan
+attribution was not supported. These startup observations are separate from
+metric timings; the new headless cohort requires fresh exact controls.

@@ -48,3 +48,31 @@ candidate plans against this parent/seal. Its photo512 body hashes are fixed to
 the exact photo case, not another grid size. Such plans remain false-scoped until
 their corresponding gates actually pass. Original AIC 200-nit XYZ routes remain
 separate and unchanged.
+
+The frozen `hdr-headless-warm-v1` preparation passed source/static checks:
+all 208 timed bodies and all 326 bound source copies outside wrapper relocation
+remain exact; the actual worker validates four warm cases, and all six retained
+audit controls pass again. No evaluator ran. Wrapper: rc=0, 1 second, peak RSS
+0.02 GiB, minimum available 15256 MiB, peak load 1.87.
+
+| Artifact | SHA256 |
+| --- | --- |
+| Headless parent plan | `1b435281ae018c58bb9b98e8f876a87ff1ca420512405c119bfcf9cdba8852ec` |
+| Warm-four cohort | `c4b3f0720f3461b2284454c0d593d984ba1b5729cc3a9ce7aea0df324fca2ec3` |
+| Bundle index | `9d0608dd21d61ac840fb834cf63b0d199a479a960fe9eac122b7dc39cfefe3c3` |
+| Static result | `d37322ce2c1680e20ad644f9538f206782ebbb6682ac7c0d7cd60ad95f8bf177` |
+
+The frozen queue SHA256 is
+`83dfb93dd66ebaffc7eb26bc91731dfb4a7961d0b032cdc90d1f397b5dfe8934`;
+worker SHA256 is
+`8035916fafc25f4e7a4d9b1028827628cc8f5c42138b1565ae98c7fa716778ce`.
+Both match tracked source commit `b716d5dc`. Active old v2 copies retain their
+earlier reviewed hashes. New parent/queue configs and sources are frozen; only
+the future owned queue metadata/output directories remain writable.
+
+The separate root launch folder contains `admitted-preflight.sh`, which acquires
+both locks, uses run-heavy 12G/jobs1 and saves complete output with no overwrite.
+Its SHA256 is
+`76f17a0e55ead799f265eab544f29c10b51a74717c62efbeb4addb6d0084e5e5`.
+It has not been executed by this lane. Fresh preflight, ABBA, cell protocol and
+native parity/resource acceptance remain separate from these static checks.
