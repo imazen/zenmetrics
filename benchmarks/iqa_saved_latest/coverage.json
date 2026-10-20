@@ -159,28 +159,28 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 343,
+        "saved_attempt_rows": 351,
         "qualified_attempt_rows": 231,
         "gate_flagged_attempt_rows": 12,
         "observed_cell_statuses": {
           "ok": 243,
-          "failed": 35,
-          "pending": 30
+          "failed": 43,
+          "pending": 22
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
         "failure_class_attempts": {
-          "resource_guard_monitored_memory": 99,
+          "resource_guard_monitored_memory": 107,
           "worker_failure_unclassified": 1
         },
-        "exhausted_saved_cells": 35
+        "exhausted_saved_cells": 43
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:10:02.005579+00:00",
-      "2026-10-20T07:10:02.790136+00:00"
+      "2026-10-20T07:15:02.007854+00:00",
+      "2026-10-20T07:15:02.767515+00:00"
     ],
-    "saved_attempt_rows": 3291,
+    "saved_attempt_rows": 3299,
     "preferred_qualified_cells": 3016,
     "exact_metric_names": [
       "ahiq-pyiqa",
@@ -446,8 +446,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:10:01.442418+00:00",
-      "2026-10-20T07:10:01.607698+00:00"
+      "2026-10-20T07:15:01.425638+00:00",
+      "2026-10-20T07:15:01.581893+00:00"
     ],
     "saved_attempt_rows": 4161,
     "preferred_qualified_cells": 3952,
@@ -652,8 +652,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T07:10:02.193665+00:00",
-      "2026-10-20T07:10:02.327090+00:00"
+      "2026-10-20T07:15:02.198105+00:00",
+      "2026-10-20T07:15:02.340608+00:00"
     ],
     "saved_attempt_rows": 5159,
     "preferred_qualified_cells": 4788,
