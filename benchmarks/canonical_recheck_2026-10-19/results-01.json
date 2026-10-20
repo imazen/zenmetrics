@@ -382,7 +382,7 @@
     "ratio_canonical_device": "cuda",
     "ratio_blocks": 3,
     "worst_ratio": 0.2918621344877682,
-    "observed_cases": 8,
+    "observed_cases": 10,
     "expected_cases": 28,
     "passed_cases": 0,
     "failed_cases": 0,

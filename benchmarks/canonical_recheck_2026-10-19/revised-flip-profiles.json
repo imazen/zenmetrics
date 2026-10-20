@@ -102,6 +102,212 @@
         "run-heavy: done rc=0 6s | peak-RSS 0.12GiB | min-avail 13532MiB | peak-load 1.88"
       ],
       "qualification": "Sampled CPU cycles after warmup through calibration and rounds; not complete slowdown attribution"
+    },
+    {
+      "case": "ws-hv-current-512x512-t1-bb7819c0",
+      "receipt": {
+        "command": [
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "--call-graph",
+          "dwarf",
+          "--delay=-1",
+          "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/profile/ack.fifo",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/profile-config.json"
+        ],
+        "binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+        "config_sha256": "be5c88c691faf309ca0e708caa8ef4bc0d2b738252de65478b7c0f6e192b92d1",
+        "profile_sha256": "b78f168437b26a23bbd255bf2da28b3179f98fdb342371fab3f4cbb858577bcc",
+        "report_sha256": "1277cd274d0bc628c324b5dc9e1eba0f830711537cef248ba03af445372db428",
+        "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+      },
+      "top_native_self_symbols": [
+        {
+          "self_percent": 25.68,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv6resizes0_0B7_.llvm.431255288122055924"
+        },
+        {
+          "self_percent": 8.62,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvXs0_NtNtNtCsevLNFiNqfJP_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_3ops5range5RangejENCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv11score_orders2_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2x_8for_each4callTddENCINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB3N_3VecB3A_E14extend_trustedBN_E0E0EB1x_"
+        },
+        {
+          "self_percent": 2.69,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv4haar"
+        },
+        {
+          "self_percent": 1.99,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "srso_alias_safe_ret"
+        },
+        {
+          "self_percent": 1.87,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNCNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv4haar0B7_.llvm.431255288122055924"
+        },
+        {
+          "self_percent": 1.87,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics5ws_hv7ingress"
+        },
+        {
+          "self_percent": 1.41,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "exc_page_fault"
+        },
+        {
+          "self_percent": 1.16,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtCsgNGfqckZKtf_8zenbench11calibration15run_calibration"
+        },
+        {
+          "self_percent": 0.94,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "clear_page_erms"
+        },
+        {
+          "self_percent": 0.7,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "asm_exc_page_fault"
+        },
+        {
+          "self_percent": 0.7,
+          "object": "libc.so.6",
+          "domain": ".",
+          "symbol": "__memset_avx512_unaligned_erms"
+        },
+        {
+          "self_percent": 0.64,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "__memcg_slab_post_alloc_hook"
+        }
+      ],
+      "wrapper_receipt": [
+        "run-heavy: done rc=0 6s | peak-RSS 0.10GiB | min-avail 14137MiB | peak-load 2.11"
+      ],
+      "qualification": "Sampled CPU cycles after warmup through calibration and rounds; not complete slowdown attribution"
+    },
+    {
+      "case": "flip-v17-current-512x512-t8-bb7819c0",
+      "receipt": {
+        "command": [
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "--call-graph",
+          "dwarf",
+          "--delay=-1",
+          "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile/ack.fifo",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile-config.json"
+        ],
+        "binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+        "config_sha256": "74680e83fc8cc29d25fe1f4694eed3d3d6f525b204f9562dec8e5b8127e35487",
+        "profile_sha256": "06cde416e431139dd1e984f7e6328ba34711375c3235c3535734bf31075291b7",
+        "report_sha256": "7328a3426f565df181b08e8a69d2f5507f78b77a034331a9fb94da98cff15f7f",
+        "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+      },
+      "top_native_self_symbols": [
+        {
+          "self_percent": 7.22,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8convolveKj4_EB6_"
+        },
+        {
+          "self_percent": 6.54,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip24___attune_conv_band_t_v4x"
+        },
+        {
+          "self_percent": 5.14,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtCslMXYMTtvUmW_15zenmetrics_math5glibc27___attune_powf_glibc_8x_t_v3"
+        },
+        {
+          "self_percent": 2.88,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8features"
+        },
+        {
+          "self_percent": 2.08,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvXs0_NtNtNtCsevLNFiNqfJP_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_3ops5range5RangejENCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip11from_planesKj4_E0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2z_8for_each4callAfB2t_NCINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB3R_3VecB3C_E14extend_trustedBN_E0E0EB1y_"
+        },
+        {
+          "self_percent": 2.03,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvMs8_NtCs2Wz0tTjopHA_15crossbeam_deque5dequeINtB5_7StealerNtNtCs2JoaK3j7lLw_10rayon_core3job6JobRefE5stealB10_"
+        },
+        {
+          "self_percent": 1.53,
+          "object": "libc.so.6",
+          "domain": ".",
+          "symbol": "__memset_avx512_unaligned_erms"
+        },
+        {
+          "self_percent": 1.52,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvNvNtNtCs1D7iEf8vUdy_5rayon4iter8plumbing24bridge_producer_consumer6helperINtNtB8_5range12IterProducerjEINtNtB6_3map11MapConsumerINtNtNtB6_7collect8consumer15CollectConsumerAfj3_ERNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip6colorsKb0_Es1_0EEB34_"
+        },
+        {
+          "self_percent": 1.37,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvMs4_NtCs2Wz0tTjopHA_15crossbeam_deque5dequeINtB5_6WorkerNtNtCs2JoaK3j7lLw_10rayon_core3job6JobRefE3popBZ_"
+        },
+        {
+          "self_percent": 1.25,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "__rseq_handle_notify_resume"
+        },
+        {
+          "self_percent": 1.16,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "clear_page_erms"
+        },
+        {
+          "self_percent": 1.15,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "num_to_str"
+        }
+      ],
+      "wrapper_receipt": [
+        "run-heavy: done rc=0 5s | peak-RSS 0.13GiB | min-avail 14217MiB | peak-load 1.36"
+      ],
+      "qualification": "Sampled CPU cycles after warmup through calibration and rounds; not complete slowdown attribution"
     }
   ]
 }

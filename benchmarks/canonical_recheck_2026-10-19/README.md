@@ -555,3 +555,9 @@ The [resident-model first-evaluation ledger](nn-first-evaluation/index.json) ret
 The [classical boundary review](cold-boundary-review/index.json) classifies all 84 warm-grid names: 65 first-evaluation candidates, 13 with resident setup excluded, two missing first-call output, two with parameter-I/O scope differences, NIQE with an earlier validation evaluation, and one with a precreated thread runner. Static eligibility is not acquired cold coverage. Base `hdrvdp`/`hdrvdp3` typed-input limitations remain distinct from the two included `*-aic2026` SDR routes.
 
 [Revised FLIP profiles](revised-flip-profiles.json) identify the current native binary, sampled stacks and resource receipts. They confirm AVX-512 convolution and batched power-function dispatch; they do not establish the complete cause of the eight-thread timing candidate.
+
+## Original Google Butteraugli maps
+
+[All 24 original-Google map checks](butter-original-maps/index.json) match scalar scores and every finite map pixel bit for bit: four sizes, three contents and requested worker budgets 1/28. Both implementations use one effective worker. This uses original Google revision `71b18b6`, separately from libjxl Butteraugli. The accuracy wrapper reports 63s, peak-RSS 1.43 GiB, minimum available 12704 MiB and peak load 2.60. No map or scalar bound was assigned.
+
+[Additional CUDA map-probe development](extra-gpu-map-scope.json) was canceled at owner request before compilation or inference. That draft is unpushed; the existing scalar comparisons continue.

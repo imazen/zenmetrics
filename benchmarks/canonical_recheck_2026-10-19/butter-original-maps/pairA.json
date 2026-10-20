@@ -1,0 +1,260 @@
+{
+  "cases": [
+    {
+      "pair": "pairA",
+      "size": "64",
+      "width": 64,
+      "height": 64,
+      "requested_worker_budget": 1,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 2.608238458633423,
+        "canonical": 2.608238458633423
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 4096,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "ff953327fb61d80b8e47d5801d07fe95fdf2dc5d423627b04aa5c02515b428f2",
+        "canonical-command.json": "a13dd4d98608fed3a6b589e6b055e565ae51d0e213f6e88293ed82db4775ce77",
+        "canonical.f32": "ff953327fb61d80b8e47d5801d07fe95fdf2dc5d423627b04aa5c02515b428f2",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "784c5a4274d7e1f118b60651d190eb80b1e1a1a2c4259c6cc1710054c0fccfa6",
+        "native-command.json": "3c8f979758ffbcfcce6da03d021681b73c1ead5ed3825d5872fd281f1de34c81",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "c7ba3d2ed8828778c85d324452e6addc7b8f7cc3472a149377a92bf6fabd5d69",
+        "canonical-stdout.log": "52a608ea9e35db753420e86f838331b252b1b054387621c5873f26daf1994643",
+        "native-memory.txt": "d277ff0e457c63651cb8fecae5c2aa76a3f0669ec9be0f3a78fd3fd38f095b61"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "64",
+      "width": 64,
+      "height": 64,
+      "requested_worker_budget": 28,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 2.608238458633423,
+        "canonical": 2.608238458633423
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 4096,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "ff953327fb61d80b8e47d5801d07fe95fdf2dc5d423627b04aa5c02515b428f2",
+        "canonical-command.json": "1b62b24ee36bc8fbe63dc366c94037db458cd6dd46bb5607d06318e8dcb7ad94",
+        "canonical.f32": "ff953327fb61d80b8e47d5801d07fe95fdf2dc5d423627b04aa5c02515b428f2",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "0ad4c36ba4c35a57e7581dff6e93e6361dfc7b97520ff4c82c5d7cda6c2687c4",
+        "native-command.json": "bf60e97dff3e1f20d6a6830acae6683c95075c2142455f3beb10481215f392dc",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "2da21091a6c56c10092de7b8b70730678aa36329288bedb09395ab670f550aa8",
+        "canonical-stdout.log": "259f83d7052544d0edda7aa84e39fdc3ff2f9b98bb748c3fca715fe5a684b345",
+        "native-memory.txt": "aa1ff363ce79d2c0e44e1725cd12fd310b3a0871dd2fb9a6be8c3514ba0f4b82"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "odd",
+      "width": 255,
+      "height": 257,
+      "requested_worker_budget": 1,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 4.272188663482666,
+        "canonical": 4.272188663482666
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 65535,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "cbde4ac5a79c194d2fef18404d2ed9d75bff44e5de84978d7b24f3adf9f8f9a3",
+        "canonical-command.json": "41bf06c0d5ccb9b928c0ec718fc0fa06e5c866efde9c90745fea4d37bb79c114",
+        "canonical.f32": "cbde4ac5a79c194d2fef18404d2ed9d75bff44e5de84978d7b24f3adf9f8f9a3",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "ea3e7adeafd06890c981ac54a7391eeab24749d67833698e927e1afee5e2ac3a",
+        "native-command.json": "34a1080e5d1e54c468ba439646447e406e3e94578fe76e6aaa82ff883dc30014",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "b3cb1cfd283157c31cbd2e52474197befdba0f5dacca38ed0732bb7008c157f1",
+        "canonical-stdout.log": "a389305179c2fce1f5c6f6c981c7cab1cccadbd2f695404f9b0190c3cade9a46",
+        "native-memory.txt": "f96b26d1e4bef03f264226a90b83cf98c83a244d58cf82d5b0a800e81a43a44d"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "odd",
+      "width": 255,
+      "height": 257,
+      "requested_worker_budget": 28,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 4.272188663482666,
+        "canonical": 4.272188663482666
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 65535,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "cbde4ac5a79c194d2fef18404d2ed9d75bff44e5de84978d7b24f3adf9f8f9a3",
+        "canonical-command.json": "e227984c4a22133add6240bfe126d9596e37d626a0634f54cdddcf478aabafe1",
+        "canonical.f32": "cbde4ac5a79c194d2fef18404d2ed9d75bff44e5de84978d7b24f3adf9f8f9a3",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "57554efcf0040e30be674c460431377bbb7ced1b11413268b10812eb520e7463",
+        "native-command.json": "78c3a4f588b3a39517166c9a483b2f8b5868bc31a2add6010726f0bea912ce81",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "a6717d52785f1bcb95429e7ac0fc7ae388c4682bf6b5f24374e28e713c3a5845",
+        "canonical-stdout.log": "b91d2ebb58b71639d39e7b6bd6e5632de306b55110942c4b8f827ef4fa05ab02",
+        "native-memory.txt": "7ca9f74548b37519540ed847469c52017853908a3b27d8f12ad4a86cfee85645"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "1mp",
+      "width": 1024,
+      "height": 1024,
+      "requested_worker_budget": 1,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 4.894380569458008,
+        "canonical": 4.894380569458008
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 1048576,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "01645dd893d3aa9d2699c590d8e117816bdd900ecc4a5e94c0e693589496910f",
+        "canonical-command.json": "a18f0a3110e9597f6b143758f93670b8afbda28a8162323dc6d2e8f5d47e569a",
+        "canonical.f32": "01645dd893d3aa9d2699c590d8e117816bdd900ecc4a5e94c0e693589496910f",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "df2f67911838cba55603c381f144ec479203a2cb34159f17219f387423418e91",
+        "native-command.json": "5c9e373d9b170de7c45457ee388f8df2c3e439b381c8897eaf5471b16c3e7e57",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "a1b68ec57455b2ea2cdd924be696f0afa9820993fbd117120d215742570b3b2d",
+        "canonical-stdout.log": "792d7ec4bf72b7e663508189d6a284ef930cbf8537a8311fc7c02a736d263a6e",
+        "native-memory.txt": "4659a313114fc441e1390d33ca4bbf505ec120d67852aa4c29521bad9a60dc28"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "1mp",
+      "width": 1024,
+      "height": 1024,
+      "requested_worker_budget": 28,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 4.894380569458008,
+        "canonical": 4.894380569458008
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 1048576,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "01645dd893d3aa9d2699c590d8e117816bdd900ecc4a5e94c0e693589496910f",
+        "canonical-command.json": "2c82fe0e22a34281d8b15c4a36ac5325083041f72c87861ba2a5d9f4b3366aff",
+        "canonical.f32": "01645dd893d3aa9d2699c590d8e117816bdd900ecc4a5e94c0e693589496910f",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "5e6f11692d95e5f0bc6eb9a538aeadb7b3001a24a9b56286891489674c44a02d",
+        "native-command.json": "b6d85a70a9d93e6eab7dec50ae1cfbfd0a92c87b176e5c7a52fdb46636a8bf1c",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "6edd17996d45a617bc10b5e9881869f245bf0fc0d26d499755f39b6ada570ae7",
+        "canonical-stdout.log": "ea50b83da6a901d269bcf259daa0ca7a6d1491c33151c50317dadd2498ce2293",
+        "native-memory.txt": "49ddc26b8ae4dcafcd7cf5322de6d254f511758edbea4a88f87073026b2a9ffd"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "4k",
+      "width": 3840,
+      "height": 2160,
+      "requested_worker_budget": 1,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 5.508072376251221,
+        "canonical": 5.508072376251221
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 8294400,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "1c1ea7a84e5049a659dd083e0b5d8c0f050de899c97e9041b0f6b89b64e50271",
+        "canonical-command.json": "5afeabdc3d90614edb66e34170da18c37da5d6265ec1aaafdb453bcb5ff1867d",
+        "canonical.f32": "1c1ea7a84e5049a659dd083e0b5d8c0f050de899c97e9041b0f6b89b64e50271",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "ca7699d82653c39e4d25620f5ea27c4ae7818ca2a8f846e47549de1586ba21ab",
+        "native-command.json": "d65f919248798730003d6f0110b038b8a6c2b202aeea1445fb74daa5e69b5a2c",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "95618c0ad48d9c570e5a6ca926560231eff0b5d0fc7514c5c9e078a4c31b41ff",
+        "canonical-stdout.log": "855666a3aedae3f7addf24368d617dccbb868b27751e03f1f9fdac31007e358e",
+        "native-memory.txt": "5f09891c02787f068594c056d0454a4e82d0eeab345bc81346184936f304857f"
+      }
+    },
+    {
+      "pair": "pairA",
+      "size": "4k",
+      "width": 3840,
+      "height": 2160,
+      "requested_worker_budget": 28,
+      "native_effective_threads": 1,
+      "canonical_effective_threads": 1,
+      "scores": {
+        "native": 5.508072376251221,
+        "canonical": 5.508072376251221
+      },
+      "scalar_abs_delta": 0.0,
+      "scalar_bound": null,
+      "map_bound": null,
+      "finite_pixels": 8294400,
+      "nonfinite_mismatches": 0,
+      "max_map_abs_delta": 0.0,
+      "map_bit_identical": true,
+      "files": {
+        "native.f32": "1c1ea7a84e5049a659dd083e0b5d8c0f050de899c97e9041b0f6b89b64e50271",
+        "canonical-command.json": "01c398f3c6b8d8bc230333714e267007b033d5018f15704aa2757f6568ad1281",
+        "canonical.f32": "1c1ea7a84e5049a659dd083e0b5d8c0f050de899c97e9041b0f6b89b64e50271",
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonical-memory.txt": "3e08d2028ea3f6ada4ca956cd0fdb8a0017daf5b4ac0684d52049bd2bd9300de",
+        "native-command.json": "36cf60b4dd100543b37269c3add8b6925ddcafb6e706114bc6e0157b1965799a",
+        "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "native-stdout.log": "48b041aae5e56db97bf42aa8bb7b5b026a3760e34b3b7ad940cf18760ed6d0c0",
+        "canonical-stdout.log": "61354d57e9d45f840e63c8215033e53461952f1d7a1288adb178710358c740ef",
+        "native-memory.txt": "c2cb20c88d38dcc88bf42197f52e03242dc3ec97a800c15f5e280c3723d0789f"
+      }
+    }
+  ]
+}

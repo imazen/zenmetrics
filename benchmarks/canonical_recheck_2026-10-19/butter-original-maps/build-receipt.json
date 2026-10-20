@@ -1,0 +1,53 @@
+{
+  "native_revision": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "native_module_sha256": "0f4c67656458b3573be6fc5396978f7641480c7d25a3a1f4718f8ce3c597ce8f",
+  "reference_origin": "https://github.com/google/butteraugli",
+  "reference_revision": "71b18b636b9c7d1ae0c1d3730b85b3c127eb4511",
+  "reference_source_sha256": {
+    "/home/lilith/tmp/portcheck/sources/butteraugli/butteraugli/butteraugli_main.cc": "1c6af9c4b2ea246e0a3759cc61503f81271598a9301d3cf3529c78a810aba4b6",
+    "/home/lilith/tmp/portcheck/sources/butteraugli/butteraugli/butteraugli.cc": "a5f0ae1696955e33a2761395ef6df4ffa320812626324161bb8215d2d9b47c58",
+    "/home/lilith/tmp/portcheck/sources/butteraugli/butteraugli/butteraugli.h": "64d0c2838a307ef603cfe376976df4f2c246898c021dde5468cf63bcd1737231"
+  },
+  "reference_plan_sha256": "49acf4bda29f426fdd871b59edcab797505239e6bd27e59134112515384ca430",
+  "commands": [
+    [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2/native.rs",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2/native-map"
+    ],
+    [
+      "g++",
+      "-O3",
+      "-std=c++20",
+      "-I/home/lilith/tmp/portcheck/sources/butteraugli",
+      "/home/lilith/tmp/local-canonical-20261019T2330/original-butter-map-harness-v2/butteraugli_original_map.cpp",
+      "/home/lilith/tmp/portcheck/sources/butteraugli/butteraugli/butteraugli.cc",
+      "-lpng",
+      "-ljpeg",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2/reference-map"
+    ]
+  ],
+  "binaries": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2/native-map": "69329554d8a543713afee6ab4532324699e1c9e9d7733370a1afc8d54fccfe0b",
+    "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2/reference-map": "a9c9a950c6942047c9d428262b793e9bdebb61728b1c33f5404dbdb46d87ba59"
+  },
+  "helper_sources": {
+    "butteraugli_original_map.rs": "313f70933f5c105bfe41495f8ba5b619f088a4309eba3db766d042ce9bf787e6",
+    "butteraugli_original_map.cpp": "3c89e80ecbe4cf0b8f5c7cbc4548474d08354cae8d171434f6a0751cc2c73a57",
+    "check_butteraugli_original_maps.py": "88e9ac9290475643cc535c9efbd3627a5ee5c9a0aa4f95d44c037a4865d44971",
+    "compare_canonical.py": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c",
+    "haarpsi_primary.py": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b",
+    "octave_primary.py": "6ebcedd417f4585d4f319c7ac466741d4cddad3c62a5a276c33a35f3a7448872",
+    "supervision.py": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3",
+    "check_fixed_factor_oracle.py": "13a40e64520360b55b5c627f929127416caff614241190e8e96033595c11c9b0",
+    "fixed_factor_oracle.py": "b21a768d12bb58e7e8d336fa99d0351ba5429067e0ea6c161491a80ad77bd36f",
+    "image_resize_source.py": "60b9dc3be231dfb34f2e2b0e3fa3a969f3164a96647dd5e55063ef21bf6b9ad1"
+  },
+  "input_manifest_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+  "scope": "Accuracy only. Both original callables use one effective worker under budgets 1/28."
+}
