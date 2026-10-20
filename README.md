@@ -62,7 +62,7 @@ drivers and fleet executors with pinned build identities.
 
 Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 
-**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. ! flags any observed case above 1.08; see the ledger for confirmation status.
+**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. ! flags any observed case above 1.08; R/O identifies RTEN/ORT CPU for neural ratios. see the ledger for confirmation status.
 
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
@@ -83,7 +83,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.084× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | h4nwei/DeepDC | prior | — |
-| [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | dingkeyan93/DISTS | prior | — |
+| [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | DISTS-pytorch 0.1 | 2/2 pass | ≈1.1× R ! |
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
@@ -109,9 +109,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 1 process errors | ≈0.088× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
-| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× ! |
-| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | richzhang/PerceptualS… | prior | — |
-| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | richzhang/PerceptualS… | prior | — |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× R ! |
+| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈0.64× R |
+| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× R ! |
 | [`mad`](docs/MODEL_CARDS.md#mad) | FR | author HI/LO + paper… | Δ 0 | ≈0.12× |
 | [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | IIGROUP/MANIQA | prior | — |
 | [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR | thorfdbg mDCTpsnr 9a2… | 2/2 pass | ≈0.8× |
@@ -166,8 +166,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.096× |
 | [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.1× ! |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | abhijay9/ShiftToleran… | prior | — |
-| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | abhijay9/ShiftToleran… | prior | — |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 1 process errors | ≈1.1× R ! |
+| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 1 process errors | ≈0.81× R |
 | [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
@@ -335,7 +335,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dists`](docs/MODEL_CARDS.md#dists) | DISTS_pytorch==0.1 | not recorded | not recorded | MIT / permissive |
+| [`dists`](docs/MODEL_CARDS.md#dists) | DISTS-pytorch 0.1 | 0.0 | not recorded | MIT / permissive |
 
 </details>
 
@@ -498,8 +498,8 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | lpips 0.1.4 | 0.00000000031480767472003013 | not recorded | BSD-2-Clause / permissive |
-| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | lpips==0.1.4 | not recorded | not recorded | BSD-2-Clause / permissive |
-| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | lpips==0.1.4 | not recorded | not recorded | BSD-2-Clause / permissive |
+| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | lpips 0.1.4 | 0.0000000028955942522196354 | not recorded | BSD-2-Clause / permissive |
+| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | lpips 0.1.4 | 0.0000000063964012003703274 | not recorded | BSD-2-Clause / permissive |
 
 </details>
 
@@ -754,8 +754,8 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | stlpips_pytorch==0.0.2 | not recorded | not recorded | BSD-2-Clause / permissive |
-| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | stlpips_pytorch==0.0.2 | not recorded | not recorded | BSD-2-Clause / permissive |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | stlpips-pytorch 0.0.2 | 0.00000000026342972345595045 | not recorded | BSD-2-Clause / permissive |
+| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | stlpips-pytorch 0.0.2 | 0.0000000006130358451775231 | not recorded | BSD-2-Clause / permissive |
 
 </details>
 

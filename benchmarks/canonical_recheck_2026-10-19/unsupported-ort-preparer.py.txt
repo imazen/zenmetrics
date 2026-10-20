@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Freeze ORT CPU counterparts of explicit original-model comparison plans."""
+import argparse
+import copy
+import json
+from pathlib import Path
+import shlex
+
+from compare_canonical import sha
+
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('manifest',type=Path);p.add_argument('models',type=Path)
+    p.add_argument('receipt',type=Path);p.add_argument('ort_library',type=Path)
+    p.add_argument('output',type=Path)
+    a=p.parse_args();a.output.mkdir()
+    here=Path(__file__).resolve().parent
+    verified={row['path']:row['sha256'] for row in json.loads(a.receipt.read_text())['artifacts']}
+    jobs=[]
+    for job in json.loads(a.manifest.read_text())['jobs']:
+        original=Path(job['plan']);plan=json.loads(original.read_text())
+        configs=[]
+        for artifact,expected in plan['bindings'].items():
+            if sha(artifact)!=expected:raise ValueError('original comparison binding changed: '+artifact)
+            if artifact.endswith('.settings.json'):
+                candidate=json.loads(Path(artifact).read_text())
+                if candidate.get('environment',{}).get('ZENMETRICS_NN_ENGINE')=='rten':configs.append(candidate)
+        if not configs:
+            continue  # the explicitly ORT-only PyIQA routes already have their own plan
+        if len(configs)!=1:raise ValueError('ambiguous original worker settings')
+        settings=copy.deepcopy(configs[0]);env=settings['environment']
+        models=a.models/Path(env['ZENMETRICS_NN_MODEL_DIR']).name
+        env.update(ZENMETRICS_NN_ENGINE='ort-cpu',ZENMETRICS_NN_MODEL_DIR=str(models.resolve()),
+                   ORT_DYLIB_PATH=str(a.ort_library.resolve(strict=True)))
+        name=original.stem.removesuffix('-plan').removesuffix('.plan')
+        config_path=a.output/(name+'.settings.json')
+        with config_path.open('x') as stream:json.dump(settings,stream,indent=2)
+        worker=a.output/(name+'.worker')
+        with worker.open('x') as stream:
+            stream.write('#!/bin/sh\nexec '+shlex.join(['/usr/bin/python3',str(here/'canonical_worker_env.py'),str(config_path.resolve())])+' "$@"\n')
+        worker.chmod(0o755)
+        bindings=plan['bindings']
+        for case in plan['cases']:
+            prefix=case['metric'].replace('-','_')
+            for file in models.glob(prefix+'*'):
+                if verified.get(str(file.resolve()))!=sha(file):raise ValueError('unverified ORT model: '+str(file))
+                bindings[str(file.absolute())]=sha(file)
+            case['scope']=case['scope'].replace('native RTEN engine','native ORT CPU engine').replace('native rten','native ort-cpu')
+        for file in [a.manifest,a.receipt,a.ort_library,original,config_path,worker,Path('/usr/bin/python3'),Path(__file__).resolve()]:
+            bindings[str(file.resolve())]=sha(file)
+        plan.update(binary=str(worker.resolve()),rust_engine='ort-cpu',engine_comparison_parent_plan_sha256=sha(original))
+        path=a.output/(name+'.plan.json')
+        with path.open('x') as stream:json.dump(plan,stream,indent=2)
+        jobs.append(dict(plan=str(path.resolve()),output=str((a.output/(name+'-run')).resolve())))
+        print(json.dumps(jobs[-1]),flush=True)
+    with (a.output/'queue.json').open('x') as stream:json.dump(dict(jobs=jobs),stream,indent=2)
+
+
+if __name__=='__main__':main()

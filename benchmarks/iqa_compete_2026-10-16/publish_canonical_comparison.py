@@ -16,6 +16,25 @@ import statistics
 from compare_canonical import compare, sha, summarize
 
 
+def native_engine(plan):
+    if plan.get('rust_engine'):
+        return plan['rust_engine']
+    with Path(plan['binary']).open('rb') as stream:
+        worker=stream.read(8192)
+    if not worker.startswith(b'#!'):
+        return None
+    text=worker.decode()
+    engines=[]
+    for path in plan['bindings']:
+        if path.endswith('settings.json') and path in text:
+            settings=json.loads(Path(path).read_text())
+            engine=settings.get('environment',{}).get('ZENMETRICS_NN_ENGINE')
+            if engine:engines.append(engine)
+    if len(set(engines))>1:
+        raise ValueError('ambiguous executed worker engine')
+    return engines[0] if engines else None
+
+
 def validate_numerics(blocks, case, row):
     """Recompute scalar decisions from the retained arms before publication."""
     for block in blocks:
@@ -43,7 +62,11 @@ def read_cohort(root, dispositions):
     plan_path=root/'plan.json'
     plan=json.loads(plan_path.read_text())
     digest=sha(plan_path)
+    engine=native_engine(plan)
     cases={c['id']: c for c in plan['cases']}
+    def disposition(case):
+        return dispositions.get(digest+':'+case['metric']+':'+case['id'],
+                                dispositions.get(digest+':'+case['metric'],''))
     rows=[]
     for path in sorted(root.glob('*/summary.json')):
         row=json.loads(path.read_text())
@@ -61,13 +84,16 @@ def read_cohort(root, dispositions):
         record={k:row[k] for k in ('metric','case','width','height','threads','passed','absolute_bound',
                                    'max_abs_delta','ratio','matched_scope','rust_source','plan_sha256')}
         record['canonical']=row['canonical']
+        # This weightless route constructs CwSsimPyiqa directly; the model
+        # engine environment is ignored by the executed native Rust callable.
+        record['engine']='rust' if case['metric']=='cw-ssim-pyiqa' else engine
         record['relative_bound']=case.get('relative_bound',0)
         record['process_errors']=sum(bool(b.get('errors')) for b in blocks)
         measured=[b for b in blocks if 'rust_ns' in b and 'canonical_ns' in b]
         record['rust_ms']=statistics.median(b['rust_ns'] for b in measured)/1e6 if measured else None
         record['canonical_ms']=statistics.median(b['canonical_ns'] for b in measured)/1e6 if measured else None
-        record['expected_cases']=sum(c['metric']==row['metric'] for c in cases.values())
-        record['excluded_contract']=dispositions.get(digest+':'+row['metric'],'')
+        record['expected_cases']=sum(c['metric']==row['metric'] and not disposition(c) for c in cases.values())
+        record['excluded_contract']=disposition(case)
         record['summary_sha256']=sha(path)
         record['blocks']=len(blocks)
         for role in ('rust','canonical'):
@@ -138,6 +164,7 @@ def project(rows, preferred_sources=None):
             ratio_width=key[0] if key else None,ratio_height=key[1] if key else None,
             ratio_threads=key[2] if key else None,ratio_cases=len(selected),
             ratio_source=key[3] if key else None,ratio_plan_sha256=key[4] if key else None,
+            ratio_engine=selected[0].get('engine') if selected else None,
             ratio_blocks=min(r.get('blocks',0) for r in selected) if selected else 0,
             worst_ratio=max(r['ratio'] for r in eligible) if eligible else None,
             observed_cases=len(entries),expected_cases=expected,passed_cases=passed,failed_cases=failed,
@@ -173,6 +200,11 @@ def main():
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
     combined=[];sources={}
     for root in a.cohorts:
+        label=root.name
+        if label in sources:
+            label=root.parent.name+'-'+label
+        if label in sources:
+            raise ValueError('cohort publication labels still collide: '+str(root))
         artifacts=[]
         rows=read_cohort(root,dispositions)
         if not rows:
@@ -189,14 +221,16 @@ def main():
                 w.writeheader();w.writerows(r for r in rows if r['metric']==metric)
                 payload=part.getvalue().encode()
                 if len(payload)>30_000:raise ValueError('metric shard exceeds generated-data cap')
-                artifact=a.output/(root.name+'-'+metric+'.tsv')
+                artifact=a.output/(label+'-'+metric+'.tsv')
                 artifact.write_bytes(payload)
                 artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
         else:
-            artifact=a.output/(root.name+'.tsv')
+            artifact=a.output/(label+'.tsv')
             artifact.write_bytes(data)
             artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
-        sources[root.name]=dict(plan_sha256=sha(root/'plan.json'),cases=len(rows),
+        absolute=root.absolute()
+        raw='~/'+str(absolute.relative_to(Path.home())) if absolute.is_relative_to(Path.home()) else str(absolute)
+        sources[label]=dict(raw_directory=raw,plan_sha256=sha(root/'plan.json'),cases=len(rows),
                                expected_cases=len(json.loads((root/'plan.json').read_text())['cases']),artifacts=artifacts)
         combined.extend(rows)
     identities=[(r['plan_sha256'],r['case']) for r in combined]

@@ -2174,3 +2174,10 @@ bench-iqa-canonical-queue manifest *options:
 
 bench-iqa-canonical-warm-profile binary config output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/profile_canonical_warm.py '{{binary}}' '{{config}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-flags manifest output regression-log:
+    python3 -B benchmarks/iqa_compete_2026-10-16/audit_canonical_flags.py '{{manifest}}' '{{output}}' '{{regression-log}}'
+
+bench-iqa-canonical-flag-profiles index:
+    python3 -B benchmarks/iqa_compete_2026-10-16/profile_canonical_queue.py '{{index}}'
+

@@ -288,6 +288,7 @@ def readme_section(items):
            'A dash means no comparable measurement. “Prior” means older recorded evidence; '
            '“gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. '
            '! flags any observed case above 1.08; '
+           'R/O identifies RTEN/ORT CPU for neural ratios. '
            'see the ledger for confirmation status.',
            '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
@@ -302,6 +303,7 @@ def readme_section(items):
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         ratio=observation.get('ratio')
         speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
+        if ratio is not None:speed+={'rten':' R','ort-cpu':' O'}.get(observation.get('ratio_engine'),'')
         worst=observation.get('worst_ratio',ratio)
         if worst is not None and worst>1.08:speed+=' !'
         metric='[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')'

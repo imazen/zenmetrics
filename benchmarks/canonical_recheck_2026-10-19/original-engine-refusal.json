@@ -1,0 +1,14 @@
+{
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "requested_engine": "ort-cpu",
+  "native_status": "failed",
+  "native_error": "ZENMETRICS_NN_ENGINE=ort-cpu: expected `rten` or `ort-cuda`",
+  "completed_rounds": 0,
+  "source": "crates/zenmetrics-cli/src/metrics/nn.rs",
+  "source_sha256": "9cbc96ae64ec00858a924048641d72cc7c039e0a98a5814cf614ffc127a01131",
+  "raw_plan_sha256": "2e01284707aad8d927939e7a2cb0276f02cbace18a74ccd1d85f5c8c66af0273",
+  "stdout_sha256": "46130c3eb984c53cde215035dd801f5882b05ae96025dc7f1c45781662a488ac",
+  "separate_pyiqa_routes": "ORT CPU supported; measured in their own five-model plan",
+  "prototype_sha256": "b5d6e738855e9a4e49ab03b8df6e3026a1da8c4f340f693d0faa531714295ff0",
+  "retained_prototype": "unsupported-ort-preparer.py.txt"
+}

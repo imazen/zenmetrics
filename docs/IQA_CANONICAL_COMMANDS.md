@@ -216,3 +216,18 @@ configuration identity. Its default sampling frequency is 199 Hz.
 
 Original-network plan preparation validates the 1100-second arm budget against
 the existing supervisor; a larger plan value is refused before scoring.
+
+`bench-iqa-canonical-flags QUEUE NEW_AUDIT_DIRECTORY LOCAL_REGRESSION_LOG`
+reads completed comparisons, logs each newly observed ratio above 1.08 and
+prepares a fixed 20-block follow-up plus a warm-profile configuration. It retains
+incomplete cases as pending. Repeating the reader adds only newly completed
+flags; it never replaces an acquired comparison or changes a numerical bound.
+
+The original learned-metric dispatcher exposes RTEN and optional ORT CUDA/WebGPU,
+with no ORT CPU engine. A frozen worker control explicitly refuses `ort-cpu`
+before scoring. The separate PyIQA port routes do expose ORT CPU. Neural ratios
+carry R/O for the executed RTEN/ORT CPU engine; an unsupported original-engine
+request never supplies a comparison ratio. Source and controls are retained in
+`benchmarks/canonical_recheck_2026-10-19/original-engine-refusal.json`.
+The original ST-LPIPS 0.0.2 package also imports `torchsummary` (the local runtime
+uses 1.5.1), even though that utility is not called during inference.

@@ -1,10 +1,47 @@
 import math
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 from compare_canonical import compare, parse, summarize
 
 
 class CanonicalComparison(unittest.TestCase):
+    def test_engine_cohorts_with_same_basename_keep_both_artifacts(self):
+        from compare_canonical import sha
+        scratch=Path.home()/'tmp';scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as temporary:
+            base=Path(temporary);roots=[]
+            for source in ('rten','ort'):
+                root=base/source/'same-run';root.mkdir(parents=True);roots.append(root)
+                case=dict(id='example-t1',metric='example',width=512,height=512,threads=1,
+                          absolute_bound=.01,matched_scope=True,scope='resident input')
+                plan=dict(binary=sys.executable,bindings={},rust_source=source,cases=[case])
+                (root/'plan.json').write_text(json.dumps(plan))
+                directory=root/case['id'];directory.mkdir()
+                for number in range(3):
+                    block=directory/f'block-{number:02d}';block.mkdir()
+                    record=dict(passed=True,delta=0.,rust_ns=2.,canonical_ns=4.,arms={
+                        'rust':dict(score=.5,times_ns=[2.,2.,2.]),
+                        'canonical':dict(score=.5,times_ns=[4.,4.,4.])})
+                    (block/'result.json').write_text(json.dumps(record))
+                row=dict(case='example-t1',canonical='original',passed=True,max_abs_delta=0.,ratio=.5,
+                         rust_source=source,plan_sha256=sha(root/'plan.json'),**{k:v for k,v in case.items() if k!='id'})
+                (directory/'summary.json').write_text(json.dumps(row))
+            output=base/'published'
+            subprocess.run([sys.executable,str(Path(__file__).with_name('publish_canonical_comparison.py')),
+                            str(output),*map(str,roots)],check=True,capture_output=True)
+            index=json.loads((output/'cohorts.json').read_text())
+            self.assertEqual(len(index),2)
+            files=[row['artifacts'][0]['file'] for row in index.values()]
+            self.assertEqual(len(set(files)),2)
+            for row in index.values():
+                artifact=row['artifacts'][0]
+                self.assertEqual(sha(output/artifact['file']),artifact['sha256'])
+
     def test_original_indexed_and_unindexed_samples(self):
         self.assertEqual(parse('SAMPLE 1 1234 .25\nSAMPLE 2 2345 .25', 'samples')[:2],
                          (.25, [1234., 2345.]))
@@ -62,10 +99,11 @@ class CanonicalComparison(unittest.TestCase):
         row=dict(metric='example',excluded_contract='',expected_cases=1,plan_sha256='old-plan',
                  passed=True,max_abs_delta=0.,ratio=.5,width=512,height=512,threads=1,
                  rust_source='old-source',canonical='primary')
-        updated=dict(row,plan_sha256='new-plan',rust_source='new-source',ratio=.4)
+        updated=dict(row,plan_sha256='new-plan',rust_source='new-source',ratio=.4,engine='ort-cpu')
         result=project([row,updated],{'example':'new-source'})['example']
         self.assertEqual(result['ratio'],.4)
         self.assertEqual(result['ratio_source'],'new-source')
+        self.assertEqual(result['ratio_engine'],'ort-cpu')
         self.assertEqual(result['observed_cases'],2)
         self.assertEqual(result['rust_sources'],['new-source','old-source'])
 

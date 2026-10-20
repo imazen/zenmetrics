@@ -270,3 +270,24 @@ Initial neural plans with a 1200-second budget were refused by the unchanged
 1100-second supervisor before either arm executed. These setup refusals remain
 in the raw cohort and explicit dispositions. Replacement plans use 1100 seconds
 and new output paths; they do not relax a numerical or native sampling gate.
+
+## Neural engine availability and reference setup
+
+The original learned-metric worker accepts RTEN and optional ORT CUDA/WebGPU;
+it has no ORT CPU route. The [native control](original-engine-refusal.json)
+records its explicit `ort-cpu` refusal with zero completed rounds. These are
+configuration refusals, excluded from score/speed projections. The
+[retained experimental preparer](unsupported-ort-preparer.py.txt) preserves the
+attempt's source; it is not an active benchmark command. The separate PyIQA
+ports expose ORT CPU and keep their own native comparison plan.
+
+The first original ST-LPIPS reference imports failed because its isolated
+runtime lacked `torchsummary`. Version 1.5.1 is now installed. A new explicit
+three-case plan replaces only those import-refusal cases; all earlier attempts
+remain. Completed native ST-LPIPS scores and later valid comparisons are not
+discarded. This setup correction changes no metric body or numerical bound.
+
+Neural ratios now identify their executed engine (R = RTEN, O = ORT CPU).
+Different source/engine cohorts retain separate artifacts even when their raw
+directories share a basename. The index records each raw directory and every
+artifact hash; publication refuses a remaining label collision.
