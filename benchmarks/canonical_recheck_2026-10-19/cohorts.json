@@ -12,7 +12,7 @@
   },
   "octave-run": {
     "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "cases": 99,
+    "cases": 100,
     "expected_cases": 102,
     "artifacts": [
       {
@@ -77,7 +77,7 @@
       },
       {
         "file": "octave-run-vsi-k4.tsv",
-        "sha256": "8ffb952cb5c9c4da4fdf177d709818b73616b934d8198acf2181c903e5c26f58"
+        "sha256": "f1b52072aa8f18b02a801312441984a366c5b08140151800a9aa1bdc33b7f12d"
       },
       {
         "file": "octave-run-vsi-nodownscale.tsv",
@@ -120,23 +120,23 @@
   },
   "pyiqa1152-run": {
     "plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "cases": 8,
+    "cases": 17,
     "expected_cases": 60,
     "artifacts": [
       {
         "file": "pyiqa1152-run.tsv",
-        "sha256": "2b39541a61a994a233287805f7ac10e94513b42916164e74581364873331bdd4"
+        "sha256": "8a6db40e3b165992f998a4069b81b61f614cb4d6c3b8fce2c740173a9d075056"
       }
     ]
   },
   "remaining-run": {
     "plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "cases": 6,
+    "cases": 15,
     "expected_cases": 36,
     "artifacts": [
       {
         "file": "remaining-run.tsv",
-        "sha256": "93237132c668c0f8f2bd210f0c9a9dfc9fb863bda8811f592970fe093b5398cd"
+        "sha256": "6dcf84b03b2c8032384dfc2cbeea2d665aed6e72dcd11ef1211607022e083772"
       }
     ]
   },
@@ -151,25 +151,146 @@
       }
     ]
   },
+  "cw-mex-run": {
+    "plan_sha256": "50848d02176f31f8870ef2380ff8952371994568b0e3c7f51b68fbdd08d19a0c",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "cw-mex-run.tsv",
+        "sha256": "20bf3271883851b28bb1d158e94fba907eb73f9022400fdccfab7fba062a19f3"
+      }
+    ]
+  },
+  "cw-pyiqa-run": {
+    "plan_sha256": "a251397cb7f682e405002f9f8f67934e0e89501ead737f66bd278ec77d1653cd",
+    "cases": 2,
+    "expected_cases": 12,
+    "artifacts": [
+      {
+        "file": "cw-pyiqa-run.tsv",
+        "sha256": "658528d215cc394c116cc807f81e35e2d0ddd1565989a25ba008d8de4c78291f"
+      }
+    ]
+  },
   "ssim1-rgb-run": {
     "plan_sha256": "6e1ad806dc033cd0cd990b138e984260e494bb8fd2c4ca78d4da7eeebc6ab60f",
-    "cases": 1,
+    "cases": 2,
     "expected_cases": 2,
     "artifacts": [
       {
         "file": "ssim1-rgb-run.tsv",
-        "sha256": "af2a894cc6042433dc62dc03c02ee1fb34bef8bad531b31649f35384eb009532"
+        "sha256": "1a4520727924835465a6c3b6c896c9c390038f696f6f5cd3c94e67d74d2c80d5"
       }
     ]
   },
   "flip-f64-run": {
     "plan_sha256": "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
-    "cases": 1,
+    "cases": 2,
     "expected_cases": 2,
     "artifacts": [
       {
         "file": "flip-f64-run.tsv",
-        "sha256": "c34724bfa90609805388ead3230a9b1ca8f164f5bccec6914696216dd98ff94f"
+        "sha256": "45d566804b8697c679f584ade7754cec4a58a61e493a5187dd7736d30371a157"
+      }
+    ]
+  },
+  "flip-v17-eight-run": {
+    "plan_sha256": "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "flip-v17-eight-run.tsv",
+        "sha256": "b71f77cfa8d5cd8c2470da2fc2e4d477b4038e3d7846be9bcb9c623b8804a32a"
+      }
+    ]
+  },
+  "flip-confirm-run": {
+    "plan_sha256": "b9d19f48bb37503308f57f27c481704cd8559d709995eb544e67dbaf657673a8",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "flip-confirm-run.tsv",
+        "sha256": "2d687f259b97e9833ff15e9d11a073d57845624a09b9c024329df3a45f21d475"
+      }
+    ]
+  },
+  "butter-original-run": {
+    "plan_sha256": "49acf4bda29f426fdd871b59edcab797505239e6bd27e59134112515384ca430",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "butter-original-run.tsv",
+        "sha256": "5b8e5aaae76bf8bad2ce8e86923b666ce4ab458bed39737f2eea38c8c0a25033"
+      }
+    ]
+  },
+  "gpu-run": {
+    "plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "gpu-run.tsv",
+        "sha256": "c7b99335c80a547f67a138e8972d97d165eb2c652a849f2746f11d6fa21823b9"
+      }
+    ]
+  },
+  "psnrhvs64-run": {
+    "plan_sha256": "522c4a2dff9eb512553847b0e0bbfe7a7e6205b3aa5002187d753360d0008f61",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "psnrhvs64-run.tsv",
+        "sha256": "1350ee755cb80853995a04089975a39f814e02a7d6df7ea2cf5267a5b79fc555"
+      }
+    ]
+  },
+  "iw-compat-run": {
+    "plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
+    "cases": 1,
+    "expected_cases": 3,
+    "artifacts": [
+      {
+        "file": "iw-compat-run.tsv",
+        "sha256": "1dd63b45cfca949a0a0a9c77b2d364bbc11b250cb6d405b67b8534c4c31c0842"
+      }
+    ]
+  },
+  "coverage-first-20261020-0-run": {
+    "plan_sha256": "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875",
+    "cases": 13,
+    "expected_cases": 14,
+    "artifacts": [
+      {
+        "file": "coverage-first-20261020-0-run.tsv",
+        "sha256": "ce6d842573fa6b784b56d1db8cacf1ecbe95ac20fb0999f99f366aecd56c3214"
+      }
+    ]
+  },
+  "coverage-first-20261020-1-run": {
+    "plan_sha256": "479cd70c076e6ce817ea0d8454e31db5abc770ccc57f5d8b605e5a37f9cd29ab",
+    "cases": 11,
+    "expected_cases": 11,
+    "artifacts": [
+      {
+        "file": "coverage-first-20261020-1-run.tsv",
+        "sha256": "9cd6ed917fcc8fe4b8dd7ad47b69f4a0653fb3b86956ed92d331d25c44056d1b"
+      }
+    ]
+  },
+  "coverage-first-20261020-2-run": {
+    "plan_sha256": "fb60975c2cfa9aad51ce41136f00ba45bf7274dd0f061c9b85a4aa4f22094b9d",
+    "cases": 3,
+    "expected_cases": 3,
+    "artifacts": [
+      {
+        "file": "coverage-first-20261020-2-run.tsv",
+        "sha256": "2d0b7d9b1e2f201b5f703c135eefb0623158c4391793f48eb8e767abbeac5e23"
       }
     ]
   }

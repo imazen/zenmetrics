@@ -80,7 +80,9 @@ def project(rows):
         # worker count and sample cohort in the expanded evidence model.
         eligible=[r for r in entries if r['ratio'] is not None]
         key=None
-        if eligible and not failed and not errored:
+        # Runtime failures stay visible in `check` and the case ledger. They
+        # do not erase a separate completed measurement; numerical findings do.
+        if eligible and not failed:
             group_counts=defaultdict(int)
             for r in eligible:
                 group_counts[(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])]+=1

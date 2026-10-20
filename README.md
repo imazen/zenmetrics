@@ -62,7 +62,7 @@ drivers and fleet executors with pinned build identities.
 
 Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 
-**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. ! flags an observed ratio above 1.08; see the ledger for confirmation status.
+**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. ! flags any observed case above 1.08; see the ledger for confirmation status.
 
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
@@ -71,42 +71,42 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
-| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl butteraugli v0… | unchecked | — |
-| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl butteraugli v0… | unchecked | — |
-| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | unrecorded | unchecked | — |
+| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl 0.12.0 origina… | Δ 5e-05 | ≈0.41× |
+| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl 0.12.0 origina… | Δ 0.0083 | ≈0.026× |
+| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | original google/butte… | Δ 0 | ≈0.72× |
 | [`cambi`](docs/MODEL_CARDS.md#cambi) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈1× |
 | [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.68× |
-| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | unrecorded | unchecked | — |
+| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | scikit-image 0.26 / d… | Δ 5.1e-05 | ≈0.52× |
 | [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | researchmm/CKDN | prior | — |
-| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp v0.5.7 (PyPI) | prior | — |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp v0.5.7 + CPU… | unchecked | — |
-| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | unrecorded | unchecked | — |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | pyiqa 0.1.16 create_m… | prior | — |
+| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.031× |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.021× |
+| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.084× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | h4nwei/DeepDC | prior | — |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | dingkeyan93/DISTS | prior | — |
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core e… | 1 process errors | — |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
-| [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.33× |
-| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core e… | 1 process errors | ≈0.49× |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | original dssim-core e… | Δ 2e-06 | ≈0.5× |
+| [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.33× ! |
+| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× ! |
 | [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | original FeatureSIM /… | 6/6 pass | ≈0.22× |
 | [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2) | FR | original FeatureSIM /… | 6/6 pass | ≈0.18× |
 | [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | FR | original FeatureSIM /… | 6/6 pass | ≈0.16× |
 | [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | FR | original FeatureSIM /… | 6/6 pass | ≈0.14× |
 | [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | FR | original FeatureSIM /… | 6/6 pass | ≈0.21× |
-| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | FR | authors' FR_FSIMc.m | unchecked | — |
+| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | FR | author FeatureSIM.m f… | 1/1 pass | ≈0.046× |
 | [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR | libgmsd de646c9a (C) | prior | — |
 | [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.12× |
 | [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.13× |
 | [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.… | prior | — |
-| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | unrecorded | unchecked | — |
+| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | official HDR-VDP 2.2.… | Δ 0.092 | ≈0.12× |
 | [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | prior | — |
 | [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | unrecorded | unchecked | — |
 | [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | SSL92/hyperIQA | prior | — |
-| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | unchecked | — |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | CPU twin | unchecked | — |
+| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | 1 process errors | ≈0.084× |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 1 process errors | — |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | jpeg-ai-qaf IW_SSIM (… | prior | — |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
 | [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | richzhang/PerceptualS… | prior | — |
@@ -118,38 +118,38 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`mdsi`](docs/MODEL_CARDS.md#mdsi) | FR | original MDSI / Octav… | 6/6 pass | ≈0.21× |
 | [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | unchecked | — |
 | [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | FR | PyIQA 0.1.16 / named… | 1/1 pass | ≈0.013× |
 | [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.014× |
-| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.026× |
+| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.043× |
+| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.075× |
+| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.22× |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 1/1 pass | ≈0.24× |
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 6/6 pass | ≈0.028× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 1.5e-07 | ≈0.35× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | google-research/googl… | prior | — |
 | [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 | 170/170 pass | ≈0.18× |
-| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | Valerolaparra/NLPD_Py… | prior | — |
-| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch source mi… | prior | — |
+| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.051× |
+| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.063× |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
 | [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public… | prior | — |
 | [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 170/170 pass | ≈0.1× |
-| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | unrecorded | unchecked | — |
+| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | libjxl 0.12.0 origina… | Δ 1.6e-08 | ≈0.4× |
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.21× |
-| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | unrecorded | unchecked | — |
-| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | unrecorded | unchecked | — |
+| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.18× |
+| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | scikit-image 0.26 / d… | Δ 4.4e-05 | ≈0.14× |
 | [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | scikit-image 0.26 / d… | Δ 2e-12 | ≈0.14× |
 | [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.76× |
-| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | unrecorded | unchecked | — |
+| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.21× |
 | [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | scikit-image 0.26 / d… | Δ 2.4e-12 | ≈0.14× |
-| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | unrecorded | unchecked | — |
-| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR | authors' psnrhvsm.m | prior | — |
+| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | scikit-image 0.26 / d… | Δ 4.1e-06 | ≈0.3× |
+| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00016× |
 | [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf psnr_hvs feat… | prior | — |
-| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | authors' psnrhvsm.m | unchecked | — |
-| [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | unrecorded | unchecked | — |
+| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00029× |
+| [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | scikit-image 0.26 / d… | Δ 6.2e-07 | — |
 | [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 6e-08 | ≈0.36× |
-| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | PyIQA 0.1.16 / named… | 1/1 pass | ≈0.014× |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 2/6 pass | ≈0.0096× |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.025× |
 | [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.041× |
@@ -157,14 +157,14 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.16× |
 | [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.28× |
 | [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR | primary SSIMULACRA2 v2.1 | Δ 0 | ≈0.58× |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | fast-ssim2 (CPU) + th… | unchecked | — |
-| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | unrecorded | unchecked | — |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | primary SSIMULACRA2 v… | Δ 0.043 | ≈0.12× |
+| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | scikit-image 0.26 / d… | Δ 1.2e-15 | ≈0.24× |
 | [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.013× |
-| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
-| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
-| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
-| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
-| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 1/3 pass | ≈0.022× |
+| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.036× |
+| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.055× |
+| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.092× |
+| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.1× ! |
 | [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | abhijay9/ShiftToleran… | prior | — |
 | [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | abhijay9/ShiftToleran… | prior | — |
@@ -181,7 +181,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`vsi`](docs/MODEL_CARDS.md#vsi) | FR | original VSI / Octave… | 6/6 pass | ≈0.078× |
 | [`vsi-k2`](docs/MODEL_CARDS.md#vsi-k2) | FR | original VSI / Octave… | 6/6 pass | ≈0.068× |
 | [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3) | FR | original VSI / Octave… | 6/6 pass | ≈0.063× |
-| [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | FR | original VSI / Octave… | 5/6 pass | ≈0.062× |
+| [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | FR | original VSI / Octave… | 6/6 pass | ≈0.062× |
 | [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR | original VSI / Octave… | 6/6 pass | ≈0.078× |
 | [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | FR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
@@ -189,7 +189,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Coo… | prior | — |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | unrecorded | unchecked | — |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 1.1e-16 | ≈0.93× |
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | unchecked | — |
 | [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | unchecked | — |
 
@@ -251,9 +251,9 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | libjxl butteraugli v0.9.2 / 0.9.4 | not recorded | not recorded | not recorded / not applicable |
-| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | libjxl butteraugli v0.9.2 / 0.9.4 | not recorded | not recorded | not recorded / not applicable |
-| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | libjxl 0.12.0 original comparator | 0.000050067901611328125 | not recorded | not recorded / not applicable |
+| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | libjxl 0.12.0 original comparator / CPU reference | 0.008306741714477539 | not recorded | not recorded / not applicable |
+| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | original google/butteraugli 71b18b6 | 0.0 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -280,7 +280,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | scikit-image 0.26 / declared RGB ingress | 0.00005128722870906266 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -298,7 +298,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | pycvvdp v0.5.7 (PyPI) | not recorded | not recorded | not recorded / not applicable |
+| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | pycvvdp 0.5.7 CPU / standard_fhd | 0.00000286102294921875 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -307,7 +307,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp v0.5.7 + CPU twin | not recorded | not recorded | not recorded / not applicable |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 CPU / standard_fhd | 0.00000095367431640625 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -316,8 +316,8 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / none |
+| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | author CW-SSIM / original pointOp MEX | 0.0000000000000006661338147750939 | not recorded | not recorded / not applicable |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.0000000000000006661338147750939 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / none |
 
 </details>
 
@@ -380,7 +380,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | dssim-core | not recorded | not recorded | not recorded / not applicable |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000001965514705881688 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -412,7 +412,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | original FeatureSIM / Octave 6.4 | 0.00000018109096577845207 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 | [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | original FeatureSIM / Octave 6.4 | 0.0000000138497604496024 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 | [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | original FeatureSIM / Octave 6.4 | 0.000001329927450832713 | not recorded | not recorded / not applicable; open terms: see pinned audit |
-| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | authors' FR_FSIMc.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | author FeatureSIM.m first output | 0.0000000014845701334920136 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 
 </details>
 
@@ -441,7 +441,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | official HDR-VDP 2.2.2 MATLAB release (ISC-licensed) | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
-| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | no evidence | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | official HDR-VDP 2.2.2 / Octave FFT adaptation | 0.09194904299747009 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 
 </details>
 
@@ -477,8 +477,8 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | Python-IW-SSIM f9de37c (the Python port linked from the authors' IW-SSIM page; not yet compared directly with the authors' MATLAB release) | not recorded | not recorded | not recorded / not applicable |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | CPU twin | not recorded | not recorded | not recorded / not applicable |
+| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | Python-IW-SSIM f9de37c / torch.linalg API compatibility | 0.0000006861363495147543 | not recorded | not recorded / not applicable |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | Python-IW-SSIM f9de37c / float32 / CPU reference | not recorded | not recorded | not recorded / not applicable |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | jpeg-ai-qaf IW_SSIM (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 IW-SSIM column; upstream mirror [local path] @ 0628a6b | not recorded | not recorded | not recorded / not applicable |
 
 </details>
@@ -562,13 +562,13 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | PyIQA 0.1.16 / named convention | 0.00000004638917427968181 | not recorded | not recorded / not applicable |
 | [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000003040175311497251 | not recorded | not recorded / not applicable |
-| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000012287708517355611 | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | PyIQA 0.1.16 / named convention | 0.000000006910840899543302 | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | PyIQA 0.1.16 / named convention | 0.0000000044734951298863734 | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | PyIQA 0.1.16 / named convention | 0.0000000031154991919635222 | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | PyIQA 0.1.16 / named convention | 0.000000002269627596973578 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -605,7 +605,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | Valerolaparra/NLPD_Pytorch (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | not recorded | not recorded | not recorded / not applicable |
+| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | NLPD_Pytorch / original RGB6 | 0.0000006519154935880067 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -614,7 +614,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | IQA_pytorch source mirrored at [local path] semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 NLPD column (n=53) | not recorded | not recorded | not recorded / not applicable |
+| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | IQA_pytorch NLPD / quantized Y709 | 0.00000007106362460637672 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -659,7 +659,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | libjxl 0.12.0 original comparator | 0.00000001636376642695503 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -669,13 +669,13 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
-| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | scikit-image 0.26 / declared RGB ingress | 0.00004378961779849533 | not recorded | not recorded / not applicable |
 | [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | scikit-image 0.26 / declared RGB ingress | 0.0000000000020463630789890885 | not recorded | not recorded / not applicable |
 | [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
-| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
 | [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | scikit-image 0.26 / declared RGB ingress | 0.0000000000024300561562995426 | not recorded | not recorded / not applicable |
-| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | scikit-image 0.26 / declared RGB ingress | 0.000004066886589271235 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -684,9 +684,9 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | authors' psnrhvsm.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | author psnrhvsm.m / signal 1.4.1 | 0.0000014436844821830164 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 | [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | libvmaf psnr_hvs feature @ f85a8536 — FFI oracle | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
-| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | authors' psnrhvsm.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | author psnrhvsm.m / signal 1.4.1 | 0.0000009203156032810966 | not recorded | not recorded / not applicable; open terms: see pinned audit |
 
 </details>
 
@@ -695,9 +695,9 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ssim`](docs/MODEL_CARDS.md#ssim) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssim`](docs/MODEL_CARDS.md#ssim) | scikit-image 0.26 / declared RGB ingress | 0.0000006184814913545722 | not recorded | not recorded / not applicable |
 | [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.00000005960464477539063 | not recorded | not recorded / not applicable |
-| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | PyIQA 0.1.16 / named convention | 0.00000022876090710610697 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000011643768749181049 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000055390560693702184 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3) | PyIQA 0.1.16 / named convention | 0.00000003263846981571561 | not recorded | not recorded / not applicable |
@@ -721,7 +721,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | fast-ssim2 (CPU) + third-party crates.io ssimulacra2 for parity | not recorded | not recorded | not recorded / not applicable |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | primary SSIMULACRA2 v2.1 / CPU reference | 0.042581382540333834 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -730,13 +730,13 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | scikit-image 0.26 / declared RGB ingress | 0.0000000000000012212453270876722 | not recorded | not recorded / not applicable |
 | [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000014727947605930325 | not recorded | not recorded / not applicable |
-| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | no evidence | not recorded | not recorded | not recorded / not applicable |
-| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000069532517188442 | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | PyIQA 0.1.16 / named convention | 0.000000040870202777654185 | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | PyIQA 0.1.16 / named convention | 0.000000028404906315948608 | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | PyIQA 0.1.16 / named convention | 0.000000022068751492909655 | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | PyIQA 0.1.16 / named convention | 0.000000017751231040641358 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -841,7 +841,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | IVP-Lab original WS_HV notebook | 0.00000000000000011102230246251565 | not recorded | not recorded / not applicable |
 
 </details>
 

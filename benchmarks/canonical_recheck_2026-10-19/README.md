@@ -29,8 +29,10 @@ alternating acquisition-block ratios, with five warm observations per arm.
 Both sides begin with resident RGB8 and include their callable conversions;
 immutable model loading is excluded, and owned parameter clones remain timed.
 The NR references evaluate both images. Ratios are descriptive approximations:
-there is no confidence interval or 1.08 regression acceptance claim. The
-SSIMULACRA1 adapter preconverts RGB to BGR, so its ratio is withheld.
+there is no confidence interval or 1.08 regression acceptance claim. The initial
+SSIMULACRA1 adapter preconverted RGB to BGR and its ratio remains withheld.
+The separate `ssim1-rgb` cohort times conversion with the original metric body;
+its one-thread 512² ratio is 1.12 and is flagged for confirmation.
 [Resource receipts](resource-receipts.txt) retain every acquisition block's
 wrapper peak-RSS/minimum-available/load line. Process `/usr/bin/time -v`
 receipts and all samples remain in the raw evidence.
@@ -129,3 +131,36 @@ Current authoritative per-cohort TSVs and their hashes are listed in
 `cohorts.json`; older unindexed TSV snapshots remain historical. Each current
 row also records maximum measured process RSS for both arms. Large projections
 use hash-checked JSON shards so no generated evidence file exceeds 30 KB.
+
+## Expanded local checks
+
+The index now includes original IW-SSIM, MAD, CW-SSIM, PSNR-HVS-M,
+PyIQA SSIM/MS-SSIM variants, original Butteraugli and CPU/CUDA CVVDP.
+The projection retains process failures separately from numerical findings; a
+completed replacement can supply its own ratio while the earlier error stays
+visible. Interrupted controllers retain every attempt and resume missing blocks.
+The 1152² PyIQA inputs are exact crops of the retained RGB pairs; they exercise
+all corrected fixed factors without the approximately 9 GiB reference process
+seen at 4K. Results remain tied to their actual geometry.
+
+All five corrected MS-SSIM k2–k6 first-photo cases pass the approved 1e-6 bound;
+the largest difference there is 1.2287708517355611e-8. The larger grid remains
+visible through observed/expected counts. CPU/CUDA CVVDP at 512² pass 0.001
+with differences 2.86102294921875e-6 and 9.5367431640625e-7.
+
+FLIP at eight threads measured a Rust/canonical ratio of 1.9754296991678477
+over 20 alternating blocks, compared with 0.3344310291418364 at one thread.
+FLIP-v17 independently measured 1.891036050578694 at eight threads over three
+blocks. The README marks any measured case above 1.08 even when its displayed
+representative one-thread ratio is faster. These are flags, not accepted
+regression intervals. Linux perf sampled the FLIP convolution at 39.51% of
+cycles and the SSIMULACRA1 AVX-512 blur at 25.69%; these identify optimization
+work, not a causal attribution for the ratios. Both profiles completed with
+peak-RSS 0.11 GiB; FLIP minimum available 12070 MiB, load 0.61; SSIMULACRA1
+12127 MiB, load 0.76. Profiler artifacts remain beside the raw cohorts.
+
+The frozen source uses DSSIM revision 331b56cf. The later master dependency
+pin is 22e9ab033d5e5ac41ee961de00e7ae9bd959b634. Historical measurements
+are not relabeled as the new pin. Its local snapshot lock check passes against
+23 pinned siblings (51s, peak-RSS 0.15 GiB, minimum available 12047 MiB,
+load 0.73). Neither this check nor the comparisons launch or wait for CI.

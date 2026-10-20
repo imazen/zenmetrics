@@ -45,6 +45,18 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(value['example']['check'],'1 findings')
         self.assertEqual(value['example']['golden_checks']['checks_passed'],170)
 
+    def test_runtime_error_remains_visible_beside_completed_ratio(self):
+        from publish_canonical_comparison import project
+        row=dict(metric='example',excluded_contract='',expected_cases=1,plan_sha256='good',
+                 passed=True,max_abs_delta=0.,ratio=.5,width=512,height=512,threads=1,
+                 rust_source='source',canonical='primary')
+        error=dict(row,plan_sha256='failed',passed=False,ratio=None,process_errors=1,
+                   max_abs_delta=None)
+        result=project([row,error])['example']
+        self.assertEqual(result['check'],'1 process errors')
+        self.assertEqual(result['ratio'],.5)
+        self.assertEqual(result['process_error_cases'],1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1651,6 +1651,10 @@ bench-iqa-changed *options:
 bench-iqa-canonical plan output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical.py '{{plan}}' '{{output}}' {{options}}
 
+# Finish missing blocks only, after the original coordinator has stopped.
+bench-iqa-canonical-resume output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/resume_canonical_comparison.py '{{output}}' {{options}}
+
 bench-iqa-canonical-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_comparison.py {{options}}
 
