@@ -182,3 +182,23 @@ reference convention and existing numerical bound. This order comes from the
 committed changed-route timing list; it is not a prediction for a different host.
 Both output paths must be new. Use `--metrics NAME,...` to restrict execution of
 the frozen plan, or pass `--blocks N --samples N` for acquisition counts.
+
+`bench-iqa-canonical-author-plan MANIFEST NEW_DIRECTORY` freezes separately
+specified original author-network callers. The manifest names the reference
+Python, helper, configuration, source/weight assets and already verified native
+graph directory for each metric. The existing JND/1000 column bound is read from
+`jnd_scale.tsv`. It retains the requested inference engine and explicit weight
+consent. Constructor controls do not establish scoring parity.
+
+`bench-iqa-canonical-queue MANIFEST` executes explicit `{plan, output, options}`
+entries sequentially. Optional `{results, blocks}` prerequisites require their
+complete frozen case list; `--wait` keeps the visible controller waiting for
+those cases. Each acquired block still obtains both host locks and its memory
+cap. Process failures remain in their cohort and do not discard later queued
+checks. Existing output directories are refused.
+
+`bench-iqa-canonical-interval RESULTS NEW_JSON --additional SUCCESSOR_RESULTS`
+combines a completed fixed follow-up only when its recorded parent plan, source,
+worker and case contract agree. All blocks remain in the primary estimate. A
+separate diagnostic counts whole blocks with at least ten clean native resource
+observations; this subset does not turn the result into an accepted regression.

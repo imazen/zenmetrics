@@ -1670,8 +1670,8 @@ bench-iqa-canonical-changed-plan manifest output *options:
 bench-iqa-canonical-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical
 
-bench-iqa-canonical-interval results output:
-    python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}'
+bench-iqa-canonical-interval results output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}' {{options}}
 
 bench-iqa-canonical-publish output +cohorts:
     python3 -B benchmarks/iqa_compete_2026-10-16/publish_canonical_comparison.py '{{output}}' {{cohorts}}
@@ -2156,3 +2156,13 @@ iqa-results-sync config:
 
 iqa-results-sync-check:
     TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_result_sync.py
+
+# Explicit resident original mDCTpsnr, preserving its compiled fast-math contract.
+bench-iqa-canonical-mdctpsnr-build source output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_mdctpsnr_reference.py '{{source}}' '{{output}}'
+
+bench-iqa-canonical-author-plan manifest output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_author_nn_comparison.py '{{manifest}}' '{{output}}'
+
+bench-iqa-canonical-queue manifest *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical_queue.py '{{manifest}}' {{options}}
