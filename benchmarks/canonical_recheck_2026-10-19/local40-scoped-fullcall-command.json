@@ -1,0 +1,33 @@
+{
+  "command": "just bench-iqa-canonical-compare \"/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40-scoped-v5.json\" /absolute/new-results 1,8",
+  "manifest": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40-scoped-v5.json",
+    "sha256": "9234de2db0a509551876b7974df337dad7ad1f7020b7ef53bda04dd453a4ffe5"
+  },
+  "prepared_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-scoped-comparative-plan-v5.json",
+    "sha256": "21fc4b0c2c8851e486af01139539ce03860ca1606e1d1de59b544140f5de3cb6",
+    "threads": [
+      1,
+      8
+    ]
+  },
+  "routes": 40,
+  "declared_cases": 80,
+  "scope_caveated_cases": 8,
+  "remaining_scope_caveats": {
+    "hdrvdp": "Resident original reference hoists spectral interpolation; native full call includes spectral parsing and interpolation.",
+    "hdrvdp3": "Resident original reference hoists spectral interpolation; native full call includes spectral parsing and interpolation.",
+    "hdrvdp-aic2026": "Original reference reads spectral files during calls; native uses embedded tables. This is an internal parameter I/O scope difference.",
+    "hdrvdp3-aic2026": "Original reference reads spectral files during calls; native uses embedded tables. This is an internal parameter I/O scope difference."
+  },
+  "reference_controls": [
+    "dssim-fullcall-controls.json",
+    "vmaf-fullcall-controls.json"
+  ],
+  "source_review": "The actual twelve VMAF control records and emitted reference plan passed independent full raw-protocol review. Its original private preparer remains immutable; a stricter general successor is separate.",
+  "preparation_wrapper": [
+    "run-heavy: done rc=0 8s | peak-RSS 0.08GiB | min-avail 15360MiB | peak-load 1.75"
+  ],
+  "qualification": "Preparation and source contract, not80completed comparisons. FourHDR routes retain spectral-parameter scope caveats. This complete40-route manifest uses1/8 because its frozen baseHDRcell wrapper explicitly binds those budgets. Separate grids use1/28 where supported. No numerical bound or historical evidence changes."
+}

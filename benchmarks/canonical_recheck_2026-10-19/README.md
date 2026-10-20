@@ -687,3 +687,13 @@ arm log hash and score-bit identity. Build/control wrapper: 4s, peak-RSS
 0.13 GiB, minimum available15054MiB, peak load2.16. This qualifies the reference
 fixture only; comparisons against the normal current40 Rust worker are
 prepared separately and preserve all original numerical bounds.
+
+## Current forty-route comparison command, 2026-10-20
+
+The [current full-call command](local40-scoped-fullcall-command.json) selects the
+controlled DSSIM and six VMAF model references. Their per-call setup/destruction
+now falls inside both clocks. Four HDR routes retain spectral-parameter timing
+caveats; all original numerical bounds remain unchanged. The source-reviewed
+plan has eighty declared cases, with the remaining current-worker measurements
+acquiring separately from historical sources. Preparation does not establish
+eighty completed comparisons.
