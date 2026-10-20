@@ -10,8 +10,8 @@ from mac_service import verify
 from prepare_coverage import freeze
 
 
-def selection(report, cap):
-    if not report.get('complete'):
+def selection(report, cap, stopped_parent=False, metrics=None):
+    if not report.get('complete') and not stopped_parent:
         raise ValueError('original campaign must be terminal before retry selection')
     for cell in report['cells']:
         c = cell['config']
@@ -21,6 +21,8 @@ def selection(report, cap):
             raise ValueError('canonical scalar non-8K protocol required')
     pending, exhausted = defaultdict(list), []
     for index, cell in enumerate(report['cells']):
+        if metrics is not None and cell['config']['metric_name'] not in metrics:
+            continue
         if cell['status'] != 'ok' or cell['config']['timing_phase'] != 'warm':
             continue
         row = cell.get('row') or {}
@@ -61,7 +63,12 @@ def main():
     p.add_argument('results', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--lock', type=Path, required=True)
+    p.add_argument('--stopped-parent', action='store_true', help='Allow a stopped broad parent; exclusive coordinator lock still required')
+    p.add_argument('--metrics', type=Path, help='Restrict replacements to explicit exact metric names in JSON')
     a = p.parse_args()
+    metrics=set(json.loads(a.metrics.read_text())) if a.metrics else None
+    if a.stopped_parent and not metrics:
+        p.error('--stopped-parent requires explicit --metrics')
     if a.output.exists():
         p.error('new successor directory required; old artifacts are immutable')
     with durable.locked(a.lock, wait=True), durable.locked(a.results / 'coordinator.lock'):
@@ -75,7 +82,7 @@ def main():
             raise ValueError('parent report does not identify the frozen bundle')
         if [c['cell_id'] for c in report['cells']] != [c['durable_cell_id'] for c in configs]:
             raise ValueError('parent report cell order differs')
-        if not report.get('complete'):
+        if not report.get('complete') and not a.stopped_parent:
             raise ValueError('original campaign must be terminal before retry selection')
         # Validate every retained attempt seal/config/log and its projected report count.
         for config, cell in zip(configs, report['cells']):
@@ -83,7 +90,7 @@ def main():
             final = next((r for r in records if r['status'] in ('ok', 'unsupported')), None)
             if cell['config'] != config or cell['attempts'] != records or cell.get('row') != (final['row'] if final else None):
                 raise ValueError('parent report projection differs from sealed attempt history')
-        groups, exhausted = selection(report, saved['policy']['max_attempts'])
+        groups, exhausted = selection(report, saved['policy']['max_attempts'], a.stopped_parent, metrics)
         original = durable.load(a.bundle / 'manifest.json')['cells']
         if groups:
             reserve(a.results, identity, a.output)

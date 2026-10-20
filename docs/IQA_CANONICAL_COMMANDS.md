@@ -139,3 +139,10 @@ blocks and emits compact source-bound tables for the README generator.
 `just bench-iqa-canonical-check` checks parsing and result projection. Builder
 recipes for original DSSIM, SSIMULACRA1, Butteraugli and libvmaf accept explicit
 source paths; run builds under the same resource wrapper and host locks.
+
+For an explicitly stopped broad parent, `prepare_gate_retry.py --stopped-parent
+--metrics EXACT_NAMES_JSON` can select only named, unqualified warm cells with
+remaining original attempts. The exclusive coordinator lock still proves the
+old controller is absent; every prior attempt/config/log seal is verified.
+The default still requires a terminal campaign. Completed clean cells are never
+selected, and create-once reservations prevent reusing the retry cap.

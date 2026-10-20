@@ -45,6 +45,14 @@ class GateRetry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'terminal'):
             selection(report,2)
 
+    def test_stopped_parent_can_only_select_named_unqualified_cells(self):
+        changed=cell(1,False);changed['config']['metric_name']='changed'
+        other=cell(1,False);other['config']['metric_name']='unchanged'
+        clean=cell(1,True);clean['config']['metric_name']='changed'
+        report=dict(complete=False,cells=[changed,other,clean])
+        groups,_=selection(report,2,stopped_parent=True,metrics={'changed'})
+        self.assertEqual(dict(groups),{1:[0]})
+
     def test_missing_rounds_are_unqualified_and_excess_history_refused(self):
         c=cell(1,True);c['row']['zenbench_samples'].pop()
         self.assertEqual(dict(selection(dict(complete=True,cells=[c]),2)[0]),{1:[0]})
