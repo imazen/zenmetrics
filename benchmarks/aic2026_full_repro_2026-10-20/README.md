@@ -130,3 +130,9 @@ the 12 GiB hard cap. No cap-fired exit was recorded, and the cause is
 unproven. Production retains three single-thread workers per classical
 bundle, releasing shared admission between bundles. The failed control
 does not establish a performance comparison.
+
+`canonical_input_hashes.py` inventories every unique image named by the pair
+list with a single read stream and 1 MiB reads. It retains the inventory and
+receipt externally, retries errno-12 reads from the beginning, and refuses
+changed or missing inputs during verification. The provenance writer accepts
+that inventory with `--input-bindings` and rechecks its bytes before export.

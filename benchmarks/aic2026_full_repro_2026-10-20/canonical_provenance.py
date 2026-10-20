@@ -36,6 +36,7 @@ def main():
     parser.add_argument('runtime_versions', type=Path)
     parser.add_argument('--source-bindings', type=Path)
     parser.add_argument('--reference-methods', type=Path)
+    parser.add_argument('--input-bindings', type=Path)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     config = json.loads(Path(manifest['config']).read_text())
@@ -62,6 +63,7 @@ def main():
                                               if args.source_bindings else None)
     report['supplementary_reference_methods'] = (checked_document(args.reference_methods, methods=True)
                                                 if args.reference_methods else None)
+    report['input_bindings'] = checked_document(args.input_bindings) if args.input_bindings else None
     for group in ('metrics', 'addendum'):
         for name, spec in manifest[group].items():
             entry = dict(spec)

@@ -2258,6 +2258,10 @@ aic-canonical-check python:
 aic-canonical-inputs source destination:
     ~/work/claudehints/scripts/run-heavy --mem 12G --jobs 12 -- rsync -a --partial --bwlimit=12000 {{source}} {{destination}}
 
+# Bind unique reference/distorted bytes; caller supplies shared resource admission.
+aic-canonical-input-hashes pairs inventory receipt *options:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_input_hashes.py {{pairs}} {{inventory}} --receipt {{receipt}} {{options}}
+
 aic-canonical-fsim-vsi python manifest summary reference sha256:
     {{python}} benchmarks/aic2026_full_repro_2026-10-20/compare_fsim_vsi.py {{manifest}} {{summary}} --published-reference {{reference}} --reference-sha256 {{sha256}}
 
