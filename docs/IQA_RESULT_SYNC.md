@@ -70,3 +70,10 @@ identity keys, so preferred selection counts each cell once. Timing controls
 do not establish native numerical parity: DMM retains `failed_native_gate` in
 the export even when its timing gate passes. Unrelated public NN jobs remain
 stopped.
+
+Mac capture scratch now uses a fresh directory with the `.noindex` suffix,
+matching the production-output convention. The private configuration was backed
+up before switching its remote scratch field; previous capture cycles remain
+at their original paths. This redirects future captures only. It does not alter
+frozen workers, results, attempt caps, resource gates or measurement clocks,
+and does not establish a cause for any earlier gate flag.
