@@ -88,3 +88,13 @@ attempt budget. A create-once parent reservation prevents duplicate successors.
 Run each frozen successor with exactly the recorded `max_attempts`; never rerun
 completed cells to replace a campaign identifier. The approved changed list has
 27 routes. Original results and source/version identities remain separate.
+
+On 2026-10-20 the Mac/i265 operational scope was restricted to the approved
+27 changed/added routes. Broad parent campaigns remain retained evidence, not
+instructions to finish unchanged methods again. The i265 boundary snapshot
+retained 896 completed changed cells and froze 400 unfinished cells: 48 with
+one remaining attempt and 352 with two. Successful parent cells are never
+selected into these successors. r7900x retains its full non-NN scope because
+it has no earlier timing panel. Progress denominators must follow the active
+scope (1296 changed cells versus 4608 full-inventory cells), not silently mark
+excluded unchanged cells complete.
