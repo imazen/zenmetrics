@@ -21,8 +21,8 @@ export PATH=$HOME/.local/opt/node/bin:$PATH
 last=$(cat "$BRIEF_OUT/.deployed.sha256" 2>/dev/null || true)
 while true; do
   ts=$(date -u +%FT%TZ)
-  (cd "$WS" && jj git fetch -q && jj new -q master@origin) || echo "$ts fetch failed (public); building the previous revision"
-  jj -R "$PRIVATE" --ignore-working-copy git fetch -q || echo "$ts fetch failed (private)"
+  (cd "$WS" && jj --quiet git fetch && jj --quiet new master@origin) || echo "$ts fetch failed (public); building the previous revision"
+  jj -R "$PRIVATE" --quiet --ignore-working-copy git fetch || echo "$ts fetch failed (private)"
   rm -rf "$BRIEF_OUT/site"
   if (cd "$WS" && scripts/complexity/brief.sh > "$BRIEF_OUT.log" 2>&1); then
     now=$(sha256sum "$BRIEF_OUT/site/index.html" | cut -d' ' -f1)
