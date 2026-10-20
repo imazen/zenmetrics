@@ -36,6 +36,7 @@ def read_cohort(root, dispositions):
         record={k:row[k] for k in ('metric','case','width','height','threads','passed','absolute_bound',
                                    'max_abs_delta','ratio','matched_scope','rust_source','plan_sha256')}
         record['canonical']=row['canonical']
+        record['process_errors']=sum(bool(b.get('errors')) for b in blocks)
         measured=[b for b in blocks if 'rust_ns' in b and 'canonical_ns' in b]
         record['rust_ms']=statistics.median(b['rust_ns'] for b in measured)/1e6 if measured else None
         record['canonical_ms']=statistics.median(b['canonical_ns'] for b in measured)/1e6 if measured else None
@@ -56,10 +57,13 @@ def project(rows):
     for name, entries in grouped.items():
         expected=sum(next(r['expected_cases'] for r in entries if r['plan_sha256']==digest)
                      for digest in {r['plan_sha256'] for r in entries})
-        failed=sum(r['passed'] is False for r in entries)
+        errored=sum(bool(r.get('process_errors')) for r in entries)
+        failed=sum(r['passed'] is False and not r.get('process_errors') for r in entries)
         passed=sum(r['passed'] is True for r in entries)
         deltas=[r['max_abs_delta'] for r in entries if r['max_abs_delta'] is not None]
-        if failed:
+        if errored:
+            check=f'{errored} process errors'
+        elif failed:
             check=f'{failed} findings'
         elif passed==len(entries):
             check=f'{passed}/{expected} pass'
@@ -69,7 +73,7 @@ def project(rows):
         # worker count and sample cohort in the expanded evidence model.
         eligible=[r for r in entries if r['ratio'] is not None]
         key=None
-        if eligible and not failed:
+        if eligible and not failed and not errored:
             def preference(r):
                 size=(r['width'],r['height'])
                 return (r['threads']!=1, size!=(1024,1024), size!=(512,512), -r['width']*r['height'],r['threads'])
@@ -83,6 +87,7 @@ def project(rows):
             ratio_width=key[0] if key else None,ratio_height=key[1] if key else None,
             ratio_threads=key[2] if key else None,ratio_cases=len(selected),
             observed_cases=len(entries),expected_cases=expected,passed_cases=passed,failed_cases=failed,
+            process_error_cases=errored,
             max_abs_delta=max(deltas) if deltas else None,
             rust_sources=sorted({r['rust_source'] for r in entries}),
             plan_sha256=sorted({r['plan_sha256'] for r in entries}),qualified=False)
@@ -94,6 +99,7 @@ def main():
     p.add_argument('output',type=Path)
     p.add_argument('cohorts',nargs='+',type=Path)
     p.add_argument('--dispositions',type=Path,help='Explicit plan-sha:metric -> contract-mismatch reason')
+    p.add_argument('--goldens',type=Path,help='Separate completed local golden-test receipts')
     a=p.parse_args()
     a.output.mkdir(exist_ok=True)
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
@@ -124,6 +130,16 @@ def main():
     if len(identities)!=len(set(identities)):
         raise ValueError('duplicate acquired cases across selected cohorts')
     value=project(combined)
+    if a.goldens:
+        goldens=json.loads(a.goldens.read_text())
+        for name,receipt in goldens['metrics'].items():
+            if receipt['checks_passed']!=receipt['checks_expected']:
+                raise ValueError('incomplete golden receipt: '+name)
+            if name not in value:
+                raise ValueError('golden receipt has no comparative metric: '+name)
+            value[name]['golden_checks']=receipt
+            value[name]['check']=f"{receipt['checks_passed']}/{receipt['checks_expected']} pass"
+            value[name]['golden_receipt_sha256']=sha(a.goldens)
     text=json.dumps(value,indent=2)+'\n'
     if len(text.encode())>30_000:
         # Compact projection; per-case detail remains in the indexed TSVs.

@@ -1,0 +1,2 @@
+metric	case	width	height	threads	passed	absolute_bound	max_abs_delta	ratio	matched_scope	rust_source	plan_sha256	canonical	process_errors	rust_ms	canonical_ms	expected_cases	excluded_contract	summary_sha256	blocks
+psnr	psnr-pair-cid22-t1	512	512	1			0.0	0.2071088479792085	True	efae6b8fed9e57346157d92dffc3cdb57c44560e	0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14	scikit-image 0.26 / declared RGB ingress	0	0.5733721470588237	2.768458	2		d3316f79b1bf08b6bffbcc520075ae652203211d56389a18d9d3373df2908a85	3

@@ -92,3 +92,16 @@ are `bench-iqa-canonical-dssim-build` and `bench-iqa-canonical-vmaf-build`.
 Project retained results with `just bench-iqa-canonical-publish OUTPUT COHORT...`;
 pass `--dispositions FILE` for explicit invalid-ingress exclusions. Raw evidence
 is retained; this command writes only the small public projection.
+
+## Local NR golden recheck
+
+All 170 BRISQUE, 170 NIQE and 170 PIQE golden checks pass on this frozen
+build, using their unchanged JND/1000 bounds. NIQE has 158 finite scores and
+12 oracle-NaN inputs with the required matching errors. Printed worst absolute
+differences are 8.301e-3, 7.317e-12 and 2.888e-12 respectively (three
+significant digits, as emitted by the tests). [The receipt](nr-goldens.json)
+binds the tests, original golden tables, input manifest and full log.
+The wrapper reports rc=0, 23s, peak-RSS 0.73GiB, minimum available 11270MiB,
+peak load 1.13. These are additional validation checks, separate from the
+paired timing cases. Add `--goldens nr-goldens.json` to the publication command
+to preserve this evidence in the compact README.

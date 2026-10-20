@@ -70,7 +70,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | IIGROUP/AHIQ | prior | — |
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('a… | prior | — |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | miccunifi/ARNIQA | prior | — |
-| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 1/1 pass | ≈0.12× |
+| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl butteraugli v0.9.2 / 0… | unchecked | — |
 | [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl butteraugli v0.9.2 / 0… | unchecked | — |
 | [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | unrecorded | unchecked | — |
@@ -87,14 +87,14 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('d… | prior | — |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core eec33f55 | 1 findings | — |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core eec33f55 | 1 process errors | — |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | unrecorded | unchecked | — |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× |
 | [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | original FeatureSIM / Octave 6.4 | 6/6 pass | ≈0.22× |
 | [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2) | FR | original FeatureSIM / Octave 6.4 | 6/6 pass | ≈0.18× |
-| [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | FR | original FeatureSIM / Octave 6.4 | 4/6 pass | ≈0.16× |
-| [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | FR | original FeatureSIM / Octave 6.4 | 4/6 pass | ≈0.14× |
+| [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | FR | original FeatureSIM / Octave 6.4 | 6/6 pass | ≈0.16× |
+| [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | FR | original FeatureSIM / Octave 6.4 | 6/6 pass | ≈0.14× |
 | [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | FR | original FeatureSIM / Octave 6.4 | 6/6 pass | ≈0.21× |
 | [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | FR | authors' FR_FSIMc.m | unchecked | — |
 | [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR | libgmsd de646c9a (C) | prior | — |
@@ -119,24 +119,24 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | unchecked | — |
 | [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR | unrecorded | unchecked | — |
 | [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | FR | unrecorded | unchecked | — |
-| [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named convention | 1/3 pass | ≈0.014× |
 | [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
 | [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
 | [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
 | [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | unrecorded | unchecked | — |
 | [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | unrecorded | unchecked | — |
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Octave 6.4 | 6/6 pass | ≈0.028× |
-| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf float_ms_ssim @ f85a8… | prior | — |
+| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named RGB ing… | Δ 1.5e-07 | ≈0.35× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | google-research/google-research | prior | — |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 | 1/1 pass | ≈0.18× |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 | 170/170 pass | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | Valerolaparra/NLPD_Pytorch (t… | prior | — |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch source mirrored a… | prior | — |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
 | [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public compute_… | prior | — |
 | [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_metric('p… | prior | — |
-| [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 1/1 pass | ≈0.1× |
+| [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 170/170 pass | ≈0.1× |
 | [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | unrecorded | unchecked | — |
-| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | unrecorded | unchecked | — |
+| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / declared… | Δ 0 | ≈0.21× |
 | [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | unrecorded | unchecked | — |
 | [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | unrecorded | unchecked | — |
 | [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | unrecorded | unchecked | — |
@@ -150,7 +150,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | unrecorded | unchecked | — |
 | [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named RGB ing… | Δ 6e-08 | ≈0.36× |
 | [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | unrecorded | unchecked | — |
-| [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named convention | 2/6 pass | ≈0.0096× |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
 | [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
 | [`ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
@@ -159,7 +159,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR | primary SSIMULACRA2 v2.1 | Δ 0 | ≈0.58× |
 | [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | fast-ssim2 (CPU) + third-part… | unchecked | — |
 | [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | unrecorded | unchecked | — |
-| [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | unrecorded | unchecked | — |
+| [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | PyIQA 0.1.16 / named convention | 1/3 pass | ≈0.013× |
 | [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | unrecorded | unchecked | — |
 | [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | FR | unrecorded | unchecked | — |
 | [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | FR | unrecorded | unchecked | — |
@@ -175,14 +175,14 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named RGB ing… | 2/2 pass | ≈0.89× |
 | [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / named RGB ing… | Δ 0 | ≈0.89× |
 | [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named RGB ing… | 2/2 pass | ≈0.87× |
-| [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named RGB ing… | 1/2 pass | ≈0.95× |
-| [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | unrecorded | unchecked | — |
+| [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named RGB ing… | 2/2 pass | ≈0.95× |
+| [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | libvmaf 3.2.0 / named RGB ing… | 2/2 pass | ≈0.91× |
 | [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR | libvmaf 3.2.0 / named RGB ing… | Δ 0.00023 | ≈0.74× |
-| [`vsi`](docs/MODEL_CARDS.md#vsi) | FR | original VSI / Octave 6.4 | 4/6 pass | ≈0.078× |
+| [`vsi`](docs/MODEL_CARDS.md#vsi) | FR | original VSI / Octave 6.4 | 6/6 pass | ≈0.078× |
 | [`vsi-k2`](docs/MODEL_CARDS.md#vsi-k2) | FR | original VSI / Octave 6.4 | 4/6 pass | ≈0.067× |
 | [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3) | FR | original VSI / Octave 6.4 | 4/6 pass | ≈0.062× |
 | [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | FR | original VSI / Octave 6.4 | 4/6 pass | ≈0.062× |
-| [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR | original VSI / Octave 6.4 | 4/6 pass | ≈0.078× |
+| [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR | original VSI / Octave 6.4 | 6/6 pass | ≈0.078× |
 | [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | FR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | dmaniry/deepIQA | prior | — |

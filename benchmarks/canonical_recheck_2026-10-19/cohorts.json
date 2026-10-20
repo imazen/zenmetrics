@@ -6,7 +6,7 @@
   },
   "octave-run": {
     "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "cases": 86,
+    "cases": 94,
     "expected_cases": 102
   },
   "vif-corrected-run": {
@@ -16,7 +16,22 @@
   },
   "vmaf-run": {
     "plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
-    "cases": 17,
+    "cases": 22,
     "expected_cases": 22
+  },
+  "pyiqa-run": {
+    "plan_sha256": "7c9060da7b774cfefbe2310765dfa447f44c8689c92bfac48f715601bbe47d51",
+    "cases": 1,
+    "expected_cases": 60
+  },
+  "pyiqa1152-run": {
+    "plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
+    "cases": 3,
+    "expected_cases": 60
+  },
+  "remaining-run": {
+    "plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "cases": 1,
+    "expected_cases": 36
   }
 }

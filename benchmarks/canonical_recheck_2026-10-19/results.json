@@ -1,7 +1,7 @@
 {
   "brisque": {
     "canonical": "PIQ 0.8.0",
-    "check": "1/1 pass",
+    "check": "170/170 pass",
     "ratio": 0.11907126763723552,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -11,6 +11,7 @@
     "expected_cases": 1,
     "passed_cases": 1,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0025634765625,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -18,7 +19,20 @@
     "plan_sha256": [
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
     ],
-    "qualified": false
+    "qualified": false,
+    "golden_checks": {
+      "reference": "PIQ 0.8.0",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 170,
+      "matching_errors": 0,
+      "printed_worst_abs_delta": "8.301e-3",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "f96d8a0d5f4fae17cf4f0fbacd18b44c4bc8689fc7e2de24f7613738980fe6f1",
+      "test_source_sha256": "cd83770c0361aec851ddbd30762c91696cac025dc56412c7449846e7207e2d1e"
+    },
+    "golden_receipt_sha256": "48aefd61b0dc135750e38a6f5214523528677b25a2b74af6477a9fbddd6035ca"
   },
   "flip-v17": {
     "canonical": "NVIDIA FLIP 1.7",
@@ -32,6 +46,7 @@
     "expected_cases": 1,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -43,7 +58,7 @@
   },
   "niqe": {
     "canonical": "BasicSR 1.4.2",
-    "check": "1/1 pass",
+    "check": "170/170 pass",
     "ratio": 0.1821820729695662,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -53,6 +68,7 @@
     "expected_cases": 1,
     "passed_cases": 1,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 9.065496319360378e-05,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -60,11 +76,24 @@
     "plan_sha256": [
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
     ],
-    "qualified": false
+    "qualified": false,
+    "golden_checks": {
+      "reference": "BasicSR 1.4.2",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 158,
+      "matching_errors": 12,
+      "printed_worst_abs_delta": "7.317e-12",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "be22f427c6c03e2e1cc18a4a0b6c8f802dca3ea69fe7977f711c2f202e9391bd",
+      "test_source_sha256": "099905f6a771ee886a0803fe738dc5c301c2d65b9517fd5d672ab1fedfa85030"
+    },
+    "golden_receipt_sha256": "48aefd61b0dc135750e38a6f5214523528677b25a2b74af6477a9fbddd6035ca"
   },
   "piqe": {
     "canonical": "pypiqe 1.2",
-    "check": "1/1 pass",
+    "check": "170/170 pass",
     "ratio": 0.1027578724461734,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -74,6 +103,7 @@
     "expected_cases": 1,
     "passed_cases": 1,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 4.618527782440651e-14,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -81,7 +111,20 @@
     "plan_sha256": [
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
     ],
-    "qualified": false
+    "qualified": false,
+    "golden_checks": {
+      "reference": "pypiqe 1.2",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 170,
+      "matching_errors": 0,
+      "printed_worst_abs_delta": "2.888e-12",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "2ead26ed9db1e7faf91a53f9276c6348a12776b9ea642f268906296bd597e32a",
+      "test_source_sha256": "307d14e40acf4e5f595ac7258d2029e250641a40a63e2edaf9b88291b59af48f"
+    },
+    "golden_receipt_sha256": "48aefd61b0dc135750e38a6f5214523528677b25a2b74af6477a9fbddd6035ca"
   },
   "ssim2": {
     "canonical": "primary SSIMULACRA2 v2.1",
@@ -95,6 +138,7 @@
     "expected_cases": 1,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -116,6 +160,7 @@
     "expected_cases": 1,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 3.826276126668582e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -127,7 +172,7 @@
   },
   "dssim": {
     "canonical": "original dssim-core eec33f55",
-    "check": "1 findings",
+    "check": "1 process errors",
     "ratio": null,
     "ratio_width": null,
     "ratio_height": null,
@@ -136,7 +181,8 @@
     "observed_cases": 4,
     "expected_cases": 6,
     "passed_cases": 0,
-    "failed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 1,
     "max_abs_delta": 3.772523560208185e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -158,6 +204,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 8.88441795687811e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -169,16 +216,17 @@
   },
   "fsim-k3": {
     "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "4/6 pass",
-    "ratio": 0.1610591276222832,
+    "check": "6/6 pass",
+    "ratio": 0.15839548482405466,
     "ratio_width": 255,
     "ratio_height": 257,
     "ratio_threads": 1,
-    "ratio_cases": 2,
-    "observed_cases": 4,
+    "ratio_cases": 3,
+    "observed_cases": 6,
     "expected_cases": 6,
-    "passed_cases": 4,
+    "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.8109096577845207e-07,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -190,16 +238,17 @@
   },
   "fsim-k4": {
     "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "4/6 pass",
-    "ratio": 0.14113184072248872,
+    "check": "6/6 pass",
+    "ratio": 0.14140061543964458,
     "ratio_width": 255,
     "ratio_height": 257,
     "ratio_threads": 1,
-    "ratio_cases": 2,
-    "observed_cases": 4,
+    "ratio_cases": 3,
+    "observed_cases": 6,
     "expected_cases": 6,
-    "passed_cases": 4,
+    "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.38497604496024e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -221,6 +270,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.329927450832713e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -242,6 +292,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.329927450832713e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -263,6 +314,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.1793922838343462e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -284,6 +336,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.6168560379448138e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -305,6 +358,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.0685896612017132e-14,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -326,6 +380,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 1.7640623451997683e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -347,6 +402,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 2.4030777368011513e-13,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -368,6 +424,7 @@
     "expected_cases": 6,
     "passed_cases": 4,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 6.297474430816408e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -389,6 +446,7 @@
     "expected_cases": 6,
     "passed_cases": 4,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 6.385277306897308e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -410,6 +468,7 @@
     "expected_cases": 6,
     "passed_cases": 4,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 2.516036712307823e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -421,16 +480,17 @@
   },
   "vsi-nodownscale": {
     "canonical": "original VSI / Octave 6.4",
-    "check": "4/6 pass",
-    "ratio": 0.07826055276827207,
+    "check": "6/6 pass",
+    "ratio": 0.07800291700487023,
     "ratio_width": 255,
     "ratio_height": 257,
     "ratio_threads": 1,
-    "ratio_cases": 2,
-    "observed_cases": 4,
+    "ratio_cases": 3,
+    "observed_cases": 6,
     "expected_cases": 6,
-    "passed_cases": 4,
+    "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 5.0279395091834544e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -442,16 +502,17 @@
   },
   "vsi": {
     "canonical": "original VSI / Octave 6.4",
-    "check": "4/6 pass",
-    "ratio": 0.07844859151986996,
+    "check": "6/6 pass",
+    "ratio": 0.07759935634573503,
     "ratio_width": 255,
     "ratio_height": 257,
     "ratio_threads": 1,
-    "ratio_cases": 2,
-    "observed_cases": 4,
+    "ratio_cases": 3,
+    "observed_cases": 6,
     "expected_cases": 6,
-    "passed_cases": 4,
+    "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 5.0279395091834544e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -473,6 +534,7 @@
     "expected_cases": 6,
     "passed_cases": 6,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 5.379585665821196e-13,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -494,6 +556,7 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -515,7 +578,30 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "msssim-libvmaf": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 1.5e-07",
+    "ratio": 0.35388468059308814,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.537393887751648e-07,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
@@ -536,6 +622,7 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -557,6 +644,7 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 5.960464477539063e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -578,6 +666,7 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -599,6 +688,7 @@
     "expected_cases": 2,
     "passed_cases": 2,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.0002482166810153785,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -610,16 +700,17 @@
   },
   "vmaf-neg-studio601": {
     "canonical": "libvmaf 3.2.0 / named RGB ingress",
-    "check": "1/2 pass",
+    "check": "2/2 pass",
     "ratio": 0.9451284726258932,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
-    "observed_cases": 1,
+    "observed_cases": 2,
     "expected_cases": 2,
-    "passed_cases": 1,
+    "passed_cases": 2,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 7.238667720343983e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
@@ -641,7 +732,30 @@
     "expected_cases": 2,
     "passed_cases": 2,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.00028193174530599663,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.9108358432538288,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 7.264956991548388e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
@@ -662,12 +776,102 @@
     "expected_cases": 2,
     "passed_cases": 0,
     "failed_cases": 0,
+    "process_error_cases": 0,
     "max_abs_delta": 0.00022515701154190992,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
       "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "ssim-pyiqa-f32": {
+    "canonical": "PyIQA 0.1.16 / named convention",
+    "check": "2/6 pass",
+    "ratio": 0.009598936908633678,
+    "ratio_width": 3840,
+    "ratio_height": 2160,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 2,
+    "expected_cases": 6,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.1643768749181049e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "7c9060da7b774cfefbe2310765dfa447f44c8689c92bfac48f715601bbe47d51",
+      "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
+    ],
+    "qualified": false
+  },
+  "ms-ssim-pyiqa-f32": {
+    "canonical": "PyIQA 0.1.16 / named convention",
+    "check": "1/3 pass",
+    "ratio": 0.013913817083772739,
+    "ratio_width": 1152,
+    "ratio_height": 1152,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 3,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 3.040175311497251e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
+    ],
+    "qualified": false
+  },
+  "ssimc-pyiqa-f32": {
+    "canonical": "PyIQA 0.1.16 / named convention",
+    "check": "1/3 pass",
+    "ratio": 0.013323195549157845,
+    "ratio_width": 1152,
+    "ratio_height": 1152,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 3,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.4727947605930325e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
+    ],
+    "qualified": false
+  },
+  "psnr": {
+    "canonical": "scikit-image 0.26 / declared RGB ingress",
+    "check": "\u0394 0",
+    "ratio": 0.2071088479792085,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "observed_cases": 1,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14"
     ],
     "qualified": false
   }

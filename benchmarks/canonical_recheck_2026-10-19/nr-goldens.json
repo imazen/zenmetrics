@@ -1,0 +1,47 @@
+{
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "command": "just bench-iqa-canonical-nr-goldens FROZEN_SOURCE TARGET NR_GOLDEN_ROOT",
+  "host": "Ryzen 9 7950X / WSL2",
+  "log_sha256": "7d7a539e09571a37f2bd8168236f2d9a969364f303737d5a847a29afe29b61d3",
+  "resource_receipt": "run-heavy: done rc=0 23s | peak-RSS 0.73GiB | min-avail 11270MiB | peak-load 1.13",
+  "metrics": {
+    "brisque": {
+      "reference": "PIQ 0.8.0",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 170,
+      "matching_errors": 0,
+      "printed_worst_abs_delta": "8.301e-3",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "f96d8a0d5f4fae17cf4f0fbacd18b44c4bc8689fc7e2de24f7613738980fe6f1",
+      "test_source_sha256": "cd83770c0361aec851ddbd30762c91696cac025dc56412c7449846e7207e2d1e"
+    },
+    "niqe": {
+      "reference": "BasicSR 1.4.2",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 158,
+      "matching_errors": 12,
+      "printed_worst_abs_delta": "7.317e-12",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "be22f427c6c03e2e1cc18a4a0b6c8f802dca3ea69fe7977f711c2f202e9391bd",
+      "test_source_sha256": "099905f6a771ee886a0803fe738dc5c301c2d65b9517fd5d672ab1fedfa85030"
+    },
+    "piqe": {
+      "reference": "pypiqe 1.2",
+      "checks_passed": 170,
+      "checks_expected": 170,
+      "finite_score_checks": 170,
+      "matching_errors": 0,
+      "printed_worst_abs_delta": "2.888e-12",
+      "printed_precision": "three significant digits from unchanged test",
+      "gate": "existing JND/1000",
+      "golden_tsv_sha256": "2ead26ed9db1e7faf91a53f9276c6348a12776b9ea642f268906296bd597e32a",
+      "test_source_sha256": "307d14e40acf4e5f595ac7258d2029e250641a40a63e2edaf9b88291b59af48f"
+    }
+  },
+  "input_manifest_sha256": "ab7c9f63904799d10558c3e2c08d307ea6f525a4d94c323cd49d49d7a2e039f4",
+  "raw_root": "~/tmp/local-canonical-20261019T2330"
+}

@@ -1,0 +1,2 @@
+metric	case	width	height	threads	passed	absolute_bound	max_abs_delta	ratio	matched_scope	rust_source	plan_sha256	canonical	process_errors	rust_ms	canonical_ms	expected_cases	excluded_contract	summary_sha256	blocks
+ssim-pyiqa-f32	ssim-pyiqa-f32-pairA-4k-t1	3840	2160	1	True	1e-06	8.607700430207643e-08	0.009598936908633678	True	efae6b8fed9e57346157d92dffc3cdb57c44560e	7c9060da7b774cfefbe2310765dfa447f44c8689c92bfac48f715601bbe47d51	PyIQA 0.1.16 / named convention	0	269.423402	28668.990235	3		cc65f6f9efd61d35ccc7c5e1195bc4b50eef81f05763016aad23890e3933c33e	3
