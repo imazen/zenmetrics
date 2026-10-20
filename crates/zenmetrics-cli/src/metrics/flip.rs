@@ -414,15 +414,18 @@ fn colors<const A: bool>(a: &[Pixel], w: usize, h: usize, f: &[[f32; 4]]) -> Vec
     // cube roots batch through the glibc-exact SIMD powf.
     let n = a.len();
     let mut t = vec![0.0f32; 3 * n];
-    {
+    if n >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
         t.par_chunks_mut(3)
             .zip(a.par_iter())
             .for_each(|(o, p)| o.copy_from_slice(&filtered_lab_root_inputs(*p)));
+    } else {
+        for (o, p) in t.chunks_mut(3).zip(a.iter()) {
+            o.copy_from_slice(&filtered_lab_root_inputs(*p));
+        }
     }
-    let ex = vec![1.0 / 3.0; 3 * n];
     let mut cb = vec![0.0f32; 3 * n];
-    vpowf_glibc(&t, &ex, &mut cb);
+    zenmetrics_math::glibc::vpowf_glibc_into(&t, &mut cb, 1.0 / 3.0);
     par_px(n, |i| {
         let delta = 6.0f32 / 29.0;
         let f: Pixel = std::array::from_fn(|c| {
