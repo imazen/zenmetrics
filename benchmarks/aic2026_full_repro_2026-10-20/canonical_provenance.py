@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Bind crop exports to their actual reference calls and retained attempts."""
+import argparse
+from datetime import datetime, timezone
+import json
+import math
+from pathlib import Path
+
+from canonical_compare import backup
+from canonical_run import sha
+
+
+def json_safe(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [json_safe(item) for item in value]
+    return value
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('manifest', type=Path)
+    parser.add_argument('runtime_versions', type=Path)
+    args = parser.parse_args()
+    manifest = json.loads(args.manifest.read_text())
+    config = json.loads(Path(manifest['config']).read_text())
+    root = Path(manifest['scratch'])
+    output = Path(manifest['output']).parent
+    versions = json.loads(args.runtime_versions.read_text())
+    statuses = json.loads((root/'status.json').read_text()) if (root/'status.json').exists() else {}
+    report = dict(schema='aic-canonical-crops-v1',
+                  recorded_at=datetime.now(timezone.utc).isoformat(),
+                  cohort_rows=manifest['cohort_rows'],
+                  input_manifest=dict(path=str(args.manifest), sha256=sha(args.manifest)),
+                  runtime_metadata=dict(path=str(args.runtime_versions), sha256=sha(args.runtime_versions)),
+                  native_source=manifest['source_commit'],
+                  binary=dict(path=manifest['binary'], sha256=manifest['binary_sha256']),
+                  batch_precision=manifest['batch_precision'],
+                  driver_source=manifest['driver_source'],
+                  report_writer=dict(path=str(Path(__file__).resolve()), sha256=sha(__file__)),
+                  bindings=manifest['bindings'],
+                  metrics={}, addendum={}, exports={})
+    for group in ('metrics', 'addendum'):
+        for name, spec in manifest[group].items():
+            entry = dict(spec)
+            entry['installed_runtime_metadata'] = versions.get(spec.get('python', 'python3'))
+            entry['adapter'] = (config.get('resident_adapters', {}).get(name)
+                                or config.get('octave', {}).get(name))
+            if name in ('brisque', 'niqe', 'piqe'):
+                details = {
+                    'brisque': ('PIQ 0.8.0', 'piq.brisque(x, data_range=255., reduction="none")',
+                                'float32 RGB code values'),
+                    'niqe': ('BasicSR 1.4.2', 'calculate_niqe(BGR8, crop_border=0)',
+                             'BGR8 input; unchanged BasicSR internal conversion'),
+                    'piqe': ('pypiqe 1.2', 'piqe(BGR8)[0]',
+                             'BGR8 input; unchanged pypiqe internal conversion'),
+                }
+                entry['package'], entry['call'], entry['dtype'] = details[name]
+            if name.startswith('pyiqa-'):
+                entry.update(device='cpu', dtype='float32 RGB / 255',
+                             call="pyiqa.create_metric(name, device='cpu', **options)(distorted, reference)",
+                             options=dict(name='vsi' if name == 'pyiqa-vsi' else 'fsim',
+                                          chromatic=False if name == 'pyiqa-fsim' else
+                                          ('default True' if name == 'pyiqa-fsimc' else 'not applicable')))
+            entry['attempts'] = {}
+            for role in (('canonical',) if group == 'addendum' else ('native', 'canonical')):
+                path = root/'logs'/f'{name}.{role}.receipt.json'
+                if path.exists():
+                    receipt = json.loads(path.read_text())
+                    result = Path(receipt['result'])
+                    if receipt['result_sha256'] is not None and sha(result) != receipt['result_sha256']:
+                        raise ValueError('attempt output changed: '+str(result))
+                    entry['attempts'][role] = receipt
+                else:
+                    entry['attempts'][role] = dict(status='pending', receipt=str(path))
+            if name in statuses:
+                entry['coverage'] = statuses[name]
+            report[group][name] = entry
+    for name in ('metrics_cropped.canonical.csv', 'metrics_cropped.zenmetrics-extra.csv',
+                 'metrics_cropped.pyiqa-fsim-vsi.csv'):
+        path = output/name
+        report['exports'][name] = dict(sha256=sha(path), bytes=path.stat().st_size) if path.exists() else None
+    path = output/'provenance.canonical.json'
+    backup(path)
+    path.write_text(json.dumps(json_safe(report), indent=2, allow_nan=False)+'\n')
+    print(path)
+
+
+if __name__ == '__main__':
+    main()
