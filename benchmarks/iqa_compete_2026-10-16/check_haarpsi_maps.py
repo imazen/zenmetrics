@@ -19,20 +19,52 @@ from octave_primary import sha, quoted
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for name in ['build','source','panel','inputs','output']:
+    for name in ['build','source','inputs','output']:
         p.add_argument('--'+name, type=Path, required=True)
+    identity_source = p.add_mutually_exclusive_group(required=True)
+    identity_source.add_argument('--panel', type=Path, help='Historical scalar-panel identity')
+    identity_source.add_argument('--worker-plan', type=Path, help='Current frozen scalar worker plan')
+    p.add_argument('--threads', help='Explicit thread counts for a current worker plan')
     a = p.parse_args()
     a.source = a.source.resolve(strict=True); a.inputs = a.inputs.resolve(strict=True)
-    original = json.loads((a.build/'build-receipt.json').read_text())
-    identity = json.loads((a.panel/'identity.json').read_text())
-    assert original['source_revision'] == 'e2d414c33a6d3c7da50a818fa36e56654d3ebeef'
+    if a.worker_plan:
+        if not a.threads:
+            p.error('--worker-plan requires explicit --threads')
+        worker = json.loads(a.worker_plan.read_text())
+        for path, expected in worker['bindings'].items():
+            assert sha(Path(path)) == expected, 'Frozen worker binding changed: ' + path
+        assert str(a.source) in worker['bindings'], 'Original map source absent from worker bindings'
+        receipt_path = a.worker_plan
+        original = dict(source_revision=worker['rust_source'])
+        identity = dict(source_sha256=worker['bindings'][str(a.source)],
+                        inputs_sha256=sha(a.inputs), threads=list(map(int, a.threads.split(','))))
+        assert identity['threads'] and all(t > 0 for t in identity['threads'])
+    else:
+        if a.threads:
+            p.error('--threads is supplied by the historical scalar-panel identity')
+        receipt_path = a.build/'build-receipt.json'
+        original = json.loads(receipt_path.read_text())
+        identity = json.loads((a.panel/'identity.json').read_text())
+        assert original['source_revision'] == 'e2d414c33a6d3c7da50a818fa36e56654d3ebeef'
     assert sha(a.source) == identity['source_sha256'] and sha(a.inputs) == identity['inputs_sha256']
     repo = Path(__file__).resolve().parents[2]
     crate = a.build/'work/zenmetrics/crates/haarpsi'
+    adaptations = {}
+    if a.worker_plan:
+        metadata = a.build/'luma-maps.meta.json'
+        for entry in json.loads(metadata.read_text())['files']:
+            adaptations[entry['path']] = entry
     for path in crate.rglob('*'):
         if path.is_file():
             relative = path.relative_to(a.build/'work/zenmetrics').as_posix()
-            assert path.read_bytes() == subprocess.check_output(['git','-C',str(repo),'show',original['source_revision']+':'+relative])
+            published = subprocess.check_output(['git','-C',str(repo),'show',original['source_revision']+':'+relative])
+            if relative in adaptations:
+                import hashlib
+                entry = adaptations[relative]
+                assert hashlib.sha256(published).hexdigest() == entry['original_sha256']
+                assert sha(path) == entry['adapted_sha256']
+            else:
+                assert path.read_bytes() == published
     a.output.mkdir(); root=a.output.resolve()
     deps = a.build/'target/release/deps'
     libs = {}
@@ -45,7 +77,9 @@ def main():
                *[v for k,path in libs.items() for v in ['--extern',k+'='+str(path)]],str(source),'-o',str(binary)]
     subprocess.run(command, check=True)
     receipt = dict(command=command,source_sha256=sha(source),binary_sha256=sha(binary),
-                   rlibs={str(p):sha(p) for p in libs.values()},frozen_receipt_sha256=sha(a.build/'build-receipt.json'))
+                   rlibs={str(p):sha(p) for p in libs.values()},frozen_receipt_sha256=sha(receipt_path),
+                   frozen_source=original['source_revision'],
+                   luma_map_adapter_sha256=sha(a.build/'luma-maps.meta.json') if a.worker_plan else None)
     (root/'build-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
     rows = []
     for item in json.loads(a.inputs.read_text())['pairs']:
@@ -73,10 +107,11 @@ fprintf('MAP %d %d %d SCORE %.17g\\n',size(s,2),size(s,1),size(s,3),score);
             assert rc==rr==0
             line=next(s for s in (directory/'canonical-stdout.log').read_text().splitlines() if s.startswith('MAP ')).split()
             mw,mh,n=map(int,line[1:4]); score=float(line[5]); assert n==3
-            prior=json.loads((a.panel/f"haarpsi-{item['pair']}-{item['size_name']}-t{threads}"/'results.json').read_text())
-            assert score==prior['reference_values'][0]
             rustline=next(s for s in (directory/'rust-stdout.log').read_text().splitlines() if s.startswith('HAARPSI ')).split()
-            assert list(map(int,rustline[3:]))==[mw,mh] and float(rustline[1])==prior['ours']
+            assert list(map(int,rustline[3:]))==[mw,mh]
+            if a.panel:
+                prior=json.loads((a.panel/f"haarpsi-{item['pair']}-{item['size_name']}-t{threads}"/'results.json').read_text())
+                assert score==prior['reference_values'][0] and float(rustline[1])==prior['ours']
             s=np.fromfile(directory/'similarities.f64',dtype='<f8').reshape(n,mh,mw)
             m=np.fromfile(directory/'weights.f64',dtype='<f8').reshape(n,mh,mw)
             with np.errstate(invalid='ignore',divide='ignore'):canonical=(s*m).sum(axis=0)/m.sum(axis=0)
@@ -84,6 +119,7 @@ fprintf('MAP %d %d %d SCORE %.17g\\n',size(s,2),size(s,1),size(s,3),score);
             finite=np.isfinite(canonical)&np.isfinite(ours)
             matching_nonfinite=(np.isnan(canonical)&np.isnan(ours)) | (np.isinf(canonical)&(canonical==ours))
             row=dict(pair=item['pair'],size=item['size_name'],threads=threads,width=mw,height=mh,
+                     rust_source=original['source_revision'], rust_score=float(rustline[1]), canonical_score=score,
                      finite_pixels=int(finite.sum()),matching_nonfinite_pixels=int(matching_nonfinite.sum()),
                      nonfinite_mismatches=int((~finite&~matching_nonfinite).sum()),
                      max_abs_delta=float(np.abs(ours[finite]-canonical[finite]).max()) if finite.any() else None,

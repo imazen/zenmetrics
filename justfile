@@ -1662,6 +1662,10 @@ bench-iqa-canonical-plan +options:
 bench-iqa-canonical-grid-plan source pairs output +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_grid.py '{{source}}' '{{pairs}}' '{{output}}' {{options}}
 
+# Caller supplies heavy admission; original weighted HaarPSI maps and current frozen rlibs.
+bench-iqa-canonical-haarpsi-maps python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_haarpsi_maps.py {{options}}
+
 # Freeze and run the 27 changed routes in ascending retained duration.
 bench-iqa-canonical-changed manifest output *options:
     just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'
