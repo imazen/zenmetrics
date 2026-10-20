@@ -20,10 +20,22 @@ def json_safe(value):
     return value
 
 
+def checked_document(path, methods=False):
+    values = json.loads(path.read_text())
+    bindings = ({entry['source']: entry['source_sha256'] for entry in values.values()}
+                if methods else values)
+    for source, expected in bindings.items():
+        if sha(source) != expected:
+            raise ValueError('supplementary reference source changed: '+source)
+    return dict(path=str(path), sha256=sha(path), entries=values)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('manifest', type=Path)
     parser.add_argument('runtime_versions', type=Path)
+    parser.add_argument('--source-bindings', type=Path)
+    parser.add_argument('--reference-methods', type=Path)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     config = json.loads(Path(manifest['config']).read_text())
@@ -45,6 +57,10 @@ def main():
                   metrics={}, addendum={}, exports={})
     published = root/'fsim-vsi-reference.json'
     report['published_comparisons'] = json.loads(published.read_text()) if published.exists() else None
+    report['supplementary_source_bindings'] = (checked_document(args.source_bindings)
+                                              if args.source_bindings else None)
+    report['supplementary_reference_methods'] = (checked_document(args.reference_methods, methods=True)
+                                                if args.reference_methods else None)
     for group in ('metrics', 'addendum'):
         for name, spec in manifest[group].items():
             entry = dict(spec)
@@ -67,6 +83,8 @@ def main():
                              options=dict(name='vsi' if name == 'pyiqa-vsi' else 'fsim',
                                           chromatic=False if name == 'pyiqa-fsim' else
                                           ('default True' if name == 'pyiqa-fsimc' else 'not applicable')))
+            if report['supplementary_reference_methods']:
+                entry.update(report['supplementary_reference_methods']['entries'].get(name, {}))
             entry['attempts'] = {}
             for role in (('canonical',) if group == 'addendum' else ('native', 'canonical')):
                 path = root/'logs'/f'{name}.{role}.receipt.json'

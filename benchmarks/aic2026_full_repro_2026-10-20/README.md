@@ -108,3 +108,9 @@ in `metrics.pointer.md`. The provenance writer records exact calls, source
 bindings, installed package metadata, coverage and retained attempt receipts.
 Per-image third-party reference values remain external; this directory will
 receive aggregates and the compressed CSV of native values after validation.
+
+The provenance recipe accepts `--source-bindings` and `--reference-methods`
+JSON inventories. It rechecks every listed source hash before exporting their
+contents and records each inventory's own hash. This binds ancillary Octave
+helpers and distinguishes normalized float32 PyIQA inputs from VSI's explicit
+internal float64 conversion without changing the frozen scoring attempt.

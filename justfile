@@ -2264,8 +2264,8 @@ aic-canonical-fsim-vsi python manifest summary reference sha256:
 aic-canonical-campaign manifest *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_campaign.py {{manifest}} {{options}}
 
-aic-canonical-provenance manifest runtime_versions:
-    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}}
+aic-canonical-provenance manifest runtime_versions *options:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}} {{options}}
 
 # Full-precision local AIC CSV regeneration; caller wraps heavy runs in run-heavy.
 aic-rescore +args:
