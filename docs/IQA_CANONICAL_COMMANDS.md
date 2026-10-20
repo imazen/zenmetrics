@@ -72,3 +72,8 @@ helper on their original parent.
 Exports retain the executed worker engine when the worker reports it, including
 weightless private CW-SSIM’s native Rust route. The NN engine environment remains
 a fallback for older workers; absent engine evidence remains null.
+
+The [captured input-contract audit](../benchmarks/iqa_input_contracts_2026-10-20/README.md)
+distinguishes HDR luminance/viewing refusals and fixed-factor MS-SSIM window
+refusals from unavailable implementations or worker stalls. Preserve these raw
+attempts and limits; larger valid geometries remain in the frozen queue.

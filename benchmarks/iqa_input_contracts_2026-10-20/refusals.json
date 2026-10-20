@@ -1,0 +1,2639 @@
+{
+  "i265": {
+    "captured_failed_attempts": 80,
+    "classification_counts": {
+      "fixed_downsampling_pyramid_window_refusal": 48,
+      "absolute_luminance_input_contract_refusal": 32
+    },
+    "method_geometry_counts": [
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "attempts": 8
+      }
+    ],
+    "records": [
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000496-2bcb523a1131d22c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "d9403cf610e6350f0b2eb3d540add1a124be4c0f0074b1ebd24b12684578f73b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000497-33bdbc4dae1f9295",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "35c90dea06065956a30c93d7016be9a0f62b92c65c49e1f8e287f76965d6e51d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000498-734e3251f40ec2e1",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "a624c3548008b2755769dace6c13dd0798e583b67338e978787c25ecd31dc7e6"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000499-9ff2b311f0fdfe46",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "d7b0d153bec153e84d3cb8dff34e9aa4f8989a4ee2f3b9b113cfaefa6f4b06c7"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000500-063b931bada54930",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "78ff159de829c9c5010c34b1f474f4c57e8924f1a5c47189a835b62c224ed367"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000501-75d34979b5bafe45",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "4ba54710a2cd1db3f05386d591bc5b03a5a3e7ca39509ceace1551b03f1fe408"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000502-01b971e83f3cd768",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "9b27b53b31bdb1286ece4f00c542526f5d0fc4f069e7a30149b167b3838ef93e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000503-328386fe392d5655",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "27f146f0e6360e928ed45f329833bc4c399cf2bf68e90f2ab5529c05c81a4222"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000504-a86286a7584ecbfa",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "d8bcd0ee863cb1afc51bd591daa1e44814d2c0591e21a04d97eda75ee6659bbb"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000505-e560db6b001d345c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "47f1fae9249be8dacd3362cd36c81b1cf5c2eab14738837712dbfd9807e1f089"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000506-81e665a01837eb96",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "41278540800d5381e07659f5f26e6c7b67180a72861bff67fbe95cd5a06c5319"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000507-f81a24a751c11242",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "959003bdac95c643eec3e72d00a375612ed012e0c333b47b5470096475c12f62"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000508-bcede45edfe852cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "3f50ddac825a4f679d4d05f70aa7adf2632f4ec5e6a45ff5a998f012e057285b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000509-48088571f6f93024",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "e85b62d6e38264c9d879382179dfb869ef24408bbb8afb2edf87c7ccaecee590"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000510-5b0ba9a485211b77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "4ed90dee3d311bae780ecbbd6f8de23043d5ae0c3a2cce3f65f5c163a92ed9f8"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000511-0138f8e926c80f0a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "ce71b166c7a48dd9bab081ec4ba79e3557d99bff1c559da58fd5963b38bd4fba"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000512-cfd52bc7018371d9",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "181e0c372031c13d281f9292d2c506c3a04235ed0a8e9372c18931fe1529e5e5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000513-2269d52b41a5bba8",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "226e74e6d7b187b9ed1ddae1cd68e7e7b7fd61e01f93f23ebcaa64aa396036df"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000514-c5f416eff2f5846d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "73b7310c7455c48c4107ea6643824aee7ed2f37d5274c5df44a3b80c3215fb3f"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000515-8ea91df2f0f0d787",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "1e78994f60c2ec7198d64f7f205a50017e4a830f53d5df59649f87519d4749a1"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000516-ede739f94f1ffe9f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "4630dfc2866199729103e3925c5a09082838f155080d8b685bffc494197aba50"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000517-30772c987276d000",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "2016890ff82119a2df4fd5206987b5365f000705b5af02f446c4128a4dfa42f9"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000518-af160b68c9d06a26",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "6fb31e5c13ff444de6e515011e3e2fdb61a0d5dbb7ef01c2cb66d3f6a064b35a"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000519-982e7f52bddd9f1f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "f5b2d7e135bc4605aa1132644d7faa652359ff89c960efbad814826b27a4119b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000520-30838b178756a7cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "7f31c19e529908ffd6920c304922d85496cd414eb137be230dc57105ba494e02"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000521-9b120e8257d65889",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "e3ab417ac4d0dac966c987f29987bd80af1a9cd1b27147d6b38939b864e110f5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000522-bb004f4d7ead6e03",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "7866a3929b19b3d52d1902928447125e2dd811dab8ab590213b2402daabd50fb"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000523-809ccfb774935095",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "28663aacb2c599004cef8bc86145fff3a7aaddf4c773bb1fbb6f6e89ec723b5d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000524-7fe4ad0b2f33af34",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "516132c4d151804a738ebadca6ca6c2c9d463427260fdd21b5729ffcd74b0b73"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000525-78d4f065a0c9c1d5",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "e526d7daf4af39fe79bdb723ecade6c18ff6e12c53a7ac022b080773100c178e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000526-357163ecd2187426",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "1fd2d5a875b352493ee52a8c483da6d045ba54ecb919968c4edba65fc7a7d737"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000527-4164c898cf96fb4f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "140e146203228127bd899f3b93e46dbd906a237f814237ed33095a1f80bb3140"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000688-bb160af2a4406fbe",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "ac93ec7b7dc67372e4b9b4ed78a2f8af2ffe18955db4d213f059295efc2dc862"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000689-a1e931a492eca181",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "e11e870dd4a9a6dbe2cb71ccda9a61470bb61cfdf1a18ef5a187d2cb54ead017"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000690-ca31b2bd0c866851",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "9dabaaa9ead98abc73a1a596b8177f8de9a761870f16268082687cc8ff9ec879"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000691-53b8eef17884a99d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "67e8846a20e315058bad8decd666a092f0d34f918bdb6f524b47f7a7fed3078e"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000692-765d8f2d06a16ddd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "7724a7fee2c4a3c0a89ced90e801095c665c6de5d0bc195ffb0e5884dc5a209d"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000693-b44c2612f4f6572c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "6bb11f4e72d82b5c4cf54e735c95033fa999e997d305d664e4422f69f0f89df8"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000694-b53ed6cf859833eb",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "2d3afd04d73706a5bed4816399e54f0cde3f91e82a240d2a66608b1b48a6582c"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000695-be35f68e91575f77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "2fc51d5ee5901b7a6d855a42accbb230103bfa693a826fd53ea38efc5e5da4d9"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000696-ce8e671c27748754",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "dd1d2dca5709647533b8bc2d7028e6da9263c160559f5f35c3e89f75e10756f8"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000697-1cbf81377fc0ccd4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "616e0185103bdb36b5b80fa987ae8ebb0b93acca29b979620752552d347bab50"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000698-49ff757b428159cd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "189c5e994987b6dbf42a74e515526ab86bac216fe017fb60d25a329f31b09173"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000699-03faa06964a514ba",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "09b9bfd630574bf31e92db1946b42d358bff3394c18a81c3a4490a7b3d7ea9f7"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000700-434659d9d9b666e3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "c837ea4acfd96875f1d9598155e83db3bc3ce86bd30c3e3aa48aebb3185782d7"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000701-699e5c26b7a73e8b",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "4395f511180d294b2acba1dc5af62e94347f4ca1ed0b768286da5a318c87f694"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000702-2237951e93cd9d58",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "a4df06401073bab4ad5cefa9d19e54ea2f460f08b15c01d7368693fa239e55cb"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000703-6e15ee5662bb898f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "965c25055bc76b5acfcdfa08ee3b849e69702d914ad70a0d2e95f90e79cfca58"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001224-4a45b640cd08f990",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "2b04248ba2e64dba17681c577d67368983a56df3de8f3cee92bddc9760cd7a39"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001225-91fe263ddbb756ab",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "aa02bf910579992150c0da0c1266a107c214cc297779c1f168b69bf199b03992"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001226-b607755e6142023a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "4830f36d2e22b72bb0a1654b3d3b749a1871878e55c0b4c3790233285b754f53"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001227-1bd598397153251c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "0f450563eac70f10e1356fb042799fc571ae86b7fbd13e103d5bd69c7bf1519b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001228-7e78ed057098b126",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "75189b89225350585a8d9096d4e1f80a6b3da1952bd26102bb2dd9f5454ca483"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001229-56aa04db56012e15",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "f3670b31cb3bd564402f2323346212ab1c74f9b7520ae244f19565331497177d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001230-3d060b3b6eadd871",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "1d9e4c3a0f7dca8155a478d02adfbd0cb1791d11dfd58f442d5d883a6c90e045"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001231-a730c891f5024e18",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "a312693617ff2bc68ffbe00fc064260997c5cdb497c5a12585d92c372785da91"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001232-a9b08b47f82ba1d3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "98ae0e4f705f531e70c43196a46b0036025aa64e8637e0babf0609d9fa37577d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001233-9326f5cbf5b71e0b",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "8b1247b4f560ab3809f609107048c9d2b9e75e845a408413c8aefc6524ebc881"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001234-d7cd82e23306f270",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "32b9d5b629894deaaebeea47b36f2c1cefdbf04ad7ee13970f62d5210b25065d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001235-37e4c668c5d93660",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "fc4a1d05f5e6340f97d894d6d6faf1ee85244b2c0520cffe3d804896a1d3f908"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001236-56e83be80c0ea43a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "a647266758c7dfc0389e4e65d5ebfb017c2165deaf14251e7a1d5615f62d9ac7"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001237-32e6c3f3e8bda9b7",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "6af63ed9b1c2ee094da27101a46f08bf4a50c2be85c477e0ddab4b7c87967f09"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001238-c108613b0f2c8af4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "ab9ebd00dcce7088672ff604c8b72d88161801d9bbda2e009c20c9f03363537f"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001239-6fb60bd42c468cf0",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "fa2937eb2a4a34353ac6e3b6b5802ad9df415ccf3eb6424d6af57b12084e60ed"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001400-af769f2140470a46",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "c596fc6682c0840f0ee904ab8cccf438eae18d23182fe4f79445dc87f56b866e"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001401-ba747b574976f4dd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "69d19bbc34702ec7865ef87463b117e305f3b9163f03100ddc3eb656285162a4"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001402-abcf25d379bf410a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "454793b05e33b418e2d3235a284ce215e525015c54c1c4b06a6ea44fd6dff25c"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001403-f2bd3643bfeb25dd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "0ac02c7b6fb09e0b8858428d15d9e68ef0b201b2fa0c4e95d5b017c1ddf5c268"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001404-d7c7506519376c11",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "e1db587a02663bec34d4cb4515f45c1fcb6f600d99d3243f42ad0655b8c04727"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001405-913611d525adc05f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "c54df79adb457e08ed1debc18e98b4088a73913a54df1991b9aa8b03e1a76405"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001406-1a8ebfe548ebfaba",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "62764f6a2c154cd0cafa3910de3b1a69ffe7f03f059d1619baa78a9ac3e52580"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001407-bf378237ffcb279d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "9f39ee5b4a060ca522953820f7296c63141427fe93c70f736a906d7b4349f83a"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001408-737a6f136329a2c4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "1b3ad3b4f7f6fb417bed05a93ebffd8061cd995060253a12a05ab3b54e2d05fd"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001409-023db7aeca8f570a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "c045a2651648b966844384b74f119c6bf66d6fb30e748d85840f0ccdd35aa267"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001410-102a6a301de72e5a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "075797dc9d1a02d6b2cdd53ef2e671e9051b101584a33b48d5ed3de3bd050ae1"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001411-ce6d255016d625bd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "9417e56b6488598b35cfa396a7e8d4ac8ddba1e120c0cfdd10db6203d32d4d30"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001412-f7592fe7a45d5da8",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "904e801223f4b9c98041f314dc787d45e42e89344757897f35d1c8a4576a5ed2"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001413-963e5ecc7c530ec1",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "756c6845f74f8bc2107fae2d9149676b62e0e6c0c84870660e3caac0dade491b"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001414-846f59c5291b71f3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "8b7839336245f3a262a862fab16762032ecfdb4e97940281faa1feecd062cb8f"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001415-a78fdd689fcf2563",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "4a46c2f91ee984a2a7d701fc0422421773c622743bf352daa06cadd4f4f6cb29",
+        "log_sha256": "19a27b07d09f56a5689b12a31f06992174e14031469b703a6ae046fa5d13b3cc"
+      }
+    ]
+  },
+  "mac": {
+    "captured_failed_attempts": 48,
+    "classification_counts": {
+      "fixed_downsampling_pyramid_window_refusal": 32,
+      "absolute_luminance_input_contract_refusal": 16
+    },
+    "method_geometry_counts": [
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "attempts": 8
+      }
+    ],
+    "records": [
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000496-2bcb523a1131d22c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "713235052a87ad847168e994fdf64a9f39fbac49d8ee873636b5e5cd4eb66e79"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000497-33bdbc4dae1f9295",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "510b1c3176a6c5c97e0db697e05142d5128ceb039e0e9c17956d22dbc0db4131"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000498-734e3251f40ec2e1",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "3be175b283540fce36fed5d087b8753f850b1976102bc77794abd63dc56e3066"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000499-9ff2b311f0fdfe46",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "c8b0d24eb598510dc47d8b73e3f5e34f9742291ba622739be76a826a41434d7c"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000500-063b931bada54930",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "d41ede69d2dd8d3a164f069ff4805ffee785ecf93807440090588f0a63b56609"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000501-75d34979b5bafe45",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "f07ea72c6916e6cbf15d9abd1ae054f7d814c8bf8e80c450bc91214b1c205eba"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000502-01b971e83f3cd768",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "158382ba39b8a97fb593c7e58ea99cebbc38de4a00df91e814a1e8cdb85aa241"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000503-328386fe392d5655",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "e8a4c8d515bf1bc726abd51f9779b9f942b80111f199a2b2efa1d73d0d932f80"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000504-a86286a7584ecbfa",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "195f4bb5a1f0a1e377ac31f0518b7b61f4f40bdc3df3fd1920c9766f840baa4d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000505-e560db6b001d345c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "0851d2fabf5444166f27a3c547658e099ba919ac040cf298b6c7f0d7ad466f95"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000506-81e665a01837eb96",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "1897d16f590f96a68803f4dbb82f0a7795c5c5e27e90936a212096e9431ac702"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000507-f81a24a751c11242",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "9b61873541e932e56dbda722e05ab0740deda9f4fcdff5cc3034733f8de560a4"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000508-bcede45edfe852cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "e0024445bacc380457294d3adabf4ebeb8d5f51e3e80c67edf3496c831cb3d97"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000509-48088571f6f93024",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "fce9af8d4b038d1626fe18fec81209cabf1e2cb7b63920d0f780ece9b4a633e7"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000510-5b0ba9a485211b77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "659df0a3a991bc7b6e4451ef4af8beba3a2d1982fbdfe54d87b11f1d1ab5a61a"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000511-0138f8e926c80f0a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "fb6a70ba8e0583c6d421018f93fff1a4953bdd9d471e4a607e905ac295ad78d5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000512-cfd52bc7018371d9",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "9d63a112cf693fa21b09a602bda8a6bf747a8c9a3db5c03bbf1e4008e6915715"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000513-2269d52b41a5bba8",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "ffca4d69ff39953e2c3ea95c4ae0e9b5db71786313c31edcae77eaf3f8cb7343"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000514-c5f416eff2f5846d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "4c9a3a0bdcf72f9e2ca3142222def50f55239362be5bea54b7c22ec8a737ff17"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000515-8ea91df2f0f0d787",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "85d5a9e485efc6254d372e0f4efb7328915944a6482c0ede4129360fb492c89e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000516-ede739f94f1ffe9f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "778f70c6c3635e4869906c947d01f287ac34538e947c4c77498c0a6e54ba2af3"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000517-30772c987276d000",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "8db7169fdcda1dfa1e107a6fe3aaa6dc06001a8e3a67f0e38bad9cdb8a8d14b9"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000518-af160b68c9d06a26",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "aa495f010e591a00a6226e7845164d8a62da228df124fb11ef5ce797adda2fb0"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000519-982e7f52bddd9f1f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "b58c7dfa105b26e43e25a2ab94c0b5329a64b9711a49d4f3f8e4188a7fb54205"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000520-30838b178756a7cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "4da474ae6ca24bf26db9a24d4e9e54c5abb2fe1f64e984332409b2b4ec3e2a48"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000521-9b120e8257d65889",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "f2245a712b349243f83899176b473b852ab632f98c946e351af0ce0a75bcc82e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000522-bb004f4d7ead6e03",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "39a5f827a4fbd1babf2faf670be27259ccaba2fc7a12944a9b5dd1b94faa34b4"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000523-809ccfb774935095",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "972b96b8c48f24b83ff7e6dcab13ea43d88a004e1185426ecea37d6612433988"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000524-7fe4ad0b2f33af34",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "fd542a45d98d013923e915fdf59149722078bbb482f59332793ad69cc1d860b2"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000525-78d4f065a0c9c1d5",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "de38f85a73c1cd7adb369fdfd7283a30398abba570e9a3808e0bc7a0b6a52466"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000526-357163ecd2187426",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "d98fb36db76ad09d4f415083df239789504c0cef8c8d36b1bc61ef73dfba872b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000527-4164c898cf96fb4f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "c038e2c3e82f3425fbb25547a268b655260a1fdaba8bd52859f05e4c79c577ed"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000688-bb160af2a4406fbe",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "593f0b9039c3847a022151819d47424cf73179816414363baa524e230bfb38db"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000689-a1e931a492eca181",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "57668ebed879615d473242a2ce289feeb562edfff2bb98d39e0b70de90ffc6f9"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000690-ca31b2bd0c866851",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "87f45aa8c9310b9c6e1364ca34786918de1f9f2454275c4a4f1c2ce1211dd3b7"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000691-53b8eef17884a99d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "39b2e63d94b9b5e4125626693791c0115bbf334966260b447a91de0ba3af27ec"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000692-765d8f2d06a16ddd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "3f0745b3d7dc9afb8faaf53b8be344f95ca9fe0d2c0f7c68c5fb6a0e80eed1e1"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000693-b44c2612f4f6572c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "6eac6f442c87ffc1de71d14e30f24ab68acb828b8af583d96c570bda91c85d46"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000694-b53ed6cf859833eb",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "c741eb77e6182c6d8a2fada99c323b1fef0bd7b2ba28b1db4b19b235a39f7af7"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000695-be35f68e91575f77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "22503db73c6ea2d55f6b8cfbe2eec7d9f42740681812a6e84e6fc2f9ddad7039"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000696-ce8e671c27748754",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "cf1a4268feb4ab29c952f1982cbcbe12e5097a42f359743e7966cd003fc0e7a7"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000697-1cbf81377fc0ccd4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "e423f674a690b1ba6c8b813336bf4bb6aec294e78759c637756ad5a6ed972f8f"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000698-49ff757b428159cd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "6095b91ab37ff38ed96db4eb4b88878e1706d69d4bc6dd7c0e0533ca40e1cf54"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000699-03faa06964a514ba",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "7d51691e7e88cce2ab49b3ad68c6566e049bfeec15b30cda1e8b6c3651f1a44c"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000700-434659d9d9b666e3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "71bd81b6fc769523ef395bdee370e65ee34089064e30e0d1bc2a1907a9c82dca"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000701-699e5c26b7a73e8b",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "a5bb1142418f36c3606bf4a74b0e781cd5569c7e43716b267eb6a1f1b65f0fbf"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000702-2237951e93cd9d58",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "f6e002cec43ee0fa1e9ec28edf7f25d5ea6e955c8a3eb0d10f67cc09a96b9529"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000703-6e15ee5662bb898f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "94e8e5dcf0be0317a148d744ccb0774506b2e409089e295cb308b5c66ea36acb",
+        "log_sha256": "473dddd9916a96ea2897a8289ba6d7ea1c88e67e6d37d969d2e4a326e81ca25b"
+      }
+    ]
+  },
+  "r7900x": {
+    "captured_failed_attempts": 96,
+    "classification_counts": {
+      "fixed_downsampling_pyramid_window_refusal": 48,
+      "absolute_luminance_input_contract_refusal": 48
+    },
+    "method_geometry_counts": [
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "attempts": 8
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "attempts": 8
+      }
+    ],
+    "records": [
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000496-2bcb523a1131d22c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "39a25014b99c6aa2bda66cc20041db5eb4cf00b55629eb10f793f89e2df6d169"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000497-33bdbc4dae1f9295",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "635261a059e04c94e9c257feb7e67b1321261d6f0ba4da9b0dc7b8e3cd7cf36f"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000498-734e3251f40ec2e1",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "c265c5314fad24f06fc46f4d811b83e662e10ea282d24bcbeeb0f48925baf87e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000499-9ff2b311f0fdfe46",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e18ead7077a8d51b6ab0dbb380e2eac1a4139a60629eb51e89e77e4d676fb03c"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000500-063b931bada54930",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "1a9dfe7cd41ac78b268bfabea9bfacd594c14802530f7dbec57f582b85fcaa90"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000501-75d34979b5bafe45",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "657f5982307deffb5c030153f0bc74b680db9f0ce4edd500edb81b1d37197dc5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000502-01b971e83f3cd768",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "cb47bd18436c08b298767140696b81a1fc1ccc37c7122d4fe17f54ab4cf63c82"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k3",
+        "size": "cid22",
+        "cell_id": "000503-328386fe392d5655",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 3)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "d1499a9b42d93afc86dc63333eb3f01c1d5522b4e0a0d90d5954bed8b9654ec6"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000504-a86286a7584ecbfa",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "ff7a3e68aea3d6fa3a25dbc04e33f1c831e6e09f4469288a131a23cb16c4496f"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000505-e560db6b001d345c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "290c37aac3a6eb9aba160bf5d6012c7523198def38bc315b0709ef8ea7fa5f78"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000506-81e665a01837eb96",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "ff04e8eb71b0beb73b3ccd793f68158172f3befc8e1eb992af4cbf4b44f9c5e5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000507-f81a24a751c11242",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "38b71cb9437cc75653a4cca1750012ce309610ba4c05b007216f1b42702420be"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000508-bcede45edfe852cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "61b2e5baf85fd2254561bb63ff340627453c1ad041185142823609bd572f6673"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000509-48088571f6f93024",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "fba7e86eed794e4377d26c309373f98fa3c5694ecc74dd1d8b6c50d66bfa619d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000510-5b0ba9a485211b77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "1690bfe23ba132f20a644b4164d28560a17900970d2cd6b674c9e6dfe63aaa48"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k4",
+        "size": "cid22",
+        "cell_id": "000511-0138f8e926c80f0a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x8; valid 11x11 window requires at least 11x11 (fixed factor 4)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "8f8f19edda3e2fd5d08eb39326f21388fbc0e74a07018901d6eb7ed346c00030"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000512-cfd52bc7018371d9",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "ed0ec1626de53f62df5b5db7c82c3670492eb69dbb01c668b752b86a0b4e6bd7"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000513-2269d52b41a5bba8",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "4ae2dd3291d7e514c8b11fcde71cd841edd022ca9dac966d4158186e0cd60838"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000514-c5f416eff2f5846d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "c34dae36a77da8ee70fc5d0fdc589bf75e0a45e2625614f1ed3c875f60806cf8"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000515-8ea91df2f0f0d787",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "0c396498d55716499410bd985c8ad0ae87bb17006eceae0d91cc776e50607ca5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000516-ede739f94f1ffe9f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "8ff2cfc3644b33bf19f171737db783e7467567cb756d7c76caca8a6da2ff432b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000517-30772c987276d000",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "7883b9260e57a150510a247e5f3e9b0b59c184f6289dcd7da14ecd0c1bcf68ca"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000518-af160b68c9d06a26",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "5642e6c672d1a3d9d12cec2f1a994203e5b6cacc0c550b116819e4c03f31256e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "cid22",
+        "cell_id": "000519-982e7f52bddd9f1f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 6x6; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "dd67c1956e21bb6934a3170ae6665a7246cf05f3de351e2622db996c8629cb0f"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000520-30838b178756a7cc",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "be81b957a03b5e63b5905c0695cc3f8e451286c4d734bb2914a3d34c136c2bf2"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000521-9b120e8257d65889",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "816533545a2351cd3c9a4b399e7aba8bfd925203ec867758398bb1d29ecb2787"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000522-bb004f4d7ead6e03",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "fd6ff3edf0fafa16712dcd345225d39155a2a6c7b9a4281c990809f982a42aa5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000523-809ccfb774935095",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "6e453dda5ca60508ce6b018d821663d3390392bc6add39c737693cb9d0af4116"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000524-7fe4ad0b2f33af34",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "65a1d21d17e8de48bf6fd2b3b01aacf17b65a1c4fb5719f015aa6ece61c99a70"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000525-78d4f065a0c9c1d5",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "96c498dc37146ec1e4f038627313216a64eeec6e8d866c893403ce0b26b4030b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000526-357163ecd2187426",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "0dc1f6909546f9971070f790f82cf732ef2ba446cf0229b89fe0328731b79af1"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "cid22",
+        "cell_id": "000527-4164c898cf96fb4f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 4 is 10x10; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "d2868f812f63d5c7041d2a6cc47391592f2fa9c0969f2bb71bca052d715cf63a"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000736-bb160af2a4406fbe",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "a1e91a1a69fd3c828b1ef6df6cba1d59b36902d887bcdb58f60d463849bc8bec"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000737-a1e931a492eca181",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "211bdfdc49e392476b760d55031307b8b5b7a3b64c409116f364ad7fa1336142"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000738-ca31b2bd0c866851",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "68beacee0aee3a06ed000e4ac388b0288e7d7a6a6e0ebd2eb9a30042d5eafe8c"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000739-53b8eef17884a99d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "374de3fd8a97e41b87cf66c5e55c4167f1338695e637cdd134d29e30e47db446"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000740-765d8f2d06a16ddd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "2de3b935feb9e5af1a1f8a0e7ba87d13716753bc231c705401f5edff20e01044"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000741-b44c2612f4f6572c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "0111a73f112b39496df7b9672548e159d01442f7211ab2ba0e95fffb35fce411"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000742-b53ed6cf859833eb",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "c77937b68f81bb6c857e1ae880c00bbd6a33c9aa65dc16629f07dfd642b6fdf6"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "cid22",
+        "cell_id": "000743-be35f68e91575f77",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "9625d1c91e9db62df129635654d7274ad3391213de8fcd8ea3a8ae1ccd0e807f"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000744-ce8e671c27748754",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "34b05f471f9a834169e8bb0b103888f49e9c5754d83687eb5afa2526d116723d"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000745-1cbf81377fc0ccd4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "cda0963086c2d3c432ae83d360584d92e6f172b9cfe1073ab4e43880b85c230e"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000746-49ff757b428159cd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "9063040358aa1b16fffb4f496e510d4bc051dcbc8508cae8f7af36daa8c216e3"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000747-03faa06964a514ba",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "09edc42ed052b0f4b38ae7bf82309cedac9bbf74330864d59ea83a052c48df8f"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000748-434659d9d9b666e3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "fc46833ecbfd1ab80c62c714671e74dea34c9d6247b6f8b20fea5a1cb9f50e65"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000749-699e5c26b7a73e8b",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "0d376dda99ef5f0c18550d2ae0a5c49d7e511b0fbf1e4fa1e8847cd0286b75a5"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000750-2237951e93cd9d58",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "55e5458772cd54a4d8cf9ac399cd76082b672fc8d2d5ddb235029c0bfe91f1cb"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "cid22",
+        "cell_id": "000751-6e15ee5662bb898f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "a839cfa94e0b45dc1c3a867fafaf306edce9b31de017a5d85bd25f79dd057322"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001272-4a45b640cd08f990",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "7744f635c00445bf92ac32c765ec17e5549b501b8aa55a1d82cd98789c0393c6"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001273-91fe263ddbb756ab",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "4881ee56f8fa863d87ca6a8716931978448e7a57c917d6e0a07098df300b703d"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001274-b607755e6142023a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "995f6a8fec0751d94542d2e5e9e18b77778536d73ca8dafe5e3e4dfbb26ea155"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001275-1bd598397153251c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e7bf8aefc3038a48de83765238d4975d3667ea276845c62202386101d2e8d7a6"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001276-7e78ed057098b126",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "6c80c489f9db24db7dd82e222c1808492e3dca5af4e83cdafaacdf6cd1241dd8"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001277-56aa04db56012e15",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "c782c34a1953489dfbf454ec110a625fc6740366efb5a6b08d348a2150f7bf70"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001278-3d060b3b6eadd871",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "14003deefad0005c02ce9bd5681b935d8020391007f2ea20b1741f82d33448f6"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k5",
+        "size": "aic-small",
+        "cell_id": "001279-a730c891f5024e18",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 10x11; valid 11x11 window requires at least 11x11 (fixed factor 5)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "2d26c3fd6b6ee28bf6c877418f9b4b48e70d4bc51149f4b0e8ce336a98ff2fbd"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001280-a9b08b47f82ba1d3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "5cd05e7c9855f9af65cb9a353fa36eac2add180679a02a55e7e533db239801c1"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001281-9326f5cbf5b71e0b",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e27d65ae390251b63823e264d0f41cba36d88b7447381e736e206649a7cfbace"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001282-d7cd82e23306f270",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "ee4137fa23862b1689499cd836008ed2d17ded994553d53264a4f0587ad534bc"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001283-37e4c668c5d93660",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "c03ff90ea23fae893a835391ec81c67b273ba94c2eb99bff6f98c1bbdf1330e5"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001284-56e83be80c0ea43a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "dbb525b3f44804f3df43c1a678a39b032a5550cd498806fcc1ec6a5396d8cd9e"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001285-32e6c3f3e8bda9b7",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e61bae6c08fd96f6166475a8f7676e788a029485e6f7fa2436f4053c2956c704"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001286-c108613b0f2c8af4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "b6e8835b2f45c4eb677dd38f323ecdd77b64a2247be1b83e5431a0595f7d2f0b"
+      },
+      {
+        "metric": "ms-ssim-pyiqa-f32-k6",
+        "size": "aic-small",
+        "cell_id": "001287-6fb60bd42c468cf0",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "fixed_downsampling_pyramid_window_refusal",
+        "error": "SSIM-pyiqa: scale 5 is 8x9; valid 11x11 window requires at least 11x11 (fixed factor 6)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "04591bd4c171dc51777c9f80f253b9f3eaf87a10ff0fcfff130cb3080c83050a"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001496-af769f2140470a46",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "803cc41bb50db909fdc4bdbd713a168ae45565979651da529f74e1fa8e2acedf"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001497-ba747b574976f4dd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "8406352207e5a863a51aec4679f5b7b6eab044b2b1d2209d8205afab06562503"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001498-abcf25d379bf410a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "b837f3801c8e9af14eec9049918ae8e226bcc20d0177d82e53d643f306da36bf"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001499-f2bd3643bfeb25dd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "8e8b4e443b4625d7149abeddbdc8b8fd9caa0b9eea82416b49412c9da49410f4"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001500-d7c7506519376c11",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f937f17d2e44aa20c3a4c232a2212cc19958175cdc0838c4935d21c730c759a0"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001501-913611d525adc05f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "fd523c0bdff1e53743be6420d2cc18a7c9bcca1628c0cb7361f285fdfafb3555"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001502-1a8ebfe548ebfaba",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "ea044344a4995ddec0cc47c4dc262b2af5f628f855dcb59bda34f4e021faff2e"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-small",
+        "cell_id": "001503-bf378237ffcb279d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "bfae4bfa80d78184065e66de945b055559167ba3e2d2a6ebc1158673bd60f322"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001504-737a6f136329a2c4",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e4c76a3dbbc08f62f5ae868ce218ff0410ff17a389fbe3234f2d2daec428db3d"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001505-023db7aeca8f570a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "743121b5ecabf8fa3e9bfa3a29e3f5f879bf62c1644f30f81a2abdc82d7057e9"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001506-102a6a301de72e5a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f553527dc0bc2f9ebb35f21f410a1ca6c020a747913276c9550672253eb1d721"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001507-ce6d255016d625bd",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "3f54b32a191a32e730caab1aa9d57e1d5fc9c41f497c58d7b19c7adbdd61b900"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001508-f7592fe7a45d5da8",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "fb9b2d5172821f44d85cf5ec98a9d9aa84b25240c5454fcf0f97fbe36f3827a3"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001509-963e5ecc7c530ec1",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "a6482e225e800f258b253a713c499ccd2e3cc27a4d95cd76a48c6140ad87871d"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001510-846f59c5291b71f3",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "34df1e7e27b29e8a2584865e5fc171a7d70f7b6afe504c49b545e0d9705ea166"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-small",
+        "cell_id": "001511-a78fdd689fcf2563",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "aacb53e0277275ad9cbebc4c2e711275b36f9d0ec46ac4b805b045e7d52e8d36"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002256-719d1ed61cd79ab7",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f07346fc36cbb4fe2d98cbbb4af4f1dd6c4a12e70784240051e26b9b043360ef"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002257-5f0d98ed5cb43de9",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "aa071462473df493af636820dd4bc92bfec7a862ddb9d23a841149164db95b05"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002258-f36995387c86d4df",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "3f4c80c5a66e18c5c13918e52ba5aac12fdd0ef73afcc7c3b83bd93e5697880a"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002259-d2f577168650b58f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f57b060e123fcec36ea7833e55f4d5cc910eda8eb13d1e727e806f5e9a0dd0d3"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002260-52f7f4820c786708",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f807ced7eb97927d653e74825030b8006d2683174ffcc59a65fac8f428a9ad0c"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002261-6553ae2bc1e05623",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "2ae577f802fba9a7267bca3b19858501f1cab7f0d1fa24b2e1d501a6d6be998d"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002262-4da9af4328a0890c",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "f927319ae9aa8faf597d6d57a220bb7af1c8dc70c48e8028b4efedf68755bb6b"
+      },
+      {
+        "metric": "hdrvdp",
+        "size": "aic-medium",
+        "cell_id": "002263-5e3dd3d1566af268",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp: HDR-VDP consumes absolute luminance (cd/m\u00b2), not sRGB8 \u2014 feed interleaved absolute-nits f32 via compute_pu_nits_interleaved (hdr_feeding: IntegratedPuNits; the --hdr sweep path)",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "26fd807bb4398fa6d05d61a2289d8a8cb19aa7d55c445d265b6dd08ccb256ef7"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002264-bdad230f79d6d253",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "82a760817f86457a9f6519f39c993b4ef1cc6186643fa3781d3db76657f0d246"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002265-f8ea99eb5b4cc21a",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "2f171ce5cd2279d420c7317a6d806e28adf5617044f0ecd71d59c41074faf4e2"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002266-2f529756a0ee02ae",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "726e6fadccbd8937c05cdc61028f7914dc9dd4a868b90797071d027402a15893"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002267-d6fc96d025a7800d",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "e3795623095d221fc8ab79def025bd0df13f157db61a06f16ea767aa82e29360"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002268-ea1d58924cb0c323",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "17f51f35f94d840178421952b5d79e9acf06e8bb5fcf1821a73613c7ae12fbcb"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002269-cb1fb5337eeb6c50",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "4dbc982ff96f7ac9e9f2ef9b5a9329a946ece03b695270472b1b58e6c277d7d3"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002270-89a531c45f54f9c7",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "48b48f6a3ce4d9cd10038840a411fba720a46823db8eaf2b08524c478ebc5143"
+      },
+      {
+        "metric": "hdrvdp3",
+        "size": "aic-medium",
+        "cell_id": "002271-d49a4237d6738c4f",
+        "attempt": 1,
+        "original_status": "failed",
+        "classification": "absolute_luminance_input_contract_refusal",
+        "error": "hdrvdp3 consumes absolute luminance (cd/m\u00b2) with explicit viewing conditions \u2014 use `--hdr` plus `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); sRGB8 input is not a valid feeding",
+        "source_report": "74810915dbe94c852041b8cbc71e064834701d5b249a69948ab1649bd36fb41b",
+        "log_sha256": "518cb2844394388c4be9de20c0f1fa4b940af391ead36ee2988d30cc4ba8ab22"
+      }
+    ]
+  }
+}

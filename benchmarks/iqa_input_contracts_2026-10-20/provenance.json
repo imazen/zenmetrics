@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "sources": {
+    "i265": {
+      "captured_utc": "2026-10-20T00:07:23.484112+00:00",
+      "observations_sha256": "411d2029033e424bbf8b89921c8594f928cedfbc9e9963ce405b24f1d817d147",
+      "exporter_sha256": "b66f0c3177d39011c450e9caa6c7a7893c186149f3f319e4e09bb6e4aa0fa7b9"
+    },
+    "mac": {
+      "captured_utc": "2026-10-20T00:07:17.412972+00:00",
+      "observations_sha256": "cc62449616551a501de568a198df3a3b03513c9b414c5a161cd3221b86781553",
+      "exporter_sha256": "b66f0c3177d39011c450e9caa6c7a7893c186149f3f319e4e09bb6e4aa0fa7b9"
+    },
+    "r7900x": {
+      "captured_utc": "2026-10-20T00:07:15.162014+00:00",
+      "observations_sha256": "9623e783f312339d28c6f93bc335abf03c9eb29791c0bfbbc32a620ad48a6db2",
+      "exporter_sha256": "b66f0c3177d39011c450e9caa6c7a7893c186149f3f319e4e09bb6e4aa0fa7b9"
+    }
+  },
+  "audit_sha256": "861ed6e016757c87d0c20f735141ef6efab877857d133108c2cabf5e440d1a3b",
+  "scope": "captured attempts only; no timing, implementation-unsupported or native-parity promotion",
+  "campaign": "canonical scalar cold3/warm10-100ms, threads1/8, six non8K geometries",
+  "classifier": "exact metric names plus absolute-luminance or valid-11x11 error text; unmatched failures refuse classification"
+}

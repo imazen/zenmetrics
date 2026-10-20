@@ -1223,3 +1223,31 @@ benchmarks/private_classical_2026-10-19/mac-observations.csv	ignored	Canonical w
 benchmarks/private_classical_2026-10-19/mac-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
 benchmarks/private_classical_2026-10-19/r7900x-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
 benchmarks/private_classical_2026-10-19/r7900x-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/iqa_input_contracts_2026-10-20/refusals.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
+benchmarks/iqa_input_contracts_2026-10-20/provenance.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
+benchmarks/canonical_recheck_2026-10-19/cohorts.json	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/retry-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/vif-corrected-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/nr-goldens.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-dssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi-y.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-mdsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-msssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vif.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vifvec.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/pyiqa-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
