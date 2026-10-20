@@ -424,3 +424,29 @@ representative ratio; an absent preferred device withholds that ratio. The
 selected canonical label follows that ratio, and the compact README marks
 CUDA references. Both devices remain in the ledger. Device choice should use
 measured equivalent work; CUDA is not automatically assumed faster.
+
+## Raw DSSIM and FLIP maps
+
+`bench-iqa-canonical-dssim-maps PYTHON ...` requires explicit native and
+reference targets, reference source/origin/revision, native revision, input
+manifest and output directory. It compares all saved pyramid maps by unique
+geometry and retains each returned index. The native map/plain scalar assertion
+is exact. Reference map/plain scores are both recorded; numerical jitter is a
+finding, rather than a reason to discard the maps. Library/source hashes and
+process memory receipts remain attached. No new map tolerance is assigned.
+
+`bench-iqa-canonical-flip-maps PYTHON BUILD INPUTS NEW_OUTPUT` uses a frozen
+build receipt and source-verified FLIP module. Where two archmage/magetypes
+versions are present, it selects the dependencies required by the recorded
+zenmetrics-math fingerprint. The independent reference retains the f64 mean
+and row-major f32 mean conventions separately. `--case` explicitly selects a
+single declared input/thread case for either tool.
+
+On the local four-size/three-pair/thread-1-and-28 grid, author DSSIM 3.5.1
+matches native scalar scores and all 120 saved maps bit for bit across 24
+cases. Native and author map/plain scalar bits also match throughout. This
+uses author commit `0e44c9b7`, with only its unresolved dependency lock
+regenerated in an owned export. It supersedes primary-reference claims from
+the older fork; those alternative observations remain retained. The combined
+public-tool validation reports 143s, peak-RSS 1.36 GiB, minimum available
+11942 MiB and peak load 2.07. These are accuracy checks, without speed ratios.

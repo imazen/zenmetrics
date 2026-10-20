@@ -2295,3 +2295,10 @@ bench-iqa-canonical-nn-first plan output:
 # Caller supplies heavy admission; records the whole first-evaluation probe lifetime.
 bench-iqa-canonical-nn-first-profile plan case output:
     python3 -B benchmarks/iqa_compete_2026-10-16/profile_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}'
+
+# Callers supply heavy admission and explicit frozen native/reference builds.
+bench-iqa-canonical-dssim-maps python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_dssim_maps.py {{options}}
+
+bench-iqa-canonical-flip-maps python build inputs output *options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_flip_maps.py '{{build}}' '{{inputs}}' '{{output}}' {{options}}
