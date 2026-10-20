@@ -76,3 +76,19 @@ frozen evaluator slices and seal/audit validators. Its synthetic scores exercise
 acceptance and rejection, including unbounded V3 timing scope and preserved
 failed native resource flags. These controls execute no metric and do not
 establish numerical or performance acceptance.
+
+## File-only validation
+
+The frozen v3 verifier passes all eleven admitted synthetic controls: the valid
+unbounded V3 case is accepted; missing cell evidence, outer failure, changed
+logs, an invented V3 bound, changed helper copies, missing ABBA evidence, runtime
+drift, wrong argument templates, wrong sample counts and changed audits refuse.
+The valid case preserves null V3 bound, false native-parity qualification and
+false native resource flags while accepting descriptive timing scope. No metric,
+Octave or subprocess is executed by the test payload.
+
+Result SHA256: `727c0c65c237ca1770d4f8845ca167b8777a0c7d00041720647c91fefbf5bcc7`.
+Both shared locks and run-heavy 12G/jobs1 were held: rc0, 29s, peak RSS 0.02 GiB,
+minimum available 14283 MiB, peak load 8.76. These are fixture-control resources,
+not metric timing evidence. Actual root-produced receipts require a separate
+receipt-only promotion audit; the lane has not executed that audit.
