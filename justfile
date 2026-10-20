@@ -2046,3 +2046,10 @@ iqa-canonical-gate-retry bundle results output lock:
 
 iqa-canonical-gate-retry-check:
     TMPDIR="$HOME/tmp" python3 benchmarks/iqa_compete_2026-10-16/test_gate_retry.py
+
+# Freeze only unfinished approved changed routes, retaining original attempt budgets.
+bench-iqa-changed-successor bundle results output metrics lock:
+    python3 benchmarks/iqa_compete_2026-10-16/prepare_changed_successor.py '{{bundle}}' '{{results}}' '{{output}}' '{{metrics}}' --lock '{{lock}}'
+
+bench-iqa-changed-successor-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -m unittest benchmarks/iqa_compete_2026-10-16/test_changed_successor.py

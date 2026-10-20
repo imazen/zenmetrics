@@ -77,3 +77,14 @@ The [captured input-contract audit](../benchmarks/iqa_input_contracts_2026-10-20
 distinguishes HDR luminance/viewing refusals and fixed-factor MS-SSIM window
 refusals from unavailable implementations or worker stalls. Preserve these raw
 attempts and limits; larger valid geometries remain in the frozen queue.
+
+### Changed-only successors after a broad campaign
+
+`prepare_changed_successor.py BUNDLE RESULTS NEW_DIRECTORY METRICS_JSON --lock LOCK`
+requires the old coordinator to have stopped and acquires its coordinator lock.
+It rebuilds the report from sealed attempts, retains completed changed cells,
+excludes unchanged cells and partitions unfinished cells by remaining original
+attempt budget. A create-once parent reservation prevents duplicate successors.
+Run each frozen successor with exactly the recorded `max_attempts`; never rerun
+completed cells to replace a campaign identifier. The approved changed list has
+27 routes. Original results and source/version identities remain separate.
