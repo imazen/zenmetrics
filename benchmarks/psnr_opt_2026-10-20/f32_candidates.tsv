@@ -1,0 +1,8 @@
+f32-cand psnr-y-studio601-eq	1024x1024	0.765 ms/call	(res=148.470570)
+f32-cand psnr-cb	1024x1024	0.740 ms/call	(res=326.221866)
+f32-cand psnr-cr	1024x1024	0.767 ms/call	(res=665.175618)
+f32-cand luma709 (inexact)	1024x1024	0.348 ms/call	(res=229.861053)
+f32-cand psnr-y-studio601-eq	3840x2160	6.079 ms/call	(res=147.595122)
+f32-cand psnr-cb	3840x2160	6.050 ms/call	(res=326.780941)
+f32-cand psnr-cr	3840x2160	6.186 ms/call	(res=666.066287)
+f32-cand luma709 (inexact)	3840x2160	3.181 ms/call	(res=229.900833)

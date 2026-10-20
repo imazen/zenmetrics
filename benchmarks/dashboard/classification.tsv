@@ -1367,3 +1367,6 @@ benchmarks/canonical_recheck_2026-10-19/cvvdp-map-semantics.json	ignored	Native 
 benchmarks/canonical_recheck_2026-10-19/additional-classical-grids.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/original-ckdn-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/original-dmm-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/psnr_opt_2026-10-20/grid.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.
+benchmarks/psnr_opt_2026-10-20/f32_candidates.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.
+benchmarks/psnr_opt_2026-10-20/grid_par.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.

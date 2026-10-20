@@ -21,6 +21,13 @@
 //! Kernels are written at 512-bit logical width (u8x64/f64x8/f32x16);
 //! magetypes polyfills v3/NEON/WASM128 down to their native widths.
 
+/// Parallel engage point: inputs at or above this many pixels split into
+/// `4·workers` chunks on the caller's rayon global pool. Chosen so a
+/// 1024² image (~1MP, sub-millisecond even serial) stays serial while the
+/// heavy 4K path parallelizes; measured small-input overhead is in
+/// `benchmarks/psnr_opt_2026-10-20/grid.tsv`.
+const PAR_MIN_PX: usize = 1 << 21;
+
 /// Scalar per-byte squared error — the reference expression and the
 /// kernel's remainder step.
 #[inline]
@@ -72,7 +79,25 @@ fn rgb_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
 }
 
 /// [`rgb_sse_inner`] dispatch. Exact integer SSE over equal-length slices.
+/// Above [`PAR_MIN_PX`] pixels and with a multi-threaded caller pool, the
+/// input is split at chunk boundaries and partial sums are combined in
+/// order — integer addition is order-free, so this is still bit-exact.
 pub(crate) fn rgb_sse(a: &[u8], b: &[u8]) -> u64 {
+    if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        // Byte-aligned chunks (any boundary is valid for a flat byte SSE).
+        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 63) & !63;
+        return a
+            .par_chunks(chunk)
+            .zip(b.par_chunks(chunk))
+            .map(|(x, y)| {
+                archmage::attuned!(
+                    rgb_sse_inner(x, y),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                )
+            })
+            .sum();
+    }
     archmage::attuned!(
         rgb_sse_inner(a, b),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -225,7 +250,23 @@ fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
 
 /// [`studio601_y_sse_inner`] dispatch. Exact integer SSE of the
 /// u8-rounded studio-601 Y planes of two packed RGB8 images.
+/// Parallelizes in pixel-aligned chunks on the caller's rayon pool (see
+/// [`rgb_sse`]).
 pub(crate) fn studio601_y_sse(a: &[u8], b: &[u8]) -> u64 {
+    if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        return a
+            .par_chunks(chunk)
+            .zip(b.par_chunks(chunk))
+            .map(|(x, y)| {
+                archmage::attuned!(
+                    studio601_y_sse_inner(x, y),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                )
+            })
+            .sum();
+    }
     archmage::attuned!(
         studio601_y_sse_inner(a, b),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -291,8 +332,24 @@ fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
 }
 
 /// [`libvmaf_y_sse_inner`] dispatch. Returns the exact integer SSE as an
-/// integral f64 (guaranteed while the total stays below 2^53).
+/// integral f64 (guaranteed while the total stays below 2^53). Parallel
+/// chunks keep exactness: every partial is integral, so the ordered
+/// combination below 2^53 is bit-identical (see [`rgb_sse`]).
 pub(crate) fn libvmaf_y_sse(a: &[u8], b: &[u8]) -> f64 {
+    if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        return a
+            .par_chunks(chunk)
+            .zip(b.par_chunks(chunk))
+            .map(|(x, y)| {
+                archmage::attuned!(
+                    libvmaf_y_sse_inner(x, y),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                )
+            })
+            .sum();
+    }
     archmage::attuned!(
         libvmaf_y_sse_inner(a, b),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -372,7 +429,22 @@ fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> 
 
 /// [`studio601_plane_sse_inner`] dispatch for the Cb/Cr routes.
 /// `plane` is 1 (Cb) or 2 (Cr). Returns the exact integer SSE as f64.
+/// Parallel chunks combine integrally — still bit-exact (see [`rgb_sse`]).
 pub(crate) fn studio601_chroma_sse(a: &[u8], b: &[u8], plane: usize) -> f64 {
+    if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        return a
+            .par_chunks(chunk)
+            .zip(b.par_chunks(chunk))
+            .map(|(x, y)| {
+                archmage::attuned!(
+                    studio601_plane_sse_inner(x, y, plane),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                )
+            })
+            .sum();
+    }
     archmage::attuned!(
         studio601_plane_sse_inner(a, b, plane),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -485,7 +557,23 @@ fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) 
 
 /// [`studio601_yuv_sse_inner`] dispatch. Returns `(sse_y, sse_cb,
 /// sse_cr)` as exact integral f64s (caller guards the 2^53 bound).
+/// Parallel chunks combine integrally per plane — bit-exact (see
+/// [`rgb_sse`]).
 pub(crate) fn studio601_yuv_sse(a: &[u8], b: &[u8]) -> (f64, f64, f64) {
+    if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        return a
+            .par_chunks(chunk)
+            .zip(b.par_chunks(chunk))
+            .map(|(x, y)| {
+                archmage::attuned!(
+                    studio601_yuv_sse_inner(x, y),
+                    [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+                )
+            })
+            .reduce(|| (0.0, 0.0, 0.0), |x, y| (x.0 + y.0, x.1 + y.1, x.2 + y.2));
+    }
     archmage::attuned!(
         studio601_yuv_sse_inner(a, b),
         [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
@@ -709,6 +797,42 @@ mod tests {
             assert_bits(gcb, rcb, &format!("yuv-cb {w}x{h}"));
             assert_bits(gcr, rcr, &format!("yuv-cr {w}x{h}"));
         }
+    }
+
+    /// Above `PAR_MIN_PX` the integer kernels chunk across the rayon
+    /// global pool (32 threads here). Partial integer sums combine in
+    /// chunk order — still bit-exact vs the scalar reference.
+    #[test]
+    fn parallel_chunking_matches_scalar() {
+        let (a, b) = pair(2048, 1152); // 2.36M px > PAR_MIN_PX
+        assert_eq!(rayon::current_num_threads() > 1, true);
+        assert_bits(
+            rgb_sse(&a, &b) as f64,
+            reference::rgb_sse(&a, &b),
+            "rgb_sse par",
+        );
+        assert_bits(
+            studio601_y_sse(&a, &b) as f64,
+            reference::studio601_y_sse(&a, &b),
+            "studio601y par",
+        );
+        assert_bits(
+            libvmaf_y_sse(&a, &b),
+            reference::libvmaf_y_sse(&a, &b),
+            "libvmaf par",
+        );
+        for plane in [1, 2] {
+            assert_bits(
+                studio601_chroma_sse(&a, &b, plane),
+                reference::studio601_plane_sse(&a, &b, plane),
+                "chroma par",
+            );
+        }
+        let (gy, gcb, gcr) = studio601_yuv_sse(&a, &b);
+        let (ry, rcb, rcr) = reference::studio601_yuv_sse(&a, &b);
+        assert_bits(gy, ry, "yuv-y par");
+        assert_bits(gcb, rcb, "yuv-cb par");
+        assert_bits(gcr, rcr, "yuv-cr par");
     }
 
     /// Identity and full-extremes inputs (infinite PSNR boundary and the

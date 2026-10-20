@@ -1,0 +1,8 @@
+exhaustive over 16777216 RGB8 triples:
+  f32 y-studio601  vs f64: 68 mismatches (first Some((0, 204, 68)))
+  f32 cb           vs f64: 16 mismatches (first Some((0, 234, 163)))
+  f32 cr           vs f64: 4 mismatches (first Some((43, 251, 1)))
+  f32 libvmaf-y    vs f64: 160 mismatches (first Some((1, 217, 194)))
+  floor(+0.5) f32 y-kernel vs f32::round: 0 mismatches
+  floor(+0.5) f64 plane kernels vs f64::round: y=0 cb=0 cr=0 mismatches
+  floor(+0.5) f64 libvmaf kernel vs f64::round: 0 mismatches
