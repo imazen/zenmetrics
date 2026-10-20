@@ -1181,6 +1181,7 @@ dependencies = [
 name = "cpu-profile"
 version = "0.0.0"
 dependencies = [
+ "archmage 0.9.31-beta.1",
  "butteraugli",
  "bytemuck",
  "cudarc",
@@ -1194,6 +1195,7 @@ dependencies = [
  "imgref",
  "iwssim",
  "mad-iqa",
+ "magetypes 0.9.31-beta.1",
  "mdctpsnr",
  "msssim",
  "nlpd",
@@ -1213,6 +1215,7 @@ dependencies = [
  "zenmetrics-api",
  "zenmetrics-cli",
  "zenmetrics-corpus",
+ "zenmetrics-math",
  "zenpixels",
  "zenresize",
  "zensim 0.3.0",

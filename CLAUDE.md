@@ -2150,3 +2150,11 @@ on one 512×512 pair match bit-for-bit between gradient policies. Four
 unexecuted plans were replaced with new identities and retained backups;
 native settings, budgets and numerical bounds are preserved. See the
 [reference-fixture control](benchmarks/canonical_recheck_2026-10-19/README.md#original-wadiqam-reference-setup).
+
+### Benchmark integration finding, 2026-10-20
+
+The new FLIP SIMD module is included directly by `cpu-profile`, so its
+archmage and zenmetrics-math references must also be declared in that
+benchmark package. A fresh build of `7d27d22b` exposed missing direct
+dependencies and failed before scoring. The harness manifest repair is
+under local verification; production metric arithmetic is unchanged.

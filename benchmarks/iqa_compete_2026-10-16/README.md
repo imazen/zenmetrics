@@ -386,3 +386,8 @@ The subsequent FLIP/FLIP-v17 and WS-HV revisions expand the current native
 `changed` selection to 38 routes. Their separate
 [scheduling table](../rebenchmark_since_f7668c7/order_current_after_flip_2026-10-20.tsv)
 retains the earlier 35-route table for existing comparison manifests.
+
+Directly included metric modules compile in the benchmark package. The
+`compete` feature therefore enables its own `avx512` cfg and declares the
+same archmage, magetypes and zenmetrics-math dependencies as the CLI. Runtime
+dispatch remains enabled; no native-CPU compiler flag is required.

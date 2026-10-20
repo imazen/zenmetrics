@@ -23,7 +23,9 @@ path = "src/bin/cpu_wall.rs"
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
 compete-nn = ["compete", "zenmetrics-cli/nn-ort", "zenmetrics-cli/nr"]
-compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current"]
+compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current", "avx512"]
+# Directly included CLI modules resolve dependencies and cfgs in this package.
+avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512", "zenmetrics-cli/avx512"]
 heap-phases = ["zenbench/heap-profiling"]
 study-gpu-wgpu = ["zenmetrics-api/all-metrics", "zenmetrics-api/wgpu", "dep:cubecl", "cubecl/wgpu"]
 study-gpu-cuda = ["zenmetrics-api/all-metrics", "zenmetrics-api/cuda", "dep:cudarc", "dep:cubecl", "cubecl/cuda"]
@@ -37,6 +39,9 @@ metrics-parallel = [
 ]
 
 [dependencies]
+archmage.workspace = true
+magetypes.workspace = true
+zenmetrics-math = { path = "../../../../crates/zenmetrics-math", features = ["std"] }
 sha2 = "0.11.0"
 nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel", "avx512"] }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
