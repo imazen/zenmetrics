@@ -1393,3 +1393,10 @@ benchmarks/canonical_recheck_2026-10-19/nr-auxiliary.json	ignored	Native referen
 benchmarks/canonical_recheck_2026-10-19/gpu-grid-profiles.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/original-liqe-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/rebenchmark_since_f7668c7/order_current_2026-10-20.tsv	ignored	Historical scheduling hints for 35 changed routes; no new timing observations.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/ssim-control.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/ssim-y.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/ssim-rgb.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/ms-ssim.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/fsim.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/fsimc.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/vsi.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
