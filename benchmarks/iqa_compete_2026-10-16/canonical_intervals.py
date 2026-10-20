@@ -12,6 +12,7 @@ import random
 import statistics
 
 from compare_canonical import sha
+from reference_publication import register_outputs
 
 
 def interval(ratios, draws=20_000):
@@ -86,6 +87,7 @@ def main():
                        qualification='descriptive; runtime closure and canonical contamination not independently audited',
                        rows=rows), stream, indent=2)
         stream.write('\n')
+    register_outputs([(a.output,'interval')])
     print(json.dumps(rows))
 
 

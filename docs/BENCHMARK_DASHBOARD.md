@@ -51,6 +51,14 @@ Public per-image TSVs may use the `quality-points` adapter with exactly `metric`
 `dataset`, `pair`, `mos`, `score`. Do not infer correlations or intervals from a
 small scatter preview.
 
+The native-reference comparison publisher and interval command add explicit
+classification rows for the files they successfully generate inside this
+repository's `benchmarks/` tree. Those comparison cohorts, summaries, source
+indexes and descriptive intervals remain separate from the canonical multi-host
+timing series. Scratch projections do not modify the registry. Other files in
+the output directory are never classified by these commands; unrelated uploads
+still fail the unknown-file guard.
+
 ## Statistical and display contracts
 
 The first view ranks all positive measured timings at one exact width × height,

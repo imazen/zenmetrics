@@ -14,6 +14,7 @@ import re
 import statistics
 
 from compare_canonical import compare, sha, summarize
+from reference_publication import register_outputs
 
 
 def native_engine(plan):
@@ -198,7 +199,7 @@ def main():
     a=p.parse_args()
     a.output.mkdir(exist_ok=True)
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
-    combined=[];sources={}
+    combined=[];sources={};published=[]
     for root in a.cohorts:
         label=root.name
         if label in sources:
@@ -223,10 +224,12 @@ def main():
                 if len(payload)>30_000:raise ValueError('metric shard exceeds generated-data cap')
                 artifact=a.output/(label+'-'+metric+'.tsv')
                 artifact.write_bytes(payload)
+                published.append((artifact,'cohort'))
                 artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
         else:
             artifact=a.output/(label+'.tsv')
             artifact.write_bytes(data)
+            published.append((artifact,'cohort'))
             artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
         absolute=root.absolute()
         raw='~/'+str(absolute.relative_to(Path.home())) if absolute.is_relative_to(Path.home()) else str(absolute)
@@ -249,6 +252,7 @@ def main():
             name=f'results-{len(shards):02d}.json'
             path=a.output/name
             path.write_text(json.dumps(part,indent=2)+'\n')
+            published.append((path,'summary'))
             if path.stat().st_size>30_000:raise ValueError('projection shard exceeds generated-data cap')
             shards.append(dict(file=name,sha256=sha(path),metrics=len(part)))
         for name,row in sorted(value.items()):
@@ -260,6 +264,8 @@ def main():
         text=json.dumps(dict(schema=2,metrics=len(value),shards=shards),indent=2)+'\n'
     (a.output/'results.json').write_text(text)
     (a.output/'cohorts.json').write_text(json.dumps(sources,indent=2)+'\n')
+    published.extend([(a.output/'results.json','summary'),(a.output/'cohorts.json','provenance')])
+    register_outputs(published)
     print(json.dumps(dict(metrics=len(value),cases=len(combined),
                          excluded=sum(bool(r['excluded_contract']) for r in combined))))
 

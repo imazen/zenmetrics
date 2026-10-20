@@ -1668,7 +1668,7 @@ bench-iqa-canonical-changed-plan manifest output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_changed_canonical.py '{{manifest}}' '{{output}}' {{options}}
 
 bench-iqa-canonical-check:
-    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical test_reference_publication
 
 bench-iqa-canonical-interval results output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}' {{options}}
