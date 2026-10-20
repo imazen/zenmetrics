@@ -1,0 +1,37 @@
+{
+  "source_revision": "933e997cc7a12099fc17d56db17f7ffa897d1f83",
+  "source_sha256": "2afa94f53fb6d777b1b0cc08939d956044f82f69ce9d15f080b5df894ba4524c",
+  "native_probe_sha256": "0c7724d7f8c3e81bd1810a4d5d00ebe2ec3da3df2dc436d09e3bf3647770f7a9",
+  "canonical_probe_sha256": "2224c95c2e065f214e82a189f7d2aec57c98382f8b39100c428998aaedb58de3",
+  "libraries": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libarchmage-af4da88822b373a9.rlib": "ffbe7bd1fd5124b70be3c0a771425ee69cdfe28198a436503659f95a5213540f",
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libmagetypes-6c46f7cb2e7e0342.rlib": "0789be2c1bcb70a100cde442b0e04a8cd6901de84999f4a10dbc8103a4aa023b",
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libzenmetrics_math-3eb28a3f3c50fdf4.rlib": "ff3bb520dbcc65fb468d3a1fc7488c53d71331e9492775dbf103d153bf1c55b0",
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/librayon-9a2d430ac7c2c7ce.rlib": "830fd6e635f9e16eab9955ad7ee1444f985f7705eceb9a47b60c9200cf380b79"
+  },
+  "command": [
+    "rustc",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "--cfg",
+    "feature=\"parallel\"",
+    "--cfg",
+    "feature=\"avx512\"",
+    "-L",
+    "dependency=/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps",
+    "--extern",
+    "archmage=/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libarchmage-af4da88822b373a9.rlib",
+    "--extern",
+    "magetypes=/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libmagetypes-6c46f7cb2e7e0342.rlib",
+    "--extern",
+    "zenmetrics_math=/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/libzenmetrics_math-3eb28a3f3c50fdf4.rlib",
+    "--extern",
+    "rayon=/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/librayon-9a2d430ac7c2c7ce.rlib",
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-current-maps/flip_map_dump.rs",
+    "-o",
+    "/home/lilith/tmp/local-canonical-20261019T2330/flip-current-maps/native-map"
+  ],
+  "binary_sha256": "8cd8b418f0a832047179946cd0e08b44fabfc9277ce3647e86bbc81019f5455d",
+  "parent_build_receipt_sha256": "dc3af44f83e0ff155ff456791eccb6364cb904cc5a65855b5b591aa2b8c28bd8"
+}

@@ -1,0 +1,87 @@
+{
+  "source_sha256": "d14cdcb0b4212001266c5d5e3cdb7b83f75c7755555db34301640bcff9c534ab",
+  "libraries": {
+    "canonical": {
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/libdssim_core-4074d08e05d84d50.rlib": "6a338f8b959155bba4eb14d08a0d618d2570b17d135b7b95fcdc68d2d5b23424",
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/librgb-4188348149aa748c.rlib": "4ffebd7908b6e427c6dc31de94fdcf6f373e1b30a3336e6ba37e93cfb3c98b20",
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/libimgref-8e382697f79c0d86.rlib": "4e36132ef91c987eed98cf4c82a892477071ec267b481dac50a50f157542ba6b",
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/librayon-1cd9c42386178cf1.rlib": "049ac63ee73671a658b8afbb4f0ed1108b3bc5a41695cc5b36a6ca7b5b0bb6cc"
+    },
+    "native": {
+      "/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/libdssim_core-79bc9a3ac35f431f.rlib": "aa539dec420a080a86cf799fbcee1c90795f9aea5147bb700c50e4fc4f38f453",
+      "/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/librgb-a8d4c47c1d3505da.rlib": "be0c54b9dfa6a730ba6fdc9b7c4ce2816284941f6e52bb164c289e9b005636c5",
+      "/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/libimgref-efe5488c04eb4b11.rlib": "7d351b6ca73121880b7bf51c8b228aaaa1abcb70deea1e88d29d7663f5e43f38",
+      "/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/librayon-ea07e479bc5dfaca.rlib": "57af68d40fdfffef7cb6f80a43e480d25851d93629e8d6b9aef7a301aa92c7ca"
+    }
+  },
+  "commands": {
+    "canonical": [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "panic=abort",
+      "-L",
+      "dependency=/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps",
+      "--extern",
+      "dssim_core=/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/libdssim_core-4074d08e05d84d50.rlib",
+      "--extern",
+      "rgb=/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/librgb-4188348149aa748c.rlib",
+      "--extern",
+      "imgref=/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/libimgref-8e382697f79c0d86.rlib",
+      "--extern",
+      "rayon=/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/target/release/deps/librayon-1cd9c42386178cf1.rlib",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_map_dump.rs",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-maps/canonical-map"
+    ],
+    "native": [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-L",
+      "dependency=/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps",
+      "--extern",
+      "dssim_core=/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/libdssim_core-79bc9a3ac35f431f.rlib",
+      "--extern",
+      "rgb=/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/librgb-a8d4c47c1d3505da.rlib",
+      "--extern",
+      "imgref=/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/libimgref-efe5488c04eb4b11.rlib",
+      "--extern",
+      "rayon=/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/deps/librayon-ea07e479bc5dfaca.rlib",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_map_dump.rs",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-maps/native-map"
+    ]
+  },
+  "binaries": {
+    "canonical": "ab70b71e5b5842b7a4fd6ccc6e331c69b3caf1c39c74676c086ce8ee7512fd37",
+    "native": "c23dd4978a8792b10a5e064470e9d412283c4076d61a17099b87465e03bf86a4"
+  },
+  "native_revision": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+  "reference_revision": "0e44c9b7fe91a5265c8e463436c28512186fe9cd",
+  "reference_origin": "https://github.com/kornelski/dssim",
+  "reference_source_files": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/Cargo.toml": "a7ee7b7445de9f0e4a7bf007052cbd5ad08a9f4eff4626f415379e7e5ac28590",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/Cargo.lock": "271b9015cf2e428a865847c0cd3e3c042e7386ef4dd01f728a3458d8bf752eed",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/Cargo.toml": "aa5c6dbf5457fc9fa059bbc43da2a9b3399127eb35844d04db0b9e7a5cbe8721",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/clic-2021/Cargo.toml": "265018a8fba4ae39e46f64ed98b01965c36111761383948420e712b399067f55",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/src/main.rs": "383c7ca3d46b17ac50b871d24d9ef841a19822b59a584e89d7406ee70b0a8262",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/src/lib.rs": "0fb4077ef499d97f3ae9d5044eb9bce645b4d6413473ec719a4b223a9a807485",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/benches/compare.rs": "722d765641ea096de5a40a8e3826439234c4efd300194b2746b13f506e9d172b",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/val.rs": "1fbd3115e02c6077794dd353a7001bc531d2539171aca91f2e32b3066ae910f1",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/tolab.rs": "809c5e812879a1fb694905c3b6ba2e497ad09c21ddbff7e877ec08c137884f9e",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/c_api.rs": "5129aea856f53f391266b1e4dff681393d168e5e1fd52ab04af028ea243c0297",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/dssim.rs": "80a23705175e5b3377a4967b2ffdf50fbe8ca743338d29bc984f5aac55773527",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/linear.rs": "b776341993b535a1e3b98b2a9f2d4050bb2da40f9df3aedec0099a3c7ff1ee09",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/lieon.rs": "257b253f6b9ee3ff0b2215f3c64939c304f5f3a7f18552cbef2a3e89155e13a2",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/lib.rs": "54533d1c5a8087c70f7191efeebeee99e809c392bc3a244759e8a4486252101d",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/image.rs": "9d2a13e5ba71f0e3e26f02b65fa9d6c7aeb916aa4801d7fa637ee436eb8718e6",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/ffi.rs": "f79d709979784b0c2be1fa9ed9393c8675a3c73c4799044d220d1083d16ee58f",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/blur.rs": "3846a5badcf88eafc1624b12db59131d33625a1061d31a80e8e87c12bfeef673",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/dssim-core/src/blur/equiv_tests.rs": "623b1ca6d3e986d6c77542ec0a4585aca64073610a86cce3e036573bf6fdc6aa",
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-build-source/clic-2021/src/main.rs": "744c0152012a668c07e7af1e19d271af21312a5665f295e7bd68786ea0bea1e3"
+  }
+}

@@ -533,3 +533,11 @@ The older-fork map results are retained with that identity too.
 ## Completed initial learned pass, 2026-10-20
 
 The initial learned pass has observations for all 28 requested non-PieAPP names. WD passes at both thread settings: one-thread absolute difference 0, Rust/canonical time ratio 0.11094338612430271; eight-thread difference 1.862645149230957e-9, ratio 0.07819718004981498. Last blocks: 293s / 84s, peak-RSS 2.34 / 2.35 GiB, minimum available 10029 / 11760 MiB, peak load 5.57 / 4.89. These are representative 512×512 scalar comparisons, not completion of the multi-size, map or cold matrix. The three original STLPIPS import failures remain retained with their already completed replacements.
+
+## Author DSSIM and revised FLIP maps, 2026-10-20
+
+[Author DSSIM maps](dssim-author-maps/index.json) match native scalar scores and all 120 maps bit for bit across 24 cases (four sizes × three pairs × threads 1/28). Both sides also retain identical map/plain scalar bits. Author source is 3.5.1 at `0e44c9b7`; only its dependency lock was resolved in an owned export. The wrapper reports 143s, peak-RSS 1.36 GiB, minimum available 11942 MiB, peak load 2.07, including the one-case public FLIP control.
+
+[Revised FLIP maps](flip-current-maps/index.json) are bit-identical in all 24 cases. Their f64 and row-major f32 scalar means remain separate. Wrapper: 116s, peak-RSS 1.22 GiB, minimum available 11447 MiB, load 4.82. These are accuracy observations, without new map bounds or speed claims.
+
+The [current 38-route worker](current38-worker.json) verifies the published Rust inputs, runtime AVX-512 and NR feature coverage, with the declared existing benchmark adapters. Its manifest uses the corrected author DSSIM reference; both earlier scheduling manifests remain retained.

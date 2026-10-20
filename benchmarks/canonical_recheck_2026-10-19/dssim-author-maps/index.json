@@ -1,0 +1,34 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-maps",
+  "completion_sha256": "388648f6081ab14b9136f2f1653f19793ec3e8dc4d1d68c98a8717edf869f51b",
+  "cases": 24,
+  "parts": [
+    {
+      "file": "pairA.json",
+      "cases": 8,
+      "sha256": "eafbb49c73482339fa91378356e3694cb9f4c892272f166d311a2edfaccb4dca"
+    },
+    {
+      "file": "pairB.json",
+      "cases": 8,
+      "sha256": "d873436eafe8afde2f0dcb08991d9065ea6490c797fbba0fc86c05e1ca8092fe"
+    },
+    {
+      "file": "pairC.json",
+      "cases": 8,
+      "sha256": "65d60cac2003646b35395b49d6261f32ab91b3801ae0ee71d471cdc25ffe7d59"
+    }
+  ],
+  "build_receipt_sha256": "446b7c545ea4a301b8e1056f43b88d480b1f9846e143414e47839354fa98ec5b",
+  "qualification": "Accuracy only; no timing ratio or newly assigned map bound",
+  "reference_origin": "https://github.com/kornelski/dssim",
+  "reference_revision": "0e44c9b7fe91a5265c8e463436c28512186fe9cd",
+  "reference_version": "3.5.1",
+  "native_revision": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+  "maps": 120,
+  "all_maps_bit_identical": true,
+  "max_scalar_abs_delta": 0.0,
+  "native_and_reference_map_plain_bits_match": true,
+  "wrapper": "run-heavy: done rc=0 143s | peak-RSS 1.36GiB | min-avail 11942MiB | peak-load 2.07; includes the one-case public FLIP wrapper control",
+  "lock_resolution_sha256": "0c1f1d2f85306ddfb39e7951b1df3037afbf0598a61cf3d03d5d10f766fbff2f"
+}

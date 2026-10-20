@@ -1,0 +1,204 @@
+{
+  "cases": [
+    {
+      "pair": "pairC",
+      "size": "64",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06950354697823968,
+          "flip_v17": 0.06950362771749496
+        },
+        "canonical": {
+          "flip": 0.06950354697823968,
+          "flip_v17": 0.06950362771749496
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "1a10e69f0e957f9a3d3bbf8a2b0788864d9754f4651f206a600d0195e43782f5",
+      "canonical_map_sha256": "1a10e69f0e957f9a3d3bbf8a2b0788864d9754f4651f206a600d0195e43782f5"
+    },
+    {
+      "pair": "pairC",
+      "size": "64",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06950354697823968,
+          "flip_v17": 0.06950362771749496
+        },
+        "canonical": {
+          "flip": 0.06950354697823968,
+          "flip_v17": 0.06950362771749496
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "1a10e69f0e957f9a3d3bbf8a2b0788864d9754f4651f206a600d0195e43782f5",
+      "canonical_map_sha256": "1a10e69f0e957f9a3d3bbf8a2b0788864d9754f4651f206a600d0195e43782f5"
+    },
+    {
+      "pair": "pairC",
+      "size": "odd",
+      "width": 255,
+      "height": 257,
+      "threads": 1,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06729297260435127,
+          "flip_v17": 0.06729260087013245
+        },
+        "canonical": {
+          "flip": 0.06729297260435127,
+          "flip_v17": 0.06729260087013245
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "fd0850dcfe54ba8d184709d4eda39543f106b88d408804512d4d6add648870e9",
+      "canonical_map_sha256": "fd0850dcfe54ba8d184709d4eda39543f106b88d408804512d4d6add648870e9"
+    },
+    {
+      "pair": "pairC",
+      "size": "odd",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06729297260435127,
+          "flip_v17": 0.06729260087013245
+        },
+        "canonical": {
+          "flip": 0.06729297260435127,
+          "flip_v17": 0.06729260087013245
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "fd0850dcfe54ba8d184709d4eda39543f106b88d408804512d4d6add648870e9",
+      "canonical_map_sha256": "fd0850dcfe54ba8d184709d4eda39543f106b88d408804512d4d6add648870e9"
+    },
+    {
+      "pair": "pairC",
+      "size": "1mp",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06922592246204018,
+          "flip_v17": 0.06922775506973267
+        },
+        "canonical": {
+          "flip": 0.06922592246204018,
+          "flip_v17": 0.06922775506973267
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "1a8ae6d1b660aed6e54e1ec9e299950155ee5e485e859e18139cb139629ee35c",
+      "canonical_map_sha256": "1a8ae6d1b660aed6e54e1ec9e299950155ee5e485e859e18139cb139629ee35c"
+    },
+    {
+      "pair": "pairC",
+      "size": "1mp",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.06922592246204018,
+          "flip_v17": 0.06922775506973267
+        },
+        "canonical": {
+          "flip": 0.06922592246204018,
+          "flip_v17": 0.06922775506973267
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "1a8ae6d1b660aed6e54e1ec9e299950155ee5e485e859e18139cb139629ee35c",
+      "canonical_map_sha256": "1a8ae6d1b660aed6e54e1ec9e299950155ee5e485e859e18139cb139629ee35c"
+    },
+    {
+      "pair": "pairC",
+      "size": "4k",
+      "width": 3840,
+      "height": 2160,
+      "threads": 1,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.0695565664923344,
+          "flip_v17": 0.06971804797649384
+        },
+        "canonical": {
+          "flip": 0.0695565664923344,
+          "flip_v17": 0.06971804797649384
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "b90e7ffd0aa35bc47b7c034a4c25b495af10179150921823a339788842fdb712",
+      "canonical_map_sha256": "b90e7ffd0aa35bc47b7c034a4c25b495af10179150921823a339788842fdb712"
+    },
+    {
+      "pair": "pairC",
+      "size": "4k",
+      "width": 3840,
+      "height": 2160,
+      "threads": 28,
+      "errors": {},
+      "observed": {
+        "native": {
+          "flip": 0.0695565664923344,
+          "flip_v17": 0.06971804797649384
+        },
+        "canonical": {
+          "flip": 0.0695565664923344,
+          "flip_v17": 0.06971804797649384
+        }
+      },
+      "map_bound": null,
+      "qualification": "Accuracy only; map means preserve f64 and row-major f32 conventions; no timing claim",
+      "max_map_abs_delta": 0.0,
+      "mean_map_abs_delta": 0.0,
+      "nonfinite_mismatches": 0,
+      "native_map_sha256": "b90e7ffd0aa35bc47b7c034a4c25b495af10179150921823a339788842fdb712",
+      "canonical_map_sha256": "b90e7ffd0aa35bc47b7c034a4c25b495af10179150921823a339788842fdb712"
+    }
+  ]
+}

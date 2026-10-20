@@ -1,4 +1,32 @@
 {
+  "psnrhvs-daala": {
+    "canonical": "libvmaf 3.2.0 / original Daala psnr_hvs / YUV444",
+    "check": "2/2 pass",
+    "ratio": 0.6688142027315707,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "02ab9084ce35d2f2b3e9b4e5bb0fa0aa99a6affd7e75701925fd9d05ca88d4a5",
+    "ratio_engine": null,
+    "ratio_canonical_device": "cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.6688142027315707,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "02ab9084ce35d2f2b3e9b4e5bb0fa0aa99a6affd7e75701925fd9d05ca88d4a5"
+    ],
+    "qualified": false
+  },
   "psnrhvs-y": {
     "canonical": "author psnrhvsm.m / signal 1.4.1",
     "check": "1 process errors",
@@ -344,13 +372,13 @@
   "ssimc": {
     "canonical": "scikit-image 0.26 / declared RGB ingress",
     "check": "\u0394 1.2e-15",
-    "ratio": 0.18814414217381423,
+    "ratio": 0.23696509076114985,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "ratio_plan_sha256": "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
@@ -687,34 +715,6 @@
     ],
     "plan_sha256": [
       "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
-    ],
-    "qualified": false
-  },
-  "vif": {
-    "canonical": "original vifp_mscale / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.0761951737804624,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "eabc27785fd4262b6a01f44ef2f8fd6f4c7f2bbb287c7df6e3e2754bd4310978",
-    "ratio_engine": null,
-    "ratio_canonical_device": "cpu",
-    "ratio_blocks": 3,
-    "worst_ratio": 0.1222333500929153,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 5.379585665821196e-13,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "eabc27785fd4262b6a01f44ef2f8fd6f4c7f2bbb287c7df6e3e2754bd4310978"
     ],
     "qualified": false
   }

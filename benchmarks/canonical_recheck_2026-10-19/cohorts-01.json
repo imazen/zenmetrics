@@ -1,4 +1,40 @@
 {
+  "original-dreamsim-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-dreamsim-1100-run",
+    "plan_sha256": "468905d1865acd24021f5813db5359841e1d9426f43753eaaf1aaf27475aece8",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-dreamsim-1100-run.tsv",
+        "sha256": "a2f0c39e9ab468dd95c71e8829ec91823684feceb436c399985c939ddf9ab387"
+      }
+    ]
+  },
+  "original-hyperiqa-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run",
+    "plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-hyperiqa-1100-run.tsv",
+        "sha256": "34704edcf4e3b0d48cd1d680dc044a2effe203720a0b726abce6e01eef9b57cc"
+      }
+    ]
+  },
+  "original-liqe-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-liqe-1100-run",
+    "plan_sha256": "8e6c30d3bc9d7d90b80e96588666c8ea212757c6b3d5d40bf47002d24cfc38ce",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-liqe-1100-run.tsv",
+        "sha256": "044e0f99c2852f22efd27ab7bf4b542686c88afa4194790e0c70ab10982c4be2"
+      }
+    ]
+  },
   "original-maniqa-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-maniqa-1100-run",
     "plan_sha256": "56ad32fc525f267a01e9f0f0f8c28d3eac9863ae2feababbfd1c63799a6728da",
@@ -131,15 +167,27 @@
       }
     ]
   },
+  "paq2piq-original-cid22-t1-3bc4fc38-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t1-3bc4fc38/confirmation-run",
+    "plan_sha256": "dfb17114cef97a51a641623410546ad746cd6ba7a9e06bb0b37b15d45da9a046",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "paq2piq-original-cid22-t1-3bc4fc38-confirmation-run.tsv",
+        "sha256": "6b51ddff98b12f0a1fabef2c821c74ba1ab190ac3d88f8e3d14b744107a1ec56"
+      }
+    ]
+  },
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 2,
+    "cases": 3,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "79c93621838049d0ca194cfd9482c9a1fd26427fd265eb61003c93125f5e0d6b"
+        "sha256": "ca9cb58765197d79c88fcfb9e4d172a78df97f5228c8c526715c85f8dc4c623f"
       }
     ]
   },
@@ -252,14 +300,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },

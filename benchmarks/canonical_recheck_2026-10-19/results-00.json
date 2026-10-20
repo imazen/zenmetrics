@@ -158,13 +158,13 @@
   "butteraugli": {
     "canonical": "libjxl 0.12.0 original comparator",
     "check": "\u0394 5e-05",
-    "ratio": 0.38724101401116495,
+    "ratio": 0.40518300806524327,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "ratio_plan_sha256": "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
@@ -386,7 +386,7 @@
   },
   "cvvdp-gpu": {
     "canonical": "pycvvdp 0.5.7 CPU / standard_fhd",
-    "check": "5/47 pass",
+    "check": "6/49 pass",
     "ratio": 0.021438893589516016,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -398,9 +398,9 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.701641789307398,
-    "observed_cases": 5,
-    "expected_cases": 47,
-    "passed_cases": 5,
+    "observed_cases": 6,
+    "expected_cases": 49,
+    "passed_cases": 6,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 2.6702880859375e-05,
@@ -409,6 +409,7 @@
     ],
     "plan_sha256": [
       "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "6ae11d80aa331e794d2232efde29817baf1b1f54a6661dd1bcd6adc60e091877",
       "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
@@ -615,49 +616,79 @@
     ],
     "qualified": false
   },
-  "flip": {
-    "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
-    "check": "\u0394 3.6e-14",
-    "ratio": 0.3344310291418364,
+  "dssim": {
+    "canonical": "author dssim-core 3.5.1 / 0e44c9b7",
+    "check": "\u0394 0",
+    "ratio": 0.1390198452057194,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
+    "ratio_source": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+    "ratio_plan_sha256": "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4",
+    "ratio_engine": null,
+    "ratio_canonical_device": "cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.3994832896683478,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "5fa7be7d42b51af3dd27b42dd50159972132ef12"
+    ],
+    "plan_sha256": [
+      "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4"
+    ],
+    "qualified": false
+  },
+  "flip": {
+    "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
+    "check": "\u0394 3.6e-14",
+    "ratio": 0.18882550985933536,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+    "ratio_plan_sha256": "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 2.0289245567679464,
-    "observed_cases": 4,
-    "expected_cases": 4,
+    "observed_cases": 6,
+    "expected_cases": 6,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 3.552713678800501e-14,
     "rust_sources": [
+      "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
       "5082f0021bb8548e259719470aafd60dc42beacff3f2adccc6bc9e8f50cd223d",
       "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
-      "b9d19f48bb37503308f57f27c481704cd8559d709995eb544e67dbaf657673a8"
+      "b9d19f48bb37503308f57f27c481704cd8559d709995eb544e67dbaf657673a8",
+      "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b"
     ],
     "qualified": false
   },
   "flip-v17": {
     "canonical": "NVIDIA FLIP 1.7",
     "check": "\u0394 0",
-    "ratio": 0.335881773407624,
-    "ratio_width": 512,
-    "ratio_height": 512,
-    "ratio_threads": 1,
-    "ratio_cases": 1,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "ratio": null,
+    "ratio_width": null,
+    "ratio_height": null,
+    "ratio_threads": null,
+    "ratio_cases": 0,
+    "ratio_source": null,
+    "ratio_plan_sha256": null,
     "ratio_engine": null,
-    "ratio_canonical_device": "cpu",
-    "ratio_blocks": 3,
+    "ratio_canonical_device": null,
+    "ratio_blocks": 0,
     "worst_ratio": 1.9073448386822038,
     "observed_cases": 3,
     "expected_cases": 3,
@@ -672,34 +703,6 @@
       "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
       "3e0d5e2ea2d617aa34654e46838c16d6521e5e9783c769612a3241551c73c497",
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
-    ],
-    "qualified": false
-  },
-  "fsim": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.21859190502808892,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_canonical_device": "cpu",
-    "ratio_blocks": 3,
-    "worst_ratio": 0.22285189686723708,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.329927450832713e-06,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
     ],
     "qualified": false
   }

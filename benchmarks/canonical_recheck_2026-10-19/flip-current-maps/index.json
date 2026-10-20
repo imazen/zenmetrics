@@ -1,0 +1,29 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/flip-current-maps",
+  "completion_sha256": "6d7e4e90c99d6efad59833d26f64b7fa80e07a76d2c9096ca25ad05487fb8360",
+  "cases": 24,
+  "parts": [
+    {
+      "file": "pairA.json",
+      "cases": 8,
+      "sha256": "571c3bfca347b33fd83648f37d4e4d38354bfd3bf54797636d3f8c3c404c4225"
+    },
+    {
+      "file": "pairB.json",
+      "cases": 8,
+      "sha256": "d682ab8fe52e07119d2f30091d7a603a1d7bf8b7855bff5fc36d9898b081739c"
+    },
+    {
+      "file": "pairC.json",
+      "cases": 8,
+      "sha256": "2c03136e4f873589508b62af03766b0d48460a881d63070bbf951efd4e226b03"
+    }
+  ],
+  "build_receipt_sha256": "e439cb4d8631b5fb0d800d1ec3fb1e9f2c6e373c7e55f5bf22cbbb9bf056208e",
+  "qualification": "Accuracy only; no timing ratio or newly assigned map bound",
+  "all_maps_bit_identical": true,
+  "max_map_abs_delta": 0.0,
+  "max_flip_abs_delta": 1.1102230246251565e-16,
+  "max_flip_v17_abs_delta": 0.0,
+  "wrapper": "run-heavy: done rc=0 116s | peak-RSS 1.22GiB | min-avail 11447MiB | peak-load 4.82"
+}

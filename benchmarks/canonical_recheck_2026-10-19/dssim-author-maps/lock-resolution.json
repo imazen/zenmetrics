@@ -1,0 +1,6 @@
+{
+  "author_revision": "0e44c9b7fe91a5265c8e463436c28512186fe9cd",
+  "original_lock_sha256": "480d24cd5b17587c6f505a3e88d6b9313e36f34898f633f14cb2decceddecdde",
+  "resolved_lock_sha256": "271b9015cf2e428a865847c0cd3e3c042e7386ef4dd01f728a3458d8bf752eed",
+  "scope": "Author manifests and Rust files unchanged; resolve the lockfile required by the author 3.5.1 manifests in an owned export; preserve the original author lockfile and repository"
+}
