@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from canonical_chunks import merge, records, scoring_environment
-from canonical_run import admitted_command
+from canonical_chunks import continuation_records, merge, records, scoring_environment
+from canonical_run import admitted_command, sha
+import json
 
 
 class ChunkRecovery(unittest.TestCase):
@@ -20,6 +21,43 @@ class ChunkRecovery(unittest.TestCase):
         for manifest in ({}, {'heavy_locks': ['relative.lock']}, {'heavy_locks': [lock, lock]}):
             with self.assertRaisesRegex(ValueError, 'heavy_locks'):
                 admitted_command(manifest, ['scorer'])
+
+    def test_successor_imports_only_exact_completed_bundle_rows(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root = Path(directory)
+            result = root/'result.tsv'
+            result.write_text('distorted\tvalue\terror\na.png\t1.25\t\n')
+            receipt = root/'receipt.json'
+            receipt.write_text(json.dumps(dict(returncode=0, outputs={str(result): sha(result)})))
+            continuation = dict(path=str(result), sha256=sha(result), rows=1,
+                                receipts=[dict(path=str(receipt), sha256=sha(receipt))])
+            observed, _ = continuation_records(continuation, False)
+            self.assertEqual(list(observed), ['a.png'])
+            result.write_text('distorted\tvalue\terror\na.png\t2.5\t\n')
+            continuation['sha256'] = sha(result)
+            with self.assertRaisesRegex(ValueError, 'worker output changed'):
+                continuation_records(continuation, False)
+
+    def test_successor_rejects_unreceipted_or_failed_rows(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root = Path(directory)
+            result = root/'result.tsv'
+            result.write_text('distorted\tvalue\terror\na.png\t1.25\t\n')
+            continuation = dict(path=str(result), sha256=sha(result), rows=1, receipts=[])
+            with self.assertRaisesRegex(ValueError, 'completed bundle identities'):
+                continuation_records(continuation, False)
+            receipt = root/'receipt.json'
+            receipt.write_text(json.dumps(dict(returncode=1, outputs={str(result): sha(result)})))
+            continuation['receipts'] = [dict(path=str(receipt), sha256=sha(receipt))]
+            with self.assertRaisesRegex(ValueError, 'successful bundles'):
+                continuation_records(continuation, False)
+
+    def test_successor_can_preserve_exact_scoring_environment(self):
+        original = Path.home()/'tmp/original-attempt'
+        successor = Path.home()/'tmp/successor-attempt'
+        old = scoring_environment({}, {}, original)
+        new = scoring_environment({'execution': {'environment_root': str(original)}}, {}, successor)
+        self.assertEqual(old, new)
 
     def test_inherited_secret_is_not_serialized_in_worker_settings(self):
         with patch.dict('os.environ', {'AIC_TEST_SECRET': 'invented-control-value'}):

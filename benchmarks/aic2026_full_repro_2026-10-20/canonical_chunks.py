@@ -48,12 +48,41 @@ def merge(target, incoming):
 def scoring_environment(m, spec, root):
     # Persist only these explicit settings. Inherited credentials belong to
     # the live process environment and must never enter an artifact.
-    return dict(TMPDIR=str(root/'scratch'), RAYON_NUM_THREADS='1', RTEN_NUM_THREADS='12',
+    environment_root = Path(m.get('execution', {}).get('environment_root', str(root)))
+    if not environment_root.is_absolute():
+        raise ValueError('environment_root must be absolute')
+    return dict(TMPDIR=str(environment_root/'scratch'), RAYON_NUM_THREADS='1', RTEN_NUM_THREADS='12',
                 OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
                 ZENMETRICS_NN_MODEL_DIR=spec.get('models', m.get('models', '')),
                 ZENMETRICS_NN_ENGINE='rten', ZENMETRICS_NN_ACCEPT_WEIGHTS=m.get('accept_weights', ''),
                 TORCH_HOME=m.get('torch_home', str(Path.home()/'.cache/torch')),
                 SETUPTOOLS_USE_DISTUTILS='stdlib')
+
+
+def continuation_records(continuation, jsonl):
+    """Import completed receipts for a scheduling successor without re-scoring."""
+    path = Path(continuation['path'])
+    if sha(path) != continuation['sha256']:
+        raise ValueError('continuation result changed')
+    retained, fields = records(path, jsonl)
+    verified = {}
+    for binding in continuation['receipts']:
+        receipt_path = Path(binding['path'])
+        if sha(receipt_path) != binding['sha256']:
+            raise ValueError('continuation receipt changed')
+        receipt = json.loads(receipt_path.read_text())
+        if receipt['returncode'] != 0:
+            raise ValueError('continuation requires completed successful bundles')
+        for result, digest in receipt['outputs'].items():
+            if digest is None or sha(result) != digest:
+                raise ValueError('continuation worker output changed')
+            incoming, header = records(result, jsonl)
+            if header != fields:
+                raise ValueError('continuation fields differ')
+            merge(verified, incoming)
+    if verified != retained or len(retained) != continuation['rows']:
+        raise ValueError('continuation does not equal completed bundle identities')
+    return retained, fields
 
 
 def execute_bundle(path):
@@ -110,6 +139,11 @@ def main():
         if sha(seed['path']) != seed['sha256']:
             raise ValueError('seed hash mismatch')
         retained, fields = records(seed['path'], jsonl, partial=True)
+    continuation = m.get('continuations', {}).get(tag)
+    if continuation:
+        if seed:
+            raise ValueError('continuation and seed are mutually exclusive')
+        retained, fields = continuation_records(continuation, jsonl)
     if not retained.keys() <= expected.keys():
         raise ValueError('seed has unknown identities')
     for key, row in retained.items():
@@ -117,7 +151,7 @@ def main():
             raise ValueError('seed metadata mismatch: '+key)
     pending = [row for row in pairs if row['distorted'] not in retained]
     # Re-score two retained identities as exact process-boundary controls.
-    controls = [expected[key] for key in list(retained)[:2]]
+    controls = [] if continuation else [expected[key] for key in list(retained)[:2]]
     limits = m['execution']
     workers = int(limits['workers'].get(args.metric, limits['default_workers']))
     per_worker = int(limits['rows_per_worker'])
@@ -217,7 +251,7 @@ def main():
             writer.writerows(retained[row['distorted']] for row in pairs if row['distorted'] in retained)
     done.write_text(json.dumps(dict(metric=args.metric, role=args.role, started=started,
         finished=datetime.now(timezone.utc).isoformat(), returncode=failure, result=str(final),
-        result_sha256=sha(final), seed=seed, native_threads=1, rows=len(retained), bundles=receipts,
+        result_sha256=sha(final), seed=seed, continuation=continuation, native_threads=1, rows=len(retained), bundles=receipts,
         resource_receipts=[line for receipt in receipts for line in receipt['resource_receipts']]), indent=2)+'\n')
     return failure
 

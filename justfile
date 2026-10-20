@@ -2330,3 +2330,7 @@ bench-iqa-canonical-nn-first-publish output receipt +roots:
 # Original Google Butteraugli, distinct from the libjxl comparator; caller holds heavy admission.
 bench-iqa-canonical-butter-original-maps python +options:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_butteraugli_original_maps.py {{options}}
+
+# Prepare a new schedule from completed canonical bundles without re-scoring them.
+aic-canonical-successor predecessor scratch output freeze lock1 lock2:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_successor.py {{quote(predecessor)}} {{quote(scratch)}} {{quote(output)}} {{quote(freeze)}} --locks {{quote(lock1)}} {{quote(lock2)}} --rows-per-worker 32

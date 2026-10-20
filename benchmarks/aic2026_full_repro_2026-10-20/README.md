@@ -139,3 +139,5 @@ list with a single read stream and 1 MiB reads. It retains the inventory and
 receipt externally, retries errno-12 reads from the beginning, and refuses
 changed or missing inputs during verification. The provenance writer accepts
 that inventory with `--input-bindings` and rechecks its bytes before export.
+
+Scheduling successors use `just aic-canonical-successor` after the prior controller reaches a completed bundle boundary. The new manifest retains the full cohort, metric specifications, scorer bytes and explicit scoring environment. Completed reference bundles carry their receipt/output hashes into the successor; their identities are imported without re-scoring. Unstarted work uses 32 rows per worker and the same ordered heavy locks. Original manifests, plans and results remain preserved.
