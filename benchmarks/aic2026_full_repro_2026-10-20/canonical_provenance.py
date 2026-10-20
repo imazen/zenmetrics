@@ -22,9 +22,9 @@ def json_safe(value):
 
 def checked_document(path, methods=False):
     values = json.loads(path.read_text())
-    bindings = ({entry['source']: entry['source_sha256'] for entry in values.values()}
-                if methods else values)
-    for source, expected in bindings.items():
+    bindings = ([(entry['source'], entry['source_sha256']) for entry in values.values()]
+                if methods else values.items())
+    for source, expected in bindings:
         if sha(source) != expected:
             raise ValueError('supplementary reference source changed: '+source)
     return dict(path=str(path), sha256=sha(path), entries=values)
@@ -55,6 +55,7 @@ def main():
                   report_writer=dict(path=str(Path(__file__).resolve()), sha256=sha(__file__)),
                   bindings=manifest['bindings'],
                   metrics={}, addendum={}, exports={})
+    report['published_reference_plan'] = manifest.get('published_comparison')
     published = root/'fsim-vsi-reference.json'
     report['published_comparisons'] = json.loads(published.read_text()) if published.exists() else None
     report['supplementary_source_bindings'] = (checked_document(args.source_bindings)

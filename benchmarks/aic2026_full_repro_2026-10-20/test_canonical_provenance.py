@@ -33,6 +33,19 @@ class SourceBindings(unittest.TestCase):
             inventory.write_text(json.dumps({'vsi': entry}))
             self.assertEqual(checked_document(inventory, methods=True)['entries']['vsi'], entry)
 
+    def test_shared_source_cannot_hide_contradictory_method_hash(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root = Path(directory)
+            source = root/'fsim.py'
+            source.write_text('shared implementation\n')
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            inventory = root/'methods.json'
+            inventory.write_text(json.dumps({
+                'fsim': dict(source=str(source), source_sha256='0'*64),
+                'fsimc': dict(source=str(source), source_sha256=digest)}))
+            with self.assertRaisesRegex(ValueError, 'reference source changed'):
+                checked_document(inventory, methods=True)
+
 
 if __name__ == '__main__':
     unittest.main()
