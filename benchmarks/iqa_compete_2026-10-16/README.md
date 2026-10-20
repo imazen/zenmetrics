@@ -417,3 +417,10 @@ NR routes; their bound source and call logs define the actual executed boundary.
 native probe process under caller-supplied admission. Its profile includes model
 priming, the first evaluation and the second score-stability control. Sampled
 shares therefore do not isolate the timed first evaluation.
+
+Comparison publication retains each canonical device. `--prefer-device
+METRIC=cpu` or `METRIC=cuda` explicitly chooses a measured reference for the
+representative ratio; an absent preferred device withholds that ratio. The
+selected canonical label follows that ratio, and the compact README marks
+CUDA references. Both devices remain in the ledger. Device choice should use
+measured equivalent work; CUDA is not automatically assumed faster.

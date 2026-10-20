@@ -85,6 +85,7 @@ def read_cohort(root, dispositions):
         record={k:row[k] for k in ('metric','case','width','height','threads','passed','absolute_bound',
                                    'max_abs_delta','ratio','matched_scope','rust_source','plan_sha256')}
         record['canonical']=row['canonical']
+        record['canonical_device']=case.get('canonical_device',plan.get('canonical_device','cpu'))
         # This weightless route constructs CwSsimPyiqa directly; the model
         # engine environment is ignored by the executed native Rust callable.
         record['engine']='rust' if case['metric']=='cw-ssim-pyiqa' else engine
@@ -116,8 +117,11 @@ def read_cohort(root, dispositions):
     return rows
 
 
-def project(rows, preferred_sources=None):
+def project(rows, preferred_sources=None, preferred_devices=None):
     preferred_sources=preferred_sources or {}
+    preferred_devices=preferred_devices or {}
+    if any(device not in ("cpu","cuda") for device in preferred_devices.values()):
+        raise ValueError("supported canonical device preferences are cpu and cuda")
     grouped=defaultdict(list)
     for row in rows:
         if not row['excluded_contract']:
@@ -142,30 +146,33 @@ def project(rows, preferred_sources=None):
         # worker count and sample cohort in the expanded evidence model.
         eligible=[r for r in entries if r['ratio'] is not None]
         preferred=preferred_sources.get(name)
-        candidates=[r for r in eligible if not preferred or r['rust_source']==preferred]
+        device=preferred_devices.get(name)
+        candidates=[r for r in eligible if (not preferred or r['rust_source']==preferred)
+                    and (not device or r.get('canonical_device','cpu')==device)]
         key=None
         # Runtime failures stay visible in `check` and the case ledger. They
         # do not erase a separate completed measurement; numerical findings do.
         if candidates and not failed:
             group_counts=defaultdict(int)
             for r in candidates:
-                group_counts[(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])]+=1
+                group_counts[(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'],r.get('canonical_device','cpu'))]+=1
             def preference(r):
                 size=(r['width'],r['height'])
-                group=(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])
+                group=(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'],r.get('canonical_device','cpu'))
                 return (r['threads']!=1, -min(3,group_counts[group]),size!=(1024,1024),
                         size!=(512,512),-r.get('blocks',0),-r['width']*r['height'],r['threads'])
             chosen=min(candidates,key=preference)
-            key=(chosen['width'],chosen['height'],chosen['threads'],chosen['rust_source'],chosen['plan_sha256'])
-            selected=[r for r in candidates if (r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])==key]
+            key=(chosen['width'],chosen['height'],chosen['threads'],chosen['rust_source'],chosen['plan_sha256'],chosen.get('canonical_device','cpu'))
+            selected=[r for r in candidates if (r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'],r.get('canonical_device','cpu'))==key]
         else:
             selected=[]
-        result[name]=dict(canonical=entries[0]['canonical'],check=check,
+        result[name]=dict(canonical=(selected[0] if selected else entries[0])['canonical'],check=check,
             ratio=statistics.median(r['ratio'] for r in selected) if selected else None,
             ratio_width=key[0] if key else None,ratio_height=key[1] if key else None,
             ratio_threads=key[2] if key else None,ratio_cases=len(selected),
             ratio_source=key[3] if key else None,ratio_plan_sha256=key[4] if key else None,
             ratio_engine=selected[0].get('engine') if selected else None,
+            ratio_canonical_device=key[5] if key else None,
             ratio_blocks=min(r.get('blocks',0) for r in selected) if selected else 0,
             worst_ratio=max(r['ratio'] for r in eligible) if eligible else None,
             observed_cases=len(entries),expected_cases=expected,passed_cases=passed,failed_cases=failed,
@@ -196,6 +203,7 @@ def main():
     p.add_argument('--dispositions',type=Path,help='Explicit plan-sha:metric -> contract-mismatch reason')
     p.add_argument('--goldens',type=Path,help='Separate completed local golden-test receipts')
     p.add_argument('--prefer-source',action='append',default=[],metavar='METRIC=COMMIT',help='Select an explicitly revised source for the representative ratio; retain all historical cases')
+    p.add_argument('--prefer-device',action='append',default=[],metavar='METRIC=DEVICE',help='Select an explicitly measured cpu or cuda reference for the representative ratio; retain both devices')
     a=p.parse_args()
     a.output.mkdir(exist_ok=True)
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
@@ -239,7 +247,8 @@ def main():
     identities=[(r['plan_sha256'],r['case']) for r in combined]
     if len(identities)!=len(set(identities)):
         raise ValueError('duplicate acquired cases across selected cohorts')
-    value=project(combined,dict(item.split('=',1) for item in a.prefer_source))
+    value=project(combined,dict(item.split('=',1) for item in a.prefer_source),
+                  dict(item.split('=',1) for item in a.prefer_device))
     if a.goldens:
         attach_goldens(value,json.loads(a.goldens.read_text()),sha(a.goldens))
     text=json.dumps(value,indent=2)+'\n'

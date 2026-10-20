@@ -62,6 +62,14 @@ class ModelCards(unittest.TestCase):
                     text=readme_section([self.by_name[metric]])
                 self.assertIn('partial; 2/2 pass',text)
 
+    def test_compact_readme_keeps_the_selected_cuda_reference_visible(self):
+        with patch('model_cards.comparison_results',return_value={'cvvdp-gpu':dict(
+                canonical='pycvvdp 0.5.7 / original callable',check='2/2 pass',ratio=.5,
+                ratio_canonical_device='cuda')}):
+            text=readme_section([self.by_name['cvvdp-gpu']])
+        self.assertIn('| CUDA pycvvdp 0.5.7',text)
+        self.assertIn('≈0.5×',text)
+
     def test_checkpoint_licence_and_oracle_scopes_survive(self):
         card=self.by_name['pieapp']
         self.assertIn('Non-Commercial',card['weights_license'])

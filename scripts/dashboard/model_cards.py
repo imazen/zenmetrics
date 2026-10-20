@@ -301,6 +301,7 @@ def readme_section(items):
         elif ref in ('no evidence','—'):
             ref='unrecorded'
         ref=ref.split(';')[0]
+        if observation.get('ratio_canonical_device')=='cuda':ref='CUDA '+ref
         if len(ref)>24:ref=ref[:21].rstrip()+'…'
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         if observation and c['parity_status']=='Partial canonical parity':check='partial; '+check

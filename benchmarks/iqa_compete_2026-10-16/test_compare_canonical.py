@@ -112,6 +112,24 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(result['observed_cases'],2)
         self.assertEqual(result['rust_sources'],['new-source','old-source'])
 
+    def test_device_preference_keeps_both_devices_and_labels_the_selected_ratio(self):
+        from publish_canonical_comparison import project
+        cpu=dict(metric='example',excluded_contract='',expected_cases=2,plan_sha256='same-plan',
+                 passed=True,max_abs_delta=0.,ratio=.5,width=512,height=512,threads=1,
+                 rust_source='source',canonical='author CPU',canonical_device='cpu')
+        cuda=dict(cpu,ratio=.2,canonical='author CUDA',canonical_device='cuda')
+        result=project([cpu,cuda],preferred_devices={'example':'cuda'})['example']
+        self.assertEqual(result['ratio'],.2)
+        self.assertEqual(result['canonical'],'author CUDA')
+        self.assertEqual(result['ratio_canonical_device'],'cuda')
+        self.assertEqual(result['ratio_cases'],1)
+        self.assertEqual(result['observed_cases'],2)
+        self.assertEqual(result['worst_ratio'],.5)
+        missing=project([cpu],preferred_devices={'example':'cuda'})['example']
+        self.assertIsNone(missing['ratio'])
+        with self.assertRaises(ValueError):
+            project([cpu],preferred_devices={'example':'unknown'})
+
     def test_publication_rechecks_every_canonical_score(self):
         from publish_canonical_comparison import validate_numerics
         case=dict(absolute_bound=.01)
