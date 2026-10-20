@@ -1,4 +1,31 @@
 {
+  "vsi": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.07759935634573503,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.0792978266940049,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.0279395091834544e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "vsi-k2": {
     "canonical": "original VSI / Octave 6.4",
     "check": "6/6 pass",

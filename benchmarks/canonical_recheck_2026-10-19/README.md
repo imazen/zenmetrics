@@ -503,3 +503,13 @@ The largest finite-pixel map difference is 0.0002071857452392578, with no nonfin
 ## Prepared learned-metric size/content grid
 
 The [28-route learned grid](neural-grid-plan.json) declares 672 warm scalar cases on the same twelve retained pairs at threads 1/28. It is prepared, not acquired; the full classical grids precede it. Existing model/reference contracts and numerical bounds are unchanged. Preparation took 16s with peak-RSS 0.02 GiB, minimum available 12328 MiB and peak load 3.05.
+
+## Auxiliary-score and follow-up update, 2026-10-20
+
+The [six auxiliary comparisons](nr-auxiliary.json) check reference-image columns independently of headline distorted-image scores. BRISQUE differs by 0.00537109375, PIQE by 2.842170943040401e-14, NIQE by 0.00013621654076612089 at both thread settings, and ARNIQA by 2.384185791015625e-7 at both settings. All satisfy their unchanged case bounds. This covers these acquired cases, not every NR input or auxiliary column. The 6s probe reports peak-RSS 0.13 GiB, minimum available 12459 MiB and peak load 3.92.
+
+[DeepDC eight-thread combined 60-block results](deepdc-pair-cid22-t8-combined60-interval.json) give 1.114711566363791, 95% [1.0977631953028684, 1.1274934746291763], meeting the precision target while retaining all 69 resource flags among 600 native observations. Last block: 21s, peak-RSS 1.72 GiB, minimum available 11502 MiB, load 3.97.
+
+[ARNIQA one-thread initial 20 blocks](arniqa-original-cid22-t1-initial20-interval.json) give 1.1507064694296374, 95% [1.1374999626952738, 1.1772551172274746], meeting precision with 19 resource flags among 200 observations. Last block: 35s, peak-RSS 0.90 GiB, minimum available 11854 MiB, load 2.28. Its eight-thread 20-block interval misses precision; a fixed additional 40 blocks retain that original stage. These intervals remain descriptive.
+
+The [GPU-grid profiles](gpu-grid-profiles.json) retain the two 64×64 DSSIM CUDA recordings. Host-side CubeCL CUDA enqueue accounts for 30.21% / 27.81% of sampled CPU cycles at threads 1/28; this is not GPU-kernel timing or proof of the complete slowdown's cause. Profiling receipts: 8s / 7s, peak-RSS 0.33 GiB each, minimum available 11971 / 12147 MiB, peak load 3.85 / 4.71.

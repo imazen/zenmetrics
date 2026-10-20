@@ -1,0 +1,29 @@
+{
+  "event": "cycles:P",
+  "frequency_hz": 199,
+  "profiles": [
+    {
+      "binary_sha256": "6a9e1e1657268ae719e95f7ec2028a132cd34b997d090390153b29ad44470d9f",
+      "config_sha256": "74b8edbb454637824a5b832e3d7ff5e3bf53ef16d22e76c3af04dc730070e2a0",
+      "profile_sha256": "5184cbdd3d35d80c38c1063f67739d84b2778a4c447b18aa8984fcf92aa7b205",
+      "report_sha256": "59d01800f5eb0020dec2ef6cc6f293e18bc29a8691c036cb2465fa0161651852",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "case": "dssim-gpu-grid-pairA-64x64-t1-3cb87691",
+      "threads": 1,
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t1-3cb87691/profile",
+      "wrapper_receipt": "run-heavy: done rc=0 8s | peak-RSS 0.33GiB | min-avail 11971MiB | peak-load 3.85"
+    },
+    {
+      "binary_sha256": "6a9e1e1657268ae719e95f7ec2028a132cd34b997d090390153b29ad44470d9f",
+      "config_sha256": "a556584475013ba1e5fc2dfa89419c9e915408ecf1ed183577e2bb3022ea70de",
+      "profile_sha256": "a16c42d8aa9c4e4a339b5fc689fb6d419c4bf2f7e8b8fd823a20c12b97564513",
+      "report_sha256": "d6d9b6f0ed2a361eefdb758667d8c6f55f1e15d59c43d30e1dadc68ac715be24",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "case": "dssim-gpu-grid-pairA-64x64-t28-3cb87691",
+      "threads": 28,
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t28-3cb87691/profile",
+      "wrapper_receipt": "run-heavy: done rc=0 7s | peak-RSS 0.33GiB | min-avail 12147MiB | peak-load 4.71"
+    }
+  ],
+  "qualification": "CPU cycle samples after model warmup, including calibration; no GPU-kernel timing or causal share of the cross-implementation gap"
+}

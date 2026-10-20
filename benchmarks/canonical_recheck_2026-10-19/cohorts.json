@@ -642,24 +642,24 @@
   "group-00-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00-run",
     "plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
-    "cases": 10,
+    "cases": 12,
     "expected_cases": 264,
     "artifacts": [
       {
         "file": "group-00-run.tsv",
-        "sha256": "d69bbc065b3689b2ec177ab61cff1436e05370828412f6acd281e0c2e6806c2f"
+        "sha256": "51d4c3346edf2e0dbc6a49f2836d58fdf6662d8502ff3fbb9b75caa32458e067"
       }
     ]
   },
   "run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
     "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 9,
+    "cases": 12,
     "expected_cases": 120,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "267543f4b091f3419d6518861518f804b5f436a9c4ff1c077c10a750f7aca01b"
+        "sha256": "905bc37c4827a8893534903750a4d5661bf0d40b8ce81784353f5522987c14fa"
       }
     ]
   },
@@ -726,24 +726,24 @@
   "original-hyperiqa-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run",
     "plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
-    "cases": 1,
+    "cases": 2,
     "expected_cases": 2,
     "artifacts": [
       {
         "file": "original-hyperiqa-1100-run.tsv",
-        "sha256": "b153c7809fc8dbba8ee95224ba1fc53556a215cabe5d6f60c08fd9709635b692"
+        "sha256": "c6f35df3742774ac4c82298e23fb0d8402c61d8c568206c56ab40b31dc2a4d69"
       }
     ]
   },
   "full-cw-pyiqa-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
     "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
-    "cases": 5,
+    "cases": 7,
     "expected_cases": 24,
     "artifacts": [
       {
         "file": "full-cw-pyiqa-grid-run.tsv",
-        "sha256": "4049a06847a5003fa7351b59b6f360b45a55d66396e04aeba48c0089e59bf749"
+        "sha256": "cd160b07c562d81f1ad91e32a7ee7e48359d4a7a4650213acc87941189bb55e9"
       }
     ]
   },
@@ -804,6 +804,18 @@
       {
         "file": "deepdc-pair-cid22-t8-f525415f-fixed-add40-run.tsv",
         "sha256": "d286fcbdbdd2d695528e60f3b68d6e8ff05a7b66d0cc64479df873ef66fc1c1c"
+      }
+    ]
+  },
+  "original-liqe-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-liqe-1100-run",
+    "plan_sha256": "8e6c30d3bc9d7d90b80e96588666c8ea212757c6b3d5d40bf47002d24cfc38ce",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-liqe-1100-run.tsv",
+        "sha256": "a464e3a2da024db7583c03a9ab1f9e590865fcc8b82217c3e1566d63abe8542e"
       }
     ]
   }
