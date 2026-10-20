@@ -1267,3 +1267,14 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_saved_latest/mac-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/i265-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/r7900x-private-protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/mac-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/i265-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/r7900x-observations.csv	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/sources.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/coverage.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/protocol.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/SHA256SUMS.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.
+benchmarks/iqa_saved_latest/sync.json	ignored	Recurring allowlisted canonical result projection; provenance and qualification retained.

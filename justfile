@@ -2076,3 +2076,10 @@ bench-iqa-publish-saved captures private_aggregates output:
 
 bench-iqa-publish-saved-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -m unittest benchmarks/iqa_compete_2026-10-16/test_saved_publication.py
+
+# Read-only host capture followed by guarded commit/push of allowlisted timing data.
+iqa-results-sync config:
+    python3 benchmarks/iqa_compete_2026-10-16/sync_saved_results.py '{{config}}'
+
+iqa-results-sync-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_result_sync.py

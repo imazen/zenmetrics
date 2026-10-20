@@ -1,0 +1,27 @@
+{
+  "host": "i265",
+  "captured_utc": "2026-10-19T23:48:49.616470+00:00",
+  "protocol": "durable-cold3-warm10-100ms-scalar-v1",
+  "threads": [
+    1,
+    8
+  ],
+  "geometries": 6,
+  "cold": "fresh-process construction plus first full pair after RGB load",
+  "warm": "ten full-pair zenbench rounds at 100ms target after initialization",
+  "memory_scope": "retained wrapper worker scope including input/setup; not metric heap or VRAM",
+  "numerical": "timings do not extend native numerical reproduction or published-column agreement",
+  "source_report_sha256": {
+    "parent_report": "5ac70c449e0e23f0ebaf9650079b7cfac7f742aa3973cdb4527a2c68d11c397b"
+  },
+  "build_receipt_sha256": "10c781ecfbde06ed3c380ca54fec91ee4b6e2c5bb5805052fbcc0568c3368591",
+  "binary_sha256": "68adee5d5ee1b9eb59b317526459a0715bb1109ccabf42c1679985c4351f3ed0",
+  "worker_source_commit": "cf59e4e614ff14732c54d92fe00d4e4249e3a7ce",
+  "exporter_sha256": "b66f0c3177d39011c450e9caa6c7a7893c186149f3f319e4e09bb6e4aa0fa7b9",
+  "collector_sha256": "7529a7b7020db5911144c38414b9d8dae799fd6dfd7f2efa05f1b25536eb9dc3",
+  "original_attempt_cap": 2,
+  "observations": 48,
+  "preferred_qualified_cells": 48,
+  "observations_sha256": "a1a70adaaf1be5e1450ff143302bf2ff89855c5905fc87a0efbdf2c61cc6939c",
+  "publication": "only observations.csv and protocol.json are allowlisted; private capture directories are not public"
+}
