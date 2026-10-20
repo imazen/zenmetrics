@@ -77,3 +77,9 @@ up before switching its remote scratch field; previous capture cycles remain
 at their original paths. This redirects future captures only. It does not alter
 frozen workers, results, attempt caps, resource gates or measurement clocks,
 and does not establish a cause for any earlier gate flag.
+
+A sealed `insufficient warm samples` rejection has the public failure class
+`insufficient_warm_samples`. It remains unqualified and does not establish an
+unsupported implementation or numerical failure. Missing timing arrays and
+sample counts are not imputed from partial worker output; the raw failed
+attempts and any partial diagnostic measurements remain preserved privately.

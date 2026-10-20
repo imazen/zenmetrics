@@ -26,6 +26,7 @@ def public_row(row, meta, host, campaign):
     failure=('resource_guard_monitored_memory' if row.get('resource_guard_stop')=='monitored_memory_guard' else
              'input_contract_absolute_luminance' if 'absolute' in error and ('luminance' in error or 'nits' in error) else
              'input_contract_fixed_window' if '11x11' in error else
+             'insufficient_warm_samples' if row.get('status')=='failed' and error.strip()=='insufficient warm samples' else
              'timeout' if 'timeout' in error else
              'worker_failure_unclassified' if row.get('status')=='failed' else None)
     out.update(failure_class=failure,host=host,campaign=campaign,source_commit=meta.get('source_commit'),

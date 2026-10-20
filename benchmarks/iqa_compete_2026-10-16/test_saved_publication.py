@@ -2,6 +2,19 @@ import unittest
 from publish_saved_results import public_row,key
 
 class Projection(unittest.TestCase):
+    def test_insufficient_warm_samples_remain_unqualified_without_imputation(self):
+        meta=dict(capture=dict(captured_utc='now'))
+        row=dict(metric_name='dmm-pyiqa',status='failed',reason='insufficient warm samples',qualified_timing=False)
+        out=public_row(row,meta,'mac','private-nn-production')
+        self.assertEqual(out['failure_class'],'insufficient_warm_samples')
+        self.assertFalse(out['qualified_timing'])
+        self.assertFalse(out['preferred'])
+        self.assertIsNone(out['n'])
+        self.assertIsNone(out['median_ns'])
+        row['reason']='insufficient memory'
+        self.assertEqual(public_row(row,meta,'mac','private-nn-production')['failure_class'],
+                         'worker_failure_unclassified')
+
     def test_explicit_guard_evidence_has_a_resource_failure_class(self):
         row=dict(metric_name='topiq_fr',status='failed',reason='worker/wrapper exited 137',
                  resource_guard_stop='monitored_memory_guard',qualified_timing=False)
