@@ -401,6 +401,8 @@ across all six blocks at threads 1/28. The GPU and primary select four and five
 pyramid levels respectively on this input. Full numerical attribution remains
 open; this is a correctness observation, not an accepted parity result or a
 request for additional GPU maps. Metric code and bounds remain unchanged.
+The fresh ordinary CPU control matches primary exactly (90.86388011956463),
+with peak-RSS 0.10 GiB, minimum available 15,411 MiB and peak load 1.33.
 
 The later [current40 comparative command receipt](../canonical_recheck_2026-10-19/local40-current40worker-command.json)
 supersedes the 38-route preparation scope above: all 40 changed routes now have

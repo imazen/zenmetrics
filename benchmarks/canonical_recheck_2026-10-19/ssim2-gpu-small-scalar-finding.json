@@ -112,6 +112,28 @@
     "observation": "GPU checks the next level dimensions before allocation; primary checks previous level before downsampling. This proves different scale selection at64, not the full numerical attribution of the6.014score difference."
   },
   "absolute_bound": null,
-  "qualification": "Retained scalar finding, no assigned case bound or new GPU map work. Current native pyramid source unchanged from measured source. A separate ordinary CPU route control is queued; no fix or tolerance change.",
-  "companion_case": "ssim2-gpu-grid-pairA-64x64-t28"
+  "qualification": "Retained GPU scalar finding, no assigned case bound or new GPU map work. Current native pyramid source unchanged from measured source. The ordinary CPU route exactly matches primary on this input. No fix or tolerance change.",
+  "companion_case": "ssim2-gpu-grid-pairA-64x64-t28",
+  "ordinary_cpu_control": {
+    "metric": "ssim2",
+    "score": 90.86388011956463,
+    "score_bits": "4056b749cfd74c75",
+    "width": 64,
+    "height": 64,
+    "threads": 1,
+    "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+    "binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+    "config": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/ssim2-small-cpu-control-config.json",
+      "sha256": "7f2074860d2f5d6709e04571cb6f2ac5299658cfcc5f241835de46afc6ed7a5b"
+    },
+    "log": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/ssim2-small-cpu-control.log",
+      "sha256": "40115925ed186a3cb6e971dba85c2d8cf391cacf12bae3a1f6190d3aab2749e6"
+    },
+    "wrapper_receipts": [
+      "run-heavy: done rc=0 2s | peak-RSS 0.10GiB | min-avail 15411MiB | peak-load 1.33"
+    ],
+    "qualification": "Ordinary CPU full-call score exactly matches primary on the retained input pair. Numerical control only; no new comparative timing ratio."
+  }
 }

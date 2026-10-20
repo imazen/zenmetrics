@@ -568,6 +568,8 @@ packed-sRGB-u8 sweep shape and answers a different question.
   scale selection: the GPU allocates 64/32/16/8, while the primary checks its
   previous size before downsampling and also evaluates 4. This structural
   difference is verified; the complete numerical attribution is not. The GPU
+  discrepancy is absent in the ordinary CPU route: its fresh current40-worker
+  control returns exactly 90.86388011956463 on the same input pair.
   pyramid source is unchanged from the measured worker. No case bound was
   assigned, no tolerance changed and no metric fix landed. Source hashes, raw
   scores and resource receipts: `benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json`.

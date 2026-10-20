@@ -615,7 +615,9 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   inspection finds four GPU scales (64/32/16/8) versus five in the primary
   loop (also 4), because their size checks occur on different sides of the
   downsample. This establishes a scale-selection difference; it does not yet
-  isolate the entire score delta to that difference. No new bound or accepted
+  isolate the entire score delta to that difference. A fresh ordinary CPU-route
+  control on the same inputs returns exactly 90.86388011956463, matching primary.
+  No new bound or accepted
   parity result is assigned. See the [source and scalar receipt](benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json).
 
 - **DIVERGES** — the default portable path uses an **FIR** blur while
