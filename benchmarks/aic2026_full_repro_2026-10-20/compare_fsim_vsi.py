@@ -128,9 +128,15 @@ def main():
                                 [('pyiqa-fsim', 'FSIM'), ('pyiqa-fsimc', 'FSIMc'), ('pyiqa-vsi', 'VSI')]}})
     commands = []
     for label, scored in [('pyiqa', path), ('native', Path(manifest['published_native']))]:
+        plan = root/f'fsim-vsi-{label}-published-routes.json'
+        backup(plan)
+        routes = ({'FSIM': 'pyiqa-fsim', 'FSIMc': 'pyiqa-fsimc', 'VSI': 'pyiqa-vsi'}
+                  if label == 'pyiqa' else {'FSIM': 'fsim-y', 'FSIMc': 'fsim', 'VSI': 'vsi'})
+        plan.write_text(json.dumps(dict(columns={column: dict(route=route) for column, route in routes.items()}),
+                                   indent=2)+'\n')
         command = [sys.executable, str(a.july_diff), str(scored), str(a.published_reference),
                    str(root/f'fsim-vsi-{label}-vs-published.tsv'),
-                   str(root/f'fsim-vsi-{label}-vs-published.worst.txt'), '--view', 'cropped']
+                   str(root/f'fsim-vsi-{label}-vs-published.worst.txt'), '--view', 'cropped', '--plan', str(plan)]
         subprocess.run(command, check=True)
         commands.append(command)
     path = root/'fsim-vsi-reference.json'
