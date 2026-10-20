@@ -18,7 +18,7 @@ FSIMc	fsim	9618	0	4.855e-05	0.009563	0.009816	1.219	0.99530	0.99751	MISS
 DSSIM	dssim	9618	90	2.6e-07	2.726e-05	7.74e-05	0.007337	1.00000	1.00000	MATCH
 VMAF	vmaf-studio601	9618	2	0.006501	0.7092	0.001066	0.1162	1.00000	0.99999	MISS
 PSNR-HVS-Y	psnrhvs-daala	9618	3	0.001405	0.2286	0.0002631	0.06136	1.00000	1.00000	MATCH
-CAMBI	cambi-aic2026	9618	840	2.187e-07	5e-07	1.287e-07	0.01162	1.00000	1.00000	MATCH
+CAMBI	cambi-aic2026	9618	0	2.187e-07	5e-07	1.287e-07	0.01162	1.00000	1.00000	MATCH
 PSNR-Cb	psnr-cb	9618	4	0.002305	0.4323	0.0002593	0.04911	1.00000	1.00000	MATCH
 PSNR-Cr	psnr-cr	9618	1	0.002134	0.3584	0.0003243	0.05515	1.00000	1.00000	MATCH
 PSNR-HVS-Cb	psnrhvs-daala	9618	1	0.003462	0.4583	0.000467	0.06233	0.99999	0.99999	MATCH
@@ -37,6 +37,20 @@ SSIMc	ssimc	9618	0	2.613e-07	1.135e-06	3.006e-06	1.46e-05	1.00000	1.00000	MATCH
 FLIP	flip-v17	9618	0	2.515e-07	4.999e-07	7.497e-06	2.265e-05	1.00000	1.00000	MATCH
 PSNR-YCbCr611	psnr-ycbcr611	9618	0	0.0003249	0.07264	5.39e-05	0.0102	1.00000	1.00000	MATCH
 mDCT-PSNR	mdctpsnr	9618	522	5e-07	0.0001141	5.074e-08	2.758e-06	1.00000	1.00000	MATCH
+PSNR-HVS-vmaf	psnrhvs-daala	0	0							nodata
+WS-HV	ws-hv	0	0							nodata
+PSNR-HVS-Y-vmaf	psnrhvs-daala	0	0							nodata
+VMAF v1	vmaf-v1	0	0							nodata
+VMAF v0	vmaf-studio601	0	0							nodata
+VMAF-neg v0	vmaf-neg-studio601	0	0							nodata
+Butteraugli-max	butteraugli	0	0							nodata
+Butteraugli-3norm	butteraugli	0	0							nodata
+SSIMULACRA1	ssimulacra1	0	0							nodata
+Butteraugli-original	butteraugli-original	0	0							nodata
+VIF-vmaf-scale0	aic_vmaf_features	0	0							nodata
+VIF-vmaf-scale1	aic_vmaf_features	0	0							nodata
+VIF-vmaf-scale2	aic_vmaf_features	0	0							nodata
+VIF-vmaf-scale3	aic_vmaf_features	0	0							nodata
 JND_CVVDP	sitejnd(CVVDP)	9618	-	0.6108	1.91					info-only
 JND_MS-SSIM	sitejnd(MS-SSIM)	9618	-	0.4017	5.967					info-only
 JND_PSNR-HVS	sitejnd(PSNR-HVS-vmaf)	9618	-	0.3156	2.328					info-only
