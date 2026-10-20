@@ -40,6 +40,9 @@
     "split": [
       "scripts/sweep/hetzner_cpu_sweep.sh",
       "scripts/sweep/split_score_worker.sh"
+    ],
+    "report_publication": [
+      "scripts/complexity/brief_watch.sh"
     ]
   },
   "deprecated": {}

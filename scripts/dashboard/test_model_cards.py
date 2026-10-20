@@ -12,6 +12,7 @@ from model_cards import cards, exports, readme_section, documentation, compariso
 
 class ModelCards(unittest.TestCase):
     def test_comparative_shards_reject_changed_evidence(self):
+        (Path.home()/'tmp').mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
             root=Path(directory);shard=root/'results-00.json'
             shard.write_text(json.dumps({'example':{'ratio':.5}}))

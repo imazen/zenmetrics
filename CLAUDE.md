@@ -2097,3 +2097,12 @@ The new Mac benchmark output uses copies of the previously frozen canonical
 RGB files, verifying every original manifest hash before scoring. This does not
 qualify the new native preparation path or relax its checksum gate. See
 [the remeasurement record](benchmarks/iqa_changed_2026-10-19/README.md).
+
+### Known Bugs: result-publication CI setup (2026-10-20)
+
+A fresh dashboard runner lacked the disk-backed scratch parent used by the
+comparative-shard tamper control. The fixture now creates that parent before
+its temporary directory; its hash-mismatch expectation is unchanged. The
+existing complexity-brief publication watcher is registered under its distinct
+report-publication concern in the tooling inventory; no fleet launcher or
+worker is added.
