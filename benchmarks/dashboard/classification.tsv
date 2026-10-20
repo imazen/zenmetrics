@@ -1315,3 +1315,10 @@ benchmarks/canonical_recheck_2026-10-19/unmeasured.json	ignored	Explicit unmeasu
 benchmarks/canonical_recheck_2026-10-19/flip-combined60-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/profiles.json	ignored	Native reference profiling provenance; not canonical multi-host timing observations.
 benchmarks/canonical_recheck_2026-10-19/ssim1-combined60-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/flip-confirm40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-v17-confirm20-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/flip-v17-confirm20-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/mdctpsnr-rgb-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-seven-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-seven-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/ssim1-confirm40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
