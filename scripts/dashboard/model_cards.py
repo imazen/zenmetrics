@@ -305,7 +305,9 @@ def readme_section(items):
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         if observation and c['parity_status']=='Partial canonical parity':check='partial; '+check
         ratio=observation.get('ratio')
-        speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
+        # Keep values near the 1.08 flag distinguishable in the compact table.
+        digits=3 if ratio is not None and .8<=ratio<=1.3 else 2
+        speed=f'≈{ratio:.{digits}g}×' if ratio is not None else '—'
         if ratio is not None:speed+={'rten':' R','ort-cpu':' O'}.get(observation.get('ratio_engine'),'')
         worst=observation.get('worst_ratio',ratio)
         if worst is not None and worst>1.08:speed+=' !'

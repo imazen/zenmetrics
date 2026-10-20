@@ -343,3 +343,14 @@ features are recomputed inside each complete pair call. In particular, the
 PyIQA CLI calls `Metric::evaluate`, whose port implementation uses `score_cold`;
 the separate warm-reference API is not used by these comparisons. The
 canonical PyTorch calls likewise evaluate both images inside the timed call.
+
+The initial ST-LPIPS-Alex one-thread flag does not persist in the fixed
+[20-block follow-up](stlpips-alex-pair-cid22-t1-initial20-interval.json):
+1.0565326061418554, 95% interval [1.047118389726684, 1.0648778619171533].
+The interval meets ±3% precision and lies below 1.08. All 13 flagged native
+observations among 200 remain recorded. This is descriptive evidence; the
+eight-thread follow-up remains separate. The last block's resource receipt is:
+
+```text
+run-heavy: done rc=0 26s | peak-RSS 0.97GiB | min-avail 12094MiB | peak-load 1.77
+```
