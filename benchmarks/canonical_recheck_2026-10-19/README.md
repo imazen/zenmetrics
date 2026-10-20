@@ -20,6 +20,17 @@ qualifications without human-approved exceptions or measured overhead estimates.
 SSIMULACRA2 and FLIP retain explicit wrapper/package provenance and thread-control
 limits. Reviewing 40/40 entry points does not qualify 40/40 timing comparisons.
 
+The [latest scoped command](local40-scoped-current40worker-command.json) keeps
+all 80 numerical cases and explicitly withholds comparable timing ratios on
+22 cases with source-review caveats. Preparation passed in 3 s, peak-RSS
+0.06 GiB, minimum available 15,482 MiB and peak load 3.60. It does not report
+80 completed comparisons. The [VMAF worker lineage](vmaf-worker-scope-lineage.json)
+distinguishes the older prepared-model benchmark snapshot from the current
+production-call worker. Both model-library hashes match their original source;
+the CLI's later parallel ingress is a separate source change. The current40
+preparation finding must not be applied automatically to the older cached-model
+timings. No timing estimate is derived from that source comparison.
+
 Missing: the full multi-size per-name grid, remaining learned comparisons,
 map comparisons and qualified regression acceptance. The initial classical
 RGB8 cohorts are complete; explicit route/input exceptions remain below. These are scalar checks on

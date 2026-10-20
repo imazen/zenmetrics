@@ -1,0 +1,41 @@
+{
+  "legacy_metadata": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/model-preload.meta.json",
+    "sha256": "ac94498195da9f1aa885530abc54f7ad7bc921d505c24d8f40c7f4cec8d5165d"
+  },
+  "legacy_scope": "benchmark-only owned snapshot; immutable model parsing cached; model cloning stays timed",
+  "legacy_overlay_files": [
+    {
+      "path": "crates/vmaf/src/lib.rs",
+      "original_sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+      "adapted_sha256": "109d0d689cc8cbdea1a833c2ecdafd49130a90345ec72dcce09c4945865754a6",
+      "retained_adapted_source": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/vmaf/src/lib.rs",
+      "current40_normal_source": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vmaf/src/lib.rs",
+      "current40_normal_sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+      "current40_matches_legacy_original": true
+    },
+    {
+      "path": "crates/vmaf/src/v0.rs",
+      "original_sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+      "adapted_sha256": "db7df675b2318912cb05414c019c2456516a8ea7f4072ef231d1157a84db4a67",
+      "retained_adapted_source": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/vmaf/src/v0.rs",
+      "current40_normal_source": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vmaf/src/v0.rs",
+      "current40_normal_sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+      "current40_matches_legacy_original": true
+    },
+    {
+      "path": "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "original_sha256": "f41cff600854b4d6a62c859b3108387f4b4719c11b2e93169b6e708b853596db",
+      "adapted_sha256": "e48d0d7cbeb538417e2726fd7e07180c5ba1199340d33592627e366fc1d4a730",
+      "reason": "reuse exact existing ingress in the benchmark source module",
+      "retained_adapted_source": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "current40_normal_source": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "current40_normal_sha256": "7017fa2b3bd83b1df92a82f696fb9af2c3b434aafca30b9af72c4d9c1e1a7c57",
+      "current40_matches_legacy_original": false
+    }
+  ],
+  "current40_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "current40_worker": "current40-worker.json",
+  "later_ingress_change": "Normal current CLI ingress also has band-parallel RGB->YUV and widening at1MP+, verified against legacy base by source diff. Six VMAF model routes and ordinaryCAMBI require current-source grid checks; CAMBI-AIC integer ingress does not use this changed path.",
+  "qualification": "Historical benchmark VMAF worker cached immutable model parsing and kept model cloning timed. Current40 normal worker has no model cache overlay. Two library-model source hashes equal legacy originals; CLI ingress has separately changed. Do not transfer the current40 preparation-asymmetry finding to the legacy prepared-model timing cohort. No numerical or performance result is inferred."
+}

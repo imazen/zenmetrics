@@ -324,6 +324,18 @@ selection and refusal of changed evidence. See the
 
 ### Current forty-route local comparison, 2026-10-20
 
+The latest [scope-qualified local command receipt](../benchmarks/canonical_recheck_2026-10-19/local40-scoped-current40worker-command.json)
+prepares 80 numerical cases for all 40 routes at threads 1/8, with comparable
+timing ratios withheld on 22 cases across 11 routes. On this box:
+
+```sh
+just bench-iqa-canonical-compare "$HOME/tmp/local-canonical-20261019T2330/changed-canonical-sources-current40-scoped-v3.json" /absolute/new-results 1,8
+```
+
+Plan preparation passed with every original numerical/input/callable contract
+unchanged. This is preparation evidence, not 80 completed measurements or a
+human-approved exception. The older manifest and receipts below remain historical.
+
 The later [timing-boundary review](../benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix.md)
 identifies setup differences on four HDR routes, six VMAF model routes and
 DSSIM. A manifest may now supply `scope_dispositions`, a mapping from route

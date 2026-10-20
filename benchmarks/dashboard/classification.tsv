@@ -1590,3 +1590,5 @@ benchmarks/canonical_recheck_2026-10-19/grid-flip-v17-grid-pairA-64x64-t28-060d4
 benchmarks/canonical_recheck_2026-10-19/paq2piq-original-cid22-t8-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/paq2piq-original-cid22-t8-3bc4fc38-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/current40-hdr-comparative-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/local40-scoped-current40worker-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-worker-scope-lineage.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
