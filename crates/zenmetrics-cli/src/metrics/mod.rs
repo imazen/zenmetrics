@@ -1395,18 +1395,27 @@ pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
     let w = (img.width & !1) as usize;
     let h = (img.height & !1) as usize;
     let src_w = img.width as usize;
-    let mut pixels = Vec::with_capacity(w * h * 3);
-    for y in 0..h {
-        let row = &img.pixels[y * src_w * 3..y * src_w * 3 + w * 3];
-        // `slice::as_chunks` is still unstable; `chunks_exact(3)` stays.
-        #[allow(clippy::chunks_exact_to_as_chunks)]
-        for px in row.chunks_exact(3) {
+    let mut pixels = vec![0u8; w * h * 3];
+    let fill = |orow: &mut [u8], srow: &[u8]| {
+        for (o, px) in orow.chunks_exact_mut(3).zip(srow.chunks_exact(3)) {
             let yv = (16.0
                 + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
                 .round()
                 .clamp(0.0, 255.0) as u8;
-            pixels.extend_from_slice(&[yv, yv, yv]);
+            o.copy_from_slice(&[yv, yv, yv]);
         }
+    };
+    if w * h >= (1 << 20) && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        pixels
+            .par_chunks_mut(w * 3)
+            .enumerate()
+            .for_each(|(y, orow)| fill(orow, &img.pixels[y * src_w * 3..y * src_w * 3 + w * 3]));
+    } else {
+        pixels
+            .chunks_mut(w * 3)
+            .enumerate()
+            .for_each(|(y, orow)| fill(orow, &img.pixels[y * src_w * 3..y * src_w * 3 + w * 3]));
     }
     Rgb8Image {
         pixels,
@@ -1416,20 +1425,35 @@ pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
 }
 
 /// The `Y = round(16 + (65.481R + 128.553G + 24.966B)/255)` studio-swing
-/// BT.601 luma plane of `img` as a packed u8 buffer at full resolution
-/// (no crop — the libvmaf SSIM features consume the Y plane at native
-/// size). Same per-pixel formula as [`studio601_gray`].
+/// BT.601 luma plane of `img` as a u16 buffer at full resolution (no
+/// crop — the libvmaf SSIM features consume the Y plane as `&[u16]`).
+/// Same per-pixel formula as [`studio601_gray`]; the u8→u16 widen is
+/// lossless, so this is one fused pass. Row-parallel above a small
+/// threshold; per-pixel math identical at any thread count.
 #[cfg(feature = "cpu-msssim")]
-fn studio601_y_plane(img: &Rgb8Image) -> Vec<u8> {
+fn studio601_y_plane_u16(img: &Rgb8Image) -> Vec<u16> {
     let (w, h) = (img.width as usize, img.height as usize);
-    let mut y = Vec::with_capacity(w * h);
-    for px in img.pixels.as_chunks::<3>().0 {
-        y.push(
-            (16.0
-                + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
-                .round()
-                .clamp(0.0, 255.0) as u8,
-        );
+    let mut y = vec![0u16; w * h];
+    let fill = |orow: &mut [u16], srow: &[u8]| {
+        for (o, px) in orow.iter_mut().zip(srow.as_chunks::<3>().0) {
+            *o = u16::from(
+                (16.0
+                    + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32)
+                        / 255.0)
+                    .round()
+                    .clamp(0.0, 255.0) as u8,
+            );
+        }
+    };
+    if w * h >= (1 << 20) && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        y.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(row, orow)| fill(orow, &img.pixels[row * w * 3..row * w * 3 + w * 3]));
+    } else {
+        y.chunks_mut(w)
+            .enumerate()
+            .for_each(|(row, orow)| fill(orow, &img.pixels[row * w * 3..row * w * 3 + w * 3]));
     }
     y
 }
@@ -1447,14 +1471,50 @@ fn studio601_yuv444(img: &Rgb8Image) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     // Studio components stay positive (16..240). Adding half and truncating
     // preserves round-away-from-zero, checked against every RGB8 triple.
     let n = (img.width * img.height) as usize;
-    let mut y = Vec::with_capacity(n);
-    let mut cb = Vec::with_capacity(n);
-    let mut cr = Vec::with_capacity(n);
-    for px in img.pixels.as_chunks::<3>().0 {
-        let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
-        y.push((16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0 + 0.5) as u8);
-        cb.push((128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0 + 0.5) as u8);
-        cr.push((128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0 + 0.5) as u8);
+    let w = img.width as usize;
+    let mut y = vec![0u8; n];
+    let mut cb = vec![0u8; n];
+    let mut cr = vec![0u8; n];
+    let fill = |yrow: &mut [u8], cbrow: &mut [u8], crrow: &mut [u8], srow: &[u8]| {
+        for (((yo, cbo), cro), px) in yrow
+            .iter_mut()
+            .zip(cbrow.iter_mut())
+            .zip(crrow.iter_mut())
+            .zip(srow.as_chunks::<3>().0)
+        {
+            let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
+            *yo = (16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0 + 0.5) as u8;
+            *cbo = (128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0 + 0.5) as u8;
+            *cro = (128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0 + 0.5) as u8;
+        }
+    };
+    if n >= (1 << 20) && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        y.par_chunks_mut(w)
+            .zip(cb.par_chunks_mut(w))
+            .zip(cr.par_chunks_mut(w))
+            .enumerate()
+            .for_each(|(row, ((yrow, cbrow), crrow))| {
+                fill(
+                    yrow,
+                    cbrow,
+                    crrow,
+                    &img.pixels[row * w * 3..row * w * 3 + w * 3],
+                )
+            });
+    } else {
+        y.chunks_mut(w)
+            .zip(cb.chunks_mut(w))
+            .zip(cr.chunks_mut(w))
+            .enumerate()
+            .for_each(|(row, ((yrow, cbrow), crrow))| {
+                fill(
+                    yrow,
+                    cbrow,
+                    crrow,
+                    &img.pixels[row * w * 3..row * w * 3 + w * 3],
+                )
+            });
     }
     (y, cb, cr)
 }
@@ -3335,10 +3395,8 @@ fn run_cpu_ssim_libvmaf(
         .into());
     }
     let (w, h) = (reference.width as usize, reference.height as usize);
-    let yr = studio601_y_plane(reference);
-    let yd = studio601_y_plane(distorted);
-    let yr16: Vec<u16> = yr.iter().map(|&v| v as u16).collect();
-    let yd16: Vec<u16> = yd.iter().map(|&v| v as u16).collect();
+    let yr16 = studio601_y_plane_u16(reference);
+    let yd16 = studio601_y_plane_u16(distorted);
     let s = msssim::float_ssim(&yr16, &yd16, w, h, w, 8)?;
     Ok(vec![(SSIM_LIBVMAF_CPU_COLUMNS[0], s)])
 }
@@ -3359,10 +3417,8 @@ fn run_cpu_msssim_libvmaf(
         .into());
     }
     let (w, h) = (reference.width as usize, reference.height as usize);
-    let yr = studio601_y_plane(reference);
-    let yd = studio601_y_plane(distorted);
-    let yr16: Vec<u16> = yr.iter().map(|&v| v as u16).collect();
-    let yd16: Vec<u16> = yd.iter().map(|&v| v as u16).collect();
+    let yr16 = studio601_y_plane_u16(reference);
+    let yd16 = studio601_y_plane_u16(distorted);
     let s = msssim::float_ms_ssim(&yr16, &yd16, w, h, w, 8)?;
     Ok(vec![(MSSSIM_LIBVMAF_CPU_COLUMNS[0], s)])
 }
