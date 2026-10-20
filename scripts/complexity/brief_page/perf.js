@@ -63,7 +63,8 @@
   }
 
   // geometry (viewBox units)
-  const W = 1500, NAME = 330, TXT = 344, AX0 = 720, AX1 = 1480, SUB = 24, HEAD = 40, FOOT = 34, GAP = 14;
+  const W = 1600, NAME = 330, AX0 = 900, AX1 = 1580, SUB = 24, HEAD = 64, FOOT = 34, GAP = 14;
+  const COL = { th: 346, n: 392, ci: 476, sp: 646, ok: 806 };   // text columns, left edges
 
   function glyph(p, s, XX, yy, cls, kind, lo) {
     if (st.view === 'fast') {
@@ -86,6 +87,9 @@
     // items: [{m, s1, s8}]; two sub-rows per metric, alternate shading per metric
     const y0 = y + HEAD, y1 = y0 + items.length * 2 * SUB;
     p.push(`<rect class="pl-cluster" x="2" y="${y}" width="${W - 4}" height="${y1 + FOOT - y}" rx="5"/><text class="perf-head" x="14" y="${y + 27}">${esc(title)}</text>`);
+    const hdr = st.view === 'fast' ? [['th', 'thr'], ['n', 'n'], ['ci', 'fastest ms'], ['sp', 'median ms']]
+      : [['th', 'thr'], ['n', 'n'], ['ci', '95 % CI ms'], ['sp', st.phase === 'warm' ? 'p10–p90 ms' : 'range ms'], ...(st.phase === 'warm' ? [['ok', 'clean']] : [])];
+    hdr.forEach(([c, t]) => p.push(`<text class="perf-colhead" x="${COL[c]}" y="${y + 54}">${t}</text>`));
     items.forEach((it, i) => { if (i % 2) p.push(`<rect class="perf-zebra" x="4" y="${y0 + i * 2 * SUB}" width="${W - 8}" height="${2 * SUB}"/>`); });
     (minorTicks || []).forEach(v => p.push(`<line class="pl-vgrid-minor" x1="${XX(v)}" y1="${y0 - 4}" x2="${XX(v)}" y2="${y1}"/>`));
     ticks.forEach(v => p.push(`<line class="pl-vgrid" x1="${XX(v)}" y1="${y0 - 4}" x2="${XX(v)}" y2="${y1}"/><text class="perf-tick" x="${XX(v)}" y="${y1 + 24}" text-anchor="middle">${tickFmt(v)}</text>`));
@@ -95,12 +99,13 @@
       [[1, it.s1], [8, it.s8]].forEach(([th, s], j) => {
         const yy = y0 + (2 * i + j) * SUB + SUB / 2;
         if (j === 0) p.push(`<text class="perf-lab" x="${NAME}" y="${yy + 6}" text-anchor="end">${esc(it.m)}</text>`);
-        if (!s) { p.push(`<text class="perf-ci" x="${TXT}" y="${yy + 5}">${th}t · not measured yet</text>`); return; }
+        const cell = (c, t) => p.push(`<text class="perf-ci" x="${COL[c]}" y="${yy + 5}">${t}</text>`);
+        cell('th', `${th}t`);
+        if (!s) { cell('n', 'not measured yet'); return; }
         const ci = s.ci ? `${f3(s.ci[0])}–${f3(s.ci[1])}${s.approx ? '≈' : ''}` : '–';
-        const gate = s.clean != null ? ` · ${s.clean}/${s.n} clean` : '';
-        p.push(st.view === 'fast'
-          ? `<text class="perf-ci" x="${TXT}" y="${yy + 5}">${th}t · fastest ${f3(s.fast)}${s.fastExact ? '' : ' (p10)'} of n=${s.n} · median ${f3(s.c)}</text>`
-          : `<text class="perf-ci" x="${TXT}" y="${yy + 5}">${th}t · n=${s.n} · ${ci} · ${f3(s.lo)}–${f3(s.hi)}${gate}</text>`);
+        cell('n', s.n);
+        if (st.view === 'fast') { cell('ci', `${f3(s.fast)}${s.fastExact ? '' : ' (p10)'}`); cell('sp', f3(s.c)); }
+        else { cell('ci', ci); cell('sp', `${f3(s.lo)}–${f3(s.hi)}`); if (s.clean != null) cell('ok', `${s.clean}/${s.n}`); }
         const tip = `${it.m}, ${th} thread${th > 1 ? 's' : ''}: median ${f3(s.c)} ms, mean ${f3(s.mean)} ms, n=${s.n}, 95 % CI ${ci}, ${s.what} ${f3(s.lo)}–${f3(s.hi)} ms` +
           (s.clean != null ? `, ${s.clean} gate-clean / ${s.flagged || 0} flagged rounds` : '') + (s.rss ? `, peak RSS ${s.rss} GiB` : '') +
           (s.simd ? `, SIMD ${s.simd}` : '') + (s.place ? `, placement ${s.place}${s.pc ? ' (' + s.pc + ' CPUs)' : ''}` : '');
@@ -133,7 +138,7 @@
     const minors = decades.flatMap(d => [2 * d, 5 * d]).filter(v => v > lo && v < hi);
     const p = [];
     let y = 8;
-    p.push(`<text class="perf-head" x="14" y="${y + 22}">All metrics, log axis (ms per call)</text><text class="perf-ci" x="${TXT}" y="${y + 22}">${st.view === 'fast' ? 'threads · fastest measurement · median (ms)' : `threads · n · 95 % CI · ${st.phase === 'warm' ? 'p10–p90' : 'range'} (ms)${st.phase === 'warm' ? ' · gate-clean rounds' : ''}`}</text>`);
+    p.push(`<text class="perf-head" x="14" y="${y + 22}">All metrics, log axis (ms per call)</text>`);
     y += 34;
     groups.forEach((g, gi) => { y = block(p, y, `Cluster ${gi + 1}: ${f3(key(g[0].m))}–${f3(key(g.at(-1).m))} ms, ${g.length} metrics`, g, LX, decades, minors, lo, tick); });
     y += 16;
