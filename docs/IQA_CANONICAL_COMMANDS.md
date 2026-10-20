@@ -6,6 +6,17 @@ HDR names and Daala RGB preprocessing. Its [local scheduling table](../benchmark
 retains measured warm medians from one common 1152×1152 photo crop; it is not a
 speed prediction for other images or thread budgets. Historical 27-, 38- and 40-route
 tables remain available for their frozen plans.
+For the current local canonical comparison, the [41-route receipt](../benchmarks/canonical_recheck_2026-10-19/local41-scoped-fullcall-command.json) freezes the original references, numerical bounds and setup caveats:
+
+```sh
+just bench-iqa-canonical-compare "$HOME/tmp/local-canonical-20261019T2330/changed-canonical-sources-current41-scoped-v1.json" /absolute/new-results 1,8
+```
+
+This complete manifest uses one/eight workers because the frozen base HDR cell
+accepts those budgets. Four HDR routes keep timing-scope caveats. Its82declared
+cases are not82acquired or passing observations; full size/content grids have
+separate plans. New output paths are required.
+
 They require explicit worker, build receipt, source revision, verified RGB pair
 manifest, new bundle/output paths, resource wrapper and shared host lock:
 

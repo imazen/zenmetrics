@@ -712,3 +712,12 @@ is an exact historical source copy for the active cohort, whose actual records
 passed independent full protocol review. It is not the general strict verifier;
 new preparation uses [the strict successor](../iqa_compete_2026-10-16/vmaf-fullcall-plan.md).
 No active plan or measured result is replaced.
+
+## Complete changed-set command, 2026-10-20
+
+The [41-route command](local41-scoped-fullcall-command.json) adds the previously
+omitted Daala preprocessing path, uses the stricter VMAF retained-evidence
+verifier, and preserves the measured ascending scheduling order. It declares
+82 one/eight-thread cases, with eight HDR scope caveats. Preparation passed
+in 4s, peak-RSS0.08GiB, minimum available14955MiB, peak load1.47; these are
+not82completed measurements. Every previous manifest and result remains retained.

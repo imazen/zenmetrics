@@ -1,0 +1,35 @@
+{
+  "command": "just bench-iqa-canonical-compare \"/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current41-scoped-v1.json\" /absolute/new-results 1,8",
+  "manifest": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-current41-scoped-v1.json",
+    "sha256": "eacf8190c718542bf8371351128851202437171b31a497239b0b3c84d2ede542"
+  },
+  "prepared_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current41-scoped-comparative-plan-v1.json",
+    "sha256": "1669a7174bc572ec6198f32edf770ad72b83f532c079cab0c898c82c15d09723"
+  },
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "routes": 41,
+  "declared_cases": 82,
+  "threads": [
+    1,
+    8
+  ],
+  "scope_caveated_cases": 8,
+  "scope_dispositions": {
+    "hdrvdp": "Resident original reference hoists spectral interpolation; native full call includes spectral parsing and interpolation.",
+    "hdrvdp3": "Resident original reference hoists spectral interpolation; native full call includes spectral parsing and interpolation.",
+    "hdrvdp-aic2026": "Original reference reads spectral files during calls; native uses embedded tables. This is an internal parameter I/O scope difference.",
+    "hdrvdp3-aic2026": "Original reference reads spectral files during calls; native uses embedded tables. This is an internal parameter I/O scope difference."
+  },
+  "order": "benchmarks/rebenchmark_since_f7668c7/order_current_local41_2026-10-20.tsv",
+  "reference_controls": [
+    "dssim-fullcall-controls.json",
+    "vmaf-fullcall-controls.json",
+    "vmaf-plan-verifier-controls.json"
+  ],
+  "wrapper": [
+    "run-heavy: done rc=0 4s | peak-RSS 0.08GiB | min-avail 14955MiB | peak-load 1.47"
+  ],
+  "qualification": "Prepared/source-verified contract, not82 completed or passing measurements. BaseHDRreference supports only1/8; different sizes/thread28 require separately bound fixtures. All numerical bounds preserved, including unassigned bounds. FourHDR routes withhold comparable time ratios."
+}

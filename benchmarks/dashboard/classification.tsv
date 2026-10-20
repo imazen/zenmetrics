@@ -1617,3 +1617,4 @@ benchmarks/canonical_recheck_2026-10-19/local40-scoped-fullcall-command.json	ign
 benchmarks/canonical_recheck_2026-10-19/vmaf-plan-verifier-controls.json	ignored	Synthetic receipt controls and retained reference contract verification; not new model timings.
 benchmarks/rebenchmark_since_f7668c7/local41-order-2026-10-20.json	ignored	Measured native scheduling insertion and source-lineage evidence; not a canonical timing comparison.
 benchmarks/rebenchmark_since_f7668c7/order_current_local41_2026-10-20.tsv	ignored	Measured native scheduling hints for41changed routes on one common local input; not canonical comparison timings.
+benchmarks/canonical_recheck_2026-10-19/local41-scoped-fullcall-command.json	ignored	Complete41route source-bound comparative command and timing qualifications; not82 acquired observations.
