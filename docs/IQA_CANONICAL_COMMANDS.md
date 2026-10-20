@@ -324,6 +324,12 @@ selection and refusal of changed evidence. See the
 
 ### Current forty-route local comparison, 2026-10-20
 
+The comparative command admits preparation under both local heavy locks and
+the 12 GiB wrapper, then releases them before the comparison runner acquires
+admission for each block. Invoke this command directly; an outer lock would
+prevent its inner preparation from starting. Low-level preparation recipes
+still require caller-held admission.
+
 The latest [scope-qualified local command receipt](../benchmarks/canonical_recheck_2026-10-19/local40-scoped-current40worker-command.json)
 prepares 80 numerical cases for all 40 routes at threads 1/8, with comparable
 timing ratios withheld on 22 cases across 11 routes. On this box:
@@ -365,3 +371,20 @@ spectral parameters, after original/resident exact-bit controls and actual cell
 protocol controls passed. HDR-VDP-2 keeps its 0.005 bound; HDR-VDP-3 has no assigned
 external bound. Timed comparisons and their resource gates remain separate from
 successful preparation. The older 38-route manifests remain frozen predecessors.
+
+### Source-reviewed grid preparation
+
+`bench-iqa-canonical-grid-scope-plan SOURCE PAIRS REVIEWED NEW_PLAN --metrics NAMES
+--threads COUNTS` expands the original reference contracts and carries forward
+the independently reviewed timing caveats. Run this preparation recipe under
+shared heavy admission, then run the completed plan separately. Numerical,
+input and callable contracts must match between the original and reviewed
+source plans; inconsistent flags or reasons are refused.
+
+The advertised output appears only after qualification is complete. Staging
+files remain beside it, including failed or interrupted preparation evidence;
+existing outputs are preserved. `bench-iqa-canonical-grid-scope-check` covers
+those guarantees and preservation of numerical bounds. The earlier
+`frozen_grid_scope_20261020.py` preserves the exact source used to prepare the
+active seven-route VMAF/CAMBI campaign. Its known future-use limits do not change
+that inspected campaign, whose 168 cases retained all six model-route caveats.

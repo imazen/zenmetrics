@@ -1674,6 +1674,13 @@ bench-iqa-canonical-plan +options:
 bench-iqa-canonical-grid-plan source pairs output +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_grid.py '{{source}}' '{{pairs}}' '{{output}}' {{options}}
 
+# Preserve an independently reviewed timing scope in a new numerical grid.
+bench-iqa-canonical-grid-scope-plan source pairs scoped output +options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_grid_scope.py '{{source}}' '{{pairs}}' '{{scoped}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-grid-scope-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_canonical_grid_scope
+
 # Caller supplies heavy admission; original weighted HaarPSI maps and current frozen rlibs.
 bench-iqa-canonical-haarpsi-maps python +options:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_haarpsi_maps.py {{options}}
@@ -1696,7 +1703,8 @@ bench-iqa-canonical-changed manifest output *options:
 
 # Compare the exact manifest scope; select thread budgets explicitly (default 1,8).
 bench-iqa-canonical-compare manifest output threads="1,8" *options:
-    just bench-iqa-canonical-scoped-plan '{{manifest}}' '{{output}}.plan.json' --threads '{{threads}}'
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/prepare_scoped_canonical.py '{{manifest}}' '{{output}}.plan.json' --threads '{{threads}}'
     just bench-iqa-canonical '{{output}}.plan.json' '{{output}}' {{options}}
 
 # Keep numerical gates and withhold timing ratios for explicitly caveated scopes.
