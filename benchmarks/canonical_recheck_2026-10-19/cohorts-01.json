@@ -1,4 +1,28 @@
 {
+  "original-afine-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-afine-1100-run",
+    "plan_sha256": "492758fb417d4ae01eb5ae3b44995be48be68ff3e1f307b8ce8a3c14f1c1a180",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-afine-1100-run.tsv",
+        "sha256": "a5e9dea89f34a28e156583f949875c6ec12ecd764655067dd561e7256e8b3435"
+      }
+    ]
+  },
+  "original-ahiq-1100-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/original-ahiq-1100-run",
+    "plan_sha256": "9f9597b91a9764ebc99254a72e73d4aeaf47bd98eebebd032352636528cfdf54",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "original-ahiq-1100-run.tsv",
+        "sha256": "194058fa6378f406a5620ff7670bfe9a73c940d17c23cce14bd655ea7bad883e"
+      }
+    ]
+  },
   "original-arniqa-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-arniqa-1100-run",
     "plan_sha256": "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
@@ -215,15 +239,27 @@
       }
     ]
   },
+  "paq2piq-original-cid22-t8-3bc4fc38-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run",
+    "plan_sha256": "f943334a59b65e735b6fef626411bb0575caac74890c1d68ac38b51e8f730552",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "paq2piq-original-cid22-t8-3bc4fc38-confirmation-run.tsv",
+        "sha256": "c5eacbcb6dbc0eaed75dff0df6d778998e44cf2dd6d664bc4d390a2119b26087"
+      }
+    ]
+  },
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 9,
+    "cases": 11,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "03a06a54559e044169ac7e570a16d3a41a0ad5eeea3aaac1be54a5a964f950ef"
+        "sha256": "009ba5ef6509e621a138b01309a6ed736cbe66f9b3510ca7f5afdf2125227018"
       }
     ]
   },
@@ -336,14 +372,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },

@@ -131,7 +131,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 170/170 pass | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.051× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.063× |
-| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | original Paq2piq / 40… | 3/3 pass | ≈1.3× R ! |
+| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | original Paq2piq / 40… | 4/4 pass | ≈1.3× R ! |
 | [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public… | excluded | — |
 | [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | excluded | — |
 | [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 170/170 pass | ≈0.1× |
@@ -253,7 +253,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | --- | --- | ---: | ---: | --- |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | libjxl 0.12.0 original comparator | 0.000050067901611328125 | not recorded | not recorded / not applicable |
 | [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | libjxl 0.12.0 original comparator / CPU reference | 0.008306741714477539 | not recorded | not recorded / not applicable |
-| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | original google/butteraugli 71b18b6 | 0.0 | not recorded | not recorded / not applicable |
+| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | original google/butteraugli 71b18b6 / 1 effective worker | 0.0 | not recorded | not recorded / not applicable |
 
 </details>
 

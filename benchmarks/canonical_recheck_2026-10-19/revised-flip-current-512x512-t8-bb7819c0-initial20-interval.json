@@ -1,0 +1,52 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "flip-current-512x512-t8",
+      "blocks": 20,
+      "ratio": 1.3429280352146744,
+      "lower_95": 1.3190995963571668,
+      "upper_95": 1.361145665005184,
+      "relative_halfwidth": 0.01774364540218905,
+      "precision_within_three_percent": true,
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "plan_sha256": "1daa6e2529daf1b1b5bf506d6edda2742cc12396b3a073e4f80c3ed8605c377d",
+      "summary_sha256": "b97d8373f3261d307fb01d4d765b871a38f34be2aa65db9901e6dba652fb7a97",
+      "stage_summary_sha256": [
+        "b97d8373f3261d307fb01d4d765b871a38f34be2aa65db9901e6dba652fb7a97"
+      ],
+      "block_sha256": [
+        "e4276091875074f22b54a497d7f44d0c6fe23c752838e22747e3c8a16de73313",
+        "6f5d83df12f89e1a9adb8148048a675b122581e9971e994db81fb9c3d930cae7",
+        "a271b74be2d479f3204e47f1a1937a7c74d0296002aa10a1f0d4c59eab3c4233",
+        "8cb12482938a1db3a0e7dc7bb40c0ffe21bb6594e652a06cc0fbb6915a083ce3",
+        "dce6f775e86b45c3ae5a88bebc1f6a900dd7ab3e6fd465c21032b9c716938f6f",
+        "7ecf39e8f27993bcab4ffd8372451b89549b6e6b21a03881ce86f9439f4ad551",
+        "1c596ed6d041716f6130ed637bc7cdd94cc0e4541d7c77c8cc4b3bcd336b4e4d",
+        "36fc63027b8b7c8aff41961fd35b1190888ed4ad4a01c6d6a55c4aef2454ad66",
+        "e7aaeddc5ffee0b6fa1255ff8e8d00d942354a07f93d30744be7365abf5bfe64",
+        "ffe49c65c311f076e0d29fe9c5038381c00e22a1a16f76f579b8fe916ede736c",
+        "bef6ee380a0501fb9472042feab38bde12f044272519ff8e6964dd94163182bf",
+        "aa736eab930d1972d9877c41e2d2c92d7916f59f3be2f1098f2943d47db2ecea",
+        "d95c96fc246e955815befe9dbeef4390a5e801da679c2ae03879bf17a17c2a9e",
+        "6c24c14e966163c00afcf814caf16e2d067584d7a7fcebfb120d2193195ecec9",
+        "c4cfaad910965b4bfff99dc5dae8454f667e7e5747dac0ac630c6b729b8b0a3c",
+        "94f88a1d6d191e2dc57dc4428cd019c7a2daac0a640001f43b27e28286a0adb6",
+        "a0014fa49b0f68558feb645d19fc5c8d50d5800c257aec488053d87b94710f3e",
+        "998f505fc22221c33c86f10a8d126027ab0e900738f2506a9e6e2c3c3aa3b49b",
+        "aed1f4fbd512c71f08440a7b06d8e6a265f27bf66c8095e2d859ca536e1efb21",
+        "20304c1417c9763b33682ba171723309871f52d7b270bde3273038596f2c9213"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 37,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 10,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ]
+}
