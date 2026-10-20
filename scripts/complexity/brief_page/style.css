@@ -1,0 +1,83 @@
+/* Metric-cost brief: system fonts only (no network requests); document, slide and print layouts. */
+:root{--bg:#fbfbf9;--fg:#1d2321;--muted:#5b6561;--line:#d6dcd9;--grid:#e6eae8;--accent:#1f6f8b;--nn:#7a5cc4;--warn:#b0660f;--band:#1f6f8b14;--cib:#b0660f2e;
+--serif:Georgia,"Noto Serif","Times New Roman",serif;--sans:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141917;--fg:#e4e9e6;--muted:#9aa5a0;--line:#2f3835;--grid:#232b28;--accent:#6fb6d0;--nn:#b9a3f0;--warn:#e7a94c;--band:#6fb6d018;--cib:#e7a94c33;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141917;--fg:#e4e9e6;--muted:#9aa5a0;--line:#2f3835;--grid:#232b28;--accent:#6fb6d0;--nn:#b9a3f0;--warn:#e7a94c;--band:#6fb6d018;--cib:#e7a94c33;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5}
+main{max-width:1000px;margin:0 auto;padding:16px 16px 48px;display:grid;gap:28px}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line);font-size:13px}
+.toolbar button,.toolbar select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer}
+.toolbar button[aria-pressed="true"],#present{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.toolbar label{display:flex;gap:6px;align-items:center;color:var(--muted)}
+.hint{color:var(--muted);font-size:12px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3.6vw,34px);line-height:1.15;margin:0;text-wrap:balance}
+h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:0;text-wrap:balance}
+h4{font-size:14px;margin:8px 0 4px}
+p{margin:0;max-width:78ch}
+section{display:grid;gap:12px;min-width:0;align-content:start}
+.status{border-left:3px solid var(--warn);padding:6px 12px;font-size:13.5px;max-width:none}
+.status strong{color:var(--warn)}
+.findings{margin:0;padding-left:20px;display:grid;gap:7px}
+.findings li,li{max-width:86ch}
+ul{margin:0;padding-left:20px;display:grid;gap:5px}
+figure{margin:0;display:grid;gap:6px;min-width:0}
+figcaption,.note,.slide-note{font-size:12.5px;color:var(--muted);max-width:none}
+svg.chart{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.coefgrid{display:grid;gap:10px}
+.coefset{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px}
+.coefset[hidden]{display:none}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:4px}
+.tablewrap.canon{max-height:70vh;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+.wrap td,.wrap th{white-space:normal}
+.canon td:nth-child(4){min-width:22ch}
+th{position:sticky;top:0;background:var(--bg);font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:400}
+tbody tr:last-child td{border-bottom:0}
+.ci{color:var(--muted)}
+code{font-family:var(--mono);font-size:.9em}
+details summary{cursor:pointer;color:var(--accent);font-size:13px}
+/* thread toggle: Pareto shows one thread count; coefficient panels show both in document mode */
+#pareto .t8{display:none} .t8 #pareto .t8{display:block} .t8 #pareto .t1{display:none}
+/* charts */
+.pl-grid{stroke:var(--grid);stroke-width:1} .pl-axisline{stroke:var(--line);stroke-width:1}
+.pl-tick{fill:var(--muted);font-size:11px;font-family:var(--mono)}
+.pl-axis{fill:var(--fg);font-size:12.5px}
+.pl-title{fill:var(--fg);font-size:12.5px;font-weight:600}
+.pl-row{fill:var(--fg);font-size:12.5px}
+.pl-lab{fill:var(--muted);font-size:11px} .pl-lab-front{fill:var(--fg);font-weight:600}
+.pl-ci{stroke:var(--muted);stroke-width:1;opacity:.45} .pl-ci-h{stroke:var(--muted);stroke-width:1.5;opacity:.7}
+.pl-front{fill:none;stroke:var(--warn);stroke-width:2}
+.pl-fit{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:5 4} .pl-ols{stroke:var(--fg);stroke-width:1.2;opacity:.75}
+.pl-band{fill:var(--band);stroke:none} .pl-cib{fill:var(--cib);stroke:none}
+.pt-cl{fill:var(--accent);stroke:var(--bg);stroke-width:1} .pt-nn{fill:var(--nn);stroke:var(--bg);stroke-width:1}
+.pt-front{fill:var(--warn);stroke:var(--fg);stroke-width:1.2} .pt-8t{fill:none;stroke:var(--accent);stroke-width:1.6}
+@media (max-width:700px){.coefset{grid-template-columns:1fr}.hint{display:none}}
+/* slides: one section per screen, large type, keyboard driven (see brief.js) */
+.slides body{font-size:18px}
+.slides .toolbar{position:fixed;top:auto;bottom:8px;right:8px;left:auto;border:1px solid var(--line);border-radius:6px;opacity:.3;transition:opacity .2s}
+.slides .toolbar:hover,.slides .toolbar:focus-within{opacity:1}
+.slides main{max-width:none;padding:0;gap:0}
+.slides section.slide{height:100vh;overflow:auto;padding:2.2vh 3.5vw;scroll-snap-align:start;border-bottom:1px solid var(--line)}
+.slides{scroll-snap-type:y mandatory}
+.slides h1{font-size:clamp(30px,4.2vw,56px)} .slides h2{font-size:clamp(24px,2.8vw,38px)}
+.slides .findings{font-size:clamp(16px,1.6vw,24px);gap:1.2vh}
+.slides figure svg.chart{max-height:calc(100vh - 230px);width:auto;max-width:100%;margin:0 auto}
+.slides #coef .t8{display:none} .slides.t8 #coef .t8{display:block} .slides.t8 #coef .t1{display:none}
+.slides .coefset svg.chart{max-height:calc(100vh - 250px)}
+.slides table{font-size:15px} .slides .tablewrap.canon{max-height:calc(100vh - 200px)}
+.slides details{display:none}
+@page{size:A4;margin:11mm 12mm}
+@media print{
+  :root{--bg:#fff;--fg:#111;--muted:#444;--line:#ccc;--grid:#e3e3e3;color-scheme:light}
+  .toolbar{display:none} body{font-size:10pt;background:#fff} main{max-width:none;padding:0;gap:14px}
+  h1{font-size:18pt} h2{font-size:13pt}
+  section.slide:not(.title-slide){break-before:page}
+  #pareto .t8,#pareto .t1{display:block} .coefset[hidden]{display:none}
+  .tablewrap.canon{max-height:none;overflow:visible}
+  figure,tr,li{break-inside:avoid} figcaption,.note{font-size:8pt} table{font-size:7.5pt} th,td{padding:3px 5px}
+}

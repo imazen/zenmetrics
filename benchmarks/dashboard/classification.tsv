@@ -57,6 +57,48 @@ benchmarks/aic_perf_big_2026-10-16/review-lint.tsv	ignored	Historical experiment
 benchmarks/aic_perf_big_2026-10-16/review-memory.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_perf_big_2026-10-16/review-panel.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_perf_big_2026-10-16/summary.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/aic_refusals_2026-10-18/browser-refusal-catalog.tsv	ignored	126-name browser capability/restriction catalog snapshot, not runtime observations
+benchmarks/aic_refusals_2026-10-18/cambi-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
+benchmarks/aic_refusals_2026-10-18/dvifm-counts.tsv	ignored	Private-port aggregate primitive counts; partial logical core schedule, no runtime observations
+benchmarks/aic_refusals_2026-10-18/dvifm-qualified-perf.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/fast-routes-qualified-perf.meta	ignored	Adaptive runtime source and whole-run resource receipt
+benchmarks/aic_refusals_2026-10-18/fast-routes-qualified-perf.tsv	ignored	Adaptive r5900xt timing supplement, distinct host from original i265 study
+benchmarks/aic_refusals_2026-10-18/fsim-branch-comparison.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/fsim-existing-after.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/fsim-existing-before.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/fsim-luma-qualified-perf.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/haar-method-aggregates.tsv	ignored	Aggregate rank-method search errors; no private per-image data
+benchmarks/aic_refusals_2026-10-18/hdr-ahiq-qualified-perf.meta	ignored	Frozen-source HDR/AHIQ timing provenance and resource receipt
+benchmarks/aic_refusals_2026-10-18/hdr-ahiq-qualified-perf.tsv	ignored	Frozen-source r5900xt HDR/AHIQ timing supplement, distinct host from original i265 study
+benchmarks/aic_refusals_2026-10-18/hdrvdp-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
+benchmarks/aic_refusals_2026-10-18/hdrvdp2-octave.tsv	ignored	Independent numerical oracle panel, not runtime data
+benchmarks/aic_refusals_2026-10-18/hdrvdp2-oracle-summary.tsv	ignored	Independent numerical oracle aggregate, not runtime data
+benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-comparison.tsv	ignored	Strict-arithmetic numerical control, not runtime observations
+benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-summary.tsv	ignored	Strict-arithmetic numerical control, not runtime observations
+benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict.meta	ignored	Strict-arithmetic source and resource receipt
+benchmarks/aic_refusals_2026-10-18/hdrvdp3-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
+benchmarks/aic_refusals_2026-10-18/landing-layout.json	ignored	Landing navigation and asset-preservation verification, not metric observations
+benchmarks/aic_refusals_2026-10-18/landing-live-verification.json	ignored	Landing navigation and asset-preservation verification, not metric observations
+benchmarks/aic_refusals_2026-10-18/proposal-butteraugli.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
+benchmarks/aic_refusals_2026-10-18/qualification.meta	ignored	AIC convention source and resource receipt, not runtime observations
+benchmarks/aic_refusals_2026-10-18/refusal-inventory.meta	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
+benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-64x64-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/refusals-64x64-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
+benchmarks/aic_refusals_2026-10-18/routes-short-delta-perf.meta	ignored	Frozen source, commands and whole-panel resource receipt
+benchmarks/aic_refusals_2026-10-18/routes-short-delta-perf.tsv	ignored	Fixed short-delta diagnostic timing panel; adaptive records qualify fast cells separately
+benchmarks/aic_refusals_2026-10-18/screenshot-aggregates.meta	ignored	Aggregate search and partial operation-count provenance
+benchmarks/aic_refusals_2026-10-18/screenshot-timings.meta	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
+benchmarks/aic_refusals_2026-10-18/summary.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
+benchmarks/aic_refusals_2026-10-18/vif-after-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-before-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-branch-comparison.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-covariance-retally.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
+benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
 benchmarks/aic_review_2026-10-15/butter_aic.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_review_2026-10-15/butter_ladder.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/aic_review_2026-10-15/cambi_aic.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -128,6 +170,39 @@ benchmarks/butter_multires_strip_2026-05-22.meta	ignored	Provenance or external-
 benchmarks/butter_strip_drift_2026-08-28.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/butter_strip_vs_whole_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/butter_strip_wall_task158_2026-05-31.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/canonical_recheck_2026-10-19/cohorts.json	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/matlab-extra-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/nr-goldens.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/nr-inputs-sha256.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-dssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-fsim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi-y.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-mdsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-msssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vif.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vifvec.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run-vsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/octave-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/pyiqa-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.
+benchmarks/canonical_recheck_2026-10-19/retry-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/vif-corrected-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
+benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fixed-look benchmark policy metadata; no measured or qualified timing results.
+benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
 benchmarks/cpu_metrics_1t8t_2026-10-09/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/cpu_metrics_1t8t_2026-10-09/serial_batch_2026-10-12/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/cpu_metrics_1t8t_2026-10-11-i265/run.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -167,6 +242,12 @@ benchmarks/cvvdp_shared_math_2026-10-11.meta.json	ignored	Provenance or external
 benchmarks/cvvdp_shared_math_2026-10-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/cvvdp_walker_round2_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/cvvdp_walker_round2_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/dashboard/aic2026/columns.tsv	ignored	AIC column-name inventory; current qualifications come from the naming ledger
+benchmarks/dashboard/aic2026/haar-search.json	ignored	Aggregate-only Haar chart method-identification outcome; no private code or per-image data
+benchmarks/dashboard/aic2026/private-aggregates.json	ignored	AIC2026 static pages aggregate-only publication contract; not per-observation measurements
+benchmarks/dashboard/aic2026/retained-comparisons.tsv	ignored	Retained numeric comparisons; no historical implementation-status labels
+benchmarks/dashboard/aic2026/scatter-example.json	ignored	AIC2026 scatter-v2 full-population density example and canonical frozen aggregate diagnostics
+benchmarks/dashboard/aic2026/screenshot-ranks.tsv	ignored	Visible author-figure metric names and median ranks; aggregate screenshot coverage input
 benchmarks/dashboard/extracts/sources.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/dashboard/quality/aic3_ctc_epfl-correlations-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/dashboard/quality/aic3_ctc_epfl-points-00.meta.json	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -212,6 +293,13 @@ benchmarks/hdr_sweep_smoke_sdr_control_2026-06-12.tsv	ignored	Historical experim
 benchmarks/hdrvdp2_corpus_ladder_2026-08-28.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/hdrvdp3_pair_2026-10-12.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/hdrvdp3_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/hdrvdp_canonical_2026-10-19/controls.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/hdrvdp2_trials.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/hdrvdp3_trials.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/qualification.meta	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/spectral_comparisons.tsv	ignored	Canonical-configuration spectral stage research; separate from published-score and runtime admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/strata-correlations.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
+benchmarks/hdrvdp_canonical_2026-10-19/strata.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
 benchmarks/hdrvdp_perf_2026-08-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/_superseded_2026-05-28/stats_pre-refresh.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/_superseded_2026-05-28/summary.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -222,6 +310,29 @@ benchmarks/heaptrack/baseline_phase9x/summary.tsv	ignored	Historical experiment 
 benchmarks/heaptrack/gmsd_peak_2026-09-22.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/gmsd_peak_v2_2026-09-23.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/heaptrack/refresh_2026-05-28/heaptrack_peaks.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_changed_2026-10-19/i265/observations.jsonl	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
+benchmarks/iqa_changed_2026-10-19/i265/resource-policy.json	ignored	Measured worker resource-policy audit; separate from timing observations.
+benchmarks/iqa_changed_2026-10-19/i265/run.meta	ignored	Exact portable invocation, toolchain and binary provenance for collected timings.
+benchmarks/iqa_changed_2026-10-19/i265/snapshot.json	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
+benchmarks/iqa_changed_2026-10-19/i265/timings.csv	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
+benchmarks/iqa_changed_2026-10-19/launch-and-controls.json	ignored	CPU campaign launch and control/resource provenance; actual timings are collected separately.
+benchmarks/iqa_changed_2026-10-19/mac/canonical-input-copy.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/observations.jsonl	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/retry-manifest.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/retry-no-overwrite.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/run.meta	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/snapshot.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/mac/timings.csv	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/observations.jsonl	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/run.meta	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/snapshot.json	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_changed_2026-10-19/r7900x-initial27/timings.csv	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
+benchmarks/iqa_chart_snapshot_2026-10-18/i265/observations.jsonl	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/iqa_chart_snapshot_2026-10-18/i265/snapshot.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/iqa_chart_snapshot_2026-10-18/i265/sources.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/iqa_chart_snapshot_2026-10-18/mac/observations.jsonl	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/iqa_chart_snapshot_2026-10-18/mac/snapshot.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
+benchmarks/iqa_chart_snapshot_2026-10-18/mac/sources.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
 benchmarks/iqa_compete_2026-10-16/adapter-build-v11.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/batch-runtime-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
 benchmarks/iqa_compete_2026-10-16/butter8k-isolated-v17-control.json	ignored	Historical competition attempt/control retained with its own provenance; not part of the reproducible two-metric verification panel.
@@ -375,12 +486,16 @@ benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160.meta	ignored	Pro
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160_nr.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_1t_3840x2160_nr.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_dvifm_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/i265_dvifm_1024.tsv	ignored	Complexity-study timing table consumed by scripts/complexity/brief_data.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_hdr_1024.tsv	ignored	Complexity-study timing table consumed by scripts/complexity/paper.py; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_nn_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_3840x2160.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_complexity_2026-10-17/measured/i265_par_3840x2160.tsv	ignored	Complexity-study timing table at 3840x2160 for the complexity analysis; not a dashboard metric schema.
+benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.tsv	ignored	Complexity-study timing table (perf_deltas.py) for the zenmetrics-pyiqa-ports models; not a dashboard metric schema.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_arrowlake.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/weights/llvm_mca_znver5.tsv	ignored	Operation-cost weight table for scripts/complexity (method inputs, not metric observations); see docs/IQA_COMPLEXITY.md.
 benchmarks/iqa_complexity_2026-10-17/weights/probes_i265.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -409,6 +524,19 @@ benchmarks/iqa_deployment_refresh_r5600g_2026-10-12.jsonl	ignored	Historical exp
 benchmarks/iqa_deployment_rolling_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iqa_deployment_rolling_i134_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/iqa_deployment_rolling_r5600g_2026-10-12.jsonl	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/iqa_i265_durable_2026-10-18/launch.json	ignored	Durable Linux launch provenance and protocol/configuration controls; an incomplete single-pair scaling run, not a metric timing dataset.
+benchmarks/iqa_input_contracts_2026-10-20/provenance.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
+benchmarks/iqa_input_contracts_2026-10-20/refusals.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
+benchmarks/iqa_saved_2026-10-20T0056Z/SHA256SUMS.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/coverage.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/i265-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/i265-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/mac-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/mac-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
+benchmarks/iqa_saved_2026-10-20T0056Z/sources.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
 benchmarks/iwssim_cachedref_strip_2026-05-22.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/iwssim_cachedref_strip_2026-05-22.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/iwssim_cachedref_strip_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -448,6 +576,12 @@ benchmarks/loo_zenjpeg_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment 
 benchmarks/loo_zenjxl_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/loo_zenwebp_lossy_ssim2_2026-06-29.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/loop_norm_calibration_2026-10-15.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json	ignored	Finite-only Mac Metal protocol and immutable scheduling receipt; not native-oracle or performance comparison qualification
+benchmarks/mac_validation_2026-10-18/no-stop-resumption-2026-10-19.json	ignored	Immutable no-stop resumption, explicit consent correction and separate owner-authorized retry budget; not new oracle qualification
+benchmarks/mac_validation_2026-10-18/ort-results.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
+benchmarks/mac_validation_2026-10-18/providers.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
+benchmarks/mac_validation_2026-10-18/results.tsv	ignored	Native correctness validation; pass/fail and parity evidence, not performance measurements
+benchmarks/mac_validation_2026-10-18/stlpips-metal-variation-2026-10-19.json	ignored	Retained unqualified numerical diagnostic; not timing or oracle qualification
 benchmarks/margarine/margarine_aic2026_inventory_2026-09-25.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
 benchmarks/margarine/margarine_avif_training_inventory_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
 benchmarks/margarine/margarine_borrowed_rows_live1_parity_2026-09-26.json	ignored	Historical spatial/steering/diagnostic artifact; not a raw correlation leaderboard table.
@@ -769,6 +903,7 @@ benchmarks/nn_aic2026_crosscheck_2026-10-15/lpips-vgg.tsv	ignored	Historical exp
 benchmarks/nn_aic2026_crosscheck_2026-10-15/pairs.tsv	ignored	Input identity or pair membership; does not supply standalone metric observations.
 benchmarks/nn_aic2026_crosscheck_2026-10-15/stlpips-alex.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_aic2026_crosscheck_2026-10-15/stlpips-vgg.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/nn_host_opt_2026-10-17/attempts.tsv	ignored	PieAPP/WD host-side optimization attempt log summarized in benchmarks/nn_host_opt_2026-10-17/README.md; not a dashboard metric schema.
 benchmarks/nn_lpips_phase0_2026-10-15/lpips_vgg_export.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/nn_opt2_2026-10-15/ab_afine_base_ra.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt2_2026-10-15/ab_afine_base_rb.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -840,7 +975,6 @@ benchmarks/nn_opt4_2026-10-16/ab_liqe_b_base_t16.tsv	ignored	Historical experime
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t1.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/ab_liqe_b_new_t16.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/nn_opt4_2026-10-16/host_stage_share.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
-benchmarks/nn_host_opt_2026-10-17/attempts.tsv	ignored	PieAPP/WD host-side optimization attempt log summarized in benchmarks/nn_host_opt_2026-10-17/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab_256_reps12.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
 benchmarks/nn_opt5_2026-10-16/ab_t1_1024_2048_cap.tsv	ignored	WD host-path A/B and profile table summarized in benchmarks/nn_opt5_2026-10-16/README.md; not a dashboard metric schema.
@@ -935,6 +1069,10 @@ benchmarks/nn_port_2026-10-15/dmm_tap_identity_2026-10-17.tsv	ignored	DMM port s
 benchmarks/nn_port_2026-10-15/dmm_three_corrections_rten.meta	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
 benchmarks/nn_port_2026-10-15/dmm_three_corrections_rten.tsv	ignored	DMM port study evidence (netlib solver bisect, tap identity, per-engine residuals); retained for the nn-port record, not a dashboard panel.
 benchmarks/nr_learned_review_2026-10-15.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/opt_dssim_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/dssim-join-create branch; not a dashboard metric schema.
+benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/msssim-libvmaf-mt-gate branch; not a dashboard metric schema.
+benchmarks/opt_ssim2_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssim2-par-gate branch; not a dashboard metric schema.
+benchmarks/opt_ssimulacra1_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssimulacra1-blur-simd branch; not a dashboard metric schema.
 benchmarks/orchestrator_parity_2026-05-27.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/orchestrator_parity_2026-05-27_phase771_run1.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/orchestrator_parity_2026-05-27_phase771_run2.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
@@ -983,6 +1121,108 @@ benchmarks/planspec_smoke_zenpng_2026-06-11.tsv	ignored	Historical experiment sc
 benchmarks/planspec_smoke_zenwebp_2026-06-11.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/planspec_smoke_zenwebp_2026-06-11.plan.json	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/planspec_smoke_zenwebp_2026-06-11.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.meta	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
+benchmarks/port_spotcheck_2026-10-18/execution-coverage.json	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
+benchmarks/port_spotcheck_2026-10-18/execution-coverage.tsv	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-nonfinite.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairA.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairB.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairC.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.json	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.meta	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/inventory-base-unmerged-3494d8af.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-00.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-01.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source-02.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
+benchmarks/port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv	ignored	Partial numerical controls against primary fixed-factor references; no qualified speed ratios or full matrix completion.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-automatic.json	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-fixed-panel.meta	ignored	Artifact, command and memory receipts for completed fixed-factor numerical panels.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairA.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairB.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairC.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd.json	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-gmsd.meta	ignored	Primary GMSD source, commands and artifact integrity metadata; no qualified timings.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairA.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairB.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairC.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.json	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
+benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.meta	ignored	Primary HaarPSI scalar experiment command and evidence metadata; no qualified timing data.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairA.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairB.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairC.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi.json	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-mdsi.meta	ignored	Primary MDSI command, source and artifact metadata; no qualified timings.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-msssim.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
+benchmarks/port_spotcheck_2026-10-18/primary-panel.meta	ignored	Primary parity-controller controls and provenance; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim-precision.json	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.json	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
+benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.meta	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairA.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairB.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairC.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2.json	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-ssim2.meta	ignored	Primary SSIMULACRA2 commands and external artifact hashes.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
+benchmarks/port_spotcheck_2026-10-18/primary-vif.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
+benchmarks/port_spotcheck_2026-10-18/review.meta	ignored	Source-review and external-test provenance; no qualified timing observations.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairA.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairB.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairC.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairA.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairB.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairC.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image212.json	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairA.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairB.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairC.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/runner-image2201.json	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairA.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairB.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairC.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.json	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
+benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.meta	ignored	Unmerged SSIM before/after experiment commands and artifact hashes; no qualified timing data.
+benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
+benchmarks/port_spotcheck_2026-10-18/summary.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
+benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.meta	ignored	Source and resource receipts for the focused VSI resize-dependency control.
+benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.tsv	ignored	Focused VSI resize-dependency numerical control; no qualified timing ratios or full matrix claim.
+benchmarks/private_classical_2026-10-19/i265-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/i265-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/mac-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/mac-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/r7900x-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
+benchmarks/private_classical_2026-10-19/r7900x-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
 benchmarks/psnrhvs_candidate_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/psnrhvs_daala_baseline_zenbench_1t_2026-10-12.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/psnrhvs_daala_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -994,6 +1234,8 @@ benchmarks/psnrhvs_pair_2026-10-12.csv	ignored	Historical experiment schema outs
 benchmarks/psnrhvs_pair_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/psnrhvs_profile_2026-10-12.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/rav1d_pin_66f58fa6_2026-08-29.tsv.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/rebenchmark_since_f7668c7/order.tsv	ignored	Historical timing references used only for changed-metric scheduling; new executable timings are separate measurements.
+benchmarks/rebenchmark_since_f7668c7/scope.json	ignored	Source-audited rerun scope; no measurements or qualification claims.
 benchmarks/router_models_2026-06-30.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
 benchmarks/rust_butteraugli_2k4k_i265_2026-10-17.meta	ignored	Provenance for registered paired butteraugli timings
 benchmarks/setref_clean_all_2026-05-29.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
@@ -1025,243 +1267,3 @@ benchmarks/zensim_cached_ref_cpu_2026-05-28.meta	ignored	Provenance or external-
 benchmarks/zensim_strip_device_cache_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.csv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/zensim_strip_vs_full_2026-05-26.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/mac_validation_2026-10-18/results.tsv	ignored	Native correctness validation; pass/fail and parity evidence, not performance measurements
-benchmarks/mac_validation_2026-10-18/ort-results.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
-benchmarks/mac_validation_2026-10-18/providers.tsv	ignored	Native correctness validation provenance and incomplete memory-guarded parity, not performance measurements
-benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.tsv	ignored	Complexity-study timing table (perf_deltas.py) for the zenmetrics-pyiqa-ports models; not a dashboard metric schema.
-benchmarks/iqa_complexity_2026-10-17/measured/pyiqa_ports_i265_1024.meta	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
-benchmarks/iqa_i265_durable_2026-10-18/launch.json	ignored	Durable Linux launch provenance and protocol/configuration controls; an incomplete single-pair scaling run, not a metric timing dataset.
-benchmarks/iqa_chart_snapshot_2026-10-18/i265/observations.jsonl	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/iqa_chart_snapshot_2026-10-18/i265/snapshot.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/iqa_chart_snapshot_2026-10-18/i265/sources.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/iqa_chart_snapshot_2026-10-18/mac/observations.jsonl	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/iqa_chart_snapshot_2026-10-18/mac/snapshot.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/iqa_chart_snapshot_2026-10-18/mac/sources.json	ignored	Attempt-level chart development snapshot; source selection and qualification required
-benchmarks/dashboard/aic2026/private-aggregates.json	ignored	AIC2026 static pages aggregate-only publication contract; not per-observation measurements
-benchmarks/dashboard/aic2026/scatter-example.json	ignored	AIC2026 scatter-v2 full-population density example and canonical frozen aggregate diagnostics
-benchmarks/dashboard/aic2026/screenshot-ranks.tsv	ignored	Visible author-figure metric names and median ranks; aggregate screenshot coverage input
-benchmarks/aic_refusals_2026-10-18/cambi-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
-benchmarks/aic_refusals_2026-10-18/hdrvdp-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
-benchmarks/aic_refusals_2026-10-18/hdrvdp3-aic2026.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
-benchmarks/aic_refusals_2026-10-18/proposal-butteraugli.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
-benchmarks/aic_refusals_2026-10-18/summary.tsv	ignored	AIC convention numerical parity diagnostic, not a runtime observation
-benchmarks/aic_refusals_2026-10-18/hdrvdp2-octave.tsv	ignored	Independent numerical oracle panel, not runtime data
-benchmarks/aic_refusals_2026-10-18/hdrvdp2-oracle-summary.tsv	ignored	Independent numerical oracle aggregate, not runtime data
-benchmarks/aic_refusals_2026-10-18/qualification.meta	ignored	AIC convention source and resource receipt, not runtime observations
-benchmarks/dashboard/aic2026/haar-search.json	ignored	Aggregate-only Haar chart method-identification outcome; no private code or per-image data
-benchmarks/aic_refusals_2026-10-18/dvifm-counts.tsv	ignored	Private-port aggregate primitive counts; partial logical core schedule, no runtime observations
-benchmarks/aic_refusals_2026-10-18/haar-method-aggregates.tsv	ignored	Aggregate rank-method search errors; no private per-image data
-benchmarks/aic_refusals_2026-10-18/screenshot-aggregates.meta	ignored	Aggregate search and partial operation-count provenance
-benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-comparison.tsv	ignored	Strict-arithmetic numerical control, not runtime observations
-benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict-summary.tsv	ignored	Strict-arithmetic numerical control, not runtime observations
-benchmarks/aic_refusals_2026-10-18/routes-short-delta-perf.tsv	ignored	Fixed short-delta diagnostic timing panel; adaptive records qualify fast cells separately
-benchmarks/aic_refusals_2026-10-18/routes-short-delta-perf.meta	ignored	Frozen source, commands and whole-panel resource receipt
-benchmarks/aic_refusals_2026-10-18/hdr-ahiq-qualified-perf.meta	ignored	Frozen-source HDR/AHIQ timing provenance and resource receipt
-benchmarks/aic_refusals_2026-10-18/fast-routes-qualified-perf.meta	ignored	Adaptive runtime source and whole-run resource receipt
-benchmarks/aic_refusals_2026-10-18/fast-routes-qualified-perf.tsv	ignored	Adaptive r5900xt timing supplement, distinct host from original i265 study
-benchmarks/aic_refusals_2026-10-18/hdr-ahiq-qualified-perf.tsv	ignored	Frozen-source r5900xt HDR/AHIQ timing supplement, distinct host from original i265 study
-benchmarks/aic_refusals_2026-10-18/hdrvdp2-strict.meta	ignored	Strict-arithmetic source and resource receipt
-benchmarks/aic_refusals_2026-10-18/fsim-luma-qualified-perf.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/dvifm-qualified-perf.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/fsim-existing-before.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/fsim-existing-after.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/fsim-branch-comparison.tsv	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/screenshot-timings.meta	ignored	Supplemental r5900xt aggregate measurement; branch and workload qualifications in screenshot-timings.meta
-benchmarks/aic_refusals_2026-10-18/landing-live-verification.json	ignored	Landing navigation and asset-preservation verification, not metric observations
-benchmarks/aic_refusals_2026-10-18/landing-layout.json	ignored	Landing navigation and asset-preservation verification, not metric observations
-benchmarks/dashboard/aic2026/columns.tsv	ignored	AIC column-name inventory; current qualifications come from the naming ledger
-benchmarks/dashboard/aic2026/retained-comparisons.tsv	ignored	Retained numeric comparisons; no historical implementation-status labels
-benchmarks/aic_refusals_2026-10-18/browser-refusal-catalog.tsv	ignored	126-name browser capability/restriction catalog snapshot, not runtime observations
-benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusals-1024x1024-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusals-3840x2160-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusals-64x64-1.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusals-64x64-8.tsv	ignored	Complete CLI execution/refusal inventory with per-attempt resource receipts; not timing observations
-benchmarks/aic_refusals_2026-10-18/refusal-inventory.meta	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
-benchmarks/aic_refusals_2026-10-18/vifvec-thread-repeat.tsv	ignored	Execution inventory provenance and reproduced thread-score difference; not throughput observations
-benchmarks/aic_refusals_2026-10-18/vif-before-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
-benchmarks/aic_refusals_2026-10-18/vif-after-perf.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
-benchmarks/aic_refusals_2026-10-18/vif-branch-comparison.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
-benchmarks/aic_refusals_2026-10-18/vif-covariance-retally.tsv	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
-benchmarks/aic_refusals_2026-10-18/vif-thread-order.meta	ignored	Unmerged VIF thread-order correctness branch comparison and source-loop count qualification
-benchmarks/opt_ssim2_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssim2-par-gate branch; not a dashboard metric schema.
-benchmarks/opt_dssim_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/dssim-join-create branch; not a dashboard metric schema.
-benchmarks/hdrvdp_canonical_2026-10-19/hdrvdp2_trials.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/hdrvdp_canonical_2026-10-19/hdrvdp3_trials.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/hdrvdp_canonical_2026-10-19/controls.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/hdrvdp_canonical_2026-10-19/strata.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/hdrvdp_canonical_2026-10-19/strata-correlations.tsv	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/hdrvdp_canonical_2026-10-19/qualification.meta	ignored	Canonical-configuration oracle research and consistency controls; retained separately from runtime and reproduction admission schemas.
-benchmarks/mac_validation_2026-10-18/stlpips-metal-variation-2026-10-19.json	ignored	Retained unqualified numerical diagnostic; not timing or oracle qualification
-benchmarks/mac_validation_2026-10-18/finite-metal-policy-2026-10-19.json	ignored	Finite-only Mac Metal protocol and immutable scheduling receipt; not native-oracle or performance comparison qualification
-benchmarks/hdrvdp_canonical_2026-10-19/spectral_comparisons.tsv	ignored	Canonical-configuration spectral stage research; separate from published-score and runtime admission schemas.
-benchmarks/port_spotcheck_2026-10-18/review.meta	ignored	Source-review and external-test provenance; no qualified timing observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-base-unmerged-3494d8af.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-source-00.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-source-01.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-source-02.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-source.meta	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/inventory-source.tsv	ignored	Source-only reference inventory and provenance; no qualified timing or metric observations.
-benchmarks/port_spotcheck_2026-10-18/parity-fsim-vsi-64.tsv	ignored	Partial numerical controls against primary fixed-factor references; no qualified speed ratios or full matrix completion.
-benchmarks/port_spotcheck_2026-10-18/primary-panel.meta	ignored	Primary parity-controller controls and provenance; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.tsv	ignored	Focused VSI resize-dependency numerical control; no qualified timing ratios or full matrix claim.
-benchmarks/port_spotcheck_2026-10-18/vsi-resize-runtime.meta	ignored	Source and resource receipts for the focused VSI resize-dependency control.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairA.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairB.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-fsim-pairC.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairA.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairB.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212-vsi-pairC.tsv	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image212.json	ignored	Completed fixed-factor numerical panel against retained system-image-2.12 runner; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairA.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairB.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image2201-vsi-pairC.tsv	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/runner-image2201.json	ignored	Completed VSI numerical panel with explicit upstream resize M-files; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-fixed-panel.meta	ignored	Artifact, command and memory receipts for completed fixed-factor numerical panels.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-fsim-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairA.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairB.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic-vsi-pairC.tsv	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-automatic.json	ignored	Completed automatic-factor numerical FSIM/VSI panel; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairA.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
-benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairB.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
-benchmarks/port_spotcheck_2026-10-18/primary-haarpsi-pairC.tsv	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
-benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.json	ignored	Primary HaarPSI scalar parity and memory observations; maps and qualified timing ratios remain missing.
-benchmarks/port_spotcheck_2026-10-18/primary-haarpsi.meta	ignored	Primary HaarPSI scalar experiment command and evidence metadata; no qualified timing data.
-benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairA.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairB.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-gmsd-pairC.tsv	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-gmsd.json	ignored	Primary GMSD scalar/map parity and instrumented odd-size failures; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-gmsd.meta	ignored	Primary GMSD source, commands and artifact integrity metadata; no qualified timings.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-multiscale-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairA.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairB.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-single-pairC.tsv	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.json	ignored	Primary PyIQA SSIM conventions joined to frozen Rust scores and refusals; external numerical gates and timing ratios remain unqualified.
-benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairA.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairB.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-mdsi-pairC.tsv	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-mdsi.json	ignored	Primary unchanged-author MDSI scalar grid; no qualified timing ratios.
-benchmarks/port_spotcheck_2026-10-18/primary-mdsi.meta	ignored	Primary MDSI command, source and artifact metadata; no qualified timings.
-benchmarks/port_spotcheck_2026-10-18/summary.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.json	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.tsv	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-paired-prefix.meta	ignored	Partial exploratory paired HaarPSI evidence; no qualified timing verdict.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim-precision.json	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
-benchmarks/port_spotcheck_2026-10-18/primary-pyiqa-ssim.meta	ignored	Primary SSIM numerical diagnostics and source bindings; acceptance bound remains unassigned.
-benchmarks/port_spotcheck_2026-10-18/execution-coverage.tsv	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
-benchmarks/port_spotcheck_2026-10-18/execution-coverage.json	ignored	Per-name incomplete port-check coverage index; no qualified performance verdict.
-benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairA.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairB.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-ssim2-pairC.tsv	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-ssim2.json	ignored	Pinned-primary SSIMULACRA2 scalar observations; no new bound or qualified ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-ssim2.meta	ignored	Primary SSIMULACRA2 commands and external artifact hashes.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-multiscale-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairA.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairB.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-single-pairC.tsv	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.json	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/approved-pyiqa-ssim.meta	ignored	Authorized PyIQA SSIM scalar policy view with separate size refusals; no qualified performance ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-msssim-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-msssim.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-vif-pairA.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-vif-pairB.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-vif-pairC.tsv	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-vif.json	ignored	Primary scalar parity grid with original bound and process RSS; no qualified timing ratio.
-benchmarks/port_spotcheck_2026-10-18/primary-msssim.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
-benchmarks/port_spotcheck_2026-10-18/primary-vif.meta	ignored	Primary scalar grid command, source and external artifact bindings; no qualified timing.
-benchmarks/mac_validation_2026-10-18/no-stop-resumption-2026-10-19.json	ignored	Immutable no-stop resumption, explicit consent correction and separate owner-authorized retry budget; not new oracle qualification
-benchmarks/port_spotcheck_2026-10-18/haarpsi-map-nonfinite.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairA.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairB.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-map-pairC.tsv	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/haarpsi-maps.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.json	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/port_spotcheck_2026-10-18/ssim2-cms-callers.meta	ignored	Native map or untimed CMS call-stack observations with retained source hashes; no assigned external map bound or qualified performance panel.
-benchmarks/opt_ssimulacra1_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/ssimulacra1-blur-simd branch; not a dashboard metric schema.
-benchmarks/opt_msssim-libvmaf_2026-10-18/summary.tsv	ignored	Optimization-lane before/after timing table for the opt/msssim-libvmaf-mt-gate branch; not a dashboard metric schema.
-benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairA.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
-benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairB.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
-benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after-pairC.tsv	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
-benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.json	ignored	Unmerged fixed-factor SSIM before/after scores and refusals; no canonical gate or timing ratio qualification.
-benchmarks/port_spotcheck_2026-10-18/ssim-fixed-before-after.meta	ignored	Unmerged SSIM before/after experiment commands and artifact hashes; no qualified timing data.
-benchmarks/clean_panel_2026-10-19/fixed_look_policy.json	ignored	Experimental fixed-look benchmark policy metadata; no measured or qualified timing results.
-benchmarks/clean_panel_2026-10-19/oracle-source-contract.json	ignored	Benchmark oracle source-contract metadata; no scoring results or runtime qualification.
-benchmarks/rebenchmark_since_f7668c7/scope.json	ignored	Source-audited rerun scope; no measurements or qualification claims.
-benchmarks/rebenchmark_since_f7668c7/order.tsv	ignored	Historical timing references used only for changed-metric scheduling; new executable timings are separate measurements.
-benchmarks/iqa_changed_2026-10-19/launch-and-controls.json	ignored	CPU campaign launch and control/resource provenance; actual timings are collected separately.
-benchmarks/iqa_changed_2026-10-19/i265/observations.jsonl	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
-benchmarks/iqa_changed_2026-10-19/i265/snapshot.json	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
-benchmarks/iqa_changed_2026-10-19/i265/timings.csv	ignored	Portable CPU chart data with per-worker memory receipts; qualification and protocol fields must be retained.
-benchmarks/iqa_changed_2026-10-19/i265/resource-policy.json	ignored	Measured worker resource-policy audit; separate from timing observations.
-benchmarks/iqa_changed_2026-10-19/r7900x-initial27/observations.jsonl	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
-benchmarks/iqa_changed_2026-10-19/r7900x-initial27/snapshot.json	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
-benchmarks/iqa_changed_2026-10-19/r7900x-initial27/timings.csv	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
-benchmarks/iqa_changed_2026-10-19/r7900x-initial27/run.meta	ignored	Initial27 CPU chart data and provenance; full CPU inventory remainder and flagged retries are separate.
-benchmarks/iqa_changed_2026-10-19/i265/run.meta	ignored	Exact portable invocation, toolchain and binary provenance for collected timings.
-benchmarks/iqa_changed_2026-10-19/mac/canonical-input-copy.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/observations.jsonl	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/retry-manifest.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/retry-no-overwrite.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/run.meta	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/snapshot.json	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/iqa_changed_2026-10-19/mac/timings.csv	ignored	Portable Mac scalar timing, memory and immutable retry/input provenance; retain qualification and protocol.
-benchmarks/canonical_recheck_2026-10-19/results.json	ignored	Native oracle recheck summary; numerical controls are distinct from timing and published-column agreement schemas.
-benchmarks/private_classical_2026-10-19/i265-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/private_classical_2026-10-19/i265-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/private_classical_2026-10-19/mac-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/private_classical_2026-10-19/mac-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/private_classical_2026-10-19/r7900x-observations.csv	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/private_classical_2026-10-19/r7900x-protocol.json	ignored	Canonical weightless private classical timing aggregates and provenance for unified comparison; separate from legacy dashboard schemas.
-benchmarks/iqa_input_contracts_2026-10-20/refusals.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
-benchmarks/iqa_input_contracts_2026-10-20/provenance.json	ignored	Hash-bound CPU input-contract refusal audit; not timing or numerical reproduction observations.
-benchmarks/canonical_recheck_2026-10-19/cohorts.json	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/retry-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/vif-corrected-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/vmaf-run.tsv	ignored	Native oracle comparison scopes; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/nr-goldens.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-dssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-fsim-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-fsim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi-y.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-haarpsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-mdsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-msssim.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vif.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vifvec.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k2.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k3.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-k4.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vsi-nodownscale.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/octave-run-vsi.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/pyiqa-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/matlab-extra-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/nr-inputs-sha256.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
-benchmarks/iqa_saved_2026-10-20T0056Z/mac-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/i265-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-private-protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/mac-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/i265-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/r7900x-observations.csv	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/sources.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/coverage.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/protocol.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.
-benchmarks/iqa_saved_2026-10-20T0056Z/SHA256SUMS.json	ignored	Canonical saved timing/provenance projection with explicit preferred rows; independent chart export, not published-column agreement.

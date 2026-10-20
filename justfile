@@ -1719,6 +1719,14 @@ complexity-regenerate:
     python3 scripts/complexity/coverage.py
     python3 scripts/complexity/paper.py
 
+# Metric-cost brief (one self-contained HTML + PDF) from the current data; see scripts/complexity/brief.sh.
+brief:
+    scripts/complexity/brief.sh
+
+# Same, then upload to the Cloudflare Pages project in BRIEF_PROJECT.
+brief-deploy:
+    scripts/complexity/brief.sh --deploy
+
 # Run one integration-test module per process on the native wgpu backend.
 mac-validation-module package module:
     cargo test --locked -p {{package}} --no-default-features --features wgpu --test it {{module}} -- --nocapture --test-threads=1

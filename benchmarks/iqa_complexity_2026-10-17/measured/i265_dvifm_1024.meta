@@ -1,0 +1,9 @@
+host=i265 (Intel Core Ultra 7 265K)
+date=2026-10-20
+binary=dvifmish examples/complexity_reps (dvifmish origin/main, adapter commit e27b88ab6181), sha256 51828420ce09cdf3…
+mapping=DVIFM_RGB:port-lap-v0.3,DVIFM_Y:port-lap-v0.2,DVIFM_2D_Y:port-2d-v0.2,DVIFM_MIN_Y:port-min-v0.2 (benchmarks/aic_refusals_2026-10-18/README.md)
+fixture=zenmetrics corpus source.png vs q20.jpg, mirror-tiled to 1024x1024 exactly as complexity_reps.rs tiles; decoded with Pillow because the prebuilt complexity-reps predates COMPLEXITY_PAIR_OUT (timing only; the scores are not used)
+command=perf_deltas.py --bin complexity_reps --shapes 1024x1024 --metrics DVIFM_RGB,DVIFM_Y,DVIFM_2D_Y,DVIFM_MIN_Y --repeats 3 --timeout-s 900; --threads 1 --cpu 6 and --threads 8 --cpu 0-7
+resource=run-heavy: done rc=0 6s | peak-RSS 0.04GiB | min-avail 25293MiB | peak-load 2.13
+dropped=an earlier attempt failed every cell with rc=1 because kernel.perf_event_paranoid was 4; those error rows are not included
+scores=identical across repeats and thread counts per variant
