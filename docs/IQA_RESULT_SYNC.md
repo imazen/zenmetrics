@@ -83,3 +83,31 @@ A sealed `insufficient warm samples` rejection has the public failure class
 unsupported implementation or numerical failure. Missing timing arrays and
 sample counts are not imputed from partial worker output; the raw failed
 attempts and any partial diagnostic measurements remain preserved privately.
+
+### Private NN qualification at 2026-10-20 08:00 UTC
+
+Saved snapshot `11005b1deca4fea824a61a358e07e989dbe218c3` contains every
+terminal private NN retry. Select campaign names beginning `private-nn-`,
+`preferred=True` and `qualified_timing=True` in the host observation CSVs.
+The seven-route canonical grid is 336 logical cells per host:
+
+| Host | Timing-qualified | Exhausted gate-flagged | Other exhausted failures | Unmeasured, blocked |
+| --- | ---: | ---: | ---: | ---: |
+| mac | 268 | 3 | 65 | 0 |
+| r7900x | 335 | 1 | 0 | 0 |
+| i265 | 289 | 1 | 2 | 44 |
+
+Mac's 65 failures comprise 64 TOPIQ large-input monitored-memory stops and one
+DMM warm cell with insufficient samples. i265's two failures are AHIQ warm
+controls: one times out and one produces insufficient samples; their exhausted
+caps block admission of the 44 remaining AHIQ cells. These are measured campaign
+limits, not unsupported implementations. No partial warm sample is qualified.
+All twelve Mac production retries reproduce their parent score bits; nine
+recover clean timing. Three remain gate-flagged after their final original
+attempt. The protected retry service exited zero and is not running.
+
+The table counts retained controls and qualified replacements once. It does
+not combine engine or worker revisions, and it does not count failed attempts
+as timings. DMM retains its failed native numerical gate; neither repeatable
+scores nor timing qualification establish native-oracle parity or agreement
+with an AIC published column. Raw attempts and exhausted budgets are preserved.
