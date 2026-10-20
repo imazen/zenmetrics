@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Select all 40 revised CPU benchmark routes in measured local order and honor
+  requested size subsets (`d660bb58`); retain original 27- and 38-route tables.
+  The common 1152×1152 scheduling study uses the explicit native-arm harness
+  (`c6ffbaee`) and exhaustive exported-source verifier (`98dd31d4`).
+
+- Require explicit numerical gates in the resident-model first-call confirmation
+  successor (`c34646a7`), preserving the earlier active helper and acquired data.
+
 - Fail the five-minute results sync loudly: a cycle that cannot publish new evidence (lock, dirty checkout, refused push, failed capture) exits 2 with a reason class, stall start and cycle count in `status.json`; the dashboard watcher turns that into a `results sync blocked` / `not running` check without exposing the private detail.
 
 - Score `hdrvdp` and `hdrvdp3` on 8-bit sRGB through upstream's own `sRGB-display` encoding (100 cd/m² peak, 1 cd/m² black, 30 ppd; v3 task quality, `led-lcd-srgb`) instead of refusing it, in the CLI and the umbrella CPU dispatch; 24 new goldens from the official HDR-VDP-2.2.2 release check the encoding.
