@@ -92,6 +92,26 @@ tolerances above.
   to `res`, no numeric change. Without it the generator's `*_planes.tsv`
   and `diag_*` artifact writes fail on the missing fields.
 
+## `sRGB-display` goldens (8-bit sRGB input, 2026-10-20)
+
+`hdrvdp.m` documents `'sRGB-display'` as the encoding "for standard (LDR) color images": the sRGB EOTF
+onto a display with a 100 cd/m² peak and 1 cd/m² black (`99·linear + 1`). The CLI's plain `hdrvdp`
+route and the umbrella's `compute_srgb_u8` use it for 8-bit sRGB pairs. `validation/gen_srgb_goldens.m`
+builds 24 cases (128×128 and 96×160; identical, noise, blur, dark, bright, chroma; 30 and 60 ppd) with
+integer arithmetic only, so `tests/golden_srgb_display.rs` regenerates the same 8-bit codes bit for bit
+and only `validation/goldens_srgb/goldens_srgb.tsv` (`res.Q`) is committed. Bound: |ΔQ| ≤ 5e-3, the
+luminance goldens' bound, for strict and default arithmetic.
+
+Generated with the official `hdrvdp-2.2.2.zip` (sha256 `b651bc474a47050b8c107484c0aff8571f5b237264eaa6d898f85a2ae7766820`)
+in the official `gnuoctave/octave:11.1.0` Docker image with `pkg install -forge image` (2.20.1), with only
+the `ifft2` `'symmetric'` patch above (the `is_mex` patch affects `P_map`, which these goldens do not
+record). That environment reproduces the committed luminance goldens (blur and dark, 128², 30 ppd) to
+1e-12. Octave 6.4.0 with image 2.12.0 does **not**: it gives 59.2606 for the blur case (golden 58.6232),
+so do not generate goldens there.
+
+    docker run --rm --user $(id -u):$(id -g) -e HOME=/w/home -e HDRVDP_SRC=/w/hdrvdp-2.2.2 \
+      -e HDRVDP_GOLDENS=/w/out -v $PWD:/w -w /w gnuoctave/octave:11.1.0 octave-cli gen_srgb_goldens.m
+
 ## What this does and does not prove
 
 - **Does**: the full pathway → pyramid → masking → pooling pipeline is a

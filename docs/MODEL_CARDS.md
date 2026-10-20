@@ -4290,13 +4290,13 @@ FR · Classical · CPU · Reported results
 **Cli contract:** HDR-VDP 2.2.2 (JOD scale 0–100, 100 = identical) — CPU implementation
 via the in-tree hdrvdp crate (native SIMD port of the official
 HDR-VDP-2.2.2; dispatched through zenmetrics_api::cpu_dispatch /
-Backend::Cpu). HDR-only input: consumes absolute luminance in
-cd/m² (the IntegratedPuNits feeding — interleaved linear-RGB nits,
-ColorEncoding::RgbBt709 inside), so plain sRGB8 pairs error with a
-"feed absolute nits" message — use score-pairs --hdr / sweep --hdr
-(or the umbrella Metric + compute_pu_nits_interleaved_multi).
-Viewing geometry defaults to DEFAULT_PIX_PER_DEG (30 — the measured
-UPIQ protocol). Emits hdrvdp_imazen_v. No GPU twin.
+Backend::Cpu). 8-bit sRGB pairs use upstream's own sRGB-display
+encoding, which hdrvdp.m documents for standard (LDR) colour images:
+the sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black display. Absolute
+luminance (cd/m², ColorEncoding::RgbBt709 inside) goes through
+score-pairs --hdr / sweep --hdr. Viewing geometry defaults to
+DEFAULT_PIX_PER_DEG (30 — the measured UPIQ protocol). Emits
+hdrvdp_imazen_v. No GPU twin.
 
 **Reproduce from the CLI:**
 
@@ -4317,7 +4317,7 @@ target/release/zenmetrics score --metric hdrvdp --reference ref.png --distorted 
 
 ```json
 {
-  "convention": "absolute luminance cd/m² + display params — not sRGB8"
+  "convention": "absolute luminance cd/m² + display params; 8-bit sRGB through upstream's sRGB-display encoding (sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black display) at 30 ppd, checked against the official release in crates/hdrvdp/tests/golden_srgb_display.rs"
 }
 ```
 
@@ -4672,9 +4672,11 @@ FR · Classical · CPU · Reported results
 **Cli contract:** HDR-VDP-3.0.7 (Q_JOD scale 0–10, 10 = identical) — CPU implementation
 via the in-tree hdrvdp::v3 module (native port of the
 jpeg-ai-qaf VDP3 NumPy reference, itself a port of the official
-HDR-VDP-3.0.7 MATLAB release). HDR-only input like hdrvdp
-(absolute-luminance nits feed). Unlike v2 there is no default
-viewing geometry: --hdrvdp3-ppd is required, and
+HDR-VDP-3.0.7 MATLAB release). 8-bit sRGB pairs use upstream's
+sRGB-display encoding (as hdrvdp), task quality, the encoding's
+upstream emission (led-lcd-srgb), age 24, no surround, and the same
+30 pixels per degree as v2. For absolute-luminance input (--hdr)
+there is no default viewing geometry: --hdrvdp3-ppd is required, and
 --hdrvdp3-task/--hdrvdp3-input/--hdrvdp3-emission/
 --hdrvdp3-age/--hdrvdp3-surround select the rest of the
 upstream parameter surface (defaults match the jpeg-ai-qaf
@@ -4700,7 +4702,7 @@ target/release/zenmetrics score --metric hdrvdp3 --reference ref.png --distorted
 
 ```json
 {
-  "convention": "absolute luminance cd/m², explicit required viewing conditions — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age"
+  "convention": "absolute luminance cd/m², explicit required viewing conditions — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age; 8-bit sRGB through upstream's sRGB-display with task quality, led-lcd-srgb, age 24, no surround, 30 ppd"
 }
 ```
 

@@ -1,4 +1,5 @@
-//! Explicit AIC2026 SDR conventions, separate from the absolute-nits routes.
+//! HDR-VDP on 8-bit sRGB: the explicit AIC2026 SDR conventions (`*-aic2026`) and the plain routes'
+//! upstream `sRGB-display` encoding, both separate from the absolute-nits (`--hdr`) routes.
 use super::MetricKind;
 use crate::decode::Rgb8Image;
 use zenmetrics_api::hdrvdp_cpu as vdp;
@@ -108,6 +109,49 @@ pub(super) fn score(
     }
 }
 
+/// Plain `hdrvdp` / `hdrvdp3` on 8-bit sRGB: upstream's own `sRGB-display` encoding, which `hdrvdp.m`
+/// documents "for standard (LDR) color images" (sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black
+/// display), at the crate's default 30 pixels per degree. v3 adds task `quality`, the encoding's
+/// upstream emission (`led-lcd-srgb`), age 24 and no surround, and reports Q_JOD.
+pub(super) fn score_srgb_display(
+    kind: MetricKind,
+    r: &Rgb8Image,
+    d: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (r.width, r.height) != (d.width, d.height) {
+        return Err(format!("{}: reference/distorted dimensions differ", kind.name()).into());
+    }
+    let (w, h) = (r.width as usize, r.height as usize);
+    let unit = |image: &Rgb8Image| {
+        image
+            .pixels
+            .iter()
+            .map(|&b| f64::from(b) / 255.0)
+            .collect::<Vec<f64>>()
+    };
+    let (r, d) = (unit(r), unit(d));
+    if kind == MetricKind::Hdrvdp3 {
+        use vdp::v3::*;
+        let p = Params::new(
+            Task::Quality,
+            ViewingConditions::new(vdp::DEFAULT_PIX_PER_DEG, Surround::None, 24),
+            InputEncoding::SrgbDisplay,
+            Emission::default_for(InputEncoding::SrgbDisplay),
+            Options::reference(Task::Quality),
+        )?;
+        Ok(vec![(
+            kind.column_names()[0],
+            vdp::v3::score(&d, &r, w, h, &p)?,
+        )])
+    } else {
+        let params = vdp::Params::new(vdp::DEFAULT_PIX_PER_DEG);
+        Ok(vec![(
+            kind.column_names()[0],
+            vdp::score(&d, &r, w, h, vdp::ColorEncoding::SrgbDisplay, &params)?,
+        )])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,5 +177,53 @@ mod tests {
         assert!(positive("0").is_err());
         assert!(positive("-1").is_err());
         assert_eq!(positive("37.84").unwrap(), 37.84);
+    }
+
+    #[test]
+    fn plain_routes_score_srgb_through_srgb_display() {
+        let (w, h) = (48usize, 40usize);
+        let px = |seed: u32| -> Vec<u8> {
+            (0..w * h * 3)
+                .map(|i| ((i as u32 * 37 + seed * 11 + (i as u32 / 7) * 5) % 256) as u8)
+                .collect()
+        };
+        let reference = Rgb8Image {
+            width: w as u32,
+            height: h as u32,
+            pixels: px(1),
+        };
+        let distorted = Rgb8Image {
+            width: w as u32,
+            height: h as u32,
+            pixels: px(2),
+        };
+        let unit = |p: &[u8]| {
+            p.iter()
+                .map(|&b| f64::from(b) / 255.0)
+                .collect::<Vec<f64>>()
+        };
+        let (rf, df) = (unit(&reference.pixels), unit(&distorted.pixels));
+        let v2 = score_srgb_display(MetricKind::Hdrvdp, &reference, &distorted).unwrap();
+        let want = vdp::score(
+            &df,
+            &rf,
+            w,
+            h,
+            vdp::ColorEncoding::SrgbDisplay,
+            &vdp::Params::new(vdp::DEFAULT_PIX_PER_DEG),
+        )
+        .unwrap();
+        assert_eq!(v2[0].1.to_bits(), want.to_bits());
+        assert!(want < 100.0);
+        let same = score_srgb_display(MetricKind::Hdrvdp, &reference, &reference).unwrap();
+        assert_eq!(same[0].1, 100.0);
+        let v3 = score_srgb_display(MetricKind::Hdrvdp3, &reference, &distorted).unwrap();
+        assert!(v3[0].1.is_finite() && v3[0].1 < 10.0, "{v3:?}");
+        let short = Rgb8Image {
+            width: 4,
+            height: 4,
+            pixels: vec![0; 48],
+        };
+        assert!(score_srgb_display(MetricKind::Hdrvdp, &reference, &short).is_err());
     }
 }

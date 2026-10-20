@@ -501,21 +501,23 @@ pub enum MetricKind {
     /// HDR-VDP 2.2.2 (JOD scale 0–100, 100 = identical) — CPU implementation
     /// via the in-tree `hdrvdp` crate (native SIMD port of the official
     /// HDR-VDP-2.2.2; dispatched through `zenmetrics_api::cpu_dispatch` /
-    /// `Backend::Cpu`). **HDR-only input**: consumes absolute luminance in
-    /// cd/m² (the `IntegratedPuNits` feeding — interleaved linear-RGB nits,
-    /// `ColorEncoding::RgbBt709` inside), so plain sRGB8 pairs error with a
-    /// "feed absolute nits" message — use `score-pairs --hdr` / `sweep --hdr`
-    /// (or the umbrella `Metric` + `compute_pu_nits_interleaved_multi`).
-    /// Viewing geometry defaults to `DEFAULT_PIX_PER_DEG` (30 — the measured
-    /// UPIQ protocol). Emits `hdrvdp_imazen_v*`. No GPU twin.
+    /// `Backend::Cpu`). 8-bit sRGB pairs use upstream's own `sRGB-display`
+    /// encoding, which `hdrvdp.m` documents for standard (LDR) colour images:
+    /// the sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black display. Absolute
+    /// luminance (cd/m², `ColorEncoding::RgbBt709` inside) goes through
+    /// `score-pairs --hdr` / `sweep --hdr`. Viewing geometry defaults to
+    /// `DEFAULT_PIX_PER_DEG` (30 — the measured UPIQ protocol). Emits
+    /// `hdrvdp_imazen_v*`. No GPU twin.
     #[value(name = "hdrvdp")]
     Hdrvdp,
     /// HDR-VDP-3.0.7 (Q_JOD scale 0–10, 10 = identical) — CPU implementation
     /// via the in-tree `hdrvdp::v3` module (native port of the
     /// `jpeg-ai-qaf` `VDP3` NumPy reference, itself a port of the official
-    /// HDR-VDP-3.0.7 MATLAB release). **HDR-only input** like `hdrvdp`
-    /// (absolute-luminance nits feed). Unlike v2 there is **no default
-    /// viewing geometry**: `--hdrvdp3-ppd` is required, and
+    /// HDR-VDP-3.0.7 MATLAB release). 8-bit sRGB pairs use upstream's
+    /// `sRGB-display` encoding (as `hdrvdp`), task `quality`, the encoding's
+    /// upstream emission (`led-lcd-srgb`), age 24, no surround, and the same
+    /// 30 pixels per degree as v2. For absolute-luminance input (`--hdr`)
+    /// there is **no default viewing geometry**: `--hdrvdp3-ppd` is required, and
     /// `--hdrvdp3-task`/`--hdrvdp3-input`/`--hdrvdp3-emission`/
     /// `--hdrvdp3-age`/`--hdrvdp3-surround` select the rest of the
     /// upstream parameter surface (defaults match the jpeg-ai-qaf
@@ -2864,24 +2866,12 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::ProposalButteraugli => Err(disabled_msg(kind.name(), "cpu-metrics")),
 
-        // HDR-VDP: umbrella native-CPU path (same `run_cpu_native_via_umbrella`
-        // as the other unsuffixed metrics). The Cpu dispatch's `compute_srgb_u8`
-        // arm returns a loud "feed absolute nits" error — sRGB pairs are not a
-        // valid HDR-VDP feeding; the `--hdr` sweep/score path is the real one.
+        // HDR-VDP on 8-bit sRGB: upstream's own `sRGB-display` encoding (hdrvdp_aic.rs). Absolute
+        // luminance keeps the `--hdr` sweep/score path.
         #[cfg(feature = "cpu-hdrvdp")]
-        MetricKind::Hdrvdp => Ok(vec![(
-            HDRVDP_CPU_COLUMNS[0],
-            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Hdrvdp, reference, distorted)?,
-        )]),
-        // HDR-VDP-3 has no sRGB8 meaning at all — absolute-luminance nits +
-        // explicit viewing conditions only. `--hdr` + `--hdrvdp3-*` is the
-        // route; this arm fails loud rather than misreading code values.
-        #[cfg(feature = "cpu-hdrvdp")]
-        MetricKind::Hdrvdp3 => Err("hdrvdp3 consumes absolute luminance \
-            (cd/m²) with explicit viewing conditions — use `--hdr` plus \
-            `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); \
-            sRGB8 input is not a valid feeding"
-            .into()),
+        MetricKind::Hdrvdp | MetricKind::Hdrvdp3 => {
+            hdrvdp_aic::score_srgb_display(kind, reference, distorted)
+        }
         #[cfg(not(feature = "cpu-hdrvdp"))]
         MetricKind::Hdrvdp => Err(disabled_msg("hdrvdp", "cpu-hdrvdp` (native SIMD CPU)")),
         #[cfg(not(feature = "cpu-hdrvdp"))]

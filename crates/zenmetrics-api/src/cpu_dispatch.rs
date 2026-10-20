@@ -747,8 +747,7 @@ impl CpuMetricState {
     }
 
     pub(crate) fn compute_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<Score> {
-        // Quiet unused-arg lints in single-`cpu-*` feature configurations
-        // (hdrvdp's arm errors without reading the buffers).
+        // Quiet unused-arg lints in single-`cpu-*` feature configurations.
         let _ = (r, d);
         match self {
             #[cfg(feature = "cpu-ssim2")]
@@ -787,14 +786,68 @@ impl CpuMetricState {
                 ..
             } => compute_butter(params, *width, *height, r, d),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
-                kind: "hdrvdp",
-                message: "HDR-VDP consumes absolute luminance (cd/m²), not \
-                          sRGB8 — feed interleaved absolute-nits f32 via \
-                          compute_pu_nits_interleaved (hdr_feeding: \
-                          IntegratedPuNits; the --hdr sweep path)"
-                    .into(),
-            }),
+            CpuMetricState::Hdrvdp {
+                params,
+                width,
+                height,
+            } => {
+                // 8-bit sRGB goes through upstream's own `sRGB-display` encoding, which `hdrvdp.m`
+                // documents "for standard (LDR) color images": the sRGB EOTF onto a display with a
+                // 100 cd/m² peak and 1 cd/m² black (`99·linear + 1`). Absolute luminance still goes
+                // through compute_pu_nits_interleaved (the --hdr path).
+                let (w, h) = (*width as usize, *height as usize);
+                let (rf, df) = (srgb_unit(r, w, h, "hdrvdp")?, srgb_unit(d, w, h, "hdrvdp")?);
+                let q = hdrvdp::score(
+                    &df,
+                    &rf,
+                    w,
+                    h,
+                    hdrvdp::ColorEncoding::SrgbDisplay,
+                    params.as_ref(),
+                )
+                .map_err(|e| Error::Metric {
+                    kind: "hdrvdp",
+                    message: format!("hdrvdp::score: {e}"),
+                })?;
+                Ok(Score {
+                    value: q,
+                    metric_name: "hdrvdp",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-hdrvdp")]
+            CpuMetricState::Hdrvdp3 {
+                params,
+                width,
+                height,
+            } => {
+                if params.encoding != hdrvdp::v3::InputEncoding::SrgbDisplay {
+                    return Err(Error::Metric {
+                        kind: "hdrvdp3",
+                        message: format!(
+                            "8-bit sRGB input needs InputEncoding::SrgbDisplay; these params declare \
+                             {:?} (feed absolute luminance via compute_pu_nits_interleaved for that)",
+                            params.encoding
+                        ),
+                    });
+                }
+                let (w, h) = (*width as usize, *height as usize);
+                let (rf, df) = (
+                    srgb_unit(r, w, h, "hdrvdp3")?,
+                    srgb_unit(d, w, h, "hdrvdp3")?,
+                );
+                let q_jod = hdrvdp::v3::score(&df, &rf, w, h, params.as_ref()).map_err(|e| {
+                    Error::Metric {
+                        kind: "hdrvdp3",
+                        message: format!("hdrvdp::v3::score: {e}"),
+                    }
+                })?;
+                Ok(Score {
+                    value: q_jod,
+                    metric_name: "hdrvdp3",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
@@ -851,14 +904,9 @@ impl CpuMetricState {
                 ..
             } => compute_butter_multi(params, *width, *height, r, d).map(|(s, p)| (s, Some(p))),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
-                kind: "hdrvdp",
-                message: "HDR-VDP consumes absolute luminance (cd/m²), not \
-                          sRGB8 — feed interleaved absolute-nits f32 via \
-                          compute_pu_nits_interleaved (hdr_feeding: \
-                          IntegratedPuNits; the --hdr sweep path)"
-                    .into(),
-            }),
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => {
+                Ok((self.compute_srgb_u8(r, d)?, None))
+            }
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
@@ -991,9 +1039,8 @@ impl CpuMetricState {
             #[cfg(feature = "cpu-hdrvdp")]
             CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
-                message: "no warm-reference path for hdrvdp — one-shot nits \
-                          scoring only (and this entry is sRGB8, which \
-                          HDR-VDP does not accept)"
+                message: "no warm-reference path for hdrvdp — score each pair \
+                          one-shot (compute_srgb_u8 or the absolute-nits entry)"
                     .into(),
             }),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
@@ -1133,9 +1180,8 @@ impl CpuMetricState {
             #[cfg(feature = "cpu-hdrvdp")]
             CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
-                message: "no warm-reference path for hdrvdp — one-shot nits \
-                          scoring only (and this entry is sRGB8, which \
-                          HDR-VDP does not accept)"
+                message: "no warm-reference path for hdrvdp — score each pair \
+                          one-shot (compute_srgb_u8 or the absolute-nits entry)"
                     .into(),
             }),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
@@ -1610,4 +1656,20 @@ fn compute_butter_linear(
         },
         result.pnorm_3,
     ))
+}
+
+/// 8-bit sRGB codes as interleaved `[0, 1]` f64 for HDR-VDP's `sRGB-display` encoding.
+#[cfg(feature = "cpu-hdrvdp")]
+fn srgb_unit(codes: &[u8], w: usize, h: usize, kind: &'static str) -> Result<Vec<f64>> {
+    if codes.len() != w * h * 3 {
+        return Err(Error::Metric {
+            kind,
+            message: format!(
+                "sRGB buffer length mismatch: expected {}, got {}",
+                w * h * 3,
+                codes.len()
+            ),
+        });
+    }
+    Ok(codes.iter().map(|&v| f64::from(v) / 255.0).collect())
 }

@@ -162,12 +162,21 @@ fn cpu_hdrvdp_default_ppd_and_input_validation() {
     );
 }
 
-/// sRGB8 is not a valid HDR-VDP feeding — the u8 entries fail loudly and
-/// point at the nits path rather than misreading code values as cd/m².
+/// 8-bit sRGB scores through upstream's own `sRGB-display` encoding (hdrvdp.m: "for standard (LDR)
+/// color images"; sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black display). The umbrella result must be
+/// bit-identical to the crate's `ColorEncoding::SrgbDisplay` call at the default viewing geometry; the
+/// encoding itself is checked against official HDR-VDP-2.2.2 in `hdrvdp/tests/golden_srgb_display.rs`.
 #[test]
-fn cpu_hdrvdp_srgb8_is_a_loud_error() {
+fn cpu_hdrvdp_srgb8_scores_through_srgb_display() {
+    use zenmetrics_api::hdrvdp_cpu as vdp;
     let (w, h) = (128u32, 96u32);
-    let buf = vec![128u8; (w * h * 3) as usize];
+    let n = (w * h * 3) as usize;
+    let r: Vec<u8> = (0..n).map(|i| ((i * 37 + i / 11) % 256) as u8).collect();
+    let d: Vec<u8> = r
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| v.saturating_add((i % 7) as u8))
+        .collect();
 
     let mut m = Metric::new(
         MetricKind::Hdrvdp,
@@ -177,12 +186,34 @@ fn cpu_hdrvdp_srgb8_is_a_loud_error() {
         crate::params_for(MetricKind::Hdrvdp),
     )
     .expect("Metric::new hdrvdp on Backend::Cpu");
-    let err = m
-        .compute_srgb_u8(&buf, &buf)
-        .expect_err("sRGB8 must not score through HDR-VDP");
-    let msg = err.to_string();
-    assert!(
-        msg.contains("nits") || msg.contains("absolute luminance"),
-        "error should point at the nits feeding, got: {msg}"
+    let got = m
+        .compute_srgb_u8(&r, &d)
+        .expect("sRGB8 scores through sRGB-display");
+    let unit = |p: &[u8]| {
+        p.iter()
+            .map(|&v| f64::from(v) / 255.0)
+            .collect::<Vec<f64>>()
+    };
+    let want = vdp::score(
+        &unit(&d),
+        &unit(&r),
+        w as usize,
+        h as usize,
+        vdp::ColorEncoding::SrgbDisplay,
+        &vdp::Params::new(vdp::DEFAULT_PIX_PER_DEG),
+    )
+    .unwrap();
+    assert_eq!(
+        got.value.to_bits(),
+        want.to_bits(),
+        "umbrella {} vs crate {want}",
+        got.value
     );
+    assert!(want < 100.0, "distorted pair must score below identical");
+    let same = m.compute_srgb_u8(&r, &r).expect("identical pair");
+    assert_eq!(same.value, 100.0);
+    let err = m
+        .compute_srgb_u8(&r[..n - 3], &d)
+        .expect_err("short sRGB buffer must error");
+    assert!(err.to_string().contains("length"), "got: {err}");
 }
