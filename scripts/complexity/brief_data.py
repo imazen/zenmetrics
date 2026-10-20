@@ -203,14 +203,25 @@ def canonical(private):
     return out
 
 
+def cell_columns(cell):
+    """Column names in one status-doc table cell: each backticked name, with `X1`–`X5` ranges expanded."""
+    names = re.findall(r'`([^`]+)`', cell)
+    if not names:
+        return [cell.strip()]
+    m = re.search(r'`([A-Za-z_-]+?)(\d+)`\s*[–-]\s*`\1(\d+)`', cell)
+    if m:
+        names += [f'{m.group(1)}{i}' for i in range(int(m.group(2)) + 1, int(m.group(3)))]
+    return names
+
+
 def aic_status():
     """Per published AIC2026 column: how docs/AIC2026_REPRODUCTION_STATUS.md classifies our match."""
     st = (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()
     def sec(a, b):
         i = st.index(a); return st[i:st.index(b, i + len(a))]
     def firsts(body):
-        return [re.sub('`', '', l.split('|')[1]).strip() for l in body.splitlines()
-                if l.startswith('| ') and not l.startswith('| Column') and not set(l) <= set('|-: ')]
+        return [c for l in body.splitlines() if l.startswith('| ') and not l.startswith('| Column') and not set(l) <= set('|-: ')
+                for c in cell_columns(l.split('|')[1])]
     out = {}
     for col in re.findall(r'`([^`]+)`', re.sub(r'\([^)]*\)', '', sec('## Reproduced', '## Explicit AIC routes'))):
         out[col] = 'reproduced'
@@ -317,13 +328,13 @@ def canonical_perf():
                          p10=sig(float(r['p10_ns']) / 1e6) if r['p10_ns'] else None, p90=sig(float(r['p90_ns']) / 1e6) if r['p90_ns'] else None,
                          n=int(r['n']), clean=int(r['warm_rounds_clean'] or 0), flagged=int(r['warm_rounds_flagged'] or 0),
                          rounds=[sig(float(v) / 1e6) for v in (r.get('round_means_ns') or '').split(';') if v] or None)
+            else:  # cold: one row per fresh-process repeat
+                c.setdefault('reps', []).append((int(r['cold_repeat'] or 0), sig(float(r['median_ns']) / 1e6)))
             for k in ('simd_tier', 'placement_policy', 'placement_cpus', 'rayon_threads_observed'):
                 if r.get(k):
                     c[k] = r[k]
             if r.get('peak_rss_gib_rounded'):
-                c['rss'] = float(r['peak_rss_gib_rounded'])
-            else:
-                c.setdefault('reps', []).append(sig(float(r['median_ns']) / 1e6))
+                c['rss'] = max(c.get('rss', 0), float(r['peak_rss_gib_rounded']))
     # Individual warm rounds (and their gate status) from the rounds projection, matched on the same identity.
     for f in sorted(d.glob('*-rounds.csv')):
         got = {}
@@ -338,6 +349,9 @@ def canonical_perf():
             v.sort()
             cells[key]['rounds'] = [sig(t) for _, t, _ in v]
             cells[key]['flagged_rounds'] = [i for i, (_, _, ok) in enumerate(v) if not ok] or None
+    for c in cells.values():
+        if c.get('reps'):
+            c['reps'] = [v for _, v in sorted(c['reps'])]
     rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps'), c.get('rounds'),
              c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus'), c.get('flagged_rounds')]
             for (h, m, s, t, ph), c in sorted(cells.items())]
@@ -355,6 +369,138 @@ def canonical_perf():
                 sizes=[dict(name=s, w=sizes[s][0], h=sizes[s][1]) for s in order],
                 coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts,
                 protocol=json.loads((d / 'protocol.json').read_text()).get('protocol') if (d / 'protocol.json').exists() else None)
+
+
+# ---------------------------------------------------------------- AIC2026 reproduction and coherence checks
+
+GH = 'https://github.com/imazen/zenmetrics'
+
+
+def doc_routes():
+    """Published column -> our CLI names, from the tables in docs/AIC2026_REPRODUCTION_STATUS.md (first two cells)."""
+    out = {}
+    for l in (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text().splitlines():
+        if not l.startswith('| ') or set(l) <= set('|-: '):
+            continue
+        cells = l.strip().strip('|').split('|')
+        if len(cells) < 2:
+            continue
+        for col in cell_columns(cells[0]):
+            out.setdefault(col, set()).update(re.findall(r'`([^`]+)`', cells[1]))
+    return out
+
+
+def changed_since(commit):
+    """Files under crates/ that differ between the reproduction's source commit and the revision being built."""
+    r = subprocess.run(['jj', '-R', str(ROOT), 'diff', '--from', commit, '--to', 'heads(::@ & ::master@origin)', '--name-only', 'crates'],
+                       capture_output=True, text=True)
+    return None if r.returncode else [l for l in r.stdout.split() if l]
+
+
+def affected_metrics(files, names):
+    """Changed source files -> the metrics they can affect (by file or crate name; heuristic, stated as such)."""
+    out, generic = {}, []
+    for f in files:
+        p = f.split('/')
+        if 'examples' in p or f.endswith('Cargo.toml'):
+            continue
+        if p[1] == 'zenmetrics-cli' and p[2:4] == ['src', 'metrics']:
+            stem = Path(f).stem.replace('_', '-')
+            ms = [n for n in names if n == 'psnr' or n.startswith('psnr-')] if stem in ('psnr-kernels', 'classical') else \
+                 [n for n in names if n == stem or n.startswith(stem + '-')]
+        elif p[1] in ('zenmetrics-math', 'zenmetrics-api', 'zenmetrics-cli', 'zenmetrics-nn'):
+            generic.append(f); continue
+        else:
+            base = p[1].removesuffix('-iqa').removesuffix('-gpu')
+            ms = [n for n in names if n == base or n.startswith(base + '-')]
+        for n in ms:
+            out.setdefault(n, []).append(f)
+        if not ms:
+            generic.append(f)
+    return out, generic
+
+
+def reproduction(names):
+    """Committed AIC2026 reproduction sets (compare TSVs, provenance) and canonical-implementation comparisons."""
+    sys.path.insert(0, str(ROOT / 'scripts/aic2026'))
+    from aic_columns import COLS
+    import repro_check
+    out = dict(sets=[], canonical=[], routes={}, july_columns=[], checks=repro_check.run())
+    cmap = json.loads((HERE / 'aic2026_columns.json').read_text())['map']
+    routes = {c: set() for c in COLS}
+    for c, m in cmap.items():
+        routes.setdefault(c, set()).add(m)
+    for c, ms in doc_routes().items():
+        routes.setdefault(c, set()).update(ms)
+    for c, (tag, _, _) in COLS.items():
+        routes[c].add(tag)
+    for d in sorted(ROOT.glob('benchmarks/aic2026_full_repro_*')):
+        for gz in sorted(d.glob('metrics_*.zenmetrics.csv.gz')):
+            import gzip
+            head = gzip.open(gz, 'rt').readline().strip().split(',')
+            out['july_columns'] = [c for c in head[9:] if not c.startswith('JND_')]
+        for cmp in sorted(d.glob('compare_*.tsv')):
+            kind = cmp.stem.removeprefix('compare_')
+            rows = list(csv.DictReader(cmp.open(), delimiter='\t'))
+            rel = cmp.relative_to(ROOT).as_posix()
+            if kind.startswith('canonical_'):
+                out['canonical'].append(dict(set=kind.removeprefix('canonical_'), path=rel, url=f'{GH}/blob/master/{rel}', rows=rows))
+                continue
+            prov_p = d / f'provenance_{kind}.json'
+            prov = json.loads(prov_p.read_text()) if prov_p.exists() else {}
+            commit = ((prov.get('source') or {}).get('commit') or '').split()[0] or None
+            gz = d / f'metrics_{kind}.zenmetrics.csv.gz'
+            changed = changed_since(commit) if commit else None
+            aff, generic = affected_metrics(changed or [], names)
+            out['sets'].append(dict(
+                set=kind, path=rel, url=f'{GH}/blob/master/{rel}', affected=aff, generic_changes=generic,
+                csv_url=f'{GH}/raw/master/{gz.relative_to(ROOT).as_posix()}' if gz.exists() else None,
+                commit=commit and commit[:12], binary=((prov.get('binary') or {}).get('sha256') or '')[:12] or None,
+                generated=prov.get('generated'), changed=changed,
+                rows=[r for r in rows if r['match'] not in ('info-only',)]))
+    out['routes'] = {c: sorted(m for m in ms if m in names) for c, ms in routes.items()}
+    out['routes'] = {c: ms for c, ms in out['routes'].items() if ms}
+    return out
+
+
+def coherence(metrics, perf, repro, aic):
+    """Build-time checks: names that resolve nowhere, doc claims that the data contradicts, stale or old inputs."""
+    out = list(repro['checks'])
+    add = lambda level, check, detail: out.append(dict(level=level, check=check, detail=detail))
+    known = {m['metric'] for m in metrics}
+    norm = lambda m: m.replace('_', '-')
+    for m in sorted({r[1] for r in (perf or {}).get('rows', [])}):
+        if m not in known and norm(m) not in known:
+            add('info', 'timings: metric without a record', f'{m} is timed but has no counts, card or reproduction status')
+    july = set(repro['july_columns'])
+    for s in repro['sets']:
+        for r in s['rows']:
+            st_ = aic.get(r['column'])
+            if r['match'] == 'MISS' and st_ in ('reproduced', 'matched by configuring the reference', 'matched pyiqa defaults'):
+                add('warn', 'status doc vs full reproduction', f"{r['column']}: the status doc says {st_}, the {s['set']} set (route {r['cli']}) misses the 1e-3 "
+                    f"site-JND gate (median {r['median_dJND']}, n {r['n']})")
+            if r['match'] == 'MATCH' and st_ in ('close, minor residual', 'not reproduced'):
+                add('info', 'status doc vs full reproduction', f"{r['column']}: the status doc says {st_}, the {s['set']} set matches (median {r['median_dJND']})")
+        scored = {r['cli'] for r in s['rows']}
+        hit = sorted(m for m in s['affected'] if m in scored)
+        if hit:
+            add('warn', f"{s['set']} reproduction older than the code", f"since its source commit {s['commit']}, code changed for scored routes "
+                + '; '.join(f"{m} ({', '.join(Path(f).name for f in s['affected'][m])})" for m in hit) + '; rescore those columns or confirm the change is bit-exact')
+        if s['generic_changes']:
+            add('info', f"{s['set']} reproduction older than shared code", f"shared files changed since {s['commit']}: {', '.join(s['generic_changes'])}")
+        if s['changed'] is None and s['commit']:
+            add('warn', f"{s['set']} reproduction", f"could not diff crates/ against its source commit {s['commit']}")
+    for c in sorted(set(aic) - july):
+        if july:
+            add('info', 'status doc column not in the July CSV', f'{c} is classified in the status doc (an AIC site column) but is not a column of the published CSV')
+    if perf and perf.get('synced_utc'):
+        import datetime
+        age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(perf['synced_utc'])
+        if age.total_seconds() > 3 * 3600:
+            add('warn', 'timings sync', f"benchmarks/iqa_saved_latest last synced {perf['synced_utc'][:16]} UTC, {age.total_seconds() / 3600:.0f} h before this build")
+    if perf and perf.get('identity_conflicts_dropped'):
+        add('warn', 'timings identity', f"{perf['identity_conflicts_dropped']} rows dropped: one cell came from more than one binary or input")
+    return out
 
 
 # ---------------------------------------------------------------- main
@@ -442,17 +588,22 @@ def main():
                 front.append(r['metric']); best = r['agreement']['agreement']
         fronts[key] = front
 
+    perf = canonical_perf()
+    repro = reproduction({m['metric'] for m in metrics} | {r[1] for r in (perf or {}).get('rows', [])})
     doc = dict(schema=1, host=HOST, shape=f'{W}x{H}', seed=SEED,
                sources=dict(public=public_rev(), private=priv and git_rev(priv, 'origin/main'),
                             dvifmish=git_rev(Path.home() / 'work/dvifmish', 'origin/main'),
                             extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement],
                             spotcheck=spot_src),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
-               tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=canonical_perf())
+               tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=perf, repro=repro,
+               checks=coherence(metrics, perf, repro, aic))
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(doc, indent=1, allow_nan=False))
     n1 = sum(1 for r in metrics if r['estimate'] and r['cpu_1t'])
     print(f'{a.out}: {len(metrics)} metrics, {n1} with count and 1-thread time, {len(stats)} stat rows; notes: {notes}')
+    for c in doc['checks']:
+        print(f"check {c['level']}: {c['check']}: {c['detail']}")
 
 
 if __name__ == '__main__':
