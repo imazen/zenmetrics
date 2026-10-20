@@ -140,7 +140,7 @@
   },
   "lpips-alex": {
     "canonical": "lpips 0.1.4",
-    "check": "3/3 pass",
+    "check": "4/4 pass",
     "ratio": 1.162649413650009,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -150,10 +150,10 @@
     "ratio_plan_sha256": "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
     "ratio_engine": "rten",
     "ratio_blocks": 20,
-    "worst_ratio": 1.2824298438478596,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 3,
+    "worst_ratio": 1.3014597690629857,
+    "observed_cases": 4,
+    "expected_cases": 4,
+    "passed_cases": 4,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 3.1480767472003013e-10,
@@ -162,6 +162,7 @@
     ],
     "plan_sha256": [
       "15ef9eb722e2af6bb75ca6cc5a18b53bf94b618c9c71fe3d67b90b2eacff0db0",
+      "843f2b4f6726bc2b60a55d15c3b68362c4ea16ae518dbd1d96109a262c92bbbc",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
     "qualified": false
@@ -195,20 +196,20 @@
   },
   "lpips-vgg": {
     "canonical": "lpips 0.1.4",
-    "check": "2/2 pass",
-    "ratio": 1.094075289121472,
+    "check": "3/3 pass",
+    "ratio": 1.082037733147578,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+    "ratio_plan_sha256": "aef59401e3c731d010b1f59d119cebb227074974cbe54801d124f6e576b0d134",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.094075289121472,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 6.3964012003703274e-09,
@@ -216,6 +217,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "aef59401e3c731d010b1f59d119cebb227074974cbe54801d124f6e576b0d134",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
     "qualified": false

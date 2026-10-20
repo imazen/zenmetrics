@@ -510,12 +510,12 @@
   "pyiqa-five-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/pyiqa-five-1100-run",
     "plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
-    "cases": 1,
+    "cases": 4,
     "expected_cases": 10,
     "artifacts": [
       {
         "file": "pyiqa-five-1100-run.tsv",
-        "sha256": "91e5172cb63d3f6f65a62ab64de954ab022713199366c614696bd610990e0d57"
+        "sha256": "8ba228b2dd45a6e06bcdcb7ab46d71c6e54b21d4ec2d155c0233e3b9eac65c7b"
       }
     ]
   },
@@ -528,6 +528,30 @@
       {
         "file": "confirmation-run.tsv",
         "sha256": "ddb65e822c0504b8bc535333d6d39b06c8c599629c3b159f7c6228bcce3210bf"
+      }
+    ]
+  },
+  "lpips-alex-pair-cid22-t8-f525415f-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-alex-pair-cid22-t8-f525415f/confirmation-run",
+    "plan_sha256": "843f2b4f6726bc2b60a55d15c3b68362c4ea16ae518dbd1d96109a262c92bbbc",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "lpips-alex-pair-cid22-t8-f525415f-confirmation-run.tsv",
+        "sha256": "ddb8e3299cd7e7046485aa4ed372107bf221dfb4aed2319f2c31db9e54077cc3"
+      }
+    ]
+  },
+  "lpips-vgg-pair-cid22-t1-f525415f-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-vgg-pair-cid22-t1-f525415f/confirmation-run",
+    "plan_sha256": "aef59401e3c731d010b1f59d119cebb227074974cbe54801d124f6e576b0d134",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "lpips-vgg-pair-cid22-t1-f525415f-confirmation-run.tsv",
+        "sha256": "b113406b8489a1fc894ab39a5b52def8f88ba0f4131670f566c61867a04a6518"
       }
     ]
   }

@@ -109,9 +109,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 1 process errors | ≈0.088× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
 | [`liqe`](docs/MODEL_CARDS.md#liqe) | NR/NN | zwx8981/LIQE | prior | — |
-| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 3/3 pass | ≈1.2× R ! |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | FR/NN | lpips 0.1.4 | 4/4 pass | ≈1.2× R ! |
 | [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈0.64× R |
-| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈1.1× R ! |
+| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 3/3 pass | ≈1.1× R ! |
 | [`mad`](docs/MODEL_CARDS.md#mad) | FR | author HI/LO + paper… | Δ 0 | ≈0.12× |
 | [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | IIGROUP/MANIQA | prior | — |
 | [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR | thorfdbg mDCTpsnr 9a2… | 2/2 pass | ≈0.8× |
@@ -168,8 +168,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.1× ! |
 | [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈1.1× R ! |
 | [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈0.96× R |
-| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 1/2 pass | ≈1× O |
-| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | chaofengc/IQA-PyTorch | gate | — |
+| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈1× O |
+| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
 | [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.89× |
@@ -765,7 +765,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | PyIQA 0.1.16 / native ORT CPU comparison | 0.00000011920928955078125 | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
-| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | pyiqa 0.1.16 (torch 2.14.1+cpu) | not recorded | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
+| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | PyIQA 0.1.16 / native ORT CPU comparison | 0.00000005960464477539063 | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
 
 </details>
 

@@ -142,7 +142,7 @@
   },
   "topiq-fr": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
-    "check": "1/2 pass",
+    "check": "2/2 pass",
     "ratio": 1.046245452605012,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -153,12 +153,39 @@
     "ratio_engine": "ort-cpu",
     "ratio_blocks": 3,
     "worst_ratio": 1.046245452605012,
-    "observed_cases": 1,
+    "observed_cases": 2,
     "expected_cases": 2,
-    "passed_cases": 1,
+    "passed_cases": 2,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.1920928955078125e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
+    ],
+    "qualified": false
+  },
+  "topiq-fr-pipal": {
+    "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+    "check": "2/2 pass",
+    "ratio": 0.9099312717602236,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
+    "ratio_engine": "ort-cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.911848700081464,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.960464477539063e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

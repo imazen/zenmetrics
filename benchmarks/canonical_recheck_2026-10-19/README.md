@@ -310,3 +310,30 @@ is 1.162649413650009, 95% interval [1.1455797183886958, 1.1843805843799495].
 Its 19 flagged observations among 200 remain recorded; this is descriptive,
 not an accepted regression decision. Warm-only perf captures exclude model
 construction through the worker's existing completed-warmup event.
+
+The eight-thread LPIPS-Alex follow-up is 1.3014597690629857, with
+[95% interval](lpips-alex-t8-initial20-interval.json)
+[1.2544969542532667, 1.3354180677802032]. It misses the requested ±3%
+precision (±3.61%); a fixed additional 40 blocks are being acquired. All
+33 flagged native observations among 200 remain in the initial result.
+
+TOPIQ-FR and TOPIQ-FR-PIPAL pass their existing bounds at threads 1/8 on this
+512×512 pair. Their maximum differences are 1.1920928955078125e-7 and
+5.960464477539063e-8. Rust ORT CPU/canonical PyTorch CPU ratios are
+1.046245452605012 / 0.8645151973914056 for TOPIQ-FR and
+0.9099312717602236 / 0.911848700081464 for TOPIQ-FR-PIPAL. These remain
+three-block descriptive comparisons rather than regression intervals.
+
+All eight initially flagged neural cases have completed warm-call profiles.
+[Their receipts and artifact hashes](neural-profiles.json) retain the exact
+recording boundaries and resource measurements. The LPIPS-Alex samples show
+RTEN's AVX-512 GEMM kernels executing at both thread settings; a sampled
+function share does not explain the complete cross-implementation timing gap.
+The DeepDC eight-thread profile reports 13s, peak-RSS 0.58 GiB, minimum
+available 11689 MiB and peak load 2.15. Profiling does not change metric code.
+
+LPIPS-VGG at one thread is borderline after the fixed 20-block follow-up:
+1.082037733147578, [95% interval](lpips-vgg-pair-cid22-t1-initial20-interval.json)
+[1.0688039346866853, 1.094678059488856]. The interval meets ±3% precision
+and straddles 1.08. Its 22 flagged native observations among 200 remain
+recorded; regression qualification is still absent.

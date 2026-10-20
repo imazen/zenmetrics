@@ -1,0 +1,94 @@
+{
+  "event": "cycles:P",
+  "frequency_hz": 199,
+  "profiles": [
+    {
+      "case": "lpips-alex-pair-cid22-t1-f525415f",
+      "threads": 1,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "2b817e39b2dbbb863860badcd4480fc074997182d5893cb9993c9868a808c570",
+      "profile_sha256": "0d96973a321d55a896b7f2ccff11933ad6d6af2c51aca7285675c9468dfdb1ba",
+      "report_sha256": "06ab6396f98ecd886f9d79e902c3a317befd0277dffff444cecb38bf88f50b12",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 5s | peak-RSS 0.12GiB | min-avail 12205MiB | peak-load 1.11",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-alex-pair-cid22-t1-f525415f/profile"
+    },
+    {
+      "case": "lpips-alex-pair-cid22-t8-f525415f",
+      "threads": 8,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "10f4c8362596af825bea4becdad9ffca8b18a63045b4d1d485f9ad362e9c2cd6",
+      "profile_sha256": "8a86ca48ecf8aa5e3a4ad3ec46dd9ddef5faf81014de65f324a7fbde903f48e0",
+      "report_sha256": "cc279176f9013b9d1878985268bf104fbbbf7689b1025aa54df25281380e2787",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 6s | peak-RSS 0.14GiB | min-avail 12432MiB | peak-load 1.72",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-alex-pair-cid22-t8-f525415f/profile"
+    },
+    {
+      "case": "lpips-vgg-pair-cid22-t1-f525415f",
+      "threads": 1,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "6688a85100c233a7bd4550dc068d2db8da9f161f9b5629196f2aeb83c614f5a9",
+      "profile_sha256": "f686f90be56d5f203cce3688f7b5e1bc4906bacd9f411fce0910786023b7408b",
+      "report_sha256": "6beea94452013272fec97b989d30ba3126d22b356d74e3ac43b9265118509acc",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 46s | peak-RSS 0.51GiB | min-avail 12007MiB | peak-load 2.64",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/lpips-vgg-pair-cid22-t1-f525415f/profile"
+    },
+    {
+      "case": "dists-pair-cid22-t1-f525415f",
+      "threads": 1,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "7426af807dbdd41097d291d4cbe2a5a8026d6b55544f32eea1c4ec41e8648e7a",
+      "profile_sha256": "76342b5c9f1c1d3f57e5d5b47c991a8d9ff49519ed525ad98990310c43d754cb",
+      "report_sha256": "9e9e64c35ec3d714e03d69d2428202ef6d687ee6fd2e4071f8d1f9094a3ee911",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 47s | peak-RSS 0.51GiB | min-avail 11913MiB | peak-load 2.15",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/dists-pair-cid22-t1-f525415f/profile"
+    },
+    {
+      "case": "stlpips-alex-pair-cid22-t1-1d3aa20e",
+      "threads": 1,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "bd6b1cae2e78e54c0461d983048d423ffe5e320fddebf88d00bbdbd16a7c3db6",
+      "profile_sha256": "8f43666014c674bf7b71f9d64cd917daf0d3d2f2fb91875e9f137bca22a62e6c",
+      "report_sha256": "b9f0e7a7ea9e8674adf211c76d19647b502aced36967c27c0e5a37d8ddf56c60",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 17s | peak-RSS 0.42GiB | min-avail 12077MiB | peak-load 1.57",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t1-1d3aa20e/profile"
+    },
+    {
+      "case": "deepdc-pair-cid22-t1-f525415f",
+      "threads": 1,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "299c4dfd117748694ddbd5595b35e5f26e293d920f78c9208fdd1fb979bfbf68",
+      "profile_sha256": "c6aab6534269c3d04b0d21cfc906757a029b087cf8650f712e17d1eb3e40e5fa",
+      "report_sha256": "5ba48d1b540136497062dfd2ed189c070a226e42f5cc829d5239ff35b3386b69",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 59s | peak-RSS 0.50GiB | min-avail 11801MiB | peak-load 1.59",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t1-f525415f/profile"
+    },
+    {
+      "case": "stlpips-alex-pair-cid22-t8-1d3aa20e",
+      "threads": 8,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "335a858db9e50c770fe3f57e61bdb65468f08ac415b6a709c4968756c08a4de2",
+      "profile_sha256": "0a96f345c653f2918831c3caa47178b1b8c2740583dd156f23a8c89422a46b11",
+      "report_sha256": "77ebe72889fce62a76887346fc31face8819f5989b0e7370c76e98a1aeef1477",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 6s | peak-RSS 0.42GiB | min-avail 12098MiB | peak-load 1.98",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t8-1d3aa20e/profile"
+    },
+    {
+      "case": "deepdc-pair-cid22-t8-f525415f",
+      "threads": 8,
+      "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
+      "config_sha256": "06cac01a5f80d47c8ec87e037a9500dda4545cd9b36d19f6c43b2e82e65768dd",
+      "profile_sha256": "c152397c899a65ef17ad9488e3ec747acf3b959ac940e44ebaa992404d2e2ef2",
+      "report_sha256": "4f787b5b60da7d2aae4c1cbb4cbf63197847411c9352d9da164d6e45781bc57b",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "wrapper_receipt": "run-heavy: done rc=0 13s | peak-RSS 0.58GiB | min-avail 11689MiB | peak-load 2.15",
+      "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/profile"
+    }
+  ]
+}
