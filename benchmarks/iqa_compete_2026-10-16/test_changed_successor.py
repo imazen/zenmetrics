@@ -1,5 +1,8 @@
+import json
+import tempfile
 import unittest
-from prepare_changed_successor import select
+from pathlib import Path
+from prepare_changed_successor import owned_elsewhere, select
 
 class Selection(unittest.TestCase):
     def test_no_completed_repeats_or_cap_reset(self):
@@ -15,3 +18,20 @@ class Selection(unittest.TestCase):
     def test_refuse_cap_overrun(self):
         with self.assertRaises(ValueError):
             select([dict(cell_id='x',config=dict(metric_name='changed'),status='pending',attempts=[1,2,3])],{'changed'},2)
+
+
+class Ownership(unittest.TestCase):
+    def test_routes_of_earlier_successors_are_owned(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as t:
+            t=Path(t); succ=t/'succ'; succ.mkdir(); res=t/'results'; res.mkdir()
+            self.assertEqual(owned_elsewhere(res),set())
+            (succ/'sequence.json').write_text(json.dumps({'metrics':['dssim','vif']}))
+            (res/'changed-successor-reservation.json').write_text(json.dumps({'successor':str(succ)}))
+            self.assertEqual(owned_elsewhere(res),{'dssim','vif'})
+
+    def test_reservation_without_sequence_refuses(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as t:
+            t=Path(t); res=t/'results'; res.mkdir()
+            (res/'remaining-successor-reservation.json').write_text(json.dumps({'successor':str(t/'missing')}))
+            with self.assertRaises(ValueError):
+                owned_elsewhere(res)
