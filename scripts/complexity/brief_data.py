@@ -291,8 +291,22 @@ def canonical_perf():
                 c['rss'] = float(r['peak_rss_gib_rounded'])
             else:
                 c.setdefault('reps', []).append(sig(float(r['median_ns']) / 1e6))
+    # Individual warm rounds (and their gate status) from the rounds projection, matched on the same identity.
+    for f in sorted(d.glob('*-rounds.csv')):
+        got = {}
+        for r in csv.DictReader(f.open()):
+            if r['timing_phase'] != 'warm' or r['preferred'] != 'True' or r['only_mode'] != 'score' or not r['time_ns']:
+                continue
+            key = (r['host'], r['metric_name'], r['size_name'], int(r['threads']), 'warm')
+            if key not in cells or ident.get(key) != (r['impl_binary_sha'], r['engine'], r['reference_sha256'], r['distorted_sha256']):
+                continue
+            got.setdefault(key, []).append((int(r['round_index']), float(r['time_ns']) / 1e6, r['gate_clean'] == 'True'))
+        for key, v in got.items():
+            v.sort()
+            cells[key]['rounds'] = [sig(t) for _, t, _ in v]
+            cells[key]['flagged_rounds'] = [i for i, (_, _, ok) in enumerate(v) if not ok] or None
     rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps'), c.get('rounds'),
-             c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus')]
+             c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus'), c.get('flagged_rounds')]
             for (h, m, s, t, ph), c in sorted(cells.items())]
     cov = json.loads((d / 'coverage.json').read_text()) if (d / 'coverage.json').exists() else {}
     coverage = {}
@@ -303,7 +317,7 @@ def canonical_perf():
     sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
     order = sorted(sizes, key=lambda s: sizes[s][0] * sizes[s][1])
     return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms', 'rounds_ms',
-                        'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus'],
+                        'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus', 'flagged_rounds'],
                 rows=rows, hosts={h: HOSTS.get(h, h) for h in sorted({r[0] for r in rows})},
                 sizes=[dict(name=s, w=sizes[s][0], h=sizes[s][1]) for s in order],
                 coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts,

@@ -32,7 +32,7 @@
         ci = [mean - h, mean + h];
       }
       const fast = rounds.length ? Math.min(...rounds) : (r[F.p10_ms] ?? med), fastExact = rounds.length > 0;
-      return { c: med, mean, ci, approx, fast, fastExact, lo: r[F.p10_ms] ?? med, hi: r[F.p90_ms] ?? med, n, dots: rounds, what: 'p10–p90',
+      return { c: med, mean, ci, approx, fast, fastExact, lo: r[F.p10_ms] ?? med, hi: r[F.p90_ms] ?? med, n, dots: rounds, flags: new Set(r[F.flagged_rounds] || []), what: 'p10–p90',
                clean: r[F.clean], flagged: r[F.flagged], rss: r[F.rss_gib], simd: r[F.simd], place: r[F.placement], pc: r[F.placement_cpus] };
     }
     const v = (r[F.cold_ms] || []).slice().sort((a, b) => a - b);
@@ -77,7 +77,7 @@
     const a = XX(Math.max(s.lo, lo)), b = XX(s.hi), c = XX(s.c);
     p.push(`<line class="bw-whisk" x1="${a}" y1="${yy}" x2="${b}" y2="${yy}"/><line class="bw-whisk" x1="${a}" y1="${yy - 6}" x2="${a}" y2="${yy + 6}"/><line class="bw-whisk" x1="${b}" y1="${yy - 6}" x2="${b}" y2="${yy + 6}"/>`);
     if (s.ci) { const q = XX(Math.max(s.ci[0], lo)), r = XX(s.ci[1]); p.push(`<rect class="bw-box ${cls}" x="${Math.min(q, r)}" y="${yy - 6.5}" width="${Math.max(Math.abs(r - q), 1.5)}" height="13"/>`); }
-    s.dots.forEach(v => p.push(`<rect class="bw-dot" x="${XX(Math.max(v, lo)) - 0.5}" y="${yy - 9.5}" width="1" height="1"/>`));
+    s.dots.forEach((v, i) => p.push(`<rect class="bw-dot${s.flags && s.flags.has(i) ? ' bw-dot-flag' : ''}" x="${XX(Math.max(v, lo)) - 0.5}" y="${yy - 9.5}" width="1" height="1"/>`));
     if (kind[1] === 'private') p.push(`<rect class="bw-med" x="${c - 3.5}" y="${yy - 8}" width="7" height="16"/>`);
     else if (kind[1] === 'dvifmish') p.push(`<path class="bw-med" d="M${c},${yy - 9} L${c + 5},${yy} L${c},${yy + 9} L${c - 5},${yy} Z"/>`);
     else p.push(`<line class="bw-med" x1="${c}" y1="${yy - 8}" x2="${c}" y2="${yy + 8}"/>`);
@@ -158,7 +158,7 @@
     info.innerHTML = `${esc(P.hosts[st.host])}, ${esc(sizeLabel(st.size))}, ${st.phase}: ${items.length} metrics in ${k} clusters by 1-thread median (${(frac * 100).toFixed(1)} % of log-time variance within clusters); ${overlap} adjacent 1-thread pairs have overlapping intervals.` +
       (cov ? ` Campaign coverage on this host so far: ${cov.ok.toLocaleString('en')} of ${cov.cells.toLocaleString('en')} cells.` : '') +
       (st.view === 'fast' ? ' Fastest view: each mark is the metric\'s single fastest measurement (warm: fastest round; cold: fastest fresh process); hollow marks fall back to p10 where rounds are not published yet.' : '') +
-      (st.phase === 'warm' ? (anyRounds ? ' Dots are individual zenbench rounds (batch means); intervals from the rounds.' : ' Per-round values are not published for this selection yet; intervals marked ≈ are inferred from p10–p90 assuming a normal distribution.') : ' Cold: each dot is one fresh process (constructor plus first evaluation).');
+      (st.phase === 'warm' ? (anyRounds ? ' Dots are the individual zenbench rounds (per-call mean within each round); red dots are rounds the busy gate flagged. Intervals come from the rounds.' : ' Per-round values are not published for this selection yet; intervals marked ≈ are inferred from p10–p90 assuming a normal distribution.') : ' Cold: each dot is one fresh process (constructor plus first evaluation).');
   }
 
   function sizeLabel(name) { const s = P.sizes.find(s => s.name === name); return s ? `${s.w}×${s.h} (${name})` : name; }
