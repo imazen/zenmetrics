@@ -278,6 +278,7 @@ def readme_variant_tables(items, comparisons):
 def readme_section(items):
     comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
     comparisons=comparison_results(comparison_path)
+    statuses=json.loads(comparison_path.with_name('unmeasured.json').read_text())
     lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
            '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
            'Code and model terms, paper citations and full reference identities remain in the linked cards.',
@@ -290,7 +291,7 @@ def readme_section(items):
            'see the ledger for confirmation status.',
            '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
-        observation=comparisons.get(c['metric'],{})
+        observation=comparisons.get(c['metric'],statuses.get(c['metric'],{}))
         ref=observation.get('canonical',c['reference_implementation'])
         if ref.startswith('https://github.com/'):
             ref='/'.join(ref.split('/')[3:5])

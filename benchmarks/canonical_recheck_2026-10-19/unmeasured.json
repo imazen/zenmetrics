@@ -1,0 +1,42 @@
+{
+  "pieapp": {
+    "check": "excluded",
+    "reason": "Owner excluded both PieAPP routes from canonical rechecks.",
+    "evidence": "docs/IQA_CANONICAL_COMMANDS.md"
+  },
+  "pieapp-pyiqa": {
+    "check": "excluded",
+    "reason": "Owner excluded both PieAPP routes from canonical rechecks.",
+    "evidence": "docs/IQA_CANONICAL_COMMANDS.md"
+  },
+  "hdrvdp": {
+    "check": "typed input",
+    "reason": "Absolute-luminance input is required; the frozen RGB8 comparison campaign cannot substitute calibrated luminance.",
+    "evidence": "benchmarks/iqa_input_contracts_2026-10-20/README.md"
+  },
+  "hdrvdp3": {
+    "check": "typed input",
+    "reason": "Absolute luminance and viewing conditions are required; this frozen RGB8 comparison campaign does not supply them.",
+    "evidence": "benchmarks/iqa_input_contracts_2026-10-20/README.md"
+  },
+  "zensim": {
+    "check": "self reference",
+    "reason": "This is the original implementation; no separate external canonical implementation is identified.",
+    "evidence": "docs/METRIC_PROVENANCE.md"
+  },
+  "zensim-gpu": {
+    "check": "disabled",
+    "reason": "The current CLI route explicitly refuses while the GPU implementation is being revised. The guard remains unchanged.",
+    "evidence": "crates/zenmetrics-cli/src/metrics/mod.rs"
+  },
+  "ms-gmsd": {
+    "check": "paper variant",
+    "reason": "The crate declares explicit paper-derived conventions and does not claim author-software parity. No matching independent author callable has been qualified for this campaign.",
+    "evidence": "crates/gmsd/README.md"
+  },
+  "ms-gmsdc": {
+    "check": "paper variant",
+    "reason": "The crate declares explicit paper-derived conventions and does not claim author-software parity. No matching independent author callable has been qualified for this campaign.",
+    "evidence": "crates/gmsd/README.md"
+  }
+}

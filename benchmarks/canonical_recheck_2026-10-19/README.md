@@ -202,3 +202,24 @@ It straddles 1.08 and misses the requested ±3% precision. The initial
 occur in both panels (49/200 and 17/200 observations). A fixed additional
 40 blocks per case are being acquired; every old observation remains visible.
 These intervals remain descriptive and do not qualify a regression decision.
+
+## Explicit gaps in the local RGB8 comparison
+
+The compact README still lists every name. Eight routes have explicit reasons
+for withholding a fresh external-canonical ratio, recorded in
+[unmeasured.json](unmeasured.json): both PieAPP routes are owner-excluded;
+`hdrvdp` and `hdrvdp3` require calibrated luminance/viewing inputs outside this
+frozen RGB8 campaign; `zensim` is the original implementation; `zensim-gpu`
+retains its explicit disabled-route refusal. `ms-gmsd` and `ms-gmsdc` are declared
+paper-derived variants whose exact conventions have no qualified author callable
+in this campaign. This does not claim that author code cannot exist. Their
+independent qualification remains missing; no ratio or parity pass is invented.
+AIMOS is excluded (proprietary, unreleased) and is not a CLI metric row.
+
+The resident original mDCTpsnr caller now matches exactly at 512×512 with
+threads 1 and 8. Its ratios are 0.8043324527167578 and 0.8625549003477649.
+The unchanged original color conversion and pooling are timed, using a resident
+P6 view of identical RGB8 bytes; file I/O and process launch are excluded.
+The compiler retains the documented fast-math contract with portable Highway
+dispatch. Build receipt: 10s, peak-RSS 0.36 GiB, minimum available 12209 MiB,
+peak load 0.96. Scalar/map and broader-size coverage remain separate questions.

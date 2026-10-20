@@ -202,3 +202,6 @@ combines a completed fixed follow-up only when its recorded parent plan, source,
 worker and case contract agree. All blocks remain in the primary estimate. A
 separate diagnostic counts whole blocks with at least ten clean native resource
 observations; this subset does not turn the result into an accepted regression.
+
+Both PieAPP routes are excluded from the owner-directed local canonical recheck.
+AIMOS is excluded: proprietary, with no released implementation identified.

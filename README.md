@@ -100,9 +100,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR | Clunie libgmsd de646c… | 2/2 pass | ≈0.091× |
 | [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.12× |
 | [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.13× |
-| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.… | prior | — |
+| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.… | typed input | — |
 | [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | official HDR-VDP 2.2.… | Δ 0.092 | ≈0.12× |
-| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | prior | — |
+| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | typed input | — |
 | [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | official HDR-VDP 3.0.… | Δ 0.00029 | ≈0.18× |
 | [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | SSL92/hyperIQA | prior | — |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.084× |
@@ -116,8 +116,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | IIGROUP/MANIQA | prior | — |
 | [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR | author's official C++… | prior | — |
 | [`mdsi`](docs/MODEL_CARDS.md#mdsi) | FR | original MDSI / Octav… | 6/6 pass | ≈0.21× |
-| [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | unchecked | — |
-| [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR | unrecorded | unchecked | — |
+| [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | paper variant | — |
+| [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | FR | unrecorded | paper variant | — |
 | [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | FR | PyIQA 0.1.16 / named… | 2/4 pass | ≈0.011× |
 | [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 2/3 pass | ≈0.013× |
 | [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 3/4 pass | ≈0.025× |
@@ -132,8 +132,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.06× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.04× |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
-| [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public… | prior | — |
-| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
+| [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public… | excluded | — |
+| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | excluded | — |
 | [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 170/170 pass | ≈0.1× |
 | [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | libjxl 0.12.0 origina… | Δ 1.6e-08 | ≈0.42× |
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.21× |
@@ -190,8 +190,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Coo… | prior | — |
 | [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 1.1e-16 | ≈0.92× |
-| [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | unchecked | — |
-| [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | unchecked | — |
+| [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | self reference | — |
+| [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | disabled | — |
 
 ### Executable, versions, output differences and terms
 
