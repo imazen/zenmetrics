@@ -121,6 +121,14 @@ tbody tr:hover{background:var(--hover);cursor:pointer}
 .mark-dev{color:var(--crit);font-weight:700}.mark-ok{color:var(--good)}.mark-un{color:var(--muted)}
 .tag{font-size:.7em;border:1px solid var(--ring);border-radius:.3rem;padding:0 .3em;color:var(--ink2);margin-left:.35em;white-space:nowrap}
 
+/* reproduction misses */
+.misses{display:grid;gap:.4rem;padding:.2rem 0 .8rem}
+.misses h3{margin:0;font-size:1rem}
+.miss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(26rem,1fr));gap:.6rem}
+.miss{border-left:4px solid var(--crit)}
+.miss-head{font-size:.95rem}.miss-num{font-variant-numeric:tabular-nums;color:var(--ink2)}
+.miss dl{display:grid;grid-template-columns:max-content 1fr;gap:.15rem .7rem;margin:.2rem 0}
+.miss dt{color:var(--muted)}.miss dd{margin:0}
 /* overview */
 .overview{height:100%;overflow:auto;padding:1rem 1.6rem;display:grid;gap:.8rem;align-content:start;max-width:110rem;margin:0 auto}
 .overview h1{margin:0;font-size:1.9rem;line-height:1.15}

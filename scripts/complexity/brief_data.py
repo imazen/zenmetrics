@@ -419,6 +419,32 @@ def doc_routes():
     return out
 
 
+def plain(md):
+    """Markdown cell text without code ticks, links reduced to their text."""
+    md = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', md)
+    return md.replace('`', '').replace('\\|', '|').strip()
+
+
+def status_rows():
+    """Published column -> {'section', 'cells': [(header, text), ...]} from every table in the status doc."""
+    out, section, header = {}, None, None
+    for l in (ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text().splitlines():
+        if l.startswith('## '):
+            section, header = l[3:].strip(), None
+            continue
+        if not l.startswith('| ') or set(l) <= set('|-: '):
+            continue
+        cells = [c for c in re.split(r'(?<!\\)\|', l.strip().strip('|'))]
+        if cells[0].strip() == 'Column':
+            header = [plain(c) for c in cells]
+            continue
+        if not header:
+            continue
+        for col in cell_columns(cells[0]):
+            out.setdefault(col, dict(section=section, cells=[(header[i], plain(c)) for i, c in enumerate(cells) if i and i < len(header)]))
+    return out
+
+
 def changed_since(commit):
     """Files under crates/ that differ between the reproduction's source commit and the revision being built."""
     r = subprocess.run(['jj', '-R', str(ROOT), 'diff', '--from', commit, '--to', 'heads(::@ & ::master@origin)', '--name-only', 'crates'],
@@ -475,7 +501,7 @@ def reproduction(names):
                 continue
             prov_p = d / f'provenance_{kind}.json'
             prov = json.loads(prov_p.read_text()) if prov_p.exists() else {}
-            commit = ((prov.get('source') or {}).get('commit') or '').split()[0] or None
+            commit = next(iter(((prov.get('source') or {}).get('commit') or '').split()), None)
             gz = d / f'metrics_{kind}.zenmetrics.csv.gz'
             changed = changed_since(commit) if commit else None
             aff, generic = affected_metrics(changed or [], names)
@@ -485,6 +511,11 @@ def reproduction(names):
                 commit=commit and commit[:12], binary=((prov.get('binary') or {}).get('sha256') or '')[:12] or None,
                 generated=prov.get('generated'), changed=changed,
                 rows=[r for r in rows if r['match'] not in ('info-only',)]))
+    doc = status_rows()
+    out['misses'] = [dict(set=st['set'], column=r['column'], cli=r['cli'], n=r['n'], median_d=r['median_d'], max_d=r['max_d'],
+                          median_dJND=r['median_dJND'], max_dJND=r['max_dJND'], spearman=r['spearman'],
+                          section=(doc.get(r['column']) or {}).get('section'), cells=(doc.get(r['column']) or {}).get('cells') or [])
+                     for st in out['sets'] for r in st['rows'] if r['match'] == 'MISS']
     out['routes'] = {c: sorted(m for m in ms if m in names) for c, ms in routes.items()}
     out['routes'] = {c: ms for c, ms in out['routes'].items() if ms}
     return out
@@ -500,6 +531,9 @@ def coherence(metrics, perf, repro, aic):
         if m not in known and norm(m) not in known:
             add('info', 'timings: metric without a record', f'{m} is timed but has no counts, card or reproduction status')
     july = set(repro['july_columns'])
+    for m in repro.get('misses', []):
+        if not m['cells']:
+            add('warn', 'miss without a recorded cause', f"{m['column']} misses the gate in the {m['set']} set but has no row in docs/AIC2026_REPRODUCTION_STATUS.md")
     for s in repro['sets']:
         for r in s['rows']:
             st_ = aic.get(r['column'])

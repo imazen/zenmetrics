@@ -380,7 +380,7 @@
       ['cost', 'Counted cost', 'Operation counts against measured CPU time, with fits and intervals.',
         s1 ? `${TABLE[D.best_table].label}: Spearman ρ ${s1.spearman.toFixed(2)} [${s1.spearman_lo.toFixed(2)}, ${s1.spearman_hi.toFixed(2)}], log–log slope ${s1.slope.toFixed(2)} [${s1.slope_lo.toFixed(2)}, ${s1.slope_hi.toFixed(2)}], n ${s1.n}.` : ''],
       ['repro', 'Reproduction', 'Each implementation against its reference and the AIC2026 columns.',
-        `${okCols} AIC2026 columns reproduced or matched, ${devCols} close but not exact. Metrics: ${cnt('checked')} checked, ${cnt('deviation')} with a recorded deviation, ${cnt('unchecked')} without a parity record yet.`],
+        `${okCols} AIC2026 columns reproduced or matched, ${devCols} close but not exact. Full set: ${(D.repro.misses || []).length} columns miss the gate (${(D.repro.misses || []).map(m => m.column).join(', ') || 'none'}). Metrics: ${cnt('checked')} checked, ${cnt('deviation')} with a recorded deviation, ${cnt('unchecked')} without a parity record yet.`],
       ['data', 'Data', 'Time per pixel by metric and CPU, sortable, as CSV.', 'Download: timings.csv (every cell), complexity.csv (counted costs).'],
       ['method', 'Method', 'What is timed, how zenbench protects it, and the limits.', ''],
     ];
@@ -822,7 +822,9 @@
     };
     const speed = m => { const c = cell(host, m, DEF.size, 1, 'warm'); return c ? c.median * perPx(DEF.size) : null; };
     const txt = (f) => (r, td) => { td.textContent = f(r) ?? '–'; };
-    sortable(body, [
+    const tableHost = h('div');
+    body.replaceChildren(missesPanel(), tableHost);
+    sortable(tableHost, [
       { id: 'm', label: 'metric', cell: (m, td) => { td.append(h('code', null, m)); const f = flagText(m); if (f) td.append(h('span', meta(m).status === 'deviation' ? 'mark-dev' : 'mark-un', ' ' + f)); }, sortv: m => m },
       { id: 'fam', label: 'family', cell: txt(m => FAMS.find(f => f[0] === M[m].fam)?.[1]), sortv: m => M[m].fam },
       { id: 'ev', label: 'evidence', cell: evidenceCell, sortv: m => M[m].status },
@@ -834,6 +836,30 @@
       { id: 'spot', label: 'oracle check', cell: txt(m => M[m].spot === 'missing' ? 'not run' : M[m].spot), sortv: m => M[m].spot },
       { id: 'ns', label: 'ns/px', num: true, title: `${hostName(host)}, ${sizeName(DEF.size)}, 1 thread, warm median`, cell: (m, td) => { td.textContent = fmt(speed(m)); }, sortv: speed },
     ], rows, openDrawer);
+  }
+
+  // Published columns our full-set run misses, with the cause the status doc records for each.
+  function missesPanel() {
+    const misses = (D.repro.misses || []).slice().sort((a, b) => +b.median_dJND - +a.median_dJND);
+    const box = h('section', 'misses');
+    if (!misses.length) return box;
+    const sets = [...new Set(misses.map(m => m.set))].join(', ');
+    box.append(h('h3', null, `${misses.length} published columns miss the 1e-3 site-JND gate (${sets}, all 9,618 crops)`));
+    box.append(h('p', 'hint', 'Cause and open detail from docs/AIC2026_REPRODUCTION_STATUS.md, the section named on each card. Numbers: median and max |Δ| in site-JND units, median raw |Δ|, Spearman against the published column.'));
+    const grid = h('div', 'miss-grid');
+    for (const m of misses) {
+      const c = h('div', 'card miss');
+      const t = h('div', 'miss-head'); t.append(h('b', null, m.column + ' '), h('code', null, m.cli));
+      c.append(t, h('div', 'miss-num', `median ${m.median_dJND} JND (max ${m.max_dJND}) · raw median ${m.median_d} · Spearman ${m.spearman}`));
+      const dl = h('dl');
+      for (const [k, v] of m.cells) if (k !== 'Ours' && v) dl.append(h('dt', null, k), h('dd', null, v));
+      c.append(dl);
+      if (m.section) c.append(h('div', 'hint', m.section));
+      if (!m.cells.length) c.append(h('div', 'mark-dev', 'No cause recorded in the status doc.'));
+      grid.append(c);
+    }
+    box.append(grid);
+    return box;
   }
 
   // ---- data
