@@ -1,0 +1,8 @@
+metric	repository	revision	matched_python_files	changed	unlisted	scope
+maniqa	https://github.com/IIGROUP/MANIQA	f573d862401243c45641951a0303b8059c1c8577	188	0	0	all locally supplied Python files; not a full repository clone
+arniqa	https://github.com/miccunifi/ARNIQA	66d16eb0ff1e1655872d32c0c233614a3922aaad	22	0	0	all locally supplied Python files; not a full repository clone
+liqe	https://github.com/zwx8981/LIQE	a64655f7b84b9543b513394472851884cde5b257	11	0	0	all locally supplied Python files; not a full repository clone
+hyperiqa	https://github.com/SSL92/hyperIQA	c42e7279717e7dcb693a24b891fc14a4189a45ee	6	0	0	all locally supplied Python files; not a full repository clone
+paq2piq	https://github.com/baidut/paq2piq	48c91e844e9f7a768f6ddcfc744dddfdd1160fea	11	0	0	all locally supplied Python files; not a full repository clone
+wadiqam	https://github.com/dmaniry/deepIQA	51dece994d73f43dbd2ea44d3f2ef581014194ad	3	0	0	all locally supplied Python files; not a full repository clone
+musiq	https://github.com/google-research/google-research	3ef52111c1fabc301880818f5a547570e926a76b	5	0	0	all locally supplied Python files; not a full repository clone

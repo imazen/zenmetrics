@@ -190,3 +190,19 @@ For `msssim`, the retained `msssim.m` and `ssim_index_new.m` both match the
 byte-for-byte (download checked 2026-10-20). The
 [authors' source page](https://ece.uwaterloo.ca/~z70wang/research/iwssim/)
 links that archive. This confirms source identity, not numerical acceptance.
+
+The [learned-reference source audit](canonical_reference_identity.tsv) matches
+246 of 246 locally supplied Python files to Git blobs at the seven declared
+upstream revisions, with no changed or unlisted files. Its scope is the supplied
+files, not complete repository clones. The [audit metadata](canonical_reference_identity.meta)
+binds the retained receipt and upstream commit links. Installed package and
+checkpoint inventories are separate from this source-origin check. In particular,
+the MANIQA adapter imports installed timm 1.0.30 before adding the author source
+path; the matching vendored timm files do not establish which runtime was used.
+
+A separate MAD reference scheduling control used eight workers with 32 rows
+each. All 256 retained control scores matched their production float64 bits
+exactly. Its scope recorded `run-heavy: done rc=0 116s | peak-RSS 0.67GiB |
+min-avail 9755MiB | peak-load 7.52`. This qualifies the scheduling control only;
+it does not assign a numerical gate or replace production rows. Native and
+other metric worker counts retain their existing settings.

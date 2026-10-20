@@ -1,0 +1,19 @@
+{
+  "recorded_at": "2026-10-20T17:00:41.477771+00:00",
+  "scope": "source identity only; no numerical or model qualification",
+  "algorithm": "Git blob SHA1 against declared upstream tree, with local SHA256 retained",
+  "source_receipt_sha256": "0701b7f1cb83eae2279e50894f87fb4c6bded3768cace9457d8908ed426449ef",
+  "aggregate_sha256": "39644c40ef5b6f8b27424defdd81b446c1631623c607594266e52e24f584f402",
+  "matched_python_files": 246,
+  "changed": 0,
+  "unlisted": 0,
+  "upstream_commits": [
+    "https://github.com/IIGROUP/MANIQA/commit/f573d862401243c45641951a0303b8059c1c8577",
+    "https://github.com/miccunifi/ARNIQA/commit/66d16eb0ff1e1655872d32c0c233614a3922aaad",
+    "https://github.com/zwx8981/LIQE/commit/a64655f7b84b9543b513394472851884cde5b257",
+    "https://github.com/SSL92/hyperIQA/commit/c42e7279717e7dcb693a24b891fc14a4189a45ee",
+    "https://github.com/baidut/paq2piq/commit/48c91e844e9f7a768f6ddcfc744dddfdd1160fea",
+    "https://github.com/dmaniry/deepIQA/commit/51dece994d73f43dbd2ea44d3f2ef581014194ad",
+    "https://github.com/google-research/google-research/commit/3ef52111c1fabc301880818f5a547570e926a76b"
+  ]
+}
