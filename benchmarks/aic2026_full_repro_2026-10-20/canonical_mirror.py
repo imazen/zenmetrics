@@ -46,7 +46,7 @@ def main():
     subprocess.run(['ssh', 'dev', 'mkdir -p '+shlex.quote(str(root))], check=True)
     commands = []
     for target in ('dev:'+str(root)+'/', str(tower)+'/'):
-        command = ['rsync', '-a', '--checksum', '--backup', '--suffix=.bak-'+stamp,
+        command = ['rsync', '-rlt', '--checksum', '--backup', '--suffix=.bak-'+stamp,
                    *(str(path) for path in sources), target]
         subprocess.run(command, check=True)
         commands.append(command)
