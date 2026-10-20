@@ -190,12 +190,12 @@
       {
         "campaign": "remaining-remaining2",
         "manifest_cells": 1504,
-        "saved_attempt_rows": 1359,
-        "qualified_attempt_rows": 1305,
-        "gate_flagged_attempt_rows": 6,
+        "saved_attempt_rows": 1411,
+        "qualified_attempt_rows": 1356,
+        "gate_flagged_attempt_rows": 7,
         "observed_cell_statuses": {
-          "ok": 1311,
-          "pending": 193
+          "ok": 1363,
+          "pending": 141
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -278,11 +278,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:10:01.733020+00:00",
-      "2026-10-20T15:10:02.860675+00:00"
+      "2026-10-20T15:15:01.924914+00:00",
+      "2026-10-20T15:15:03.997198+00:00"
     ],
-    "saved_attempt_rows": 6136,
-    "preferred_qualified_cells": 5526,
+    "saved_attempt_rows": 6188,
+    "preferred_qualified_cells": 5577,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -389,7 +389,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 18798,
+    "individual_measurement_rows": 18967,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -637,8 +637,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:10:01.428158+00:00",
-      "2026-10-20T15:10:01.820253+00:00"
+      "2026-10-20T15:15:01.427585+00:00",
+      "2026-10-20T15:15:01.820410+00:00"
     ],
     "saved_attempt_rows": 6189,
     "preferred_qualified_cells": 5827,
@@ -899,8 +899,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T15:10:02.172963+00:00",
-      "2026-10-20T15:10:02.461835+00:00"
+      "2026-10-20T15:15:02.289099+00:00",
+      "2026-10-20T15:15:02.579993+00:00"
     ],
     "saved_attempt_rows": 6359,
     "preferred_qualified_cells": 5937,
