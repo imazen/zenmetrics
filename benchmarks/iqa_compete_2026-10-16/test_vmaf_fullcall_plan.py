@@ -260,6 +260,22 @@ class RetainedControls(unittest.TestCase):
         self.assertFalse(plan['timing_qualification'])
         self.assertFalse(plan['native_parity_qualification'])
 
+    def test_malformed_native_json_source_is_opaque(self):
+        relative = 'crates/vmaf/fixtures/intentionally-malformed.json'
+        path = self.f.file('native-build/work/zenmetrics/'+relative, b'{ invalid JSON source fixture')
+        native_build_path = self.f.native_root/'build-receipt.json'
+        native_build = verifier.read(native_build_path)
+        native_build['files'][relative] = verifier.sha(path)
+        self.f.write(native_build_path, native_build)
+        receipt = verifier.read(self.f.native_receipt)
+        receipt['files'][relative] = verifier.sha(path)
+        receipt['build_receipt_sha256'] = verifier.sha(native_build_path)
+        self.f.write(self.f.native_receipt, receipt)
+        self.f.prepare()
+        plan = verifier.read(self.f.output)
+        self.assertEqual(plan['bindings'][str(path)], verifier.sha(path))
+        self.assertEqual(path.read_bytes(), b'{ invalid JSON source fixture')
+
     def test_forged_arm_names_even_with_resealed_receipt(self):
         case = self.f.first_case()
         case['arms']['pretend'] = case['arms'].pop('old')

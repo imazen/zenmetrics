@@ -78,8 +78,6 @@ class Evidence:
         require(str(path) not in self.bindings or self.bindings[str(path)] == actual,
                 'evidence changed during verification: '+str(path))
         self.bindings[str(path)] = actual
-        if path.suffix == '.json':
-            read(path)  # Bound JSON is evidence too, even when otherwise opaque.
         return path
 
     def json(self, path, expected=None):

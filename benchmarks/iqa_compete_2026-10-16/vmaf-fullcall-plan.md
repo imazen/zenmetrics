@@ -31,9 +31,10 @@ Verification reparses raw VERSION/SCOPE/COLD+two SAMPLE records, requires finite
 scalars and exact recorded f64 bits, and checks all 72 observations. Exact arm
 names, binaries, case identities, argv, environments and all recorded process
 outcomes must agree. Nonempty stderr is preserved under the producer's policy;
-there is no new score or stderr threshold. Duplicate/nonfinite JSON is refused,
+there is no new score or stderr threshold. Duplicate/nonfinite receipt JSON is refused,
 and validation uses explicit exceptions rather than optimization-sensitive
-assertions.
+assertions. Hashed source and asset files remain opaque bytes, including native
+test fixtures whose `.json` extension does not imply a valid receipt.
 
 The output binds source/header/archive identities, original/native receipts,
 compiler query/link records, both sets of asset/runtime snapshots, recursive
