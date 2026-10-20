@@ -1251,3 +1251,7 @@ benchmarks/canonical_recheck_2026-10-19/octave-run-vsi.tsv	ignored	Native oracle
 benchmarks/canonical_recheck_2026-10-19/pyiqa-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/pyiqa1152-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
 benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/flip-f64-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/matlab-extra-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/nr-inputs-sha256.json	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv	ignored	Native oracle comparison evidence; separate from canonical timing and published-column agreement observations.

@@ -193,6 +193,679 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | unchecked | — |
 | [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | unchecked | — |
 
+### Executable, versions, output differences and terms
+
+Use each exact metric name below with `target/release/zenmetrics score --metric NAME --reference ref.png --distorted dist.png`. The linked card supplies its build features, model export, consent and display arguments; the command is not a substitute for those requirements.
+
+**Licensing is not uniformly cleared.** Our Rust license, upstream reference-code terms and weight terms are separate. See the [pinned upstream audit](docs/PYIQA_UPSTREAM_LICENSES_2026-10-15.md) for research-only clauses and open questions affecting FSIM, VSI, PSNR-HVS, HDR-VDP, unlicensed reference sources and pretrained backbones. A permissive reference-code license does not grant permission for separately licensed weights. “Not recorded” means unresolved, not unrestricted.
+
+**Deltas are absolute raw-score differences**, written as decimals (for example `0.00003`). Maxima below come only from the named [local canonical comparison cohorts](benchmarks/canonical_recheck_2026-10-19/README.md), with their exact Rust revision, input dimensions and thread configurations. They are not global error bounds or AIC published-column agreement. A median is shown only when retained as a median of paired score differences; it is never inferred from a maximum or a pass threshold. Missing local deltas do not erase older parity evidence in the cards.
+
+<details>
+<summary>afine — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`afine`](docs/MODEL_CARDS.md#afine) | git clone of ChrisDud0257/AFINE (no pip package; QuickInference/) | not recorded | not recorded | Apache-2.0 / noncommercial |
+
+</details>
+
+<details>
+<summary>ahiq — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ahiq`](docs/MODEL_CARDS.md#ahiq) | IIGROUP/AHIQ epoch-32 checkpoint, CPU, fp32, upstream-path nine-crop ensemble | not recorded | not recorded | MIT / unknown |
+
+</details>
+
+<details>
+<summary>ahiq-pyiqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | pyiqa 0.1.16 create_metric('ahiq'), CPU fp32, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
+
+</details>
+
+<details>
+<summary>arniqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | git clone of miccunifi/ARNIQA (no pip package), pinned 66d16eb0ff1e1655872d32c0c233614a3922aaad | not recorded | not recorded | Apache-2.0 / permissive |
+
+</details>
+
+<details>
+<summary>brisque — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`brisque`](docs/MODEL_CARDS.md#brisque) | PIQ 0.8.0 | 0.0025634765625 | not recorded | not recorded / not recorded |
+
+</details>
+
+<details>
+<summary>butteraugli — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | libjxl butteraugli v0.9.2 / 0.9.4 | not recorded | not recorded | not recorded / not applicable |
+| [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | libjxl butteraugli v0.9.2 / 0.9.4 | not recorded | not recorded | not recorded / not applicable |
+| [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>cambi — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`cambi`](docs/MODEL_CARDS.md#cambi) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>cambi-aic2026 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ciede2000 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ckdn — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | git clone of researchmm/CKDN (no pip package; commit tip 2026-10-15) | not recorded | not recorded | MIT / unknown |
+
+</details>
+
+<details>
+<summary>cvvdp — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | pycvvdp v0.5.7 (PyPI) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>cvvdp-gpu — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp v0.5.7 + CPU twin | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>cw-ssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | pyiqa 0.1.16 create_metric('cw_ssim'), CPU, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / none |
+
+</details>
+
+<details>
+<summary>deepdc — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`deepdc`](docs/MODEL_CARDS.md#deepdc) | DeepDC_PyTorch==0.2 | not recorded | not recorded | MIT / permissive |
+
+</details>
+
+<details>
+<summary>dists — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dists`](docs/MODEL_CARDS.md#dists) | DISTS_pytorch==0.1 | not recorded | not recorded | MIT / permissive |
+
+</details>
+
+<details>
+<summary>dmm — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dmm`](docs/MODEL_CARDS.md#dmm) | pip DMM_PyTorch (DMM_PyTorch/DMM.py) | not recorded | not recorded | MIT (Baoliang Chen 2024) / permissive |
+
+</details>
+
+<details>
+<summary>dmm-pyiqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | pyiqa 0.1.16 create_metric('dmm'), CPU fp32 (torch.svd, MKL), metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab); LAPACK routines BSD-3-Clause (../../LICENSE-lapack) / permissive |
+
+</details>
+
+<details>
+<summary>dreamsim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | pip dreamsim 0.21.2 (identical to the repo's dreamsim/ tree) | not recorded | not recorded | MIT / unknown |
+
+</details>
+
+<details>
+<summary>dssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | original dssim-core eec33f55 | 0.00000003772523560208185 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>dssim-gpu — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | dssim-core | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>flip — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`flip`](docs/MODEL_CARDS.md#flip) | NVIDIA FLIP 1.7 / f64 map mean | 0.00000000000003552713678800501 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>flip-v17 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | NVIDIA FLIP 1.7 | 0.0 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>fsim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`fsim`](docs/MODEL_CARDS.md#fsim) | original FeatureSIM / Octave 6.4 | 0.000001329927450832713 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2) | original FeatureSIM / Octave 6.4 | 0.0000000888441795687811 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | original FeatureSIM / Octave 6.4 | 0.00000018109096577845207 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-k4`](docs/MODEL_CARDS.md#fsim-k4) | original FeatureSIM / Octave 6.4 | 0.0000000138497604496024 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-nodownscale`](docs/MODEL_CARDS.md#fsim-nodownscale) | original FeatureSIM / Octave 6.4 | 0.000001329927450832713 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`fsim-y`](docs/MODEL_CARDS.md#fsim-y) | authors' FR_FSIMc.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+
+</details>
+
+<details>
+<summary>gmsd — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`gmsd`](docs/MODEL_CARDS.md#gmsd) | libgmsd de646c9a (C) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>haarpsi — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | original HaarPSI / Octave 6.4 | 0.000000011793922838343462 | not recorded | not recorded / not applicable |
+| [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | original HaarPSI / Octave 6.4 | 0.000000016168560379448138 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>hdrvdp — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | official HDR-VDP 2.2.2 MATLAB release (ISC-licensed) | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | no evidence | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+
+</details>
+
+<details>
+<summary>hdrvdp3 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | official HDR-VDP 3.0.7 MATLAB release + jpeg-ai-qaf VDP3/ numpy port @ 0628a6b (verified equal — see DIVERGENCES) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>hdrvdp3-aic2026 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>hyperiqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | git clone of SSL92/hyperIQA, pinned c42e7279717e7dcb693a24b891fc14a4189a45ee (the paper's official repo — NOT 'SSL-Group/hyperIQA', which 404s) | not recorded | not recorded | MIT / unknown |
+
+</details>
+
+<details>
+<summary>iwssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`iwssim`](docs/MODEL_CARDS.md#iwssim) | Python-IW-SSIM f9de37c (the Python port linked from the authors' IW-SSIM page; not yet compared directly with the authors' MATLAB release) | not recorded | not recorded | not recorded / not applicable |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | CPU twin | not recorded | not recorded | not recorded / not applicable |
+| [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | jpeg-ai-qaf IW_SSIM (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 IW-SSIM column; upstream mirror [local path] @ 0628a6b | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>liqe — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`liqe`](docs/MODEL_CARDS.md#liqe) | git clone of zwx8981/LIQE (no pip package), pinned a64655f7b84b9543b513394472851884cde5b257 | not recorded | not recorded | MIT / unknown |
+
+</details>
+
+<details>
+<summary>lpips — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`lpips-alex`](docs/MODEL_CARDS.md#lpips-alex) | lpips==0.1.4 | not recorded | not recorded | BSD-2-Clause / permissive |
+| [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | lpips==0.1.4 | not recorded | not recorded | BSD-2-Clause / permissive |
+| [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | lpips==0.1.4 | not recorded | not recorded | BSD-2-Clause / permissive |
+
+</details>
+
+<details>
+<summary>mad — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`mad`](docs/MODEL_CARDS.md#mad) | official MATLAB release (larschandler.com) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>maniqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | git clone of IIGROUP/MANIQA (no pip package; vendored timm 0.5.5 in-repo), pinned f573d862401243c45641951a0303b8059c1c8577 | not recorded | not recorded | Apache-2.0 / permissive |
+
+</details>
+
+<details>
+<summary>mdctpsnr — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | author's official C++ thorfdbg/mDCTpsnr (Thomas Richter; contributor Jon Sneyers) (zlib-style license), built GCC -O3 -ffast-math AVX2 + glibc libmvec | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>mdsi — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`mdsi`](docs/MODEL_CARDS.md#mdsi) | original MDSI / Octave 6.4 | 0.000000000000010685896612017132 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ms-gmsd — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ms-gmsdc — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ms-gmsdc`](docs/MODEL_CARDS.md#ms-gmsdc) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ms-ssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ms-ssim-pyiqa`](docs/MODEL_CARDS.md#ms-ssim-pyiqa) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000003040175311497251 | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>msssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`msssim`](docs/MODEL_CARDS.md#msssim) | original msssim / Octave 6.4 | 0.0000017640623451997683 | not recorded | not recorded / not applicable |
+| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0000001537393887751648 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>musiq — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`musiq`](docs/MODEL_CARDS.md#musiq) | git clone of google-research (sparse musiq/), pinned 3ef5211; legacy stack jax 0.3.25 + flax 0.3.3 (flax.nn) + tensorflow CPU on python 3.9 — Kaggle/TF-Hub google/musiq instances are conversions of the same npz checkpoints (docs/pyiqa_licenses_2026-10-15/deep_origins.tsv) | not recorded | not recorded | Apache-2.0 / permissive |
+
+</details>
+
+<details>
+<summary>niqe — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | BasicSR 1.4.2 | 0.00009065496319360378 | not recorded | not recorded / not recorded |
+
+</details>
+
+<details>
+<summary>nlpd — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`nlpd`](docs/MODEL_CARDS.md#nlpd) | Valerolaparra/NLPD_Pytorch (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>nlpd-iqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | IQA_pytorch source mirrored at [local path] semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 NLPD column (n=53) | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>paq2piq — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | git clone of baidut/paq2piq revision 48c91e844e9f7a768f6ddcfc744dddfdd1160fea (the first author's official inference repo; LICENSE.md added 2024-10-25) | not recorded | not recorded | MIT / noncommercial |
+
+</details>
+
+<details>
+<summary>pieapp — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`pieapp`](docs/MODEL_CARDS.md#pieapp) | Official v0.1 public compute_score, release 0513613d1f575136ea52418e35f2cebc5a49f783 | not recorded | not recorded | not recorded / Modified BSD-2 for Non-Commercial Use Only, UC Regents |
+
+</details>
+
+<details>
+<summary>pieapp-pyiqa — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | pyiqa 0.1.16 create_metric('pieapp'), CPU fp32, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
+
+</details>
+
+<details>
+<summary>piqe — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`piqe`](docs/MODEL_CARDS.md#piqe) | pypiqe 1.2 | 0.00000000000004618527782440651 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>proposal-butteraugli — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>psnr — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`psnr`](docs/MODEL_CARDS.md#psnr) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | scikit-image 0.26 / declared RGB ingress | 0.0000000000020463630789890885 | not recorded | not recorded / not applicable |
+| [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | scikit-image 0.26 / declared RGB ingress | 0.0000000000024300561562995426 | not recorded | not recorded / not applicable |
+| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>psnrhvs — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | authors' psnrhvsm.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | libvmaf psnr_hvs feature @ f85a8536 — FFI oracle | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | authors' psnrhvsm.m | not recorded | not recorded | not recorded / not applicable; open terms: see pinned audit |
+
+</details>
+
+<details>
+<summary>ssim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ssim`](docs/MODEL_CARDS.md#ssim) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.00000005960464477539063 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000011643768749181049 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000055390560693702184 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k3) | PyIQA 0.1.16 / named convention | 0.00000003263846981571561 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k4) | PyIQA 0.1.16 / named convention | 0.000000022443646052749955 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5) | PyIQA 0.1.16 / named convention | 0.00000001689128470427903 | not recorded | not recorded / not applicable |
+| [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6) | PyIQA 0.1.16 / named convention | 0.000000013229299988815058 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ssim2 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ssim2`](docs/MODEL_CARDS.md#ssim2) | primary SSIMULACRA2 v2.1 | 0.0 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ssim2-gpu — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | fast-ssim2 (CPU) + third-party crates.io ssimulacra2 for parity | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ssimc — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ssimc`](docs/MODEL_CARDS.md#ssimc) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000014727947605930325 | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k3) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k4) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | no evidence | not recorded | not recorded | not recorded / not applicable |
+| [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>ssimulacra1 — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | original SSIMULACRA1 / OpenCV | 0.000000003826276126668582 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>stlpips — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | stlpips_pytorch==0.0.2 | not recorded | not recorded | BSD-2-Clause / permissive |
+| [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | stlpips_pytorch==0.0.2 | not recorded | not recorded | BSD-2-Clause / permissive |
+
+</details>
+
+<details>
+<summary>topiq — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | pyiqa 0.1.16 (torch 2.14.1+cpu) | not recorded | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
+| [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | pyiqa 0.1.16 (torch 2.14.1+cpu) | not recorded | not recorded | PolyForm-Noncommercial-1.0.0 + S-Lab-1.0 (LICENSE-pyiqa, LICENSE-S-Lab) / https://github.com/chaofengc/IQA-PyTorch/blob/main/LICENSE |
+
+</details>
+
+<details>
+<summary>vif — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`vif`](docs/MODEL_CARDS.md#vif) | original vifp_mscale / Octave 6.4 | 0.0000000000005379585665821196 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>vifvec — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`vifvec`](docs/MODEL_CARDS.md#vifvec) | original vifvec / Octave 6.4 | 0.00000000000024030777368011513 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>vmaf — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | libvmaf 3.2.0 / named RGB ingress | 0.00028193174530599663 | not recorded | not recorded / not applicable |
+| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | libvmaf 3.2.0 / named RGB ingress | 0.0002482166810153785 | not recorded | not recorded / not applicable |
+| [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | libvmaf 3.2.0 / named RGB ingress | 0.000007238667720343983 | not recorded | not recorded / not applicable |
+| [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | libvmaf 3.2.0 / named RGB ingress | 0.000007264956991548388 | not recorded | not recorded / not applicable |
+| [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | libvmaf 3.2.0 / named RGB ingress | 0.00022515701154190992 | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>vsi — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`vsi`](docs/MODEL_CARDS.md#vsi) | original VSI / Octave 6.4 | 0.0000000050279395091834544 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`vsi-k2`](docs/MODEL_CARDS.md#vsi-k2) | original VSI / Octave 6.4 | 0.000000006297474430816408 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3) | original VSI / Octave 6.4 | 0.000000006385277306897308 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | original VSI / Octave 6.4 | 0.000000004950456933272562 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+| [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | original VSI / Octave 6.4 | 0.0000000050279395091834544 | not recorded | not recorded / not applicable; open terms: see pinned audit |
+
+</details>
+
+<details>
+<summary>wadiqam — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
+| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
+| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
+| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
+| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
+
+</details>
+
+<details>
+<summary>wd — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`wd`](docs/MODEL_CARDS.md#wd) | ed9de16b8819146afeecc20b4d2d0f385f711a7fd9740288bfdbacd3e93e7b43 | not recorded | not recorded | BSD-3-Clause; source and license notices in LICENSE-wd / permissive |
+
+</details>
+
+<details>
+<summary>ws-hv — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | no evidence | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>zensim — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`zensim`](docs/MODEL_CARDS.md#zensim) | — | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+<details>
+<summary>zensim-gpu — variants and configurations</summary>
+
+| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
+| --- | --- | ---: | ---: | --- |
+| [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | — | not recorded | not recorded | not recorded / not applicable |
+
+</details>
+
+DVIFMISH is a separate, unpublished benchmark dependency: `publish = false`; publication requires the original author’s consent. Its six benchmark configurations are `dvifmish-port-min-v0.2`, `dvifmish-port-2d-v0.2`, `dvifmish-port-lap-v0.2`, `dvifmish-port-lap-v0.3`, `dvifmish-talk-faithful-luma-float` and `dvifmish-talk-faithful-luma-int`. These are not public `zenmetrics score` names, and benchmark repeatability does not establish native-author oracle parity. Private adapters, models and weights are not distributed by these instructions.
+
+
 ## Datasets
 
 Datasets this repo validates or benchmarks against, with thanks to their

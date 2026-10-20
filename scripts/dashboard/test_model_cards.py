@@ -74,6 +74,17 @@ class ModelCards(unittest.TestCase):
         readme=readme_section(self.items)
         for metric in self.by_name:self.assertIn('`'+metric+'`',readme)
 
+    def test_decimal_deltas_preserve_small_values_and_missing_medians(self):
+        from model_cards import decimal_delta, readme_variant_tables
+        self.assertEqual(decimal_delta(3e-5), '0.00003')
+        self.assertEqual(decimal_delta(0.0), '0.0')
+        self.assertEqual(decimal_delta(None), 'not recorded')
+        text=readme_variant_tables([self.by_name['ssim2']],
+            {'ssim2': {'canonical': 'explicit reference', 'max_abs_delta': 3e-5}})
+        self.assertIn('0.00003 | not recorded', text)
+        self.assertIn('explicit reference', text)
+        self.assertIn('Reference code / weights', text)
+
     def test_historical_family_join_is_explicit_and_version_scoped(self):
         from build import HISTORICAL_QUALITY_FAMILY
         self.assertEqual(HISTORICAL_QUALITY_FAMILY['score_zensim_v0_16'],'zensim')

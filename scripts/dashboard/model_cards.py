@@ -212,6 +212,69 @@ def comparison_results(path):
     return combined
 
 
+def decimal_delta(value):
+    """Print retained precision without exponent notation or invented zeroes."""
+    from decimal import Decimal
+    if value is None:
+        return 'not recorded'
+    return format(Decimal(str(value)), 'f')
+
+
+def variant_family(metric):
+    for prefix in ('ms-ssim', 'ssimc', 'ssim', 'msssim', 'psnrhvs', 'psnr',
+                   'butteraugli', 'vmaf', 'fsim', 'vsi', 'haarpsi', 'hdrvdp',
+                   'iwssim', 'cw-ssim', 'lpips', 'stlpips', 'wadiqam', 'topiq'):
+        if metric == prefix or metric.startswith(prefix+'-'):
+            return prefix
+    return metric
+
+
+def readme_variant_tables(items, comparisons):
+    lines = ['', '### Executable, versions, output differences and terms', '',
+        'Use each exact metric name below with `target/release/zenmetrics score --metric NAME '
+        '--reference ref.png --distorted dist.png`. The linked card supplies its build features, '
+        'model export, consent and display arguments; the command is not a substitute for those requirements.', '',
+        '**Licensing is not uniformly cleared.** Our Rust license, upstream reference-code terms '
+        'and weight terms are separate. See the [pinned upstream audit](docs/PYIQA_UPSTREAM_LICENSES_2026-10-15.md) '
+        'for research-only clauses and open questions affecting FSIM, VSI, PSNR-HVS, HDR-VDP, '
+        'unlicensed reference sources and pretrained backbones. A permissive reference-code license '
+        'does not grant permission for separately licensed weights. “Not recorded” means unresolved, not unrestricted.', '',
+        '**Deltas are absolute raw-score differences**, written as decimals (for example `0.00003`). '
+        'Maxima below come only from the named [local canonical comparison cohorts]'
+        '(benchmarks/canonical_recheck_2026-10-19/README.md), with their exact Rust revision, '
+        'input dimensions and thread configurations. They are not global error bounds or AIC '
+        'published-column agreement. A median is shown only when retained as a median of paired '
+        'score differences; it is never inferred from a maximum or a pass threshold. '
+        'Missing local deltas do not erase older parity evidence in the cards.', '']
+    groups = {}
+    for card in items:
+        groups.setdefault(variant_family(card['metric']), []).append(card)
+    for family, variants in groups.items():
+        lines += ['<details>', '<summary>'+family+' — variants and configurations</summary>', '',
+                  '| Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |',
+                  '| --- | --- | ---: | ---: | --- |']
+        for card in variants:
+            obs = comparisons.get(card['metric'], {})
+            terms = str(card['reference_code_license'])+' / '+str(card['weights_license'])
+            if variant_family(card['metric']) in ('fsim','vsi','psnrhvs','hdrvdp'):
+                terms += '; open terms: see pinned audit'
+            values = ['[`'+card['metric']+'`](docs/MODEL_CARDS.md#'+card['metric']+')',
+                      obs.get('canonical', card['reference_identity']),
+                      decimal_delta(obs.get('max_abs_delta')),
+                      decimal_delta(obs.get('median_abs_delta')), terms]
+            lines.append('| '+' | '.join(str(v).replace('|',r'\|').replace('\n',' ') for v in values)+' |')
+        lines += ['', '</details>', '']
+    lines += ['DVIFMISH is a separate, unpublished benchmark dependency: `publish = false`; '
+              'publication requires the original author’s consent. Its six benchmark configurations '
+              'are `dvifmish-port-min-v0.2`, `dvifmish-port-2d-v0.2`, '
+              '`dvifmish-port-lap-v0.2`, `dvifmish-port-lap-v0.3`, '
+              '`dvifmish-talk-faithful-luma-float` and `dvifmish-talk-faithful-luma-int`. '
+              'These are not public `zenmetrics score` names, and benchmark repeatability '
+              'does not establish native-author oracle parity. Private adapters, models and '
+              'weights are not distributed by these instructions.', '']
+    return '\n'.join(lines)
+
+
 def readme_section(items):
     comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
     comparisons=comparison_results(comparison_path)
@@ -241,7 +304,7 @@ def readme_section(items):
         metric='[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')'
         values=[metric,c['kind']+('/NN' if c['family']=='Learned' and c['metric']!='brisque' else ''),ref,check,speed]
         lines.append('| '+' | '.join(str(v).replace('|','\\|').replace('\n',' ') for v in values)+' |')
-    return '\n'.join(lines)+'\n\n'
+    return '\n'.join(lines)+'\n'+readme_variant_tables(items, comparisons)+'\n\n'
 
 
 def documentation(items):
