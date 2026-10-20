@@ -18,6 +18,17 @@ def sha(path):
     return digest.hexdigest()
 
 
+def admitted_command(manifest, command):
+    locks = manifest.get('heavy_locks')
+    if (not isinstance(locks, list) or not locks
+            or any(not isinstance(path, str) or not Path(path).is_absolute() for path in locks)
+            or len({str(Path(path).resolve()) for path in locks}) != len(locks)):
+        raise ValueError('manifest requires unique absolute heavy_locks in acquisition order')
+    prefix = [item for path in locks for item in ('flock', path)]
+    return prefix+[str(Path.home()/'work/claudehints/scripts/run-heavy'),
+                   '--mem', '12G', '--jobs', '12', '--', *command]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('manifest', type=Path)
@@ -26,6 +37,7 @@ def main():
     p.add_argument('--addendum', action='store_true')
     a = p.parse_args()
     manifest = json.loads(a.manifest.read_text())
+    admission = admitted_command(manifest, [])
     home = Path.home()
     root = Path(manifest['scratch'])
     output = Path(manifest['output'])
@@ -89,9 +101,7 @@ def main():
             driver = 'canonical_octave.py' if spec['kind'] == 'octave' else 'canonical_python.py'
             command = [spec.get('python', sys.executable), str(Path(__file__).with_name(driver)),
                        manifest['config'], metric, str(pairs), str(result)]
-        wrapped = ['flock', str(home/'tmp/lilith-heavy.lock'),
-                   'flock', str(home/'tmp/lilith-wsl-heavy.lock'),
-                   str(home/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '12', '--', *command]
+        wrapped = admission+command
         env = dict(os.environ, TMPDIR=str(root/'scratch'), RAYON_NUM_THREADS='1', RTEN_NUM_THREADS='12',
                    OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
                    ZENMETRICS_NN_MODEL_DIR=spec.get('models', manifest.get('models', '')), ZENMETRICS_NN_ENGINE='rten',

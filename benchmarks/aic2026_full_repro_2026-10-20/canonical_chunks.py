@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from canonical_run import sha
+from canonical_run import admitted_command, sha
 
 
 def records(path, jsonl=False, partial=False):
@@ -79,6 +79,7 @@ def main():
     if args.execute_bundle:
         return execute_bundle(args.manifest)
     m = json.loads(args.manifest.read_text())
+    admission = admitted_command(m, [])
     spec = m['addendum' if args.addendum else 'metrics'][args.metric]
     root, output = Path(m['scratch']), Path(m['output'])
     root.mkdir(parents=True, exist_ok=True)
@@ -166,10 +167,8 @@ def main():
                 bundle['workers'].append(dict(command=command, result=str(result), pairs=str(pair_path),
                                               rows=len(rows), log=str(result)+'.log'))
             plan.write_text(json.dumps(bundle, indent=2)+'\n')
-            wrapped = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'),
-                       'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
-                       str(Path.home()/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '12', '--',
-                       sys.executable, str(Path(__file__).resolve()), str(plan), '--execute-bundle']
+            wrapped = admission+[sys.executable, str(Path(__file__).resolve()),
+                                 str(plan), '--execute-bundle']
             log = plan.with_suffix('.log')
             print(f'queued {tag} bundle {number} ({len(bundle["workers"])} workers)', flush=True)
             with log.open('x') as target:

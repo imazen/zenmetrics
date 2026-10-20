@@ -5,9 +5,22 @@ import unittest
 from unittest.mock import patch
 
 from canonical_chunks import merge, records, scoring_environment
+from canonical_run import admitted_command
 
 
 class ChunkRecovery(unittest.TestCase):
+    def test_admission_preserves_configured_lock_order(self):
+        locks = [str(Path.home()/'tmp/first.lock'), str(Path.home()/'tmp/second.lock')]
+        command = admitted_command({'heavy_locks': locks}, ['scorer', 'pairs.tsv'])
+        self.assertEqual(command[:4], ['flock', locks[0], 'flock', locks[1]])
+        self.assertEqual(command[-7:], ['--mem', '12G', '--jobs', '12', '--', 'scorer', 'pairs.tsv'])
+
+    def test_admission_refuses_missing_relative_and_duplicate_locks(self):
+        lock = str(Path.home()/'tmp/first.lock')
+        for manifest in ({}, {'heavy_locks': ['relative.lock']}, {'heavy_locks': [lock, lock]}):
+            with self.assertRaisesRegex(ValueError, 'heavy_locks'):
+                admitted_command(manifest, ['scorer'])
+
     def test_inherited_secret_is_not_serialized_in_worker_settings(self):
         with patch.dict('os.environ', {'AIC_TEST_SECRET': 'invented-control-value'}):
             settings = scoring_environment({}, {}, Path.home()/'tmp')

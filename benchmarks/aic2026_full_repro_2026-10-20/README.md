@@ -131,6 +131,9 @@ unproven. Production retains three single-thread workers per classical
 bundle, releasing shared admission between bundles. The failed control
 does not establish a performance comparison.
 
+Local manifests list shared `heavy_locks` in acquisition order. Maintained
+drivers require unique absolute paths before starting resource admission.
+
 `canonical_input_hashes.py` inventories every unique image named by the pair
 list with a single read stream and 1 MiB reads. It retains the inventory and
 receipt externally, retries errno-12 reads from the beginning, and refuses
