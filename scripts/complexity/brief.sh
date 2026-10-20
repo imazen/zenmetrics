@@ -16,7 +16,7 @@ OUT=${BRIEF_OUT:-$HOME/tmp/metric-brief}
 PRIVATE=${BRIEF_PRIVATE:-$(cd .. && pwd)/zenmetrics-private}
 [ -d "$PRIVATE" ] || PRIVATE=$HOME/work/zen/zenmetrics-private
 AGREE=${BRIEF_AGREEMENT:-"$HOME/tmp/iqa-cx-lead/aic2026/agreement.json $HOME/tmp/iqa-cx-lead/dvifm-agree/dvifm_agreement.json"}
-mkdir -p "$OUT/site"
+rm -rf "$OUT/site"; mkdir -p "$OUT/site"  # only the page and its PDF are deployed
 
 python3 scripts/complexity/paper.py >/dev/null
 args=()
