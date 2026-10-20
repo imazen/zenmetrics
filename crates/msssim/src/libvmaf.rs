@@ -124,7 +124,11 @@ fn decimate_inner(
     } else {
         [f64x4::splat_t(token, 0.0); 81]
     };
-    crate::kernel::for_each_row(&mut out, sw, |y, orow| {
+    // Gate on the convolution work, not the output size: a scale-10
+    // decimate writes ~2% of the input samples but still reads every
+    // kernel tap, so `out.len()` would keep big inputs serial.
+    let work = sw * sh * kw * kw;
+    crate::kernel::for_each_row_work(&mut out, sw, work, |y, orow| {
         let cy = y * factor;
         let mut x = 0;
         // Resolve reflected rows once, rather than for every kernel column.
@@ -527,12 +531,24 @@ fn hbd_scaler(bpc: u32) -> f32 {
 }
 
 fn plane_to_f32(y: &[u16], w: usize, h: usize, stride: usize, scaler: f32) -> Vec<f32> {
-    let mut out = Vec::with_capacity(w * h);
+    let mut out = vec![0.0f32; w * h];
+    let fill = |orow: &mut [f32], srow: &[u16]| {
+        for (o, &v) in orow.iter_mut().zip(srow) {
+            *o = v as f32 / scaler;
+        }
+    };
+    #[cfg(feature = "parallel")]
+    if crate::kernel::par_ok(out.len()) {
+        use rayon::prelude::*;
+        out.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(row, orow)| fill(orow, &y[row * stride..row * stride + w]));
+        return out;
+    }
     for row in 0..h {
-        out.extend(
-            y[row * stride..row * stride + w]
-                .iter()
-                .map(|&v| v as f32 / scaler),
+        fill(
+            &mut out[row * w..row * w + w],
+            &y[row * stride..row * stride + w],
         );
     }
     out

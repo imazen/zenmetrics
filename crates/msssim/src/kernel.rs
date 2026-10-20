@@ -77,8 +77,25 @@ pub(crate) fn par_ok(n: usize) -> bool {
 /// Writes are disjoint per row either way, so results are bit-identical
 /// at any thread count.
 pub(crate) fn for_each_row(out: &mut [f32], row_w: usize, f: impl Fn(usize, &mut [f32]) + Sync) {
+    let n = out.len();
+    for_each_row_work(out, row_w, n, f);
+}
+
+/// [`for_each_row`] with an explicit work measure for the [`PAR_MIN`]
+/// gate. Kernels whose per-row cost is dominated by reads outside `out`
+/// (decimation runs a `kw`×`kw` filter against the input plane per
+/// output sample) need the gate to see the work, not the output size —
+/// a heavily decimated output can be far under `PAR_MIN` while doing
+/// megasamples of reads.
+pub(crate) fn for_each_row_work(
+    out: &mut [f32],
+    row_w: usize,
+    work_n: usize,
+    f: impl Fn(usize, &mut [f32]) + Sync,
+) {
+    let _ = work_n;
     #[cfg(feature = "parallel")]
-    if par_ok(out.len()) {
+    if par_ok(work_n) {
         use rayon::prelude::*;
         out.par_chunks_mut(row_w)
             .enumerate()
