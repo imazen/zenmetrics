@@ -1,5 +1,14 @@
 # Classical evaluator first calls
 
+Run the comparative protocol with
+`just bench-iqa-canonical-classical-first PLAN NEW_OUTPUT --blocks 3`.
+For resident-model NN first calls, the separate
+`just bench-iqa-canonical-first-confirm PLAN CASE NEW_OUTPUT --blocks 20`
+command acquires a fixed alternating stage and bootstraps the median ratio.
+It retains every block and refuses an interval on an execution, score or
+numerical-gate failure. Its interval remains descriptive; it does not certify
+runtime isolation or replace the warm measurements.
+
 `compare_classical_first.py PLAN NEW_OUTPUT --blocks 3` acquires one first
 evaluation per fresh process, alternating canonical/native order. It uses
 the frozen native worker's `timing_phase=cold`, `only_mode=score` path.
