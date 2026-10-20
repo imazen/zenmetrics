@@ -2,7 +2,7 @@
 use std::collections::BTreeSet;
 
 const CHANGED_ORDER: &str =
-    include_str!("../../../../rebenchmark_since_f7668c7/order_current_2026-10-20.tsv");
+    include_str!("../../../../rebenchmark_since_f7668c7/order_current_after_flip_2026-10-20.tsv");
 
 fn changed_order() -> Vec<String> {
     CHANGED_ORDER

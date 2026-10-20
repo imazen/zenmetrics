@@ -29,3 +29,6 @@ psnr-y-libvmaf
 psnr-y-studio601
 psnr-y601
 psnr-ycbcr611
+flip
+flip-v17
+ws-hv

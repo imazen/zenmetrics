@@ -381,3 +381,8 @@ audits an existing queue on every scored-case completion, including an initial
 and final catch-up. It records cells above 1.08 immediately without launching
 additional inference. Follow-up measurements and profiles remain explicit
 queued jobs.
+
+The subsequent FLIP/FLIP-v17 and WS-HV revisions expand the current native
+`changed` selection to 38 routes. Their separate
+[scheduling table](../rebenchmark_since_f7668c7/order_current_after_flip_2026-10-20.tsv)
+retains the earlier 35-route table for existing comparison manifests.
