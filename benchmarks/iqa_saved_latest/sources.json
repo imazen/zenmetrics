@@ -120,7 +120,7 @@
       "zensim"
     ],
     "manifest_cells": 4272,
-    "capture_utc": "2026-10-20T03:45:01.780076+00:00",
+    "capture_utc": "2026-10-20T03:50:01.769720+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "e0f82d7ee2fb5720f764fac3cb622c9f86b661bceccc2ca10a36fc397aba030e"
@@ -167,7 +167,7 @@
       "ms-ssim-pyiqa-f32-k6"
     ],
     "manifest_cells": 49,
-    "capture_utc": "2026-10-20T03:45:01.802263+00:00",
+    "capture_utc": "2026-10-20T03:50:01.792015+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "2a9a84eab21ef9e54735e91588b6d3f90cffe08b57c1f481c5f88c13b2ea7cd9"
@@ -236,7 +236,7 @@
       "vmaf-v1"
     ],
     "manifest_cells": 763,
-    "capture_utc": "2026-10-20T03:45:01.923618+00:00",
+    "capture_utc": "2026-10-20T03:50:01.914866+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "1df3b5e28ca4cdfa4d8bbec57f44d151a64882d92b4214e27718f0253c030378"
@@ -285,7 +285,7 @@
       "dvifmish-talk-faithful-luma-int"
     ],
     "manifest_cells": 96,
-    "capture_utc": "2026-10-20T03:45:01.944934+00:00",
+    "capture_utc": "2026-10-20T03:50:01.936093+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "06c5f1635c5834eb91b65fcb4b97ccc4b33d61556a5d22afa2bbc1dd1c242725"
@@ -334,7 +334,7 @@
       "dvifmish-talk-faithful-luma-int"
     ],
     "manifest_cells": 576,
-    "capture_utc": "2026-10-20T03:45:01.984921+00:00",
+    "capture_utc": "2026-10-20T03:50:01.977564+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "4e30096e3c225ded7716a085dcd8347cdef3c5eea0213e9165e7f1d16895ec22"
@@ -439,7 +439,7 @@
       "dvifmish-talk-faithful-luma-int"
     ],
     "manifest_cells": 260,
-    "capture_utc": "2026-10-20T03:45:02.029488+00:00",
+    "capture_utc": "2026-10-20T03:50:02.022555+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "eb6a41dab17c6247cdbba3706716da92ebc9db43da28e7bc812ed0acb5b43a38"
@@ -486,7 +486,7 @@
       "dvifmish-port-min-v0.2"
     ],
     "manifest_cells": 28,
-    "capture_utc": "2026-10-20T03:45:02.035954+00:00",
+    "capture_utc": "2026-10-20T03:50:02.029133+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "cce3408a9ead0fcc8d3256438f9baeb6a47695131560935584a5e45682c7740e"
@@ -529,7 +529,7 @@
       "msssim"
     ],
     "manifest_cells": 1,
-    "capture_utc": "2026-10-20T03:45:02.036904+00:00",
+    "capture_utc": "2026-10-20T03:50:02.030072+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "d949b4041330b8c1b9d0172512dca2753c3b419fdc73a27b0b5fd91aecfeebf1"
@@ -599,7 +599,7 @@
       "wadiqam-pyiqa"
     ],
     "manifest_cells": 28,
-    "capture_utc": "2026-10-20T03:45:02.042444+00:00",
+    "capture_utc": "2026-10-20T03:50:02.035789+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "5f59ec43982ecb21c47785c471176e9497bfdb789bbf2fe5f57596b0d299e0f7"
@@ -664,7 +664,7 @@
       "ahiq-pyiqa"
     ],
     "manifest_cells": 1,
-    "capture_utc": "2026-10-20T03:45:02.043363+00:00",
+    "capture_utc": "2026-10-20T03:50:02.036730+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "a4dca350f62a86c97679146c76298cd8b3f82e1d5031cc517fcf7bf87d3eb84f"
@@ -736,7 +736,7 @@
       "wadiqam-pyiqa"
     ],
     "manifest_cells": 308,
-    "capture_utc": "2026-10-20T03:45:02.094636+00:00",
+    "capture_utc": "2026-10-20T03:50:02.089356+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "0ee47dfcc1655618eb606f41ba658553ffdf8b9badc1a2c05c6fd1bd58b7380c"
@@ -869,7 +869,10 @@
         "34c4f085066e32d3356537a1232ea343d00b3a9f8097939417741c790b6bc039",
         "aa6bef6316153619468fbe11dc2632c06c7ddc70ada76858187aa94481d0690c",
         "b58c2a0c277ef69ee2cfe3423f6c2075a1cbd7437f1ae108d408daeb4f170b3b",
-        "d41c265a131f8b59e6d710b3e94ac4e2a58d8adfd19f0746059badf2086de895"
+        "d41c265a131f8b59e6d710b3e94ac4e2a58d8adfd19f0746059badf2086de895",
+        "fbb69a93cb9b6453aa7c7775716fe6d27ef1c852cb8eb5ca40405d670a6af66c",
+        "fb92319e959ea831f58342c34a5306efc36c3a01a74bbe2a6a03783ed3117e6c",
+        "e2fa475ead4087391ea256ee5fe0e9bee95e45ed27d0a8cc9bc58039206bab7f"
       ]
     }
   },
@@ -995,7 +998,7 @@
       "zensim"
     ],
     "manifest_cells": 4272,
-    "capture_utc": "2026-10-20T03:45:01.431365+00:00",
+    "capture_utc": "2026-10-20T03:50:01.431497+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "e830a7e1444580fd16959a3ba649941c37fcc73c2f7b3d57ce8c7f529ac473e5"
@@ -1042,7 +1045,7 @@
       "ms-ssim-pyiqa-f32-k6"
     ],
     "manifest_cells": 48,
-    "capture_utc": "2026-10-20T03:45:01.468246+00:00",
+    "capture_utc": "2026-10-20T03:50:01.469163+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "e89e87ca8071c906bb28c6698c220d9404041151ebf87ab600fb1dcdb0fffdbf"
@@ -1112,7 +1115,7 @@
       "vmaf-v1"
     ],
     "manifest_cells": 352,
-    "capture_utc": "2026-10-20T03:45:01.507759+00:00",
+    "capture_utc": "2026-10-20T03:50:01.508756+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "c40ff683c959797f01a5f87ae47be4a9fc1acdf70d83ef626b57d89ee72ad6f7"
@@ -1160,7 +1163,7 @@
       "dvifmish-talk-faithful-luma-int"
     ],
     "manifest_cells": 288,
-    "capture_utc": "2026-10-20T03:45:01.543857+00:00",
+    "capture_utc": "2026-10-20T03:50:01.543879+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "b51c60c029cb3bccf8e93c0732f25d6bcd8a1940c65a9e38489aaa6dfcb4476f"
@@ -1204,7 +1207,7 @@
       "dvifmish-port-min-v0.2"
     ],
     "manifest_cells": 1,
-    "capture_utc": "2026-10-20T03:45:01.547054+00:00",
+    "capture_utc": "2026-10-20T03:50:01.546866+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "a4c586b61dda61c35af2def8ecd630c3c28a1501bcde4aeb2231821ff102ae79"
@@ -1263,7 +1266,7 @@
       "vmaf-studio601"
     ],
     "manifest_cells": 24,
-    "capture_utc": "2026-10-20T03:45:01.551039+00:00",
+    "capture_utc": "2026-10-20T03:50:01.550804+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "cf3be7a685057e0fb783f3b494a54cd394cae6ce763c3812f86538ae337c268b"
@@ -1308,7 +1311,7 @@
       "ssimulacra1"
     ],
     "manifest_cells": 2,
-    "capture_utc": "2026-10-20T03:45:01.552025+00:00",
+    "capture_utc": "2026-10-20T03:50:01.551776+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "63300300bf6013c6a83ff58364ff656066ba903cd7c636d988ecdaa630e07be9"
@@ -1379,7 +1382,7 @@
       "wadiqam-pyiqa"
     ],
     "manifest_cells": 28,
-    "capture_utc": "2026-10-20T03:45:01.560673+00:00",
+    "capture_utc": "2026-10-20T03:50:01.560449+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "17af08b9dc29e6cde8e86b8daeda2b5e0d11ec4f002d2c0667e5efd3392a8278"
@@ -1545,7 +1548,7 @@
       "zensim"
     ],
     "manifest_cells": 4560,
-    "capture_utc": "2026-10-20T03:45:02.252810+00:00",
+    "capture_utc": "2026-10-20T03:50:02.265582+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "e65cc8770a317dbdfee9cc7866c1050c93bd1997cb6d5e009790d40dc9e91a77"
@@ -1624,7 +1627,7 @@
       "ws-hv"
     ],
     "manifest_cells": 58,
-    "capture_utc": "2026-10-20T03:45:02.338153+00:00",
+    "capture_utc": "2026-10-20T03:50:02.348079+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "4fbc42d7ab805b3a835c3d0ac85d82c382bd6cdd8496e0e70c29098dbc4cfd61"
@@ -1694,7 +1697,7 @@
       "wadiqam-pyiqa"
     ],
     "manifest_cells": 28,
-    "capture_utc": "2026-10-20T03:45:02.344421+00:00",
+    "capture_utc": "2026-10-20T03:50:02.353452+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "86bdeb57a7194c150860c89e3c63bb71dce8dd2c5b5dedf1b1125f946d8ea975"
@@ -1759,7 +1762,7 @@
       "idfiqa"
     ],
     "manifest_cells": 1,
-    "capture_utc": "2026-10-20T03:45:02.345321+00:00",
+    "capture_utc": "2026-10-20T03:50:02.354381+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "5849ad93f55543ecfd5dae781adef1fc2cce4e4151f86912a9d9355602113a91"
@@ -1831,7 +1834,7 @@
       "wadiqam-pyiqa"
     ],
     "manifest_cells": 308,
-    "capture_utc": "2026-10-20T03:45:02.402973+00:00",
+    "capture_utc": "2026-10-20T03:50:02.405730+00:00",
     "exporter_sha256": "9a8a8a3727562cbfc5756dc324899822b06ccaed2ae15bb38744fc63cabb5441",
     "report_hashes": [
       "26eb01ec7a816ea9eb55f86a160adb299e60eb0760bcc52a2a99b05533cfe733"
@@ -2004,7 +2007,15 @@
         "41c7d362b5fe1e22a8362b40aebb9107a20767debf892c3f2415a30710eed843",
         "9b687a395133a5743d96dab8f30c55a4ccb0857c44526039754757be24fd1e83",
         "5ad966dd7efa4fba9e9bfae8aafc6a0378e62dfd76cedd240a818944b0428fe5",
-        "7dec659efcbf2fa2aee0bcca22797d6615d1396d0ac3f42dfaa8419907abfe58"
+        "7dec659efcbf2fa2aee0bcca22797d6615d1396d0ac3f42dfaa8419907abfe58",
+        "697f3f1094ff1d7bf38325daa0deb42e0b87c187610070e750e85fd271edf6a1",
+        "51beab87e3c92768d317ac69b56eb4846c2153956f4cdae0ac7d1c75cee7d7b3",
+        "6908e39189fbe1d3142d5411c876b53ad5f94b195072a3279b1d077043cd16a5",
+        "efc697afddb443c328a1d9b1ae910c99ec66ed04d6b8ae85b71d56fd9f77e44e",
+        "1fc53739a4b696406009580432d17db4149567c485627e338acfbd2c43fd9e96",
+        "e38437c2d6e32d7d1165cc991f73c6066b871039dbe6236707a8266119858008",
+        "296b122a946f0ab9e8203277b240dec786bf651c7a6a695109d3db244b9e9322",
+        "df7e22e9b291f7e50963f91d09d31aaaf929ed5e79ebe47836eb945a9708da67"
       ]
     }
   }
