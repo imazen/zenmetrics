@@ -8,6 +8,7 @@
 #   BRIEF_AGREEMENT  space-separated agreement JSON files (agreement_from_scores.py output and the
 #                    published-column agreement); default: the two files under ~/tmp/iqa-cx-lead
 #   BRIEF_PRIVATE    zenmetrics-private checkout, read with git show origin/main (default ../zenmetrics-private)
+# BRIEF_SYNC_STATUS (optional) the five-minute results sync's status.json; a blocked or stopped sync becomes a page check.
 # Other settings: BRIEF_OUT (default ~/tmp/metric-brief), BRIEF_CHROME (headless Chromium for the PDF),
 # BRIEF_PROJECT (Cloudflare Pages project), CLOUDFLARE_API_TOKEN or ~/.config/cloudflare/zenmetrics-pages-token.
 set -euo pipefail
@@ -21,6 +22,7 @@ rm -rf "$OUT/site"; mkdir -p "$OUT/site"  # only the page, its CSV downloads and
 python3 scripts/complexity/paper.py >/dev/null
 args=()
 for f in $AGREE; do [ -f "$f" ] && args+=(--agreement "$f") || echo "brief: agreement file $f missing; skipped" >&2; done
+[ -n "${BRIEF_SYNC_STATUS:-}" ] && args+=(--sync-status "$BRIEF_SYNC_STATUS")
 python3 scripts/complexity/brief_data.py --out "$OUT/brief_data.json" --private "$PRIVATE" "${args[@]}"
 python3 scripts/complexity/brief_page.py --data "$OUT/brief_data.json" --out "$OUT/site"
 

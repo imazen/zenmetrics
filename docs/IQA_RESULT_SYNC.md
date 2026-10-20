@@ -16,7 +16,8 @@ private implementation details enter that projection. Existing timestamped
 captures and all source benchmark attempts remain unchanged.
 
 The coordinator takes `.workongoing` atomically before repository mutation and
-requires an empty working copy. An occupied or dirty checkout defers publication.
+requires an empty working copy. An occupied or dirty checkout blocks publication
+and fails the cycle (below).
 It fetches master, commits the new evidence, pushes through `scripts/safe_push.sh`
 and verifies remote ancestry. Evidence-identical captures create no extra commit.
 A source push racing the result push is retried after a normal forward rebase;
@@ -28,6 +29,28 @@ The user service `iqa-results-sync.service` is driven by
 `journalctl --user -u iqa-results-sync.service`. The private config's scratch
 root contains `status.json`, `last-published.json`, immutable raw capture cycles
 and full push logs. A failed cycle preserves the previous remote export.
+
+### A blocked sync fails loudly
+
+A cycle with new evidence that cannot publish it exits 2, so
+`systemctl --user status iqa-results-sync.service` shows failed and the journal
+carries an `IQA RESULT SYNC BLOCKED since … (N cycles): <reason>` line with
+the detail. This covers a lock held by another lane, a dirty checkout (including
+the commit a refused push leaves behind), a checkout parent not on master, a
+refused or failed guarded push (`push refused by dashboard guard`, `… hygiene
+guard`, `… lock guard`, not a fast-forward, transport) and a failed capture.
+`status.json` records `blocked`, a fixed `reason` class, `stalled_since`,
+`blocked_cycles`, the first reason, and private `detail` (diff summary, or the
+traceback plus the last 25 lines of `push.log`). A cycle that publishes, or a
+recovery, clears it. "No new measured evidence" is not a failure.
+
+The dashboard watcher reads this status over ssh each cycle (`BRIEF_SYNC_HOST`,
+`BRIEF_SYNC_PATH`) and the page shows a `results sync blocked` check, warn at
+first and error after 15 minutes; `results sync not running` (error) when the
+status is over 20 minutes old; and a warning when it cannot be read. Only the
+reason class and times reach the page: guard output can quote the lines it
+matched, so the detail stays private. Tests: `just iqa-results-sync-check` and
+`just brief-sync-check`.
 
 Concurrent forward updates are retried at both rejection stages: the initial
 ancestry check and the final push. A final push failure triggers rebase only

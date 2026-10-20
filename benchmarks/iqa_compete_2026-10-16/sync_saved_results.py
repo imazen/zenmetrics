@@ -4,6 +4,12 @@
 The caller supplies private host/path configuration outside git. The systemd
 service serializes cycles. Repository mutations also require .workongoing and
 an empty working copy; contention is reported, never overridden.
+
+A cycle that holds new evidence but cannot publish it (lock held, dirty
+checkout, unintegrated parent, refused or failed push) exits nonzero, so the
+service shows failed, and status.json records the reason class, when the stall
+began and how many cycles it has blocked. Detail (diff summary, push-log tail)
+stays in the private status; `reason` is a fixed class safe to display publicly.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +28,11 @@ import sys
 FILES = ('capture_saved_results.py', 'export_chart_snapshot.py', 'publish_saved_results.py',
          'durable.py', 'admission_recovery.py')
 DESTINATION = 'benchmarks/iqa_saved_latest'
+BLOCKED_EXIT = 2
+# scripts/safe_push.sh exit codes -> publicly displayable reason classes.
+PUSH_REASONS = {2: 'push revision unresolved', 3: 'push not a fast-forward of master', 4: 'push fetch failed',
+                5: 'push transport failed', 6: 'push not verified on remote', 7: 'push refused by hygiene guard',
+                8: 'push refused by lock guard', 9: 'push refused by dashboard guard'}
 
 
 def now():
@@ -132,17 +143,21 @@ def publish(repo, projection, digest, cycle):
     try:
         fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        return dict(state='captured; repository owned by another lane', captured=str(cycle))
+        return dict(state='captured; repository owned by another lane', captured=str(cycle), blocked=True,
+                    reason='checkout locked by another lane', detail=lock.read_text(errors='replace').strip()[:300])
     owner = now() + ' Codex-result-sync five-minute results publication\n'
     try:
         with os.fdopen(fd, 'w') as stream:
             stream.write(owner)
-        if run(['jj', 'diff', '--summary', '--color', 'never'], cwd=repo):
-            return dict(state='captured; uncommitted repository changes left untouched', captured=str(cycle))
+        dirty = run(['jj', 'diff', '--summary', '--color', 'never'], cwd=repo)
+        if dirty:
+            return dict(state='captured; uncommitted repository changes left untouched', captured=str(cycle), blocked=True,
+                        reason='checkout has uncommitted changes', detail=dirty[:2000])
         run(['jj', 'git', 'fetch'], cwd=repo)
         parent = run(['jj', 'log', '-r', '@-', '--no-graph', '-T', 'commit_id'], cwd=repo)
         if subprocess.run(['git', 'merge-base', '--is-ancestor', parent, 'origin/master'], cwd=repo).returncode:
-            return dict(state='captured; unpublished source commits require owner integration', captured=str(cycle))
+            return dict(state='captured; unpublished source commits require owner integration', captured=str(cycle), blocked=True,
+                        reason='checkout parent not on master', detail=parent)
         run(['jj', 'new', 'master@origin', '-m', 'data: synchronize measured IQA results'], cwd=repo)
         destination = repo / DESTINATION
         destination.mkdir(exist_ok=True)
@@ -162,6 +177,40 @@ def publish(repo, projection, digest, cycle):
     finally:
         if lock.exists() and lock.read_text() == owner:
             lock.unlink()
+
+
+def push_failure(error, cycle):
+    """Reason class and private detail for an exception raised while publishing."""
+    import traceback
+    reason = 'sync cycle failed (%s)' % type(error).__name__
+    command = str(getattr(error, 'cmd', ''))
+    if isinstance(error, subprocess.CalledProcessError) and command.startswith('safe_push'):
+        reason = PUSH_REASONS.get(error.returncode, 'push failed (exit %d)' % error.returncode)
+    elif isinstance(error, subprocess.CalledProcessError) and re.search(r"\b(ssh|scp)\b", command):
+        reason = 'host capture failed'
+    log = cycle / 'push.log'
+    tail = log.read_text(errors='replace').splitlines()[-25:] if log.exists() else []
+    return reason, '\n'.join([traceback.format_exc().rstrip()] + tail)
+
+
+def stalled(previous, result):
+    """Carry the stall start and the first failure forward until a cycle publishes."""
+    if previous.get('blocked'):
+        result['stalled_since'] = previous.get('stalled_since') or previous.get('updated_utc')
+        result['blocked_cycles'] = previous.get('blocked_cycles', 1) + 1
+        result['first_reason'] = previous.get('first_reason') or previous.get('reason')
+        result['first_detail'] = previous.get('first_detail') or previous.get('detail')
+    else:
+        result.update(stalled_since=result['updated_utc'], blocked_cycles=1,
+                      first_reason=result['reason'], first_detail=result.get('detail'))
+    return result
+
+
+def write_status(root, result):
+    target = root / 'status.json'
+    temporary = target.with_suffix('.new')
+    temporary.write_text(json.dumps(result, indent=2) + '\n')
+    temporary.replace(target)
 
 
 def main():
@@ -184,6 +233,7 @@ def main():
                 temporary.replace(target)
             print(json.dumps(result))
             return
+        prior = json.loads((root / 'status.json').read_text()) if (root / 'status.json').exists() else {}
         cycle = root / datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         (cycle / 'captures').mkdir(parents=True)
         repo = Path(config['repo'])
@@ -210,11 +260,20 @@ def main():
                 result = publish(repo, projection, digest, cycle)
                 if result['state'] == 'committed and remote verified':
                     state_path.write_text(json.dumps(result, indent=2) + '\n')
-            (root / 'status.json').write_text(json.dumps(result, indent=2) + '\n')
-            print(json.dumps(result))
         except Exception as error:
-            (root / 'status.json').write_text(json.dumps(dict(state='failed; previous published data retained', error=str(error), captured=str(cycle), updated_utc=now()), indent=2) + '\n')
-            raise
+            reason, detail = push_failure(error, cycle)
+            result = dict(state='failed; previous published data retained', error=str(error), captured=str(cycle),
+                          blocked=True, reason=reason, detail=detail)
+        result.setdefault('updated_utc', now())
+        if result.get('blocked'):
+            result = stalled(prior, result)
+            write_status(root, result)
+            print(json.dumps(result))
+            print('IQA RESULT SYNC BLOCKED since %s (%d cycles): %s\n%s' % (
+                result['stalled_since'], result['blocked_cycles'], result['reason'], result.get('detail') or ''), file=sys.stderr)
+            sys.exit(BLOCKED_EXIT)
+        write_status(root, result)
+        print(json.dumps(result))
 
 
 if __name__ == '__main__':

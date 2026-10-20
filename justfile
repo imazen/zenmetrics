@@ -1828,6 +1828,10 @@ aic-repro-check *args:
     python3 scripts/aic2026/repro_check.py {{args}}
 
 # Browser check of a built dashboard: every tab at two sizes, every control button, drawer, print mode.
+# Unit tests for how the results-sync status becomes dashboard checks.
+brief-sync-check:
+    cd scripts/complexity && python3 -m unittest test_brief_sync
+
 brief-check site="~/tmp/metric-brief/site" shots="~/tmp/metric-brief/check":
     uv run -q --with playwright scripts/complexity/brief_check.py {{site}} --shots {{shots}} ${BRIEF_CHROME:+--chrome "$BRIEF_CHROME"}
 

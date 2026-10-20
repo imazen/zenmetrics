@@ -6,10 +6,78 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_saved_results import DESTINATION, FILES, fingerprint, public_checks, publish, recover_published, guarded_push
+from sync_saved_results import (BLOCKED_EXIT, DESTINATION, FILES, fingerprint, main, public_checks, publish, push_failure,
+                                recover_published, guarded_push)
 
 
 class SyncControls(unittest.TestCase):
+    def run_cycle(self, root, outcome):
+        """One main() cycle with capture/export stubbed; returns (exit code, status.json)."""
+        import sys
+        config = root / 'config.json'
+        config.write_text(json.dumps(dict(scratch=str(root / 'scratch'), repo=str(root))))
+        def publish_stub(repo, projection, digest, cycle):
+            if isinstance(outcome, Exception):
+                raise outcome
+            return dict(outcome)
+        with patch.object(sys, 'argv', ['sync', str(config)]), patch('sync_saved_results.run', return_value='rev'), patch(
+                'sync_saved_results.subprocess.check_output', return_value=b''), patch(
+                'sync_saved_results.capture'), patch('sync_saved_results.subprocess.run'), patch(
+                'sync_saved_results.public_checks'), patch('sync_saved_results.fingerprint', return_value='new'), patch(
+                'sync_saved_results.publish', side_effect=publish_stub):
+            try:
+                main()
+                code = 0
+            except SystemExit as exit_:
+                code = exit_.code
+        return code, json.loads((root / 'scratch' / 'status.json').read_text())
+
+    def test_blocked_cycles_fail_loudly_until_a_cycle_publishes(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            dirty = dict(state='captured; uncommitted repository changes left untouched', blocked=True,
+                         reason='checkout has uncommitted changes', detail='M benchmarks/x')
+            code, first = self.run_cycle(root, dirty)
+            self.assertEqual(code, BLOCKED_EXIT)
+            self.assertEqual((first['blocked_cycles'], first['first_reason']), (1, 'checkout has uncommitted changes'))
+            refused = subprocess.CalledProcessError(9, 'safe_push; inspect push.log')
+            code, second = self.run_cycle(root, refused)
+            self.assertEqual(code, BLOCKED_EXIT)
+            self.assertEqual(second['reason'], 'push refused by dashboard guard')
+            self.assertEqual((second['blocked_cycles'], second['stalled_since']), (2, first['stalled_since']))
+            self.assertEqual(second['first_reason'], 'checkout has uncommitted changes')
+            code, third = self.run_cycle(root, dict(state='committed and remote verified', revision='r'))
+            self.assertEqual(code, 0)
+            self.assertNotIn('blocked', third)
+            self.assertNotIn('stalled_since', third)
+
+    def test_no_new_evidence_is_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'scratch').mkdir()
+            (root / 'scratch' / 'last-published.json').write_text(json.dumps(dict(evidence_fingerprint='new', revision='r')))
+            code, status = self.run_cycle(root, AssertionError('publish must not run'))
+            self.assertEqual((code, status['state']), (0, 'no new measured evidence'))
+
+    def test_push_failure_names_guard_and_keeps_log_tail(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            cycle = Path(d)
+            (cycle / 'push.log').write_text('earlier\nsafe_push: 2 unclassified benchmark uploads\n')
+            for code, reason in ((7, 'push refused by hygiene guard'), (9, 'push refused by dashboard guard'),
+                                 (42, 'push failed (exit 42)')):
+                try:
+                    raise subprocess.CalledProcessError(code, 'safe_push; inspect push.log')
+                except subprocess.CalledProcessError as error:
+                    got, detail = push_failure(error, cycle)
+                self.assertEqual(got, reason)
+                self.assertIn('unclassified benchmark uploads', detail)
+            try:
+                raise subprocess.CalledProcessError(255, ['ssh', '-o', 'BatchMode=yes', 'host', 'true'])
+            except subprocess.CalledProcessError as error:
+                self.assertEqual(push_failure(error, Path(d) / 'none')[0], 'host capture failed')
+
     def test_initial_stale_tip_retains_forward_rebase_recovery(self):
         import subprocess
         with tempfile.TemporaryDirectory() as d:
@@ -125,6 +193,7 @@ class SyncControls(unittest.TestCase):
             (p / '.workongoing').write_text('another lane\n')
             result = publish(p, p, 'digest', p)
             self.assertIn('another lane', result['state'])
+            self.assertTrue(result['blocked'])
             self.assertEqual((p / '.workongoing').read_text(), 'another lane\n')
 
     def test_dirty_checkout_is_never_modified_or_hidden(self):
@@ -133,6 +202,7 @@ class SyncControls(unittest.TestCase):
             with patch('sync_saved_results.run', return_value='M user-source.rs') as run:
                 result = publish(p, p, 'digest', p)
             self.assertIn('uncommitted', result['state'])
+            self.assertEqual((result['blocked'], result['detail']), (True, 'M user-source.rs'))
             self.assertEqual(run.call_count, 1)
             self.assertFalse((p / '.workongoing').exists())
 

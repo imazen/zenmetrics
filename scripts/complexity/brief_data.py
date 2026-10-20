@@ -521,7 +521,7 @@ def reproduction(names):
     return out
 
 
-def coherence(metrics, perf, repro, aic):
+def coherence(metrics, perf, repro, aic, sync=None):
     """Build-time checks: names that resolve nowhere, doc claims that the data contradicts, stale or old inputs."""
     out = list(repro['checks'])
     add = lambda level, check, detail: out.append(dict(level=level, check=check, detail=detail))
@@ -560,10 +560,42 @@ def coherence(metrics, perf, repro, aic):
         if age.total_seconds() > 3 * 3600:
             add('warn', 'no new timings', f"newest timing evidence is from {perf['synced_utc'][:16]} UTC, {age.total_seconds() / 3600:.0f} h before this build; "
                 "the five-minute sync commits only when the campaigns produce new results, so the campaigns have produced none since")
+    out += sync_checks(sync)
     if perf and perf.get('superseded_series'):
         add('info', 'timings superseded', f"{perf['superseded_series']} cell series measured by an older build are superseded by a newer build's complete series (or kept until it is complete)")
     if perf and perf.get('identity_conflicts_dropped'):
         add('warn', 'timings identity', f"{perf['identity_conflicts_dropped']} rows dropped: one cell came from more than one binary or input")
+    return out
+
+
+SYNC_REASON = re.compile(r'[a-z][a-z ]{2,60}( \((exit \d+|[A-Za-z]+Error|[A-Za-z]+Exception)\))?')
+
+
+def sync_checks(sync, now=None):
+    """The five-minute results sync's private status (fetched by the watcher) as page checks.
+
+    Only the state, times, cycle count and the coordinator's fixed reason class reach the page; the
+    diff summary and push-log tail stay private (a hygiene refusal quotes the lines it matched)."""
+    import datetime
+    if sync is None:
+        return []
+    out = []
+    add = lambda level, check, detail: out.append(dict(level=level, check=check, detail=detail))
+    if sync.get('state') == 'unreachable':
+        add('warn', 'results sync status unavailable', 'the build could not read the five-minute sync status; whether new timings are being published is unknown')
+        return out
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    age = lambda t: (now - datetime.datetime.fromisoformat(t)).total_seconds() / 60
+    if sync.get('updated_utc') and age(sync['updated_utc']) > 20:
+        add('error', 'results sync not running', f"the five-minute sync last ran at {sync['updated_utc'][:16]} UTC, {age(sync['updated_utc']):.0f} min before this build")
+    if sync.get('blocked'):
+        reason = sync.get('reason', '')
+        reason = reason if SYNC_REASON.fullmatch(reason) else 'unclassified failure'
+        since = sync.get('stalled_since') or sync.get('updated_utc')
+        minutes, n = age(since), sync.get('blocked_cycles', 1)
+        add('error' if minutes >= 15 else 'warn', 'results sync blocked',
+            f"new timings are captured but not published: publishing has been blocked since {since[:16]} UTC "
+            f"({minutes:.0f} min, {n} cycle{'s' if n != 1 else ''}); reason: {reason}")
     return out
 
 
@@ -575,6 +607,7 @@ def main():
     ap.add_argument('--private', type=Path, help='zenmetrics-private checkout (read from origin/main with git show)')
     ap.add_argument('--agreement', action='append', default=[], help='aggregate agreement JSON: list of {column|metric, within_source_srcc|agreement, ci_lo|lo, ci_hi|hi, overall_abs_srcc|overall}')
     ap.add_argument('--timing', action='append', default=[], help='extra perf_deltas TSV measured on i265')
+    ap.add_argument('--sync-status', type=Path, help="the five-minute results sync's private status.json (only its state and reason class reach the page)")
     a = ap.parse_args()
     notes = []
     priv = a.private if a.private and (a.private / '.git').exists() else None
@@ -661,7 +694,7 @@ def main():
                             spotcheck=spot_src),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
                tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=perf, repro=repro,
-               checks=coherence(metrics, perf, repro, aic))
+               checks=coherence(metrics, perf, repro, aic, json.loads(a.sync_status.read_text()) if a.sync_status else None))
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(doc, indent=1, allow_nan=False))
     n1 = sum(1 for r in metrics if r['estimate'] and r['cpu_1t'])
