@@ -54,6 +54,23 @@ with a synthetic complete source/plan/receipt topology and never invokes an
 evaluator. Rejections must occur on the successor while the old summary accepts
 the same damaged fixtures; these controls do not qualify real metric scores.
 
+All six successor controls passed under both shared locks and run-heavy. The
+valid fixture passed; changed log, null bits, NaN bits, changed preflight artifact
+and changed seal each refused. The old summary accepted every damaged fixture.
+No evaluator ran. Result SHA256:
+`080f5d6a5e2915f77d286e7da81e30ec44c2d71cd13d50f1f412753a8584d809`.
+Wrapper: rc=0, 0 seconds, peak RSS 0.02 GiB, minimum available 15146 MiB,
+peak load 3.84. These are static-controller resource observations.
+
+The corrected source commit is `d5e7bacd8e8db17f00a6e7cb4058d8970d02dc2f`.
+Tested copies match tracked queue SHA256
+`54b9ed5217ef529f528f17e3cb01396b079093d752c6ba2203a63a89479494c1`
+and worker SHA256
+`53279efc3c684f1f3d44b1f69caf55a282409c510bc743d9fd10ad7876b47310`.
+The frozen source-stack manifest SHA256 is
+`20401b0d67ede2d51ac7dda3acdba30984f7dc92e2fb70ed5dd0bc0582782cc5`.
+Real fresh ABBA and audit receipts remain for independent coordinator review.
+
 ## Fresh-arm admission and source stack
 
 No concrete fresh-arm admission/hash/exact-scalar defect was found by this
