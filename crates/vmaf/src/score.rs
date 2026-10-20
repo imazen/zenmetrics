@@ -99,13 +99,64 @@ impl VmafV1Scorer {
         parallel_cambi: bool,
     ) -> Result<VmafFeatures, Error> {
         #[cfg(feature = "parallel")]
-        let cambi = self.with_cambi_threads(parallel_cambi, |parallel| {
+        let cambi_impl = |parallel: bool| {
             if parallel {
                 crate::cambi_v1_from_luma(distorted.y, self.width, self.height, self.bit_depth)
             } else {
                 crate::cambi::cambi_v1_serial(distorted.y, self.width, self.height, self.bit_depth)
             }
-        })?;
+        };
+        #[cfg(feature = "parallel")]
+        if rayon::current_num_threads() > 1 || self.pool.is_some() {
+            // cambi / chroma speed / adm3 are independent read-only
+            // passes — spawn the smaller two and run adm3 (the largest,
+            // with the deepest scratch-pool demand) inline on the calling
+            // thread via `in_place_scope`, keeping its thread-local
+            // scratch buffers warm across calls (`join`/`scope` from a
+            // non-worker thread migrate every branch to cold workers).
+            // Each unit computes identical values either way, so the
+            // score is bit-exact.
+            let run = || {
+                let mut cambi = None;
+                let mut speed = None;
+                let mut adm3 = None;
+                rayon::in_place_scope(|s| {
+                    s.spawn(|_| {
+                        cambi = Some(cambi_impl(parallel_cambi));
+                    });
+                    s.spawn(|_| {
+                        speed = Some(speed_v1_chroma_420(
+                            reference.u,
+                            reference.v,
+                            distorted.u,
+                            distorted.v,
+                            self.width,
+                            self.height,
+                            self.bit_depth,
+                            self.variant,
+                        ));
+                    });
+                    adm3 = Some(adm3_v1_from_luma(
+                        reference.y,
+                        distorted.y,
+                        self.width,
+                        self.height,
+                        self.bit_depth,
+                        self.variant,
+                    ));
+                });
+                Ok::<_, Error>((cambi.unwrap()?, speed.unwrap()?, adm3.unwrap()?))
+            };
+            let (cambi, speed, adm3) = self.on_pool(run)?;
+            return Ok(VmafFeatures {
+                cambi,
+                speed_chroma_uv: speed,
+                adm3,
+                motion3: 0.0,
+            });
+        }
+        #[cfg(feature = "parallel")]
+        let cambi = cambi_impl(parallel_cambi && self.pool.is_some())?;
         #[cfg(not(feature = "parallel"))]
         let _ = parallel_cambi;
         #[cfg(not(feature = "parallel"))]
@@ -136,15 +187,10 @@ impl VmafV1Scorer {
     }
 
     #[cfg(feature = "parallel")]
-    fn with_cambi_threads<T: Send>(
-        &self,
-        allow_parallel: bool,
-        compute: impl FnOnce(bool) -> T + Send,
-    ) -> T {
-        if allow_parallel && let Some(pool) = &self.pool {
-            pool.install(|| compute(true))
-        } else {
-            compute(false)
+    fn on_pool<T: Send>(&self, f: impl FnOnce() -> T + Send) -> T {
+        match &self.pool {
+            Some(pool) => pool.install(f),
+            None => f(),
         }
     }
 
@@ -488,9 +534,11 @@ mod cambi_thread_tests {
                     .unwrap()
                     .to_bits(),
             );
-            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
+            // No private pool: `on_pool` leaves the caller's pool (4).
+            assert_eq!(scorer.on_pool(|| rayon::current_num_threads()), 4);
             let scorer = scorer.with_threads(1).unwrap();
-            assert!(!scorer.with_cambi_threads(true, |parallel| parallel));
+            // threads=1 clears the private pool — ambient pool still applies.
+            assert_eq!(scorer.on_pool(|| rayon::current_num_threads()), 4);
             // A one-worker private pool is valid on every test host and must
             // override the unrelated four-worker caller pool.
             let scorer = VmafV1Scorer {
@@ -502,11 +550,7 @@ mod cambi_thread_tests {
                 ),
                 ..scorer
             };
-            assert_eq!(
-                scorer
-                    .with_cambi_threads(true, |parallel| (parallel, rayon::current_num_threads())),
-                (true, 1)
-            );
+            assert_eq!(scorer.on_pool(|| rayon::current_num_threads()), 1);
         });
     }
 }

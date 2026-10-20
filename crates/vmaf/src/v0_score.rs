@@ -100,11 +100,71 @@ impl VmafV0Scorer {
         Ok(())
     }
 
+    #[cfg(feature = "parallel")]
+    fn on_pool<T: Send>(&self, f: impl FnOnce() -> T + Send) -> T {
+        match &self.pool {
+            Some(pool) => pool.install(f),
+            None => f(),
+        }
+    }
+
     fn extract_features(
         &self,
         reference: &Yuv420Frame<'_>,
         distorted: &Yuv420Frame<'_>,
     ) -> Result<VmafV0Features, Error> {
+        #[cfg(feature = "parallel")]
+        if rayon::current_num_threads() > 1 || self.pool.is_some() {
+            // The three feature units are independent read-only passes
+            // over the same planes — spawn the two smaller ones and keep
+            // vif (largest, deepest scratch-pool demand) inline on the
+            // calling thread via `in_place_scope`, keeping its
+            // thread-local scratch buffers warm across calls
+            // (`join`/`scope` from a non-worker thread migrate every
+            // branch to cold workers). Results are computed identically
+            // either way, so scores are bit-exact.
+            let run = || {
+                let mut validated = None;
+                let mut adm2 = None;
+                let mut vif_scales = None;
+                rayon::in_place_scope(|s| {
+                    s.spawn(|_| {
+                        validated = Some((|| {
+                            self.validate_frame(reference)?;
+                            self.validate_frame(distorted)
+                        })());
+                    });
+                    s.spawn(|_| {
+                        adm2 = Some(adm2_v0_from_luma(
+                            reference.y,
+                            distorted.y,
+                            self.width,
+                            self.height,
+                            self.bit_depth,
+                            self.variant,
+                        ));
+                    });
+                    // vif is the largest unit and the deepest scratch-pool
+                    // consumer — keep it inline so it reuses the calling
+                    // thread's warm thread-local buffers.
+                    vif_scales = Some(vif_v0_from_luma(
+                        reference.y,
+                        distorted.y,
+                        self.width,
+                        self.height,
+                        self.bit_depth,
+                        self.variant,
+                    ));
+                });
+                Ok::<_, Error>((validated.unwrap()?, adm2.unwrap()?, vif_scales.unwrap()?))
+            };
+            let (_, adm2, vif_scales) = self.on_pool(run)?;
+            return Ok(VmafV0Features {
+                adm2,
+                motion2: 0.0,
+                vif_scales,
+            });
+        }
         self.validate_frame(reference)?;
         self.validate_frame(distorted)?;
         Ok(VmafV0Features {
