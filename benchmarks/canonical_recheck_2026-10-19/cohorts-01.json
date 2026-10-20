@@ -1,4 +1,16 @@
 {
+  "niqe-resident-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/niqe-resident-run",
+    "plan_sha256": "a3ce7889ebb98f73041aff276a5cf0ba98c0c98ac43d5ae36a8b2781b7dc0d9d",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "niqe-resident-run.tsv",
+        "sha256": "fe142519f79d463d460167f33b2827f9619c645f5a2ad95fb38d84570b7eb527"
+      }
+    ]
+  },
   "octave-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/octave-run",
     "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
@@ -342,12 +354,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 27,
+    "cases": 28,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "85559ca20732fd3b9f99b46681410b0adf5a007b423cfeb35b7746a6e2ba8a5a"
+        "sha256": "597ab96ede4838416cdcaac58f29c39bd13986d5cc4e09d8883aed227dc4eb24"
       }
     ]
   },
@@ -460,14 +472,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
-    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
-    "cases": 24,
-    "expected_cases": 24,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 17,
+    "expected_cases": 120,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
+        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
       }
     ]
   },
@@ -570,12 +582,12 @@
   "vmaf-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-current-grid-run",
     "plan_sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
-    "cases": 1,
+    "cases": 3,
     "expected_cases": 168,
     "artifacts": [
       {
         "file": "vmaf-current-grid-run.tsv",
-        "sha256": "fdb507a7a63bc8811ef35e875cf767417df07e284dbd9db5a6a3e51cc2211c2b"
+        "sha256": "1d2ac2b56693a475487d97279131a15cf5a242332127e67e421321b1fca021ca"
       }
     ]
   },
