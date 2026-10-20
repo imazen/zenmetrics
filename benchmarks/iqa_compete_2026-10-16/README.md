@@ -457,3 +457,13 @@ It recomputes numerical decisions from acquired arms, withholds ratios for
 numerical failures, and preserves unknown bounds. Shards remain below 30 KB.
 These observations exclude immutable-model construction and do not replace
 warm timing rows or complete process-startup measurements.
+
+Original Google Butteraugli has its own accuracy probe, separate from libjxl:
+`just bench-iqa-canonical-butter-original-maps PYTHON --repo REPO --native-source MODULE --native-revision COMMIT --reference-source ORIGINAL_TREE --reference-plan PLAN --pairs PAIRS --output NEW_OUTPUT`.
+It checks the production module against its declared git revision and the
+original author source against its reference-plan hashes. Both original
+callables use one effective worker under each declared budget. The optional
+`canonical_single_thread_reference.py` adapter discloses that budget and
+executes the unchanged original scorer with its supported worker count.
+The first 24-case accuracy run matched every scalar and map bit, with no
+new numerical bound; raw outputs remain separate from timing evidence.

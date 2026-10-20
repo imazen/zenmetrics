@@ -2318,3 +2318,7 @@ bench-iqa-canonical-flip-maps python build inputs output *options:
 # Publish resident-model first calls separately from warm comparison tables.
 bench-iqa-canonical-nn-first-publish output receipt +roots:
     python3 -B benchmarks/iqa_compete_2026-10-16/publish_nn_first_evaluation.py '{{output}}' '{{receipt}}' {{roots}}
+
+# Original Google Butteraugli, distinct from the libjxl comparator; caller holds heavy admission.
+bench-iqa-canonical-butter-original-maps python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_butteraugli_original_maps.py {{options}}
