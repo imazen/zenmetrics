@@ -1,0 +1,261 @@
+{
+  "coverage": {
+    "required_names": 84,
+    "classified_names": 84,
+    "grid_plan_count": 21,
+    "classification_counts": {
+      "resident_setup_excluded": 13,
+      "cold_not_emitted": 2,
+      "first_evaluation_candidate": 65,
+      "parameter_io_scope_mismatch": 2,
+      "pre_evaluated": 1,
+      "precreated_thread_runner": 1
+    },
+    "campaign_included_names": 84,
+    "campaign_excluded_names": []
+  },
+  "definitions": {
+    "first_evaluation_candidate": "No earlier evaluation or hoisted metric-state construction identified in selected adapter. Candidate for resident-input first-call comparison, subject to runtime baseline declaration, exact output/ingress and successful paired acquisition. Not an empirically qualified ratio.",
+    "pre_evaluated": "The emitted COLD is already primed by earlier full pair evaluations; cannot compare to unprimed native cold.",
+    "cold_not_emitted": "Adapter executes but suppresses first timing. No existing COLD observation is available.",
+    "resident_setup_excluded": "Canonical first evaluation excludes scorer/configuration/model parameter construction/loading included in construction-inclusive native semantics or otherwise required for full scorer startup. Treat as resident-setup first evaluation, not full cold.",
+    "precreated_thread_runner": "Metric evaluation is first, but canonical JXL thread runner setup is outside timer; strict runtime-inclusive native first-call equivalence is not established.",
+    "parameter_io_scope_mismatch": "True first evaluation with declared SDR ingress; timed spectral-parameter I/O requires explicit matched scope before cold ratios."
+  },
+  "native_contract": {
+    "description": "Fresh process, raw RGB image files loaded before timer; make_call construction plus one evaluation inside cold_call; no warmup. Runtime startup not uniformly hoisted; closure/scorer destruction follows elapsed capture. No OS-cache flush.",
+    "evidence": [
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+        "line": 98,
+        "end_line": 149
+      },
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+        "line": 206,
+        "end_line": 223
+      },
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+        "line": 285,
+        "end_line": 317
+      },
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+        "line": 338,
+        "end_line": 343
+      },
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/mod.rs",
+        "line": 5,
+        "end_line": 15
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "title": "NIQE COLD follows two untimed pair evaluations",
+      "finding": "The original-loader score at line 68 and resident-loader score at line 70 run before line 78 starts the first labeled timer. The emitted value is a third pair evaluation, not an unprimed cold call. This is the only explicit same-process scoring precheck identified among the selected 84-route adapters.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_niqe_resident_cell.py",
+          "line": 41,
+          "end_line": 82
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "title": "Two libjxl routes have no COLD output",
+      "finding": "butteraugli and proposal-butteraugli both select rgb-input. The adapter times iteration zero but if(i) suppresses its output. First SAMPLE is already after one complete evaluation. Do not treat it as COLD.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/libjxl_compute.cpp",
+          "line": 54,
+          "end_line": 64
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/libjxl_compute.cpp",
+          "line": 96,
+          "end_line": 113
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "title": "Six VMAF model routes include model parsing only on native first call",
+      "finding": "Frozen model-preload overlay caches after first construction; it does not eagerly prime models before native cold. new_uncached parses JSON on the first new call. Canonical model_load is before the loop. Existing warm model parity does not imply cold boundary equality. Auxiliary libvmaf routes do not load this model.",
+      "evidence": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/vmaf/src/v0.rs",
+          "line": 62,
+          "end_line": 78
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/vmaf/src/lib.rs",
+          "line": 173,
+          "end_line": 189
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp",
+          "line": 97,
+          "end_line": 109
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "title": "Resident setup differs from scorer-construction cold",
+      "finding": "CVVDP, IW-SSIM, IW-SSIM-PIQ, NLPD, NLPD-IQA and DSSIM preconstruct canonical objects. BRISQUE loads immutable weights before timing and clones them inside. These are first evaluations with resident setup, not full construction-inclusive cold observations. Constructors in inspected NLPD/IW sources do not score an input.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cvvdp_cell.py",
+          "line": 18,
+          "end_line": 27
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_iwssim_cell.py",
+          "line": 33,
+          "end_line": 40
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_classical_cell.py",
+          "line": 31,
+          "end_line": 43
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_reference.c",
+          "line": 28,
+          "end_line": 37
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+          "line": 40,
+          "end_line": 52
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_maps.rs",
+          "line": 20,
+          "end_line": 46
+        }
+      ]
+    },
+    {
+      "id": "F5",
+      "title": "Runtime startup and output teardown require explicit scope",
+      "finding": "SSIMULACRA2 canonical runner is created before timing. Python adapters configure/import runtimes outside timing while native runtime first-use can occur inside cold. Native cold_call measures make()+one call, then records elapsed before closure destruction; it is not a complete create/evaluate/destroy lifecycle or process startup timer. Most per-call temporary outputs are released inside the closure.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/ssimulacra2_primary_compute.cpp",
+          "line": 79,
+          "end_line": 94
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+          "line": 32,
+          "end_line": 38
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/mod.rs",
+          "line": 5,
+          "end_line": 15
+        }
+      ]
+    },
+    {
+      "id": "F6",
+      "title": "AIC2026 SDR aliases: cold parameter-I/O scope unresolved",
+      "finding": "Both AIC2026 aliases are campaign-included RGB8 SDR routes: canonical_hdrvdp_cell.py declares 200-nit linearization, fixed ppd, and v3 10-bit quantization/XYZ conversion. Their first evaluation includes spectral-parameter file I/O, so construction-inclusive resident-parameter cold scope is not yet matched. Base hdrvdp/hdrvdp3 typed absolute-luminance limitations remain separate and unchanged.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_hdrvdp_cell.py",
+          "line": 26,
+          "end_line": 52
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/hdrvdp-v2-octave/hdrvdp.m",
+          "line": 247,
+          "end_line": 251
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/hdrvdp-v2-octave/load_spectral_resp.m",
+          "line": 10
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/hdrvdp-original/v3/hdrvdp-3.0.7/hdrvdp_visual_pathway.m",
+          "line": 58,
+          "end_line": 71
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/hdrvdp-original/v3/hdrvdp-3.0.7/utils/load_spectral_resp.m",
+          "line": 10
+        }
+      ]
+    },
+    {
+      "id": "F7",
+      "title": "Warm plan acceptance cannot qualify a cold ratio",
+      "finding": "compare_canonical sets timing_phase=warm and parses only SAMPLE rows; matched_scope is a warm contract. No cold ratios are established by this review. Many absolute_bound values are null; no fresh numerical pass may be inferred.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py",
+          "line": 29,
+          "end_line": 43
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py",
+          "line": 64,
+          "end_line": 93
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical_samples.py",
+          "line": 17,
+          "end_line": 28
+        }
+      ]
+    },
+    {
+      "id": "F8",
+      "title": "Resident NN first evaluation remains a different protocol",
+      "finding": "resident_nn_first builds Rayon and primes immutable model construction before cold_call, then checks a second evaluation after the timer. The second call before printing COLD does not contaminate the earlier measured first call. This is resident-model first evaluation and must not replace construction-inclusive native cold.",
+      "evidence": [
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/resident_nn_first.rs",
+          "line": 27,
+          "end_line": 29
+        },
+        {
+          "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/resident_nn_first.rs",
+          "line": 45,
+          "end_line": 73
+        }
+      ]
+    }
+  ],
+  "shards": [
+    {
+      "file": "routes-00.json",
+      "routes": 21,
+      "sha256": "369058d3149ceb45d11a220137c27b3b08b75d3f223f02f63ce7c44fd35ae92e"
+    },
+    {
+      "file": "routes-01.json",
+      "routes": 21,
+      "sha256": "98274af8100eb1a132af11e2c20f31ec3b7057393b78dc49ecafba704f4d750f"
+    },
+    {
+      "file": "routes-02.json",
+      "routes": 21,
+      "sha256": "c5d435889e4e22fa322b2b0c15e23125e0c1ae03cb6924fab2bf904bd3b12f53"
+    },
+    {
+      "file": "routes-03.json",
+      "routes": 21,
+      "sha256": "1e4cc8de5bbc917ebdf3398a5744bc7576594c90d2b74d07887414c94e360bc9"
+    }
+  ],
+  "raw_review": "/home/lilith/tmp/local-canonical-20261019T2330/cold-boundary-review.json",
+  "raw_review_sha256": "9a608cf99e5b90d7c0f7a4041978d2903424c2805e277f33cbb668afdabba1ca",
+  "qualification": "Static boundary review, not acquired first-call timing or parity acceptance"
+}

@@ -1,0 +1,107 @@
+{
+  "profiles": [
+    {
+      "case": "flip-current-512x512-t8-bb7819c0",
+      "receipt": {
+        "command": [
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "--call-graph",
+          "dwarf",
+          "--delay=-1",
+          "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile/ack.fifo",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile-config.json"
+        ],
+        "binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+        "config_sha256": "a772138f6700983ea7df2c0d01305731ddd340742e8e18c51f827324f5d70365",
+        "profile_sha256": "89bfb157deef70e9a3a62958c109c60d2856f650c6fbe276c52277e4c5ef71e5",
+        "report_sha256": "31fef626e3e831ae6064768804bb96285e3d589aa1e0ad20628ee64da367700e",
+        "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+      },
+      "top_native_self_symbols": [
+        {
+          "self_percent": 6.87,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip24___attune_conv_band_t_v4x"
+        },
+        {
+          "self_percent": 5.99,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8convolveKj4_EB6_"
+        },
+        {
+          "self_percent": 4.45,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtCslMXYMTtvUmW_15zenmetrics_math5glibc27___attune_powf_glibc_8x_t_v3"
+        },
+        {
+          "self_percent": 3.06,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8features"
+        },
+        {
+          "self_percent": 2.79,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvXs0_NtNtNtCsevLNFiNqfJP_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_3ops5range5RangejENCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip11from_planesKj4_E0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2z_8for_each4callAfB2t_NCINvMsk_NtCs1C1lLj4PWSY_5alloc3vecINtB3R_3VecB3C_E14extend_trustedBN_E0E0EB1y_"
+        },
+        {
+          "self_percent": 2.16,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvXs_NtNtNtCsevLNFiNqfJP_4core3ops8function5implsRNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip6colorsKb0_Es0_0INtB6_5FnMutTTQSfRAfj4_EEE8call_mutBW_"
+        },
+        {
+          "self_percent": 1.84,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RINvNvNtNtCs1D7iEf8vUdy_5rayon4iter8plumbing24bridge_producer_consumer6helperINtNtB8_5range12IterProducerjEINtNtB6_3map11MapConsumerINtNtNtB6_7collect8consumer15CollectConsumerAfj3_ERNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip6colorsKb0_Es1_0EEB34_"
+        },
+        {
+          "self_percent": 1.7,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "do_syscall_64"
+        },
+        {
+          "self_percent": 1.6,
+          "object": "iqa-compete",
+          "domain": ".",
+          "symbol": "_RNvMs8_NtCs2Wz0tTjopHA_15crossbeam_deque5dequeINtB5_7StealerNtNtCs2JoaK3j7lLw_10rayon_core3job6JobRefE5stealB10_"
+        },
+        {
+          "self_percent": 1.53,
+          "object": "libc.so.6",
+          "domain": ".",
+          "symbol": "__memset_avx512_unaligned_erms"
+        },
+        {
+          "self_percent": 1.5,
+          "object": "[kernel.kallsyms]",
+          "domain": "k",
+          "symbol": "update_curr"
+        },
+        {
+          "self_percent": 1.4,
+          "object": "libc.so.6",
+          "domain": ".",
+          "symbol": "cfree@GLIBC_2.2.5"
+        }
+      ],
+      "wrapper_receipt": [
+        "run-heavy: done rc=0 6s | peak-RSS 0.12GiB | min-avail 13532MiB | peak-load 1.88"
+      ],
+      "qualification": "Sampled CPU cycles after warmup through calibration and rounds; not complete slowdown attribution"
+    }
+  ]
+}

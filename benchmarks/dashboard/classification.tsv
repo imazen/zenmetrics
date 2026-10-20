@@ -1462,3 +1462,12 @@ benchmarks/cpu_metrics_1t8t_2026-10-20-i270/mt8_photo_1024.tsv	ignored	Single-ho
 benchmarks/cpu_metrics_1t8t_2026-10-20-i270/mt8_photo_3355x2516.tsv	ignored	Single-host CPU timing experiment with its own schema and source receipt; retained for separate dashboard adapter review.
 benchmarks/cpu_metrics_1t8t_2026-10-20-i270/st_photo_1024.tsv	ignored	Single-host CPU timing experiment with its own schema and source receipt; retained for separate dashboard adapter review.
 benchmarks/cpu_metrics_1t8t_2026-10-20-i270/run.meta	ignored	Single-host CPU timing experiment with its own schema and source receipt; retained for separate dashboard adapter review.
+benchmarks/canonical_recheck_2026-10-19/cold-boundary-review/routes-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cold-boundary-review/routes-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cold-boundary-review/routes-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cold-boundary-review/routes-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cold-boundary-review/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/revised-flip-profiles.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/cases-00.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-author-cpu-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

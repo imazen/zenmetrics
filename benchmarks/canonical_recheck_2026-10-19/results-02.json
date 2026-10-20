@@ -504,8 +504,8 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.2576344608643147,
-    "observed_cases": 4,
-    "expected_cases": 4,
+    "observed_cases": 5,
+    "expected_cases": 28,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -515,6 +515,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
       "543952f2c0903c45dd0691ef1dfd89846afd1d929ae045f7f2c2eaa0c6a5de95",
       "59dbf6ad89208fdda6b69f41673798d9d3c8e49a86de9202494477bff286f4c7"
     ],

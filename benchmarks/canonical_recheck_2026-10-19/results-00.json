@@ -629,9 +629,9 @@
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
-    "worst_ratio": 0.3994832896683478,
-    "observed_cases": 2,
-    "expected_cases": 2,
+    "worst_ratio": 0.5517845373395013,
+    "observed_cases": 4,
+    "expected_cases": 26,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -640,6 +640,7 @@
       "5fa7be7d42b51af3dd27b42dd50159972132ef12"
     ],
     "plan_sha256": [
+      "3e57d8485a9828e47c85c61a83a21580e9da8ed14feccf54bfe0440f52e9d3bf",
       "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4"
     ],
     "qualified": false
@@ -658,7 +659,7 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 2.0289245567679464,
-    "observed_cases": 7,
+    "observed_cases": 8,
     "expected_cases": 30,
     "passed_cases": 0,
     "failed_cases": 0,
@@ -680,30 +681,32 @@
   "flip-v17": {
     "canonical": "NVIDIA FLIP 1.7",
     "check": "\u0394 0",
-    "ratio": null,
-    "ratio_width": null,
-    "ratio_height": null,
-    "ratio_threads": null,
-    "ratio_cases": 0,
-    "ratio_source": null,
-    "ratio_plan_sha256": null,
+    "ratio": 0.19231749426789446,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+    "ratio_plan_sha256": "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b",
     "ratio_engine": null,
-    "ratio_canonical_device": null,
-    "ratio_blocks": 0,
+    "ratio_canonical_device": "cpu",
+    "ratio_blocks": 3,
     "worst_ratio": 1.9073448386822038,
-    "observed_cases": 3,
-    "expected_cases": 3,
+    "observed_cases": 5,
+    "expected_cases": 5,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
+      "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
       "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
       "3e0d5e2ea2d617aa34654e46838c16d6521e5e9783c769612a3241551c73c497",
-      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
+      "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+      "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b"
     ],
     "qualified": false
   }

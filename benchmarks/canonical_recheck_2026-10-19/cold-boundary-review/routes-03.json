@@ -1,0 +1,214 @@
+{
+  "routes": [
+    {
+      "metric": "ssimc-pyiqa-f32",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k2",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k3",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k4",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k5",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k6",
+      "adapter_family": "python_cpu",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "PyIQA 0.1.16 / named convention",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ssimulacra1",
+      "adapter_family": "ssim1",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original SSIMULACRA1 / OpenCV RGB callable",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vif",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original vifp_mscale / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vifvec",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original vifvec / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vmaf",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vmaf-4k",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vmaf-neg",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vmaf-neg-studio601",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vmaf-studio601",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vmaf-v1",
+      "adapter_family": "libvmaf",
+      "classification": "resident_setup_excluded",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+      "recommendation": "Choose an explicit separate boundary: (a) include canonical scorer/model setup in construction-inclusive cold, with immutable asset byte reads separately staged if required; or (b) add a native resident-setup first-evaluation adapter that performs construction only before timing, without evaluating any image. Retain existing observations under their original scope."
+    },
+    {
+      "metric": "vsi",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original VSI / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vsi-k2",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original VSI / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vsi-k3",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original VSI / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vsi-k4",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original VSI / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "vsi-nodownscale",
+      "adapter_family": "octave",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "original VSI / Octave 6.4",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    },
+    {
+      "metric": "ws-hv",
+      "adapter_family": "classical",
+      "classification": "first_evaluation_candidate",
+      "canonical_emits_cold": true,
+      "canonical_cold_is_first_pair_evaluation": true,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "canonical_label": "IVP-Lab original WS_HV notebook",
+      "recommendation": "Add an explicit isolated cold arm using the existing native timing_phase=cold and canonical first observation. Keep existing warm plans immutable; bind source/input hashes, budgets, outputs and the runtime baseline, and retain refusals."
+    }
+  ]
+}
