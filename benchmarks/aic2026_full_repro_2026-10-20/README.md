@@ -176,3 +176,14 @@ reference-runtime limitations beside each affected metric and verifies every
 linked diagnostic artifact hash. These notes do not change numerical gates.
 The exported provenance also records the execution schedule and its predecessor
 so retained rows remain distinguishable from successor bundles.
+
+`aic-canonical-reference-inventory` records installed package code and data
+with the selected reference interpreter, without importing models. Explicit
+asset plans can require existing checkpoint hashes. Missing files and changed
+expected bytes refuse the inventory; bytecode caches are excluded.
+
+For `msssim`, the retained `msssim.m` and `ssim_index_new.m` both match the
+[authors' MS-SSIM archive](https://ece.uwaterloo.ca/~z70wang/research/iwssim/msssim.zip)
+byte-for-byte (download checked 2026-10-20). The
+[authors' source page](https://ece.uwaterloo.ca/~z70wang/research/iwssim/)
+links that archive. This confirms source identity, not numerical acceptance.

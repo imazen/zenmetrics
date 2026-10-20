@@ -2289,6 +2289,10 @@ aic-canonical-inputs source destination:
 aic-canonical-input-hashes pairs inventory receipt *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_input_hashes.py {{pairs}} {{inventory}} --receipt {{receipt}} {{options}}
 
+# Capture installed reference files and explicit assets without loading models.
+aic-canonical-reference-inventory python output receipt *options:
+    {{quote(python)}} benchmarks/aic2026_full_repro_2026-10-20/canonical_reference_inventory.py {{quote(output)}} {{quote(receipt)}} {{options}}
+
 aic-canonical-fsim-vsi python manifest summary reference sha256:
     {{python}} benchmarks/aic2026_full_repro_2026-10-20/compare_fsim_vsi.py {{manifest}} {{summary}} --published-reference {{reference}} --reference-sha256 {{sha256}}
 
