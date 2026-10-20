@@ -1673,6 +1673,10 @@ bench-iqa-canonical-niqe-resident python +options:
 bench-iqa-canonical-niqe-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_niqe_resident.py {{options}}
 
+# Caller supplies heavy admission; no timed-code changes or new map tolerance.
+bench-iqa-canonical-butteraugli-maps python +options:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_butteraugli_maps.py {{options}}
+
 # Freeze and run the 27 changed routes in ascending retained duration.
 bench-iqa-canonical-changed manifest output *options:
     just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'

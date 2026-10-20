@@ -299,3 +299,22 @@ the caller-identified future plan in a backup, and refuses a plan whose output
 directory already exists. It retains native settings and numerical bounds.
 Earlier archive-loading observations remain diagnostic evidence for that
 different timing boundary.
+
+## Frozen Butteraugli map comparison
+
+`bench-iqa-canonical-butteraugli-maps` builds accuracy-only probes against a
+captured CPU Butteraugli rlib and the captured libjxl comparator. Both consume
+the same hashed RGB8 inputs at intensity target 80. Each native map call checks
+its scalar score bits against the scalar-only call. The existing FIR scalar
+policy applies; map differences are observations without a new tolerance.
+
+```sh
+just bench-iqa-canonical-butteraugli-maps PYTHON \
+  --native-build NATIVE_BUILD --reference-build LIBJXL_BUILD \
+  --pairs PAIRS_JSON --output NEW_DIRECTORY
+```
+
+The caller must provide heavy-job admission. The tool accepts captured CMake
+Makefiles or Ninja link commands, records library/probe/input hashes, retains
+raw maps outside git, and refuses an existing output directory. This accuracy
+probe does not supply comparative timing measurements.
