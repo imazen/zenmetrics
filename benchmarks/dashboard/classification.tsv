@@ -1583,3 +1583,10 @@ benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix/ssim2.json	ignor
 benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix/hdrvdp-aic2026.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix/vmaf-neg.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/iqa_compete_2026-10-16/current40-timing-audit/matrix/dssim.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdrvdp-current40-progress.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-03.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-04.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/grid-flip-v17-grid-pairA-64x64-t28-060d464f-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/paq2piq-original-cid22-t8-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/paq2piq-original-cid22-t8-3bc4fc38-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/current40-hdr-comparative-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

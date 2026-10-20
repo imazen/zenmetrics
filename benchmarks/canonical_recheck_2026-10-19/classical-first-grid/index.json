@@ -2,21 +2,31 @@
   "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
   "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
   "expected_cases": 240,
-  "completed_cases": 7,
+  "completed_cases": 13,
   "phase": "scorer_construct_first_eval",
   "shards": [
     {
       "file": "cases-00.json",
       "cases": 3,
-      "sha256": "c41f7056caa0abcc4b7efe672d37f7ea9e0cf2ab29c982e3243a9fa6105bc482"
+      "sha256": "6694d4885a68f5deebd4438e82c5aea2fed9b652cce8f3a83f9d0d0dc15676de"
     },
     {
       "file": "cases-01.json",
       "cases": 3,
-      "sha256": "4cabdb84eae37062f755c3d92184ee3320dadfce7736efe2fc22d5237589782d"
+      "sha256": "fbd9330f8871f01e908e769324e07bbdfbdb666c61c94b7a4f40e93d599c2a32"
     },
     {
       "file": "cases-02.json",
+      "cases": 3,
+      "sha256": "4a44f06a804b4622e1c986ed086c69b8351b728cff365ba8773363ba07e5e095"
+    },
+    {
+      "file": "cases-03.json",
+      "cases": 3,
+      "sha256": "6dcd03db1256ba4f924a91721871d945c716f8bf1e037a29cc6b3a8983240e2d"
+    },
+    {
+      "file": "cases-04.json",
       "cases": 1,
       "sha256": "39a5b5959ede8631c3339abe3bff4f6b550fad344e3ac3008ae691bde3222ffc"
     }

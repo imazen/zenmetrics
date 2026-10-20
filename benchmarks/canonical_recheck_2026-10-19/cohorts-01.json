@@ -327,15 +327,27 @@
       }
     ]
   },
+  "paq2piq-original-cid22-t8-3bc4fc38-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/fixed-add40-run",
+    "plan_sha256": "d04535f1bc6093f552ee76f9716ebbff073bf0c27c62bf0630a6226856690c04",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "paq2piq-original-cid22-t8-3bc4fc38-fixed-add40-run.tsv",
+        "sha256": "ccc5fd3153456c216b3606f4efcadfe72b51d1fbf336b74bd131954cde8ef72e"
+      }
+    ]
+  },
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 20,
+    "cases": 25,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "91dc06d329705b1cd002c564562add6a9d3b8134339d6ba2909cb971d361847d"
+        "sha256": "62fccff738ddbed3951fff944c3ca33d7f87ed9d955200d62a83a232b180bbfe"
       }
     ]
   },
@@ -448,14 +460,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
-    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
-    "cases": 24,
-    "expected_cases": 24,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 17,
+    "expected_cases": 120,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
+        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
       }
     ]
   },

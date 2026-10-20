@@ -10,13 +10,13 @@
     "evidence": "docs/IQA_CANONICAL_COMMANDS.md"
   },
   "hdrvdp": {
-    "check": "recheck queued",
-    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Separate original-reference comparisons are queued.",
+    "check": "scope caveat",
+    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Numerical controls are retained; spectral preparation occurs on different sides of the two clocks. Paired timings are acquiring as descriptive evidence, with comparable ratios withheld.",
     "evidence": "benchmarks/canonical_recheck_2026-10-19/hdrvdp-srgb-successor.json"
   },
   "hdrvdp3": {
-    "check": "recheck queued",
-    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Separate original-reference comparisons are queued.",
+    "check": "scope caveat",
+    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Numerical controls are retained; spectral preparation occurs on different sides of the two clocks. Paired timings are acquiring as descriptive evidence, with comparable ratios withheld.",
     "evidence": "benchmarks/canonical_recheck_2026-10-19/hdrvdp-srgb-successor.json"
   },
   "zensim": {

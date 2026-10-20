@@ -1,0 +1,15 @@
+{
+  "expected": 4,
+  "acquired": [
+    {
+      "case": "hdrvdp-changed-512x512-t1",
+      "passed": true,
+      "max_abs_delta": 0.0007070822066168603,
+      "ratio": 0.13981098836898156,
+      "summary_sha256": "044fe0e6c5d43238a929981ace49796a3fe52e62b2a696bf7f3ddef2a1d2daf8"
+    }
+  ],
+  "plan_sha256": "c000cd89ef40652764780a143aa13439af97ac79f38fc5180b2fcd8771567244",
+  "command_receipt": "local40-current40worker-command.json",
+  "qualification": "Separate four warm512photo cells, not the full HDR size/content/first-call matrix; spectral-preparation asymmetry excludes strict timing acceptance"
+}
