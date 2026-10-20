@@ -2,7 +2,7 @@
 use std::collections::BTreeSet;
 
 const CHANGED_ORDER: &str =
-    include_str!("../../../../rebenchmark_since_f7668c7/order_current_local40_2026-10-20.tsv");
+    include_str!("../../../../rebenchmark_since_f7668c7/order_current_local41_2026-10-20.tsv");
 
 fn changed_order() -> Vec<String> {
     CHANGED_ORDER
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn changed_schedule_contains_only_the_audited_scope_in_timing_order() {
-        let names = include_str!("../../../../rebenchmark_since_f7668c7/existing.txt")
+        let names = include_str!("../../../../rebenchmark_since_f7668c7/existing_current41.txt")
             .lines()
             .chain(include_str!("../../../../rebenchmark_since_f7668c7/new.txt").lines())
             .map(str::to_owned)

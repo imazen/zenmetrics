@@ -11,7 +11,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 SIZES = 'cid22,aic-small,aic-medium,aic-large,2k,4k'
 SCOPE = HERE.parent / 'rebenchmark_since_f7668c7'
-CURRENT_ORDER = SCOPE / 'order_current_local40_2026-10-20.tsv'
+CURRENT_ORDER = SCOPE / 'order_current_local41_2026-10-20.tsv'
 
 
 def changed_metrics():
@@ -20,7 +20,7 @@ def changed_metrics():
             (line for line in stream if not line.startswith('#')), delimiter='\t'))
     names = [row['metric'] for row in rows]
     times = [float(row['historical_ms']) for row in rows]
-    expected = ((SCOPE / 'existing.txt').read_text().splitlines()
+    expected = ((SCOPE / 'existing_current41.txt').read_text().splitlines()
                 + (SCOPE / 'new.txt').read_text().splitlines())
     if (not names or len(names) != len(set(names)) or set(names) != set(expected)
             or any(not math.isfinite(t) or t <= 0 for t in times)

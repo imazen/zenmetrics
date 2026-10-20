@@ -10,9 +10,10 @@ import canonical_bench as bench
 
 
 class CurrentBenchmarkScope(unittest.TestCase):
-    def test_current_command_contains_all_forty_routes(self):
+    def test_current_command_contains_all_forty_one_routes(self):
         names = bench.changed_metrics().split(',')
-        self.assertEqual(len(names), 40)
+        self.assertEqual(len(names), 41)
+        self.assertIn('psnrhvs-daala', names)
         self.assertIn('hdrvdp', names)
         self.assertIn('hdrvdp3', names)
         self.assertEqual(names[0], 'psnr')
@@ -21,7 +22,7 @@ class CurrentBenchmarkScope(unittest.TestCase):
     def test_missing_duplicate_unsorted_or_nonfinite_order_refuses(self):
         with tempfile.TemporaryDirectory(dir=Path.home() / 'tmp') as directory:
             root = Path(directory)
-            (root / 'existing.txt').write_text('a\nb\n')
+            (root / 'existing_current41.txt').write_text('a\nb\n')
             (root / 'new.txt').write_text('')
             order = root / 'order.tsv'
             for rows in ['a\t1\n', 'a\t1\na\t2\nb\t3\n',

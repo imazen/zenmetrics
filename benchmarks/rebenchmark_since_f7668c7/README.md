@@ -4,12 +4,14 @@ The original audited combined tree was `b216412c`, descended from upstream maste
 `7ed7b106`. This is a scope manifest, not a successful build or timing result.
 Use the final landed commit and its pinned siblings for the new measurements.
 
-[existing.txt](existing.txt) contains **36 existing CPU CLI names**;
+[existing_current41.txt](existing_current41.txt) contains **37 existing CPU CLI names**;
 [new.txt](new.txt) contains **4 added names** for first measurements.
 [scope.json](scope.json) preserves the original 27-route audit. The current
-40-route scope also includes the eight PSNR routes revised in `07972529` and
+41-route scope also includes the eight PSNR routes revised in `07972529` and
 `bcadda73`: `psnr`, `psnr-y`, `psnr-y601`, `psnr-y-studio601`,
 `psnr-y-libvmaf`, `psnr-cb`, `psnr-cr` and `psnr-ycbcr611`.
+`psnrhvs-daala` also reaches the revised `studio601_yuv444` preprocessing;
+its omission from the previous 40-name selection is corrected.
 FLIP, FLIP-v17 and WS-HV are also revised by `f5523a4b` and `7d27d22b`.
 Base `hdrvdp` and `hdrvdp3` gained the upstream sRGB-display route in `4f89155c`.
 The five fixed-factor MS-SSIM variants need score revalidation as well as timing.
@@ -38,13 +40,17 @@ Re-measure that cell explicitly; the gate is not established as a win at every
 size. Snapshot publication additionally requires green checkpoint tests and CI.
 
 Run `just bench-iqa-changed` with the explicit build/input/provenance options in
-[the command guide](../../docs/IQA_CANONICAL_COMMANDS.md) for the current 40-name
-scope. Both native selectors use [the measured local order](order_current_local40_2026-10-20.tsv)
-instead of sorting names alphabetically. Its [receipt](local40-order-2026-10-20.json)
+[the command guide](../../docs/IQA_CANONICAL_COMMANDS.md) for the current 41-name
+scope. Both native selectors use [the measured local order](order_current_local41_2026-10-20.tsv)
+instead of sorting names alphabetically. Its [receipt](local41-order-2026-10-20.json)
 binds one common 1152×1152 S67 photo crop on Ryzen 9 7950X / WSL2, source
 `ea767ba1`, one thread and at least ten warm observations. This size admits
-corrected MS-SSIM k6. The run took 309s, peak RSS 0.76 GiB, minimum available
-14205 MiB, peak load 2.16. This ordering is a scheduling hint for other workloads.
+corrected MS-SSIM k6. The original forty-route run took 309s, peak RSS 0.76 GiB, minimum available
+14205 MiB, peak load 2.16. Daala was measured separately on the identical
+input/configuration: 2s, peak RSS 0.11 GiB, minimum available 15156 MiB,
+peak load 2.93. All observed noisy rounds remain retained. This ordering is
+a scheduling hint for other workloads. The original [40-route table](order_current_local40_2026-10-20.tsv)
+and [membership list](existing.txt) remain unchanged for their frozen plans.
 The older [38-route table](order_current_after_flip_2026-10-20.tsv) remains unchanged.
 For selected sizes, use `just bench-iqa cid22,4k changed` with the same options.
 

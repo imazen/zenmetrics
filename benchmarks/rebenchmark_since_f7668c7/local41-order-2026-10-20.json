@@ -1,0 +1,33 @@
+{
+  "metrics": 41,
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "parent_order": {
+    "path": "benchmarks/rebenchmark_since_f7668c7/order_current_local40_2026-10-20.tsv",
+    "sha256": "382c30cf48bc93eb94f44c4aec04daf904490b52f9f66e04d8ac70608644acf4"
+  },
+  "parent_receipt": {
+    "path": "benchmarks/rebenchmark_since_f7668c7/local40-order-2026-10-20.json",
+    "sha256": "6237511fd187efb75f58fa6905d0705cf246fb3b67dae05f338c51fd4b96e32a"
+  },
+  "order_sha256": "63d28acb235e2c13eef3c8ffd2b4ceab3006ad2cb844baed1ba38bb98e4556d6",
+  "added_route": {
+    "metric": "psnrhvs-daala",
+    "median_ms": 37.6360325,
+    "width": 1152,
+    "height": 1152,
+    "threads": 1,
+    "n": 10,
+    "stdout": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-daala-current-order-run/stdout.log",
+      "sha256": "eb36a4cb129d1c6264e94dd93e3685194f28912f6d05d43d1237f7d1e09fd37f"
+    },
+    "config": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-daala-current-order-run/config.json",
+      "sha256": "7fecaf77321f9eb398074ff62930e31e02b89876a5cbb2b4731a67a64ce523e9"
+    },
+    "wrapper": "run-heavy: done rc=0 2s | peak-RSS 0.11GiB | min-avail 15156MiB | peak-load 2.93",
+    "resource_qualification": "Native scheduling observation; noisy rounds retained; not canonical ratio or regression acceptance."
+  },
+  "reason": "studio601_yuv444 reached preprocessing changed since EFA; previous40scope omitted Daala",
+  "qualification": "Exact previous40 rows plus one measured insertion. Other size/content/thread rankings not inferred. Previous source tables/lists remain unchanged."
+}
