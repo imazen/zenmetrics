@@ -561,6 +561,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **Linux durable recovery fixture selected a different cell (2026-10-20).**
+  The pending-launch fixture selected the first filesystem directory but
+  asserted against the first reported cell. Directory iteration order can
+  differ from manifest order. Selecting the reported cell identity fixes the
+  fixture; a forced reverse-order control fails before and passes after with
+  the original two-attempt assertion unchanged. Production recovery logic
+  and its acceptance checks are unchanged.
+
 - **Direct classical benchmark module resolution (2026-10-20).** The
   MS-SSIM benchmark includes the CLI classical module by path; rustfmt then
   sought its PSNR child beside the parent instead of in `classical/`.

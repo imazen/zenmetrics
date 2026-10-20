@@ -329,8 +329,8 @@ class DurableTests(unittest.TestCase):
         self.freeze('ok','ok')
         # Initialize via a real successful run, retain its complete config/intent,
         # then model a crash prior to child launch using a separate fresh output.
-        self.finish(self.start())
-        first=next((self.output/'cells').iterdir())/'attempt-0001'
+        initial=self.finish(self.start())
+        first=self.output/'cells'/initial['cells'][0]['cell_id']/'attempt-0001'
         for name in ('result.json','worker.log','exit.json','payload.json','groups.json'):
             (first/name).unlink(missing_ok=True)
         self.finish(self.start())
