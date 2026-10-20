@@ -1,0 +1,30 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
+  "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+  "expected_cases": 240,
+  "completed_cases": 7,
+  "phase": "scorer_construct_first_eval",
+  "shards": [
+    {
+      "file": "cases-00.json",
+      "cases": 3,
+      "sha256": "c41f7056caa0abcc4b7efe672d37f7ea9e0cf2ab29c982e3243a9fa6105bc482"
+    },
+    {
+      "file": "cases-01.json",
+      "cases": 3,
+      "sha256": "4cabdb84eae37062f755c3d92184ee3320dadfce7736efe2fc22d5237589782d"
+    },
+    {
+      "file": "cases-02.json",
+      "cases": 1,
+      "sha256": "39a5b5959ede8631c3339abe3bff4f6b550fad344e3ac3008ae691bde3222ffc"
+    }
+  ],
+  "fixture_amendment": {
+    "previous_plan_sha256": "9711bfb661268c541ebbfdd0e9b6f243e285044ee1cf59fe5f44c8048ec5316b",
+    "replacement_plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+    "reason": "The replacement binds the primary helper paths used by the public just recipe; the first attempt acquired zero summaries and is retained."
+  },
+  "qualification": "Partial classical evaluator-first grid. Three alternating calls per case; absent bounds remain unqualified. These ratios are separate from warm performance, process startup and NN resident-model first calls."
+}

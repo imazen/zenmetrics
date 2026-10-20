@@ -230,6 +230,391 @@
         "2b2e85108f7c52e5bd7af63fbac4597402b74be40b4a5b7087a432e6992465c5",
         "01f837c2e6bf6d82e3d4d1c4371da0e4353903e0de27a95ebdd06d89e15e424b"
       ]
+    },
+    {
+      "metric": "stlpips-vgg",
+      "case": "stlpips-vgg-first-pair-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "stlpips-pytorch 0.0.2",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 6.5762e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 6.130358451775231e-10,
+      "ratio": 0.8226074107079384,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 827476275,
+              "score": 0.003577700350433588
+            },
+            "native": {
+              "ns": 680688116,
+              "score": 0.003577700963469433
+            }
+          },
+          "delta": 6.130358451775231e-10,
+          "passed": true,
+          "ratio": 0.8226074107079384
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 698275294,
+              "score": 0.003577700963469433
+            },
+            "canonical": {
+              "ns": 815380440,
+              "score": 0.003577700350433588
+            }
+          },
+          "delta": 6.130358451775231e-10,
+          "passed": true,
+          "ratio": 0.856379745876661
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 854941963,
+              "score": 0.003577700350433588
+            },
+            "native": {
+              "ns": 689753499,
+              "score": 0.003577700963469433
+            }
+          },
+          "delta": 6.130358451775231e-10,
+          "passed": true,
+          "ratio": 0.8067840027171529
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 25s | peak-RSS 1.45GiB | min-avail 14616MiB | peak-load 2.88",
+        "run-heavy: done rc=0 27s | peak-RSS 1.46GiB | min-avail 14209MiB | peak-load 3.51",
+        "run-heavy: done rc=0 30s | peak-RSS 1.44GiB | min-avail 14510MiB | peak-load 3.09"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "4bf7177cb980d263b2f2bc6016f7fdaa22b365d75c348294000549ba1e14522a",
+      "block_sha256": [
+        "74c9481e45459dcd0528b68215c6e6c24fb86308917c2b4183efea3814a67fae",
+        "22a22106100742e793ac42885d653e83ada017a3203c59527898eb29849da61c",
+        "8eb04f6891b55bc3d5404e180381bd62d911175bc4b10d4bd0d0f148a00492d3"
+      ]
+    },
+    {
+      "metric": "dists",
+      "case": "dists-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "DISTS-pytorch 0.1",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 9.4498e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 0.0,
+      "ratio": 1.0748950485452562,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3116026024,
+              "score": 0.009233295917510986
+            },
+            "native": {
+              "ns": 3326660493,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.0675971469357664
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 3473617293,
+              "score": 0.009233295917510986
+            },
+            "canonical": {
+              "ns": 2941025238,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.1810906102125738
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3029388690,
+              "score": 0.009233295917510986
+            },
+            "native": {
+              "ns": 3256274903,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.0748950485452562
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 35s | peak-RSS 1.68GiB | min-avail 14500MiB | peak-load 2.86",
+        "run-heavy: done rc=0 38s | peak-RSS 1.68GiB | min-avail 14590MiB | peak-load 3.02",
+        "run-heavy: done rc=0 35s | peak-RSS 1.68GiB | min-avail 14596MiB | peak-load 3.26"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "ee4a947462f32eb3f66920637b9ac5c68a3e3e1dc30158290984b161959033b2",
+      "block_sha256": [
+        "9e0ec7b68e80dc0cb84be4f8ceceedb626b9a33754efbd66d1845e6339abfbae",
+        "d6d5f3a1b6e43cb6610111945712c88088cb72657d35c46c0ae568436d4e0bc4",
+        "36d46a3fea5d13de0f74f0be12d896ff1724aedc07b6bf26783e0b251955ee61"
+      ]
+    },
+    {
+      "metric": "dists",
+      "case": "dists-first-pair-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "DISTS-pytorch 0.1",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 9.4498e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 0.0,
+      "ratio": 0.8417120218655116,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 620609854,
+              "score": 0.009233295917510986
+            },
+            "native": {
+              "ns": 522374775,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 0.8417120218655116
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 515177632,
+              "score": 0.009233295917510986
+            },
+            "canonical": {
+              "ns": 644958473,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 0.7987764384328043
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 655427255,
+              "score": 0.009233295917510986
+            },
+            "native": {
+              "ns": 558991409,
+              "score": 0.009233295917510986
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 0.85286567614586
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 24s | peak-RSS 1.67GiB | min-avail 14143MiB | peak-load 4.14",
+        "run-heavy: done rc=0 22s | peak-RSS 1.68GiB | min-avail 14836MiB | peak-load 2.81",
+        "run-heavy: done rc=0 23s | peak-RSS 1.68GiB | min-avail 14720MiB | peak-load 3.09"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "955147291b02394db67e8a6e9e449c9cfd940c3bc09825b41ce800e0f95fc243",
+      "block_sha256": [
+        "4f26eb7be26249dcdd04204705eb06143aa23f26d52a81035faf78e19a988a56",
+        "a8421c0a2817cbb725fabfb8352037e93760110415bd0f51ffbbdfbe1e413db8",
+        "9adf30d21a3a3ae7a79c540d15d290d2c1d53e814580f745e4c21a57bf40a484"
+      ]
+    },
+    {
+      "metric": "deepdc",
+      "case": "deepdc-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "DeepDC-PyTorch 0.2 / input normalization",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 6.415300000000001e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 0.0,
+      "ratio": 1.219280445692862,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3433562909,
+              "score": 0.0010464787483215332
+            },
+            "native": {
+              "ns": 4186476114,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.219280445692862
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 4137438334,
+              "score": 0.0010464787483215332
+            },
+            "canonical": {
+              "ns": 3504253732,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.1806902839876894
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3408224869,
+              "score": 0.0010464787483215332
+            },
+            "native": {
+              "ns": 4197705338,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.2316397829793548
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 45s | peak-RSS 1.72GiB | min-avail 14181MiB | peak-load 2.76",
+        "run-heavy: done rc=0 38s | peak-RSS 1.71GiB | min-avail 13576MiB | peak-load 3.79",
+        "run-heavy: done rc=0 36s | peak-RSS 1.72GiB | min-avail 14223MiB | peak-load 3.54"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "6781c486ab11dcfff1d928223d02be02919b994c9cd6518515e1c1556896c8c4",
+      "block_sha256": [
+        "c9096a9ee58d861e8bca552f24656423dc8260dec743c7f3f45553c3444607a6",
+        "035362d296a69fe695dbd530e0da2b8c97754f195d1719c22931f4956970860e",
+        "1bf2cdc910de81b179d4ab06e3cd675d25f2aa0e149006c10d25de750d106b3c"
+      ]
+    },
+    {
+      "metric": "deepdc",
+      "case": "deepdc-first-pair-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "DeepDC-PyTorch 0.2 / input normalization",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 6.415300000000001e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 0.0,
+      "ratio": 1.062974504492368,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 693597826,
+              "score": 0.0010464787483215332
+            },
+            "native": {
+              "ns": 736009041,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.0611466954050113
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 751960011,
+              "score": 0.0010464787483215332
+            },
+            "canonical": {
+              "ns": 653810778,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.150118713705267
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 683869184,
+              "score": 0.0010464787483215332
+            },
+            "native": {
+              "ns": 726935507,
+              "score": 0.0010464787483215332
+            }
+          },
+          "delta": 0.0,
+          "passed": true,
+          "ratio": 1.062974504492368
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 29s | peak-RSS 1.72GiB | min-avail 14028MiB | peak-load 3.18",
+        "run-heavy: done rc=0 29s | peak-RSS 1.71GiB | min-avail 14571MiB | peak-load 2.88",
+        "run-heavy: done rc=0 27s | peak-RSS 1.72GiB | min-avail 13525MiB | peak-load 2.90"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "a6dda5c1789abc555d3b969e1ff294665bd2fb5756a5b4968054acf950a3ff76",
+      "block_sha256": [
+        "8be89227ebb97edfb3b8dec08c1f8fe7c1dc7647ee3f94348b2612627d7e4de1",
+        "4d440fb860f8616e642f82f71f16cf3249a1f11fb887a03c619d685dccc10b30",
+        "35122dde86acfba2b831a09513c419f9262fe96f1307c23e2beb755bc181b6ac"
+      ]
     }
   ]
 }

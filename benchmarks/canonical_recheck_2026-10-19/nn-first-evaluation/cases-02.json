@@ -1,0 +1,158 @@
+{
+  "cases": [
+    {
+      "metric": "topiq-fr",
+      "case": "topiq-fr-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "ort-cpu",
+      "absolute_bound": 3.0642e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 1.1920928955078125e-07,
+      "ratio": 0.8951054659197222,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 1101553756,
+              "score": 0.9147325158119202
+            },
+            "native": {
+              "ns": 986006788,
+              "score": 0.9147323966026306
+            }
+          },
+          "delta": 1.1920928955078125e-07,
+          "passed": true,
+          "ratio": 0.8951054659197222
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 1009276728,
+              "score": 0.9147323966026306
+            },
+            "canonical": {
+              "ns": 1109343761,
+              "score": 0.9147325158119202
+            }
+          },
+          "delta": 1.1920928955078125e-07,
+          "passed": true,
+          "ratio": 0.9097961907589437
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 1134155758,
+              "score": 0.9147325158119202
+            },
+            "native": {
+              "ns": 950776945,
+              "score": 0.9147323966026306
+            }
+          },
+          "delta": 1.1920928955078125e-07,
+          "passed": true,
+          "ratio": 0.8383124965803859
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 28s | peak-RSS 1.37GiB | min-avail 14026MiB | peak-load 2.67",
+        "run-heavy: done rc=0 27s | peak-RSS 1.39GiB | min-avail 14688MiB | peak-load 3.39",
+        "run-heavy: done rc=0 29s | peak-RSS 1.38GiB | min-avail 14780MiB | peak-load 2.58"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "c7c33404f4792ad0946c14c28e7be90d11917ba0a4e20e811c735775a7634e66",
+      "block_sha256": [
+        "bd99a91eceae48c9c8a964381f4b928ea3579771cb635a4b4b3ec04582554a5c",
+        "d9cf1409946540a7e7e374662bb95b3c934f7cf20ee442321a7e360716bcead2",
+        "9a7ee9eae55d58de9eaea03bf393deef818722438b38e3635722d701887138bd"
+      ]
+    },
+    {
+      "metric": "topiq-fr",
+      "case": "topiq-fr-first-pair-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "ort-cpu",
+      "absolute_bound": 3.0642e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 5.960464477539063e-08,
+      "ratio": 0.8267670850632182,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 302898421,
+              "score": 0.9147324562072754
+            },
+            "native": {
+              "ns": 232425328,
+              "score": 0.9147323966026306
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.767337535906138
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 269478307,
+              "score": 0.9147323966026306
+            },
+            "canonical": {
+              "ns": 289510348,
+              "score": 0.9147324562072754
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.9308071675558899
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 334141696,
+              "score": 0.9147324562072754
+            },
+            "native": {
+              "ns": 276257356,
+              "score": 0.9147323966026306
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.8267670850632182
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 24s | peak-RSS 1.45GiB | min-avail 14638MiB | peak-load 3.09",
+        "run-heavy: done rc=0 24s | peak-RSS 1.37GiB | min-avail 14665MiB | peak-load 2.71",
+        "run-heavy: done rc=0 28s | peak-RSS 1.50GiB | min-avail 14460MiB | peak-load 3.11"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "34a9b4909e8b115aed68985b2f112e3580764329c2bfa6470e651209953b2801",
+      "block_sha256": [
+        "493666f4ac221dd5bb163b5d1e22a2f5f4d25520cfea65c4f480d275d8491cb4",
+        "2938edd8d429aeaf39cdd0aafddc7b0578af2a48af2c397067945f5accb3cee2",
+        "07d90275caf7f4877670bf355e5f6e06f6a827a727e99e4effd706b25072a44e"
+      ]
+    }
+  ]
+}

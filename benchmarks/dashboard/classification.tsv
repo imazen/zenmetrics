@@ -1500,3 +1500,10 @@ benchmarks/rebenchmark_since_f7668c7/order_current_local40_2026-10-20.tsv	ignore
 benchmarks/rebenchmark_since_f7668c7/local40-order-2026-10-20.json	ignored	Local native scheduling study with explicit shape/source/control receipts; separate from the main multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/current40-worker.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/hdrvdp-reference-controls/controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-00.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-01.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-02.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/classical-first-grid/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/lpips-vgg-first-pair-cid22-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/cases-02.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-v17-grid-pairA-64x64-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

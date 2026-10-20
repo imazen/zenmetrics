@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-10-20T16:59:29.435596+00:00",
+  "observed_at_utc": "2026-10-20T17:11:23.841654+00:00",
   "queues": {
     "full-classical-grid-v2/queue.json": {
       "expected": 2016,
@@ -8,12 +8,12 @@
     },
     "full-gpu-grid-v2/queue.json": {
       "expected": 106,
-      "completed": 26,
+      "completed": 27,
       "queue_sha256": "01003c0fc99b3bc8c5b646143dc5b06984da7762c0a6f90adcd4fcdbf52a6384"
     },
     "psnr-current-queue.json": {
       "expected": 208,
-      "completed": 35,
+      "completed": 36,
       "queue_sha256": "5cb84584b3871f20de13b75da68c4eeafbd8b58f86daf5e2aa88dcdc0813b6d1"
     },
     "dssim-author-queue.json": {
@@ -39,7 +39,7 @@
   },
   "nn_first": {
     "expected": 56,
-    "completed": 15,
+    "completed": 16,
     "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0"
   },
   "revised_classical_first": {
