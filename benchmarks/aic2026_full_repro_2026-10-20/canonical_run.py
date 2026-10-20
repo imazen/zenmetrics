@@ -48,6 +48,19 @@ def main():
         if spec.get('kind'):
             steps.append((metric, 'canonical', spec))
     for metric, role, spec in steps:
+        if manifest.get('execution') and not a.limit:
+            command = [sys.executable, str(Path(__file__).with_name('canonical_chunks.py')),
+                       str(a.manifest), metric, role]
+            if a.addendum:
+                command.append('--addendum')
+            completed = subprocess.run(command)
+            print(f'chunked {metric}.{role}: exit {completed.returncode}', flush=True)
+            # A recorded scorer refusal is a completed attempt. A controller
+            # failure without its receipt must be repaired, not silently skipped.
+            receipt = root/'logs'/f'{metric}.{role}.receipt.json'
+            if not receipt.exists():
+                raise RuntimeError('chunk controller failed before retaining a receipt: '+str(receipt))
+            continue
         tag = f'{metric}.{role}'+(f'.first{a.limit}' if a.limit else '')
         result = output/(tag+('.tsv' if role == 'native' or spec['kind'] == 'octave' else '.jsonl'))
         done = root/'logs'/(tag+'.receipt.json')
