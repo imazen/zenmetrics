@@ -2300,6 +2300,10 @@ aic-canonical-mirror manifest receipt label:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_mirror.py {{quote(manifest)}} {{quote(receipt)}} --label {{quote(label)}}
 
 # Diagnostic only: three studio-709 rounding conventions, with no acceptance gate.
+# Separate diagnostic of author MAD components and documented comparison semantics.
+aic-canonical-mad-probe manifest output sources +identities:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_mad_probe.py {{quote(manifest)}} {{quote(output)}} --source-bindings {{quote(sources)}} {{identities}}
+
 aic-canonical-psnr-rounding python pairs native output *options:
     {{python}} benchmarks/aic2026_full_repro_2026-10-20/diagnose_psnr_rounding.py {{pairs}} {{native}} {{output}} {{options}}
 

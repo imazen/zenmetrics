@@ -155,3 +155,18 @@ identities, exactly 32 per worker, without re-scoring any retained identity.
 That scope recorded `run-heavy: done rc=0 84s | peak-RSS 0.68GiB |
 min-avail 12706MiB | peak-load 4.39`. This is a scheduling observation on
 that bundle; no full-cohort canonical comparison is qualified yet.
+
+MAD's raw Octave comparator has a runtime qualification. In two retained
+crop controls, one author HI component is infinite while its blended scalar
+is finite. Complex reference-contrast storage changes the selected mask
+cells under Octave's complex ordering. Replaying only MATLAB's documented
+real-part comparisons removes the infinite cells; both original blended
+scalars repeat the production observations exactly, and one control remains
+unchanged by the replay. This is an Octave diagnostic, not MATLAB execution
+or an assigned acceptance bound. The production scorer remains unchanged.
+[Aggregate observations](mad_reference_runtime.tsv) and
+[packet/source bindings](mad_reference_runtime.meta) retain the evidence;
+[Octave](https://docs.octave.org/v6.3.0/Comparison-Ops.html) and
+[MATLAB](https://www.mathworks.com/help/matlab/ref/double.gt.html) document
+the differing comparison rules. The large raw tail alone does not establish
+a native port regression.

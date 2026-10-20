@@ -1,0 +1,2 @@
+cases	original_hi_finite	original_combined_finite	replay_hi_finite	replay_combined_finite	production_scalar_exact_repeats	unchanged_by_comparison_replay	complex_reference_contrast_cases	negative_mean_cells_total	original_interior_inf_cells_total	replay_interior_inf_cells_total	raw_median_delta	raw_max_delta	replay_median_delta	replay_max_delta	qualification
+2	1	2	2	2	2	1	1	48	32	0	11.199437058224198	22.39887315244672	4.280344487739285e-06	7.596687296995697e-06	comparison-semantics diagnostic only; no MATLAB execution; no assigned MAD gate

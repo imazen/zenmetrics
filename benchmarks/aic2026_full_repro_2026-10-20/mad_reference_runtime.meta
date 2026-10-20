@@ -1,0 +1,24 @@
+MAD reference-runtime diagnostic, 2026-10-20
+Native source: 4d8331955f96b558be0094e98ad10e2863105135
+Native ELF SHA256: 68d0ab9aac2353e8492b5fa4d3514cb2b41f932c17ba6cadc31cea58b716ba3f
+Production scheduler capture: 48395b451ff82948b80d9bccfc4818921ac2ccc1
+Production scheduler published-equivalent core: b746af2f7a4628f4a52aa67d2dd505c4a5ef78d1
+Command, after both configured admission locks:
+  run-heavy --mem 12G --jobs 12 -- just aic-canonical-mad-probe
+    ~/tmp/aic-canon/attempt-v7/manifest.json
+    /mnt/v/output/zenmetrics/aic2026_reproduction/2026-10-20/mad-comparison-control-v3
+    ~/tmp/aic-canon/reference-source-bindings.json
+    PTC_S01_J2K_20.png PTC_S22_J2K_20.png
+External packet: /mnt/v/output/zenmetrics/aic2026_reproduction/2026-10-20/mad-comparison-control-v3/
+Packet files: receipt.json, observations.tsv, observations.jsonl, probe.m, probe.log
+No per-image third-party values are copied into git. The table contains aggregate observations only.
+run-heavy: done rc=0 5s | peak-RSS 0.76GiB | min-avail 14701MiB | peak-load 1.67
+
+Documentation:
+https://docs.octave.org/v6.3.0/Comparison-Ops.html
+https://www.mathworks.com/help/matlab/ref/double.gt.html
+
+Diagnostic worker SHA256: feddb24dfe9bce972a52d717c3782b9aa7bbdc46f4a6ebc6a4d2b5465bbeb8c4
+Receipt SHA256: 02bad8ff160cd0cddd742543ef8b035cdc997f154c51e491578915dd0a8c783d
+Result SHA256: 25274f877f5babb611e917bb10b59b6c6df3dc3ae654529bc2ebf3a6dc73c815
+Script SHA256: 7882074754b896195335a06b6bf752834d9e98aaf498697c5cd20137b0729584

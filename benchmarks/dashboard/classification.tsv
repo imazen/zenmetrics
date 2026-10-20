@@ -1494,3 +1494,5 @@ benchmarks/canonical_recheck_2026-10-19/revised-flip-v17-current-512x512-t8-bb78
 benchmarks/canonical_recheck_2026-10-19/revised-ws-hv-current-512x512-t1-bb7819c0-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/flip-v17-current-512x512-t8-bb7819c0-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/ws-hv-current-512x512-t1-bb7819c0-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/aic2026_full_repro_2026-10-20/mad_reference_runtime.tsv	ignored	MAD reference-runtime diagnostic aggregates; no performance or native MATLAB qualification.
+benchmarks/aic2026_full_repro_2026-10-20/mad_reference_runtime.meta	ignored	Source and external-packet bindings for the MAD reference-runtime diagnostic; not a measurement panel.
