@@ -42,7 +42,7 @@ tbody tr:last-child td{border-bottom:0}
 code{font-family:var(--mono);font-size:.9em}
 details summary{cursor:pointer;color:var(--accent);font-size:13px}
 /* thread toggle: Pareto shows one thread count; coefficient panels show both in document mode */
-#pareto .t8{display:none} .t8 #pareto .t8{display:block} .t8 #pareto .t1{display:none}
+#pareto .t8,#perf .t8{display:none} .t8 #pareto .t8,.t8 #perf .t8{display:block} .t8 #pareto .t1,.t8 #perf .t1{display:none}
 /* charts */
 .pl-grid{stroke:var(--grid);stroke-width:1} .pl-axisline{stroke:var(--line);stroke-width:1}
 .pl-tick{fill:var(--muted);font-size:11px;font-family:var(--mono)}
@@ -53,7 +53,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:13px}
 .pl-ci{stroke:var(--muted);stroke-width:1;opacity:.45} .pl-ci-h{stroke:var(--muted);stroke-width:1.5;opacity:.7}
 .pl-front{fill:none;stroke:var(--warn);stroke-width:2}
 .pl-fit{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:5 4} .pl-ols{stroke:var(--fg);stroke-width:1.2;opacity:.75}
-.pl-band{fill:var(--band);stroke:none} .pl-cib{fill:var(--cib);stroke:none}
+.pl-band{fill:var(--band);stroke:none} .pl-cluster{fill:var(--band);stroke:var(--line)} .perf-lab{fill:var(--fg);font-size:10.5px} .pl-cib{fill:var(--cib);stroke:none}
 .pt-cl{fill:var(--accent);stroke:var(--bg);stroke-width:1} .pt-nn{fill:var(--nn);stroke:var(--bg);stroke-width:1}
 .pt-front{fill:var(--warn);stroke:var(--fg);stroke-width:1.2} .pt-8t{fill:none;stroke:var(--accent);stroke-width:1.6}
 @media (max-width:700px){.coefset{grid-template-columns:1fr}.hint{display:none}}
@@ -66,7 +66,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:13px}
 .slides{scroll-snap-type:y mandatory}
 .slides h1{font-size:clamp(30px,4.2vw,56px)} .slides h2{font-size:clamp(24px,2.8vw,38px)}
 .slides .findings{font-size:clamp(16px,1.6vw,24px);gap:1.2vh}
-.slides figure svg.chart{max-height:calc(100vh - 230px);width:auto;max-width:100%;margin:0 auto}
+.slides #perf svg.chart{max-height:none;width:100%} .slides figure svg.chart{max-height:calc(100vh - 230px);width:auto;max-width:100%;margin:0 auto}
 .slides #coef .t8{display:none} .slides.t8 #coef .t8{display:block} .slides.t8 #coef .t1{display:none}
 .slides .coefset svg.chart{max-height:calc(100vh - 250px)}
 .slides table{font-size:15px} .slides .tablewrap.canon{max-height:calc(100vh - 200px)}
@@ -77,7 +77,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:13px}
   .toolbar{display:none} body{font-size:10pt;background:#fff} main{max-width:none;padding:0;gap:14px}
   h1{font-size:18pt} h2{font-size:13pt}
   section.slide:not(.title-slide){break-before:page}
-  #pareto .t8,#pareto .t1{display:block} .coefset[hidden]{display:none}
+  #pareto .t8,#pareto .t1,#perf .t8,#perf .t1{display:block} #perf figure{break-inside:auto} .coefset[hidden]{display:none}
   .tablewrap.canon{max-height:none;overflow:visible}
   figure,tr,li{break-inside:avoid} figcaption,.note{font-size:8pt} table{font-size:7.5pt} th,td{padding:3px 5px}
 }

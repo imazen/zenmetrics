@@ -279,6 +279,114 @@ def chart_scaling(d):
     return pl.svg('Per-pixel time at 3840x2160 relative to 1024x1024'), len(pts), flat, out
 
 
+T975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
+
+
+def rep_ci(reps):
+    """Mean and 95 % t-interval over timing repeats (run-to-run noise on one pair), or None."""
+    if not reps or len(reps) < 2:
+        return None
+    n = len(reps); m = sum(reps) / n
+    sd = math.sqrt(sum((v - m) ** 2 for v in reps) / (n - 1))
+    h = T975.get(n - 1, 1.96) * sd / math.sqrt(n)
+    return m, max(m - h, min(reps) * 0.5), m + h
+
+
+def kmeans1d(xs, k):
+    """Exact 1-D k-means (dynamic programming) on sorted xs; returns the cluster index of each x."""
+    n = len(xs)
+    pre = [0.0]; pre2 = [0.0]
+    for x in xs:
+        pre.append(pre[-1] + x); pre2.append(pre2[-1] + x * x)
+    cost = lambda i, j: (pre2[j] - pre2[i]) - (pre[j] - pre[i]) ** 2 / (j - i)  # SS of xs[i:j]
+    INF = float('inf')
+    D = [[INF] * (n + 1) for _ in range(k + 1)]; arg = [[0] * (n + 1) for _ in range(k + 1)]
+    D[0][0] = 0.0
+    for c in range(1, k + 1):
+        for j in range(c, n + 1):
+            for i in range(c - 1, j):
+                v = D[c - 1][i] + cost(i, j)
+                if v < D[c][j]:
+                    D[c][j], arg[c][j] = v, i
+    lab, j = [0] * n, n
+    for c in range(k, 0, -1):
+        i = arg[c][j]
+        for t in range(i, j): lab[t] = c - 1
+        j = i
+    return lab, D[k][n]
+
+
+def clusters_of(vals, max_k=7, keep=0.06):
+    """Smallest k whose within-cluster sum of squares (log10 time) is at most `keep` of the total."""
+    xs = sorted(math.log10(v) for v in vals)
+    total = kmeans1d(xs, 1)[1] or 1.0
+    for k in range(2, max_k + 1):
+        lab, ss = kmeans1d(xs, k)
+        if ss <= keep * total:
+            break
+    return k, lab, ss / total
+
+
+def chart_perf(d, key):
+    reps_key = key + '_reps'
+    ms = sorted((m for m in d['metrics'] if m.get(key)), key=lambda m: m[key])
+    k, lab, frac = clusters_of([m[key] for m in ms])
+    groups = [[m for m, l in zip(ms, lab) if l == c] for c in range(k)]
+    W_, LBL, LX0, LX1, RX0, RX1, rowh, head = 940, 196, 206, 560, 600, 924, 15, 40
+    H_ = 34 + sum(head + rowh * len(g) + 6 for g in groups) + 30
+    lo, hi = log_dom([m[key] for m in ms])
+    X = lambda v: LX0 + (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (LX1 - LX0)
+    p = []
+    th = '1 thread' if key.endswith('1t') else '8 threads'
+    p.append(f'<text class="pl-title" x="{LX0}" y="14">all metrics, log axis (CPU ns/px, {th})</text>'
+             f'<text class="pl-title" x="{RX0}" y="14">within cluster, linear axis</text>')
+    e = math.ceil(math.log10(lo) - 1e-9)
+    while 10 ** e <= hi * 1.0001:
+        x = X(10 ** e)
+        p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="22" x2="{x:.1f}" y2="{H_-26}"/><text class="pl-tick" x="{x:.1f}" y="{H_-12}" text-anchor="middle">{fmt_num(10**e)}</text>'
+                 f'<text class="pl-tick" x="{x:.1f}" y="32" text-anchor="middle">{fmt_num(10**e)}</text>')
+        e += 1
+    y = 40
+    narrow = 0
+    for ci_, g in enumerate(groups):
+        gmax = max(max((rep_ci(m.get(reps_key)) or (0, 0, m[key]))[2], m[key]) for m in g) * 1.05
+        step = nice_step(gmax, 4)
+        RX = lambda v: RX0 + v / gmax * (RX1 - RX0)
+        top = y
+        p.append(f'<rect class="pl-cluster" x="4" y="{y:.1f}" width="{W_-8}" height="{head + rowh*len(g) - 6:.1f}" rx="4"/>')
+        p.append(f'<text class="pl-row" x="10" y="{y+16:.1f}" font-weight="600">Cluster {ci_+1}: {fmt_num(float(f'{g[0][key]:.3g}'))}–{fmt_num(float(f'{g[-1][key]:.3g}'))} ns/px, {len(g)} metrics</text>')
+        v = 0.0
+        while v <= gmax + 1e-12:
+            x = RX(v)
+            p.append(f'<line class="pl-grid" x1="{x:.1f}" y1="{y+22:.1f}" x2="{x:.1f}" y2="{y+head+rowh*len(g)-10:.1f}"/><text class="pl-tick" x="{x:.1f}" y="{y+32:.1f}" text-anchor="middle">{fmt_num(v)}</text>')
+            v += step
+        y += head
+        prev = None
+        for m in g:
+            yy = y + rowh / 2
+            c = rep_ci(m.get(reps_key))
+            cls = 'pt-nn' if m['kind'].startswith('nn') else 'pt-cl'
+            tip = f'{m["metric"]}: median {m[key]:.4g} ns/px' + (f', mean {c[0]:.4g} [95 % {c[1]:.4g}, {c[2]:.4g}], n={len(m[reps_key])}' if c else '')
+            p.append(f'<text class="pl-lab perf-lab" x="{LBL}" y="{yy+4:.1f}" text-anchor="end">{E(m["metric"])}</text>')
+            for XX in (X, RX):
+                if c:
+                    p.append(f'<line class="pl-ci-h" x1="{XX(max(c[1], lo if XX is X else 0)):.1f}" y1="{yy:.1f}" x2="{XX(c[2]):.1f}" y2="{yy:.1f}"/>')
+                cx = XX(m[key])
+                if m['origin'] == 'private':
+                    p.append(f'<rect class="{cls}" x="{cx-3.5:.1f}" y="{yy-3.5:.1f}" width="7" height="7"><title>{E(tip)}</title></rect>')
+                elif m['origin'] == 'dvifmish':
+                    p.append(f'<path class="{cls}" d="M{cx:.1f},{yy-4.5:.1f} L{cx+4.5:.1f},{yy:.1f} L{cx:.1f},{yy+4.5:.1f} L{cx-4.5:.1f},{yy:.1f} Z"><title>{E(tip)}</title></path>')
+                else:
+                    p.append(f'<circle class="{cls}" cx="{cx:.1f}" cy="{yy:.1f}" r="3.6"><title>{E(tip)}</title></circle>')
+            if c and prev and prev[2] >= c[1]:
+                narrow += 1
+            prev = c
+            y += rowh
+        y += 6
+    svg = f'<svg class="chart perf" viewBox="0 0 {W_} {H_}" role="img" aria-label="CPU time per metric with 95 % intervals, {th}" xmlns="http://www.w3.org/2000/svg">{"".join(p)}</svg>'
+    return svg, k, frac, narrow, len(ms)
+
+
 # ---------------------------------------------------------------- tables
 
 def table(head, rows, cls=''):
@@ -338,6 +446,8 @@ def build(data_path, out):
     typ = [s1[t]['typical'] for t in s1 if s1[t]]
     w2 = [(s1[t]['within2'], s1[t]['n']) for t in s1 if s1[t]]
 
+    perf1 = chart_perf(d, 'cpu_1t')
+    perf8 = chart_perf(d, 'cpu_8t')
     par1, below1 = chart_pareto(d, 'cpu_1t')
     par8, below8 = chart_pareto(d, 'cpu_8t')
     rho_svg = chart_rho(d)
@@ -402,6 +512,12 @@ def build(data_path, out):
 <h1>Counted cost vs measured runtime for image-quality metrics</h1>
 <p class="status"><strong>Provisional.</strong> One host (Intel Core Ultra 7 265K), one image pair at 1024×1024 for the fits. Agreement uses the preliminary AIC2026 subjective JND reconstruction (public split: 42 sources, 5,768 images). Most operation counts have one counter so far. Includes {n_priv} private ports and {len(dv)} dvifmish versions.</p>
 <ul class="findings">{"".join(f"<li>{f}</li>" for f in findings)}</ul>
+</section>
+
+<section class="slide" id="perf"><h2>CPU time per metric, with 95 % intervals</h2>
+<p class="slide-note">Performance only, no agreement scores. Each row is one metric: median CPU time per pixel at 1024×1024 (i265), and a 95 % t-interval over its timing repeats, which measures run-to-run noise on one image pair, not variation across images. Clusters: exact 1-D k-means on log time, the smallest k that leaves at most 6 % of the variance within clusters. Left: one log axis for every metric. Right: each cluster on its own linear axis, so neighbours can be compared directly. Press T (or the 8 threads button) to switch thread count.</p>
+<figure><div class="t1">{perf1[0]}<figcaption>1 thread: {perf1[4]} metrics in {perf1[1]} clusters ({perf1[2]*100:.1f} % of log-time variance within clusters); {perf1[3]} adjacent pairs have overlapping intervals.</figcaption></div>
+<div class="t8">{perf8[0]}<figcaption>8 threads (CPU time summed over threads): {perf8[4]} metrics in {perf8[1]} clusters ({perf8[2]*100:.1f} % within); {perf8[3]} adjacent pairs overlap.</figcaption></div>{legend_html(False)}</figure>
 </section>
 
 <section class="slide" id="pareto"><h2>Agreement with subjective scores vs CPU time</h2>

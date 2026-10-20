@@ -115,6 +115,7 @@ def timings(private, extra):
             groups = non_par or groups
         rows = [r for g in groups for r in g[2]]
         out[k] = dict(cpu_ms=statistics.median(c for c, _ in rows), wall_ms=statistics.median(w for _, w in rows),
+                      cpu_reps=[c for c, _ in rows], wall_reps=[w for _, w in rows],
                       n=len(rows), source=sorted({g[1] for g in groups}), origin=groups[0][0])
     return out
 
@@ -297,6 +298,8 @@ def main():
             cpu_1t=t1 and t1['cpu_ms'] * 1e6 / px, wall_1t=t1 and t1['wall_ms'] * 1e6 / px,
             cpu_8t=t8 and t8['cpu_ms'] * 1e6 / px, wall_8t=t8 and t8['wall_ms'] * 1e6 / px,
             cpu_1t_4k=t4 and t4['cpu_ms'] * 1e6 / px4,
+            cpu_1t_reps=t1 and [v * 1e6 / px for v in t1['cpu_reps']], cpu_8t_reps=t8 and [v * 1e6 / px for v in t8['cpu_reps']],
+            wall_8t_reps=t8 and [v * 1e6 / px for v in t8['wall_reps']],
             timing_sources=sorted(set((t1 or {}).get('source', []) + (t8 or {}).get('source', []))),
             agreement=agree.get(m), canonical=canon.get(m)))
 

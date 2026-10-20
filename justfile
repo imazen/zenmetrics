@@ -1727,6 +1727,10 @@ brief:
 brief-deploy:
     scripts/complexity/brief.sh --deploy
 
+# Rebuild every 5 minutes from master and redeploy when the page changed (run it in a visible tab).
+brief-watch workspace="../zenmetrics--brief-watch":
+    scripts/complexity/brief_watch.sh {{workspace}}
+
 # Run one integration-test module per process on the native wgpu backend.
 mac-validation-module package module:
     cargo test --locked -p {{package}} --no-default-features --features wgpu --test it {{module}} -- --nocapture --test-threads=1
