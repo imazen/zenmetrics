@@ -677,3 +677,13 @@ old/new exact-score controls are queued separately; this source review does
 not promote the six model routes or change any existing plan, result or bound.
 
 [Two additional 4K CPU profiles](grid-4k-profiles-2026-10-20/index.json) retain the FLIP-v17/28-worker and WS-HV/one-worker flags. Each projection binds its unchanged binary/configuration and raw recording, and includes the resource-wrapper receipt. CPU samples do not establish the complete cause of the Rust/canonical timing gaps. Fixed twenty-block confirmations remain separate.
+
+## VMAF full-call controls completed, 2026-10-20
+
+The previously queued [reference controls](vmaf-fullcall-controls.json) now pass
+all twelve old/new comparisons: 24 fresh children and 72 finite, identical
+binary64 observations. The coordinator independently verified every case hash,
+arm log hash and score-bit identity. Build/control wrapper: 4s, peak-RSS
+0.13 GiB, minimum available15054MiB, peak load2.16. This qualifies the reference
+fixture only; comparisons against the normal current40 Rust worker are
+prepared separately and preserve all original numerical bounds.

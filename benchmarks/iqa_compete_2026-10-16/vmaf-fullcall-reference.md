@@ -1,8 +1,10 @@
 # VMAF complete-model-lifetime reference preparation
 
-**Source-only, uncompiled and unexecuted.** Root must independently review the
-frozen source before admitting its C++ link and scalar controls. Existing
-reference/native sources, binaries, plans, results and bounds remain unchanged.
+The frozen source fixture passed independent review and its admitted C++ link
+and [twelve exact-score controls](../canonical_recheck_2026-10-19/vmaf-fullcall-controls.json).
+All 72 old/new scalar observations match in binary64. This qualifies the
+reference fixture; native comparisons and timing acceptance remain separate.
+Existing reference/native sources, binaries, plans, results and bounds are retained.
 
 [libvmaf_rgb_fullcall.cpp](libvmaf_rgb_fullcall.cpp) is an additive successor of
 `libvmaf_rgb_compare.cpp`. Its only scoring-body change moves the original

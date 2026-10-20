@@ -1612,3 +1612,4 @@ benchmarks/canonical_recheck_2026-10-19/dssim-author-cuda-run.tsv	ignored	Native
 benchmarks/canonical_recheck_2026-10-19/grid-4k-profiles-2026-10-20/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/grid-4k-profiles-2026-10-20/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/grid-4k-profiles-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-fullcall-controls.json	ignored	Exact original-reference score controls and source/build identities; not native timing observations.

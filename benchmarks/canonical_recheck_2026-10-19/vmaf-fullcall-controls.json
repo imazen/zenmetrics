@@ -1,0 +1,81 @@
+{
+  "comparisons": 12,
+  "fresh_children": 24,
+  "finite_exact_observations": 72,
+  "cases": [
+    {
+      "case": "vmaf-v1-pair-cid22-t1",
+      "f64_bits": "4058aa2983179fdc",
+      "raw_case_sha256": "fa4fee9a4923433eb286be6ab5f8c2603e349211358b145ae98ec7808d21781f"
+    },
+    {
+      "case": "vmaf-v1-pair-cid22-t8",
+      "f64_bits": "4058aa2983179fdc",
+      "raw_case_sha256": "260562cd21bb2a00ed6d3c45d287555763389d112970fa80f8bd7acf50215649"
+    },
+    {
+      "case": "vmaf-pair-cid22-t1",
+      "f64_bits": "40583c054fedf171",
+      "raw_case_sha256": "ca2c062359c9b8ae06c6f483d69ec1a50c6226e48d88cf507877c7c78732df76"
+    },
+    {
+      "case": "vmaf-pair-cid22-t8",
+      "f64_bits": "40583c054fedf171",
+      "raw_case_sha256": "ac78899a4d511f265ad5d527e57d27e5b673b4aca0961b2d5a370c6c9601fc57"
+    },
+    {
+      "case": "vmaf-4k-pair-cid22-t1",
+      "f64_bits": "4059000000000000",
+      "raw_case_sha256": "952b01d87f7e4255fd9160ded03cc772d64c9e013499ee0d7fc8c66ee6d73da7"
+    },
+    {
+      "case": "vmaf-4k-pair-cid22-t8",
+      "f64_bits": "4059000000000000",
+      "raw_case_sha256": "536a811c3d5ab7fcd1fe930dc23c9e5d2a07c98c5b03269c55ed9cd1b09ec3b7"
+    },
+    {
+      "case": "vmaf-neg-pair-cid22-t1",
+      "f64_bits": "4057dd9f45c453cb",
+      "raw_case_sha256": "4a587b666035ea34acfc4d7a964b1b6193923072ef7119ece933bb8d049f2a9e"
+    },
+    {
+      "case": "vmaf-neg-pair-cid22-t8",
+      "f64_bits": "4057dd9f45c453cb",
+      "raw_case_sha256": "62b97bca5834dc50f11742cba7c1a3b8e9d305fa310278a06cb3e28f60693b13"
+    },
+    {
+      "case": "vmaf-neg-studio601-pair-cid22-t1",
+      "f64_bits": "4057e9275bef09c6",
+      "raw_case_sha256": "ffe58f0352688557add7f376a22c13f49aeab58109ab769427725491c9c692ae"
+    },
+    {
+      "case": "vmaf-neg-studio601-pair-cid22-t8",
+      "f64_bits": "4057e9275bef09c6",
+      "raw_case_sha256": "dcb19b4a81f00bf0c6534632d245d7ab44820d98dd49e712a5f6f9e722fac99d"
+    },
+    {
+      "case": "vmaf-studio601-pair-cid22-t1",
+      "f64_bits": "40584098fe00944c",
+      "raw_case_sha256": "df0015227a0e2cd4c116a6b21f2e586e013e05d729e695e38d605bbe132eed14"
+    },
+    {
+      "case": "vmaf-studio601-pair-cid22-t8",
+      "f64_bits": "40584098fe00944c",
+      "raw_case_sha256": "a8a988cf46dde3279aef0bbf34eda0b71ae774f03f2481703d9cd083349c566e"
+    }
+  ],
+  "new_reference_binary": {
+    "path": "/home/lilith/tmp/handoff/vmaf-fullcall-oracle-20261020/build-v1/libvmaf-rgb-fullcall",
+    "resolved": "/home/lilith/tmp/handoff/vmaf-fullcall-oracle-20261020/build-v1/libvmaf-rgb-fullcall",
+    "bytes": 1981216,
+    "sha256": "c82f0ca7e6c35983d62377d105ef29aa8726a3de09c21862f312c792aa3aff14"
+  },
+  "freeze_sha256": "be1e3f2044de8b825f486349b7f4cee73d0c482db454a3a4d03a3f03c7596742",
+  "build_receipt_sha256": "45313628ef7454c671a395ad87889948b1862ef7aec56fde32dff52a5c8f23e7",
+  "control_receipt_sha256": "0843b0b4014dbf1646398e797bb09355661dbc384afd9f4be2f582a6b6f3b6a3",
+  "raw_directory": "/home/lilith/tmp/handoff/vmaf-fullcall-oracle-20261020",
+  "wrapper": [
+    "run-heavy: done rc=0 4s | peak-RSS 0.13GiB | min-avail 15054MiB | peak-load 2.16"
+  ],
+  "qualification": "Exact author-reference old/new score controls only; not native parity, speed or runtime-cleanliness acceptance."
+}
