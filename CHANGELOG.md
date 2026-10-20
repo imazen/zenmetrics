@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Preserve full precision in CLI score, compare, folder and batch exports and the AIC VMAF feature helper (`f8ae4743`); reconcile supplied AIC CSVs with July without rounding or hiding changed cells (`da2ac8ca`).
+
 - Add hash-bound original-reference comparisons and the changed-route comparative
   recipe (`952cbfc4`), explicit Chainer CPU inference fixtures (`879eceb6`), and
   a retained ten-warm-round audit (`5b69c10f`). Local README ratios keep their

@@ -2263,3 +2263,20 @@ aic-canonical-fsim-vsi python manifest summary:
 
 aic-canonical-campaign manifest *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_campaign.py {{manifest}} {{options}}
+
+# Full-precision local AIC CSV regeneration; caller wraps heavy runs in run-heavy.
+aic-rescore +args:
+    python3 scripts/complexity/aic_rescore.py {{args}}
+
+# Compare July and supplied CSV revisions without changing source values.
+aic-csv-reconcile +args:
+    python3 scripts/complexity/aic_csv_reconcile.py {{args}}
+
+# OS-backed resume, precision, identity and CSV reconciliation controls.
+aic-rescore-check:
+    python3 -m unittest discover -s scripts/complexity -p 'test_aic*.py' -v
+
+aic-precision-check binary reference distorted output:
+    python3 scripts/complexity/check_aic_precision.py --binary '{{binary}}' --reference '{{reference}}' --distorted '{{distorted}}' --output '{{output}}'
+
+
