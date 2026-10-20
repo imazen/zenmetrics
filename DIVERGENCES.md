@@ -119,6 +119,15 @@ Deep doc: `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md` (6 open items),
 - **RESOLVED** — CSF `log_rho` axis flat-clamp at high PPD (2026-05-26);
   several further items resolved in v0.1.0 — see the crate doc.
 
+- **EXTENSION — native map definition.** The CPU port's native diffmap
+  bilinearly upsamples masked-error bands, adds them per channel, then folds
+  channels with a Minkowski norm (`crates/cvvdp/src/diffmap.rs`). pycvvdp
+  0.5.7's `heatmap="raw"` folds channels within each band, reconstructs its
+  heatmap pyramid, applies `1 - met2jod(map)/10`, and stores float16 output.
+  These are different map definitions and units. Scalar parity does not
+  establish pointwise equivalence between those outputs. [Local source inspection and file hashes](https://github.com/imazen/zenmetrics/blob/master/benchmarks/canonical_recheck_2026-10-19/cvvdp-map-semantics.json)
+  record that boundary.
+
 ### `cvvdp-gpu` — vs pycvvdp + in-tree `cvvdp`
 
 Deep docs: `crates/cvvdp-gpu/docs/DIFFMAP_DIVERGENCES.md`,

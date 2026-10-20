@@ -311,6 +311,33 @@
     ],
     "qualified": false
   },
+  "ckdn": {
+    "canonical": "original CKDN / pinned source",
+    "check": "2/2 pass",
+    "ratio": 0.4868198485495653,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "694a965b68a0aadcc52d4e21287c920b3400dbdcd87dc21dbd4d920739e9871f",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.7293809496651175,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.960464477539063e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "694a965b68a0aadcc52d4e21287c920b3400dbdcd87dc21dbd4d920739e9871f"
+    ],
+    "qualified": false
+  },
   "cvvdp": {
     "canonical": "pycvvdp 0.5.7 CPU / standard_fhd",
     "check": "1/1 pass",
@@ -475,6 +502,33 @@
     ],
     "qualified": false
   },
+  "dmm": {
+    "canonical": "original DMM / pinned source",
+    "check": "1/2 pass",
+    "ratio": 0.6058034560576455,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "0f892468ed89bb8fb1607212971bc1d4a6807af286666c614b909d614bd54f5b",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.6058034560576455,
+    "observed_cases": 1,
+    "expected_cases": 2,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 2.6667229833488796e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "0f892468ed89bb8fb1607212971bc1d4a6807af286666c614b909d614bd54f5b"
+    ],
+    "qualified": false
+  },
   "dmm-pyiqa": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
     "check": "2/2 pass",
@@ -544,12 +598,12 @@
     "ratio_engine": null,
     "ratio_blocks": 3,
     "worst_ratio": 15.983711306101481,
-    "observed_cases": 2,
+    "observed_cases": 3,
     "expected_cases": 25,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 5.282498001246694e-06,
+    "max_abs_delta": 5.282498001468738e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
@@ -663,60 +717,6 @@
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 8.88441795687811e-08,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
-    ],
-    "qualified": false
-  },
-  "fsim-k3": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.15839548482405466,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.16372277042051173,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.8109096577845207e-07,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
-    ],
-    "qualified": false
-  },
-  "fsim-k4": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.14140061543964458,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.14313096487231813,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.38497604496024e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

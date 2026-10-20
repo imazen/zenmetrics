@@ -1,0 +1,20 @@
+{
+  "scope": "Source inspection only; no new numerical map comparison",
+  "native_source": "crates/cvvdp/src/diffmap.rs",
+  "native_source_sha256": "ac0cf792b639ff60b64269482da30bdcfea408e8038506fce8301c433bd6430b",
+  "reference_version": "pycvvdp 0.5.7",
+  "reference_source": "~/tmp/portcheck/python/lib/python3.12/site-packages/pycvvdp/cvvdp_metric.py",
+  "reference_source_sha256": "55b8bfdb0a0f2364886cc5f583c8f9fbc98296d0658d58a8f3907beef3acc0c4",
+  "reference_operations": [
+    "channel norm per band",
+    "heatmap pyramid reconstruction",
+    "1 - met2jod(map)/10",
+    "float16 storage"
+  ],
+  "native_operations": [
+    "bilinear band upsampling",
+    "weighted band sum per channel",
+    "channel Minkowski fold"
+  ],
+  "external_pointwise_bound": null
+}

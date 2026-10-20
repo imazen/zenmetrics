@@ -1,7 +1,7 @@
 # Local canonical rechecks
 
 Missing: the full multi-size per-name grid, remaining learned comparisons,
-map comparisons and qualified regression acceptance. The declared classical
+map comparisons and qualified regression acceptance. The initial classical
 RGB8 cohorts are complete; explicit route/input exceptions remain below. These are scalar checks on
 Ryzen 9 7950X / WSL2. The first six-name panel uses one 512×512 photo pair.
 Additional original MATLAB, corrected VIF and libvmaf cohorts are indexed in
@@ -481,3 +481,15 @@ meeting the requested ±3% precision. All 600 native observations remain,
 including 102 resource flags. Its slowdown flag persists; full regression
 qualification remains absent. The last acquisition block's wrapper reports
 8s, peak-RSS 1.12 GiB, minimum available 11991 MiB and load 1.34.
+The [additional classical grids](additional-classical-grids.json) add five GPU
+routes and the weightless `cw-ssim-pyiqa` Rust route. Together with the main
+84-route CPU grid, this declares 90 runnable classical names and 2,160 warm
+scalar cases. The GPU comparisons use the stated original CPU references;
+they do not establish a comparison with an alternative GPU implementation.
+
+[CVVDP map source inspection](cvvdp-map-semantics.json) identifies different
+native-map and reference-heatmap definitions: the port sums upsampled bands per
+channel before its norm; pycvvdp folds channels per band, reconstructs a
+pyramid, transforms to `1 - JOD/10`, and stores float16. This is a semantic
+extension recorded in DIVERGENCES.md, with source hashes. No new numerical map
+parity result is claimed from that inspection.

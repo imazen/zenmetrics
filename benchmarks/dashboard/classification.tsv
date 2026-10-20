@@ -1363,3 +1363,7 @@ benchmarks/canonical_recheck_2026-10-19/run.tsv	ignored	Native reference compari
 benchmarks/canonical_recheck_2026-10-19/lpips-alex-eight-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/niqe-resident-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/results-04.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/cvvdp-map-semantics.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/additional-classical-grids.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/original-ckdn-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-dmm-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

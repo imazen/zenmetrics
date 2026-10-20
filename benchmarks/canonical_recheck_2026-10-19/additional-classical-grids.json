@@ -1,0 +1,37 @@
+{
+  "scope": "Declared and started warm scalar grids; no completion or parity qualification implied",
+  "groups": [
+    {
+      "raw_root": "~/tmp/local-canonical-20261019T2330/full-gpu-grid",
+      "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "cases": 120,
+      "metrics": [
+        "butteraugli-gpu",
+        "dssim-gpu",
+        "ssim2-gpu",
+        "iwssim-gpu",
+        "cvvdp-gpu"
+      ],
+      "threads": [
+        1,
+        28
+      ]
+    },
+    {
+      "raw_root": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid",
+      "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+      "cases": 24,
+      "metrics": [
+        "cw-ssim-pyiqa"
+      ],
+      "threads": [
+        1,
+        28
+      ]
+    }
+  ],
+  "combined_with_main_grid": {
+    "runnable_routes": 90,
+    "declared_cases": 2160
+  }
+}

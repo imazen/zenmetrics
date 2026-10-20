@@ -77,14 +77,14 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`cambi`](docs/MODEL_CARDS.md#cambi) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈1× |
 | [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.68× |
 | [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | scikit-image CIEDE200… | Δ 9.2e-15 | ≈0.6× |
-| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | researchmm/CKDN | prior | — |
+| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | original CKDN / pinne… | 2/2 pass | ≈0.49× R |
 | [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.031× |
 | [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.021× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.084× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 3/3 pass | ≈1.23× R ! |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | DISTS-pytorch 0.1 | 3/3 pass | ≈1.11× R ! |
-| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | Baoliang93/DMM | partial | — |
+| [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | original DMM / pinned… | partial; 1/2 pass | ≈0.61× R |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | ssundaram21/dreamsim | prior | — |
 | [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core e… | 1 process errors | ≈0.48× |
@@ -157,7 +157,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.16× |
 | [`ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.28× |
 | [`ssim2`](docs/MODEL_CARDS.md#ssim2) | FR | primary SSIMULACRA2 v2.1 | Δ 0 | ≈0.58× |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | primary SSIMULACRA2 v… | Δ 0.043 | ≈0.12× |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | FR | primary SSIMULACRA2 v… | Δ 6 | ≈0.12× |
 | [`ssimc`](docs/MODEL_CARDS.md#ssimc) | FR | scikit-image 0.26 / d… | Δ 1.2e-15 | ≈0.19× |
 | [`ssimc-pyiqa-f32`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.013× |
 | [`ssimc-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.023× |
@@ -173,8 +173,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
 | [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.885× |
-| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.895× |
-| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 3/26 pass | ≈0.873× |
+| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / named… | Δ 6.9e-06 | ≈0.895× |
+| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.873× |
 | [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.945× |
 | [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | libvmaf 3.2.0 / named… | 2/2 pass | ≈0.911× |
 | [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR | libvmaf 3.2.0 / named… | Δ 0.00023 | ≈0.74× |
@@ -289,7 +289,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | git clone of researchmm/CKDN (no pip package; commit tip 2026-10-15) | not recorded | not recorded | MIT / unknown |
+| [`ckdn`](docs/MODEL_CARDS.md#ckdn) | original CKDN / pinned source | 0.00000005960464477539063 | not recorded | MIT / unknown |
 
 </details>
 
@@ -344,7 +344,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dmm`](docs/MODEL_CARDS.md#dmm) | pip DMM_PyTorch (DMM_PyTorch/DMM.py) | not recorded | not recorded | MIT (Baoliang Chen 2024) / permissive |
+| [`dmm`](docs/MODEL_CARDS.md#dmm) | original DMM / pinned source | 0.0000026667229833488796 | not recorded | MIT (Baoliang Chen 2024) / permissive |
 
 </details>
 
@@ -380,7 +380,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000005282498001246694 | not recorded | not recorded / not applicable |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000005282498001468738 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -721,7 +721,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | primary SSIMULACRA2 v2.1 / CPU reference | 0.042581382540333834 | not recorded | not recorded / not applicable |
+| [`ssim2-gpu`](docs/MODEL_CARDS.md#ssim2-gpu) | primary SSIMULACRA2 v2.1 / CPU reference | 6.014046784655932 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -793,7 +793,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`vmaf`](docs/MODEL_CARDS.md#vmaf) | libvmaf 3.2.0 / named RGB ingress | 0.00028193174530599663 | not recorded | not recorded / not applicable |
-| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
+| [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | libvmaf 3.2.0 / named RGB ingress | 0.000006884634188963901 | not recorded | not recorded / not applicable |
 | [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | libvmaf 3.2.0 / named RGB ingress | 0.0002482166810153785 | not recorded | not recorded / not applicable |
 | [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | libvmaf 3.2.0 / named RGB ingress | 0.000007238667720343983 | not recorded | not recorded / not applicable |
 | [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | libvmaf 3.2.0 / named RGB ingress | 0.000007264956991548388 | not recorded | not recorded / not applicable |
