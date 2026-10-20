@@ -1,0 +1,141 @@
+{
+  "metric": "brisque",
+  "detailed_source_review": true,
+  "profile": "nr",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nr-reference-replay-plan.json",
+    "sha256": "2bf47a27c78a4e6f047a49d33c4ea3e0608aa2c512610e38a41b17ccd5c93ef8",
+    "case_id": "brisque-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "brisque-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "brisque-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/portcheck/python/bin/python",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}",
+    "--weights",
+    "/home/lilith/tmp/clean-panel-20261019/sealed/brisque_svm_weights.pth",
+    "--extra-path",
+    "/home/lilith/tmp/local-canonical-20261019T2330/oracle-extras"
+  ],
+  "command_sha256": "20264bc8fa5e26017ed0db2d481654ab85a77761c00e4dabf7aa45490b5523c9",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "20341168c41f91f4328c68d1f1a8d563f5734d515e617ff80a8dcfce323218b7",
+  "canonical_label": "PIQ 0.8.0",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+      "sha256": "c2b38465bfbe5e37f76278e7df190416f7a9d89c03c11676f8a60d19a7901e45",
+      "selected_plan_sha256": "c2b38465bfbe5e37f76278e7df190416f7a9d89c03c11676f8a60d19a7901e45",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck/python/lib/python3.12/site-packages/piq/brisque.py",
+      "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/nr.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/nr.rs",
+      "sha256": "84524b0aae45030b67aaa002bbfc0923f5719c92b267c96aba8326743b2412ce",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/piqe/src/lib.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/piqe/src/lib.rs",
+      "sha256": "fcbd7255c7981a6fda4f6b03f34b9ee59ff5c06e789eea05906005c3231f28e4",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/niqe/src/lib.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/lib.rs",
+      "sha256": "703c48155be9478e9ce70945ace17a262ed473ca90fcde640ce96a7d6e7dde29",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/brisque/src/lib.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/lib.rs",
+      "sha256": "2d11b727f472de035d8f36ff8b5ca080b90615f1eb4381ab8e3922e4cb0e6c3b",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Alternative PIQ BRISQUE / pypiqe / BasicSR NIQE implementations, not the authors original MATLAB.",
+    "native_call": "metrics/nr.rs constructs stateless native scorer and evaluates both reference and distorted RGB8 inside callback; returns distorted plus reference scalar. Both image conversions/statistics and local scratch destruction timed. Normal current40 worker has no per-call model file loads (also verified by root).",
+    "canonical_call": "canonical_cpu_cell.py:40-72,107-114: BRISQUE copies CHW float RGB and evaluates r then d; PIQE makes BGR copies and calls pypiqe twice, whose COLOR_BGR2GRAY is inside. NIQE selected resident wrapper:63-82 evaluates both BGR copies through original BasicSR calculate_niqe. Each SAMPLE includes both NR image evaluations and conversion.",
+    "parameters": "BRISQUE torch.load outside clocks; exact support-vector clones returned by load_url shim inside each call because PIQ mutates its owned tensor. NIQE npz parameters read/unpacked before clock, exact-key shim returns owned raw-array copies during call; original features/resize unchanged. Native NR parameters embedded/stateless. PIQE has no model file.",
+    "library_threads": "Both selected Python wrappers set torch intraop1/8, interop1, gradient recording disabled; OpenBLAS/MKL/OMP inherited1/8. NumPy/SciPy/OpenCV operators may use different or fewer workers; no runtime census claimed. Native uses global Rayon through compiled metric features/size gates.",
+    "limits": "NIQE resident wrapper additionally evaluates original/default and cached variants and checks exact bits outside clocks before COLD; not a process-first-call measurement. BRISQUE clones/model parameter preparation differs from native embedded representation; no I/O asymmetry is claimed for these selected resident wrappers."
+  },
+  "numerical_contract": {
+    "absolute_bound": 0.015138428,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Rust RGB8 full call vs canonical RGB8 full call; immutable parameters resident"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

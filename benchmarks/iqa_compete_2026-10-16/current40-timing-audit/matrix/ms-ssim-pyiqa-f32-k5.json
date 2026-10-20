@@ -1,0 +1,142 @@
+{
+  "metric": "ms-ssim-pyiqa-f32-k5",
+  "detailed_source_review": true,
+  "profile": "pyiqa",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/pyiqa1152-plan.json",
+    "sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
+    "case_id": "ms-ssim-pyiqa-f32-k5-pairA-1152-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "ms-ssim-pyiqa-f32-k5-changed-1152x1152-t1",
+      "threads": 1
+    },
+    {
+      "id": "ms-ssim-pyiqa-f32-k5-changed-1152x1152-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 1152,
+    "height": 1152
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/inputs1152/pairA-reference.rgb",
+      "selected_plan_sha256": "d14366246fa1f19cb024af56eaaa47edc12db85478cf6f771344565b438c1386",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/inputs1152/pairA-distorted.rgb",
+      "selected_plan_sha256": "15a2f0e883c4a668fcfa049df700671e7957ba58cc8c653e4f679f486e04627e",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/portcheck/pyiqa-env/bin/python",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}",
+    "--fixed-manifest",
+    "/home/lilith/tmp/portcheck-pyiqa-fixed-k56-20261019T1318/k5/ssim_arch.py.manifest.json"
+  ],
+  "command_sha256": "32dae3454b274d4abb854654b129d36a59f23797f116bdd9be9893bb6b837310",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "20341168c41f91f4328c68d1f1a8d563f5734d515e617ff80a8dcfce323218b7",
+  "canonical_label": "PyIQA 0.1.16 / named convention",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+      "sha256": "c2b38465bfbe5e37f76278e7df190416f7a9d89c03c11676f8a60d19a7901e45",
+      "selected_plan_sha256": "c2b38465bfbe5e37f76278e7df190416f7a9d89c03c11676f8a60d19a7901e45",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-pyiqa-fixed-k56-20261019T1318/k5/ssim_arch.py.manifest.json",
+      "sha256": "67c78ca5532054f61a4872f7e920af18ccd021a5de6ab891ade2db710098116c",
+      "selected_plan_sha256": "67c78ca5532054f61a4872f7e920af18ccd021a5de6ab891ade2db710098116c",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-pyiqa-fixed-k56-20261019T1318/k5/ssim_arch.py",
+      "sha256": "b5d24d439bb8e67054cb8e872ca9384ebd3be5e4587d83b1a1d04c6e0b5d2d9b",
+      "selected_plan_sha256": "b5d24d439bb8e67054cb8e872ca9384ebd3be5e4587d83b1a1d04c6e0b5d2d9b",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/check_fixed_factor_oracle.py",
+      "sha256": "13a40e64520360b55b5c627f929127416caff614241190e8e96033595c11c9b0",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck/pyiqa-env/lib/python3.12/site-packages/pyiqa/archs/ssim_arch.py",
+      "sha256": "a0eb8e0bedfae99d9d014371a77b7d9afb110c71a22b6cda06a4992da0d951e8",
+      "selected_plan_sha256": "a0eb8e0bedfae99d9d014371a77b7d9afb110c71a22b6cda06a4992da0d951e8",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs",
+      "sha256": "c1b80ef489ed5b99e7d4097bd99227c7e8b16381aa3c287e13209f7aaf7bf221",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Alternative PyIQA implementation with explicitly hash-bound fixed-factor ssim function; not Wang original MATLAB.",
+    "native_call": "metrics/mod.rs:2967-2981 -> ssim_pyiqa.rs:16-62,116-143: RGB8 -> owned f64 unrounded .299/.587/.114 luma, per-scoring-view fixed-factor pool, five-level twofold pyramid and reductions all timed. The f32 name denotes unrounded ingress here; actual adapter/native arithmetic is double.",
+    "canonical_call": "canonical_cpu_cell.py:80-102,107-114: fixed-manifest check and AST installation outside clocks. Each call copies RGB, permutes/contiguates tensors, casts to double, forms unrounded .299/.587/.114 luma, then ms_ssim(data_range=255,downsample=True). PyIQA ssim_arch.py:30-67,126-181 allocates window/weights and pools original per-level views inside call. Local tensors release on return.",
+    "parameters": "No learned model or spectral parameters. Fixed function source is installed before prime; Gaussian/window and weights arithmetic remains in the timed functions. Native Gaussian/pyramid preparation remains timed.",
+    "library_threads": "torch.set_num_threads(1/8), interop=1 and no_grad before calls. Native fixed-factor code has no Rayon dispatch in this file; configured eight is a ceiling. Effective Torch operator concurrency was not independently measured.",
+    "limits": "1152x1152 selected to preserve all five valid 11x11 scoring windows even at k6. Earlier too-small refusals are not bypassed. Fixed source is a declared controlled variant, not unchanged upstream ssim."
+  },
+  "numerical_contract": {
+    "absolute_bound": 1e-06,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "resident RGB8 to PyIQA f64 callable; named rounding/downsample convention"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

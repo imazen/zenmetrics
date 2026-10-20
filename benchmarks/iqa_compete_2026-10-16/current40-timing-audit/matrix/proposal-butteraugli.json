@@ -1,0 +1,125 @@
+{
+  "metric": "proposal-butteraugli",
+  "detailed_source_review": true,
+  "profile": "butter",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/remaining-plan.json",
+    "sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "case_id": "proposal-butteraugli-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "proposal-butteraugli-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "proposal-butteraugli-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/local-canonical-20261019T2330/jxl-rgb-build/iqa-jxl",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "score",
+    "{samples}",
+    "rgb-input"
+  ],
+  "command_sha256": "6e6c38d591956df2932871632ac02668a663926bf9901c9d5d23058f31fd07ec",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "42f0788c11239dbe3ab1239032738f81e91a9f599acb259f370a17e089e1784e",
+  "canonical_label": "libjxl 0.12.0 original comparator",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/libjxl_compute.cpp",
+      "sha256": "1d5733e90c7488205bdb59669c1da48b99af6e57e96a0e70be34600ba66f0f74",
+      "selected_plan_sha256": "1d5733e90c7488205bdb59669c1da48b99af6e57e96a0e70be34600ba66f0f74",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck/sources/libjxl/libjxl-0.12.0/tools/thread_pool_internal.h",
+      "sha256": "80340f08f5a7fdaff536a73d1935af03b0f04645a126b64664ebfb865583d91c",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck/sources/libjxl/libjxl-0.12.0/lib/threads/thread_parallel_runner_internal.cc",
+      "sha256": "81d83de1d7c49515c21623ef355a974eb3ceafef39a95c5aa2f006182c96d140",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "sha256": "4387a91945e4018d2283ac5f6356e53b4fb5ddce07b4b02f61fd29a05827bff0",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Original libjxl0.12 comparator with explicit proposal p3 scalar transform; owned RGB wrapper.",
+    "native_call": "mod.rs:2248-2264,2859-2864: constructs CPU Butteraugli umbrella per call, computes maximum and pnorm3 n, then applies proposal max(0.00459792*n,2.0938201*n-1.1033102). Conversion/core scratch and destruction timed.",
+    "canonical_call": "libjxl_compute.cpp:54-58,65-75,98-114 selected rgb-input mode: resident byte reads, thread pool and immutable comparator params outside. Timed scope creates metadata/bundles and diffmap, performs both BufferToImageBundle conversions, constructs comparator, computes distance and pnorm3/proposal result; RAII destruction before stop. Iteration0 primes, only later samples emitted.",
+    "parameters": "Immutable Butteraugli parameter object outside canonical, per-image comparator and buffers inside. No spectral/model file reads. Native fixed config creation remains per callback; no precomputed reference in either selected score route.",
+    "library_threads": "ThreadPoolInternal outside canonical clock wraps JxlThreadParallelRunner with0 helpers/caller execution at budget1 and8 workers at budget8; runner waits at its worker barrier. Native global Rayon budget1/8; source review supplies no utilization census or oversubscription finding.",
+    "limits": "C++ wrapper hash is plan-bound. Original library linked binary/library provenance remains in original build records; this source audit does not rebuild or prove transitive compiler output. Proposal transform is explicit, not plain original max Butteraugli."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Resident RGB8 conversion, original callable and output release; immutable parameters resident"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

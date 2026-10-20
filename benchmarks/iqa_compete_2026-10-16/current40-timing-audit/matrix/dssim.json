@@ -1,0 +1,122 @@
+{
+  "metric": "dssim",
+  "detailed_source_review": true,
+  "profile": "dssim",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-cpu-plan.json",
+    "sha256": "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4",
+    "case_id": "dssim-author-512x512-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "dssim-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "dssim-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/dssim-reference",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}"
+  ],
+  "command_sha256": "89b97c1f14cb6d5668c8e6c777c6a0c08f608e6093709570d06132787e92f156",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "07906b0471c7600852938c15fbabc2b50df2d61478cffd59ae3c7b2d2448d64b",
+  "canonical_label": "author dssim-core 3.5.1 / 0e44c9b7",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_reference.c",
+      "sha256": "55fbb678aa2c2885e753c010365ced392c0a7dc3b2997e28de98c19356a8df76",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/build_dssim_reference.sh",
+      "sha256": "bc642e8e8a500b7ac1cda81b89a31b7eb2fc8baadec55fb7dd4435b0465e7ef7",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/dssim-author-reference-build-v2/build.sha256",
+      "sha256": "cef031e63a09c822e1f00284172a20828878f50d2ff2b966ecef5ee88cb5b028",
+      "selected_plan_sha256": "cef031e63a09c822e1f00284172a20828878f50d2ff2b966ecef5ee88cb5b028",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "sha256": "4387a91945e4018d2283ac5f6356e53b4fb5ddce07b4b02f61fd29a05827bff0",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Author dssim-core3.5.1 at0e44c9b7; earlier fork comparison remains separate.",
+    "native_call": "mod.rs:2212-2220 constructs Metric::new per call -> cpu_dispatch.rs:231-236 boxed Dssim::new. Helpers1495-1533 create both images, compare and destroy local images/metric within callback; reference-image preparation not cached.",
+    "canonical_call": "Current dssim_reference.c:28-41: dssim_new before clocks31-37, free after all samples41; create both images32-33, compare35 and free images36 inside. Raw RGB reads outside; iteration0 prime before SAMPLE calls.",
+    "parameters": "Configuration lifetime differs: canonical Dssim context retained; native constructed and dropped per callback. Pixel conversion/preparation remains timed both sides. No model-file I/O in the inspected author library path.",
+    "library_threads": "C harness accepts the threads argv position but does not read it or set a thread API. Consumer supplies RAYON_NUM_THREADS and OMP/BLAS env1/8 before launch. Native global Rayon budget1/8 and join for image pair. Author library effective thread control is not proven by this C source; no runtime census.",
+    "limits": "Selected author binary/build.sha256 omit C harness hash (build_dssim_reference.sh:15-16). Boundary read from current source lacks an independent wrapper-to-binary witness. This is a provenance limit plus context placement difference, not evidence of wrong binary or measured overhead."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Resident RGB8 pair ingress and complete DSSIM pair evaluation, including both image constructions and output release; no decoding or file I/O timed; native CPU callable vs pinned author CPU callable"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

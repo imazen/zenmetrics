@@ -1,0 +1,122 @@
+{
+  "metric": "ssimulacra1",
+  "detailed_source_review": true,
+  "profile": "ssim1",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/ssim1-rgb-plan.json",
+    "sha256": "6e1ad806dc033cd0cd990b138e984260e494bb8fd2c4ca78d4da7eeebc6ab60f",
+    "case_id": "ssimulacra1-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "ssimulacra1-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "ssimulacra1-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/local-canonical-20261019T2330/ssim1-rgb-build/ssimulacra1-rgb",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}"
+  ],
+  "command_sha256": "ee25065198d3885370a5b5abd8503e5633d4b0f513c9664239d25105ead4ce4c",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "9dccbf238369892832a8609adf841906bc78083eb215814bf099d4920513d7a8",
+  "canonical_label": "original SSIMULACRA1 / OpenCV RGB callable",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/ssim1-rgb-build/build.json",
+      "sha256": "5bf3e75e5100182e10419af7f4aa0813a0a633b771a4d80f5b146c7c8f72bbd4",
+      "selected_plan_sha256": "5bf3e75e5100182e10419af7f4aa0813a0a633b771a4d80f5b146c7c8f72bbd4",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/ssim1-rgb-build/reference.cpp",
+      "sha256": "dff72b3d9e794603b82e1abc03a9268724ba8d053bce71f130764e9b1cc19d47",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": "dff72b3d9e794603b82e1abc03a9268724ba8d053bce71f130764e9b1cc19d47",
+      "proof": "receipt-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck/sources/ssimulacra/ssimulacra.cpp",
+      "sha256": "37aa4a1ed0913be4ace4b97c7ad762764145b950099c6e5e6acd6fb490214580",
+      "selected_plan_sha256": "37aa4a1ed0913be4ace4b97c7ad762764145b950099c6e5e6acd6fb490214580",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": "37aa4a1ed0913be4ace4b97c7ad762764145b950099c6e5e6acd6fb490214580",
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/ssimulacra1.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/ssimulacra1.rs",
+      "sha256": "e6fae5c02457086d29ed7ea926ae01ba58ea90939b700cfc7633fa066e248c5f",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Original Cloudinary SSIMULACRA1 body inside a source/receipt-bound OpenCV RGB callable.",
+    "native_call": "mod.rs:2911-2920 -> ssimulacra1.rs:18-64,286-374: RGB8->linear RGB LUT and Lab, pyramid/score/local buffers all inside. Up to six levels; reference not precomputed.",
+    "canonical_call": "Generated reference.cpp:194-249,259-370,382-387: raw files and cv::setNumThreads outside. RGB->BGR copy, original per-call LUT/EOTF/Lab conversion, six-level body and Mat destruction inside reference_score before elapsed. One COLD then N SAMPLE calls.",
+    "parameters": "Only fixed constants. LUT rebuilt inside both calls; configuration/static coefficients outside or constant-folded. No learned files.",
+    "library_threads": "cv::setNumThreads(1/8) before prime; native uses Rayon channels when size>=32768. OpenCV implementation decides actual parallel operators; no runtime worker census.",
+    "limits": "Bound build.json hashes original source, extracted body, generated wrapper and binary. This is stronger wrapper provenance than SSIM2/DSSIM selected plans. No new numerical validation is inferred."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Resident RGB8, original body and temporary destruction; OpenCV threads explicitly set"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

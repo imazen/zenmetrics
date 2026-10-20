@@ -1,0 +1,51 @@
+{
+  "native_revision": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "verified_build": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/verified-build.json",
+  "verified_build_sha256": "d31275b70be26b72ddb15e8d6736f8f1fcf44c860bc4698876d284d042772b2c",
+  "binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+  "binary_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+  "native_common": [
+    {
+      "repo_path": "benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+      "sha256": "2948d4cd37f8ca11d6dcac113513a858e3c30b8c0b01912539a96b78877ba585",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "consumer_sources": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/prepare_ordered_canonical.py",
+      "sha256": "f12fbf4105989d558a57c239e1a87e44aa8cd2475fc3351058eb9c8809327b5d",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py",
+      "sha256": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical_budgeted.py",
+      "sha256": "70463f6c395cc0112c7b5f010441db52eee2f0170c39e7ad2ca0a9561a5cdd85",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    }
+  ],
+  "prototype_disposition": "first_boundary_hdrvdp.rs is uncompiled/superseded; no prototype or optional native probe supplies evidence for current40. Exact unchanged production bodies are compiled in the retained full worker.",
+  "limits": "This registry verifies the inspected native snapshot files against retained receipt hashes. It is not a fresh exhaustive source verification, rebuild, transitive dependency closure or runtime snapshot. Canonical rows explicitly identify unbound observed sources."
+}

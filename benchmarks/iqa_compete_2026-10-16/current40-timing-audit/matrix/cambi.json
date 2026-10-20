@@ -1,0 +1,129 @@
+{
+  "metric": "cambi",
+  "detailed_source_review": true,
+  "profile": "vmaf-feature",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-plan.json",
+    "sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "case_id": "cambi-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "cambi-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "cambi-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/local-canonical-20261019T2330/libvmaf-rgb-reference-v2",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}",
+    "601"
+  ],
+  "command_sha256": "030e61a42bb5c4441b6b32718693076ad528c9acc6e41beffd8e8c19e1722e5a",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "fd4d4b619b235f1e12a71dc500b46e06a0e02010481a4dc615d44a1a53a89819",
+  "canonical_label": "libvmaf 3.2.0 / named RGB ingress",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp",
+      "sha256": "d08698529ee31bc7861b568329ad884e57e08c9775189e535a7eb40a450aa326",
+      "selected_plan_sha256": "d08698529ee31bc7861b568329ad884e57e08c9775189e535a7eb40a450aa326",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "sha256": "7017fa2b3bd83b1df92a82f696fb9af2c3b434aafca30b9af72c4d9c1e1a7c57",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/classical.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/classical.rs",
+      "sha256": "4c55f833a5b2d3ca89093d3409f13adfddd436aabbff6d8d2be54e1cb84658a1",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/msssim/src/libvmaf.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/msssim/src/libvmaf.rs",
+      "sha256": "02e2ddeb6a2f1bcf346d57eed5a7e0115af017edd460be237edb4073229aefca",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/vmaf/src/cambi.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vmaf/src/cambi.rs",
+      "sha256": "cf48f58f9e462925004c6865671a661b6a8beff85b593e3819e1041743b89aec",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Original libvmaf feature extractor via owned resident-RGB C++ wrapper.",
+    "native_call": "metrics/mod.rs selects float_ssim/float_ms_ssim over studio601-f32 rounded Y, limited709 Y PSNR, or distortion-only CAMBI. Conversion, feature scratch and scalar reduction are timed. CAMBI ordinary ingress calls to_yuv420_even (including unused chroma allocation), whereas AIC integer ingress builds only Y (vmaf.rs:248-277).",
+    "canonical_call": "libvmaf_rgb_compare.cpp:88-129: mono YUV400 feature path; both luma planes converted inside clock except CAMBI, which converts distorted only and copies it into two VmafPictures. Context init/feature registration/submit/flush/read/close and buffers release all timed. No VmafModel load for these routes.",
+    "parameters": "No VmafModel resident asymmetry on feature-only path. Constants and library startup primed by COLD. Gaussian/feature contexts still prepared in each call. Reference output pictures and native internal buffers differ as normal adapter/API work.",
+    "library_threads": "C++ sets VmafConfiguration.n_threads=1/8 explicitly. Native kernels use global Rayon where enabled; CAMBI column path threshold512x512 (cambi.rs:5653) can use eight; other feature kernels/ingress have size gates. Worker-budget propagation verified in source, actual utilization not measured.",
+    "limits": "Declared per-route luma convention must be kept: 601-f32 for float SSIM/MS-SSIM,709 for Y PSNR,601-f64 or integer601 for CAMBI. CAMBI scores distorted only, not a two-image NR pair. Do not apply VMAF model finding to these rows."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "resident RGB8 conversion, complete single-frame context/picture lifetime; immutable model loading excluded"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

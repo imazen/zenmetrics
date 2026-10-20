@@ -1,0 +1,211 @@
+{
+  "metric": "hdrvdp3",
+  "detailed_source_review": true,
+  "profile": "hdr-base",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-promoted-headless-v2/hdrvdp3-reference-plan.json",
+    "sha256": "fe237685c47ccf9972678f442591a03d21332c8802ab724bfc4f176d09c145c0",
+    "case_id": "hdrvdp3-photo512-t1-warm-resident-candidate",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "hdrvdp3-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "hdrvdp3-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/usr/bin/python3",
+    "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/helpers/first_boundary_hdrvdp_resident_cell.py",
+    "cell",
+    "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/cell-config.json",
+    "--config-sha",
+    "ceee3c5e560d4bc86df60a56562c40f8b7bacfad23bfadb3245eb7b95ff4bfb5",
+    "hdrvdp3",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}"
+  ],
+  "command_sha256": "25a7d5cb34a43fa33278276378c942585d94e849a1fe9d0724c649b0756d46c7",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "a2f33a6e006989270f4340528eb61f8f97366e00a5d1b602ac8672ea44fc56ae",
+  "canonical_label": "original official hdrvdp3 sRGB-display, resident parameters",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/helpers/first_boundary_hdrvdp_resident_cell.py",
+      "sha256": "35a252870cd9622372da426807115b0f065a444023463fbc0b94ff0e07403d77",
+      "selected_plan_sha256": "35a252870cd9622372da426807115b0f065a444023463fbc0b94ff0e07403d77",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/cell-config.json",
+      "sha256": "ceee3c5e560d4bc86df60a56562c40f8b7bacfad23bfadb3245eb7b95ff4bfb5",
+      "selected_plan_sha256": "ceee3c5e560d4bc86df60a56562c40f8b7bacfad23bfadb3245eb7b95ff4bfb5",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/original-evaluator-parts/hdrvdp3/setup.m",
+      "sha256": "75bdd0206afd6f7883d1a4f292b3f50400866fccde69b6048fee9fb1463d6712",
+      "selected_plan_sha256": "75bdd0206afd6f7883d1a4f292b3f50400866fccde69b6048fee9fb1463d6712",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/original-evaluator-parts/hdrvdp3/inputs.m",
+      "sha256": "df6b9cf348b6fdec6bbf0e2a1fde840c0d1f2bab469e0c1382fbddbfab23aefa",
+      "selected_plan_sha256": "df6b9cf348b6fdec6bbf0e2a1fde840c0d1f2bab469e0c1382fbddbfab23aefa",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/original-evaluator-parts/hdrvdp3/body.m",
+      "sha256": "0c0fa5e5389ff3dccf93f42fdb765c89c9f212a3c26f445111c38a6db4dbf88a",
+      "selected_plan_sha256": "0c0fa5e5389ff3dccf93f42fdb765c89c9f212a3c26f445111c38a6db4dbf88a",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/original-evaluator-parts/hdrvdp3/suffix.m",
+      "sha256": "3546a99fb2d1392907b43cfbf0c6cb42832bde1a609a8228f8b7387878395612",
+      "selected_plan_sha256": "3546a99fb2d1392907b43cfbf0c6cb42832bde1a609a8228f8b7387878395612",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/helpers/first_boundary_hdrvdp_resident.py",
+      "sha256": "858f2ae0ad84dfb306de0173af381332c972462b1975f56797d8c0d3a46c091f",
+      "selected_plan_sha256": "858f2ae0ad84dfb306de0173af381332c972462b1975f56797d8c0d3a46c091f",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/official-v3/hdrvdp3.m",
+      "sha256": "0f9f267f68b042c167ef03f41daaf07388ae192ab30f81b243766863f9a5402a",
+      "selected_plan_sha256": "0f9f267f68b042c167ef03f41daaf07388ae192ab30f81b243766863f9a5402a",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/official-v3/utils/load_spectral_resp.m",
+      "sha256": "f51b19ae6a874bf5474a0bee367d9564fac84b091b9d343bc7c7a6e72e6ca560",
+      "selected_plan_sha256": "f51b19ae6a874bf5474a0bee367d9564fac84b091b9d343bc7c7a6e72e6ca560",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs",
+      "sha256": "6b790071435a1bcc943f7d3da17b2353f6de434d4a526abb3dfeee4560c31b94",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/hdrvdp/src/metric.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/hdrvdp/src/metric.rs",
+      "sha256": "8fd62c44de77d198984fd060f38546779645be0f685a06ffbfaa22f40c7a438b",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/hdrvdp/src/spectral.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/hdrvdp/src/spectral.rs",
+      "sha256": "65ce3bd23b53061ebe210b936e749d2da25f4cac80f99d5fdf2b705264c23c51",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/hdrvdp/src/v3/metric.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/hdrvdp/src/v3/metric.rs",
+      "sha256": "550fdf8390715120668f30098aee3820f227174f9b8e4597118e3e856f1380f2",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/hdrvdp/src/v3/pathway.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/hdrvdp/src/v3/pathway.rs",
+      "sha256": "16f4931d02a47c7edd3d4c0af8d0b0c470cf84c1dc81df551f0a925a57d14f72",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/hdrvdp/src/v3/spectral.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/hdrvdp/src/v3/spectral.rs",
+      "sha256": "79fd86d19b86aac6ddfd1e51faf12192b90c0951fbda769c882e2c6d37a74697",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Official HDR-VDP2/3 unchanged evaluator bodies, sealed exact-key interpolated-parameter fixture; base100nit/1black/30ppd, v3 Q_JOD.",
+    "native_call": "hdrvdp_aic.rs:116-151 exact production score_srgb_display: RGB8 unit conversion and native v2/v3 sRGB-display call inside warm callback; params creation, EOTF/display conversion, embedded CSV parse/PCHIP and temporary release all timed. Both bodies are in current40 worker; no prototype build relied on.",
+    "canonical_call": "first_boundary_hdrvdp_resident_cell.py composes hash-bound setup/inputs/body/suffix, input fread and original-helper fixture preload before clocks. Preserved M body times whole RGB8 conversion and official100nit/1black/30ppd sRGB-display evaluator, v3 Q_JOD, then clear temporary arrays. One COLD prime and explicit SAMPLE count. Headless --no-gui --no-window-system.",
+    "parameters": "BASE-HDR-PARAM-PREP: resident.py:105-116 loads and caches already interpolated original-helper outputs before clocks, shim46-60 returns them. Native spectral.rs:68-101,141-173 and v3 spectral.rs:84-97,148-152 parse/resample every call. File I/O excluded but canonical interpolation also hoisted; preparation placement asymmetric.",
+    "library_threads": "Exact case budgets1/8 explicit through cell argv/environment and sealed predecessor cases. Root verified FFTW effective budgets1/8. Native global Rayon configured1/8, no new utilization claim. Source/body/array/runtime gates retained; runtime snapshots not repeated by lane.",
+    "limits": "Only photo512 warm1/8 qualified by retained controls, not full104/first. V2 unchanged absolute0.005; V3 null, native_parity_qualified remains false: observed delta1.7763568394002505e-15 is descriptive, not invented acceptance. Coordinator/root provisional judgment keeps these timings asymmetric descriptive/unqualified, outside strict acceptance; no human-approved exception. Raw-table successor is design only."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": false,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "RGB8 conversion + original call + temporary release; parameters resident; exact protocol controls passed"
+  },
+  "audit_disposition": "preparation asymmetry; numerical observations retained; no strict timing qualification by this audit"
+}

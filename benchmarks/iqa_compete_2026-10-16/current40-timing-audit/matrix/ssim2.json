@@ -1,0 +1,116 @@
+{
+  "metric": "ssim2",
+  "detailed_source_review": true,
+  "profile": "ssim2",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nr-reference-replay-plan.json",
+    "sha256": "2bf47a27c78a4e6f047a49d33c4ea3e0608aa2c512610e38a41b17ccd5c93ef8",
+    "case_id": "ssim2-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "ssim2-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "ssim2-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/portcheck-primary-rgb-build-20261019T0948/build/iqa-ssim2-primary",
+    "ssim2",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "score",
+    "{samples}"
+  ],
+  "command_sha256": "01f1b3c39794ccf4a6d2d5ea024c32d935d1f0a68e1dec617fd6de66efd44bde",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "2e78406631721d54524849319340ac887a34a34edce8372c653c96aaf670b399",
+  "canonical_label": "primary SSIMULACRA2 v2.1",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/ssimulacra2_primary_compute.cpp",
+      "sha256": "4142b2f1e7ef265d03f8ffdbba23ce656cd386ad357f1ae99a24e3a8e4427ddf",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-primary-rgb-build-20261019T0948/src-ssim2-extract/src/lib/threads/thread_parallel_runner_internal.cc",
+      "sha256": "25b272ee8fd211cd01909764ecedd1ed4ddc22bc0ee49a057523e6138672a7d4",
+      "selected_plan_sha256": null,
+      "selected_plan_matches": null,
+      "receipt_expected_sha256": null,
+      "proof": "observed source; selected plan does not bind this path"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-api/src/cpu_dispatch.rs",
+      "sha256": "4387a91945e4018d2283ac5f6356e53b4fb5ddce07b4b02f61fd29a05827bff0",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Cloudinary primary SSIMULACRA2 v2.1 callable C++ wrapper.",
+    "native_call": "mod.rs:2683-2685 invokes umbrella CPU SSIMULACRA2 on resident RGB8; constructor, conversion/score and temporary destruction inside each callback. Dependency implementation is selected by frozen build/lock, not a GPU or prototype path.",
+    "canonical_call": "ssimulacra2_primary_compute.cpp:79-114: raw inputs, JxlThreadParallelRunner/ThreadPool outside; per clock ImageMetadata/ImageBundle, BufferToImageBundle RGB8 conversion, ComputeSSIMULACRA2 and Score inside RAII scope, destroyed before clock stop. One COLD then N SAMPLE calls.",
+    "parameters": "No learned/spectral files. Thread pool and CMS static infrastructure outside canonical sample; image representation and metric scratch inside. Native global pool primed before samples; no reference feature caching selected.",
+    "library_threads": "JxlThreadParallelRunner uses0 helpers/caller execution for budget1 and8 workers for budget8; runner waits at its barrier while workers process ingress. THREADS ingress is explicit; canonical ComputeSSIMULACRA2 has no pool argument and wrapper reports caller-only score. Native global Rayon budget1/8; actual utilization unmeasured. No oversubscription finding inferred.",
+    "limits": "Selected plan binds primary executable hash but does not bind this C++ wrapper/build receipt. Retained compile_commands names this path, without a source hash witness. Observed current wrapper boundary is conditional on that provenance; do not claim wrong binary or full source-to-binary proof. GPU SSIM2 level/scalar issues are outside these40 CPU routes."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Rust RGB8 full call vs canonical RGB8 full call; immutable parameters resident"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

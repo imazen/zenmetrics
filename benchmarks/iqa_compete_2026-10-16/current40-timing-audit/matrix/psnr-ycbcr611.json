@@ -1,0 +1,115 @@
+{
+  "metric": "psnr-ycbcr611",
+  "detailed_source_review": true,
+  "profile": "psnr",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-02.source.json",
+    "sha256": "2d39dcedc07c611678fcaa729999068c28f7011d2d3eb37baf98989a02894a6a",
+    "case_id": "psnr-ycbcr611-pair-cid22-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "psnr-ycbcr611-changed-512x512-t1",
+      "threads": 1
+    },
+    {
+      "id": "psnr-ycbcr611-changed-512x512-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 512,
+    "height": 512
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "selected_plan_sha256": "0b128660f9d7ab27fb91134346fdd3df7fb0d9fada80ac60ab0acf9cc4e2ae06",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "selected_plan_sha256": "af34c6b2fe9408df64118f3509f4f355a4fe06f84b00b46bde1ff01dec53142f",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "/home/lilith/tmp/portcheck/python/bin/python",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_psnr_planes_cell.py",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}"
+  ],
+  "command_sha256": "b3d1eaf3d485ce7c5df7e68cc0ef7b60d8ad04b1ff4a18c5b22a40704aa2626a",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": "20341168c41f91f4328c68d1f1a8d563f5734d515e617ff80a8dcfce323218b7",
+  "canonical_label": "NumPy / declared float64 studio601 weighted PSNR",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_psnr_planes_cell.py",
+      "sha256": "9bae797396e0cb1651dac49039307d00d9c31d85beae308f7f965f22e15128ad",
+      "selected_plan_sha256": "9bae797396e0cb1651dac49039307d00d9c31d85beae308f7f965f22e15128ad",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/classical.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/classical.rs",
+      "sha256": "4c55f833a5b2d3ca89093d3409f13adfddd436aabbff6d8d2be54e1cb84658a1",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/classical/psnr_kernels.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/classical/psnr_kernels.rs",
+      "sha256": "79a2feb65db7547fbe8bcc799f1386ed023ec9281dd455e71be6243cabe76152",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Explicit skimage/NumPy convention oracle; weighted611 is a declared weighted-MSE formula, not an original-author package.",
+    "native_call": "classical.rs:53-162 selected RGB/luma/chroma conversion, SSE/MSE and logarithm inside callback. RGB integer SSE; unrounded709/601 f64 Y; studio601 f32 rounded Y; Cb/Cr and611 full-resolution rounded studio planes. No transfer EOTF or chroma subsampling.",
+    "canonical_call": "canonical_classical_cell.py:66-93 converts RGB to requested plane and skimage PSNR inside score. Studio601 branch computes all three rounded codes then selects Y. canonical_psnr_planes_cell.py:23-35 computes requested full-resolution studio plane(s), MSE and PSNR inside;611 weights Y/Cb/Cr MSE6:1:1. Raw reads/constants outside. COLD then N samples.",
+    "parameters": "Only fixed coefficients/constants; no model or parameter files. Native fused conversion versus NumPy materialization/all-plane studio-Y conversion is explicit implementation work within clock, not missing ingress.",
+    "library_threads": "classical wrapper sets Torch1/8/interOp1 and cv2.setNumThreads1/8 even though PSNR uses NumPy/skimage. Planes wrapper parses argv budget but uses env only. Native PSNR parallel RGB gate2^21 exceeds selected512x512; ordered unrounded Y paths serial. No claim of eight-way work from the row label.",
+    "limits": "All scopes use code values; do not infer linear light. psnr-y is full-range unrounded709; psnr-y601 is unrounded601; psnr-y-studio601 rounded limited601. libvmaf Y PSNR belongs to its separate feature profile. No external numerical bound assigned in these selected rows."
+  },
+  "numerical_contract": {
+    "absolute_bound": null,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "Resident RGB8 float64 studio601 ingress, only the requested plane(s), original scikit-image PSNR or declared weighted MSE; temporary arrays released"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}

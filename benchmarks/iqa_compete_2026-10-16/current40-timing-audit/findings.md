@@ -1,7 +1,8 @@
 # Current40 timing-boundary source findings
 
-Detailed route matrix is in progress. Selection is verified for 40/40 routes and
-80/80 derived cases; selection alone does not qualify timing or numerical parity.
+Detailed route review is complete for [40/40 routes](matrix.md), with 80/80
+original comparative cases represented. Source coverage does not qualify timing
+or numerical parity. Each row preserves source paths, hashes and proof limits.
 No active helper, plan or result has been edited; no scoring/build/CI ran.
 
 ## HDR preparation placement

@@ -1,0 +1,169 @@
+{
+  "metric": "vifvec",
+  "detailed_source_review": true,
+  "profile": "octave",
+  "selected_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/octave-plan.json",
+    "sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "case_id": "vifvec-pairA-odd-t1",
+    "source_thread": 1
+  },
+  "comparative_cases": [
+    {
+      "id": "vifvec-changed-255x257-t1",
+      "threads": 1
+    },
+    {
+      "id": "vifvec-changed-255x257-t8",
+      "threads": 8
+    }
+  ],
+  "geometry": {
+    "width": 255,
+    "height": 257
+  },
+  "inputs": [
+    {
+      "role": "reference",
+      "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+      "selected_plan_sha256": "1d932035242928844118effedd9cefa72ed9f19d3aa47a05854d7fb4c3efb34b",
+      "byte_rehashed_in_this_audit": false
+    },
+    {
+      "role": "distorted",
+      "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+      "selected_plan_sha256": "bfcf894f916d2fbbcae17e9068146eeac58d20b974fc3527052f2559ea132c1d",
+      "byte_rehashed_in_this_audit": false
+    }
+  ],
+  "command": [
+    "python3",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_octave_cell.py",
+    "/home/lilith/tmp/local-canonical-20261019T2330/octave-sources.json",
+    "{metric}",
+    "{width}",
+    "{height}",
+    "{reference}",
+    "{distorted}",
+    "{threads}",
+    "{samples}"
+  ],
+  "command_sha256": "95bbae70734215d5d3afdcdf71ffe523d47e8cda9d38867742512e819379ee96",
+  "command_digest_encoding": "SHA256 of compact JSON argv; templates preserved",
+  "command_executable_bound_sha256": null,
+  "canonical_label": "original vifvec / Octave 6.4",
+  "canonical_source_records": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_octave_cell.py",
+      "sha256": "f9a69721468d918f9b66efcd2178ec628833aeef22b638ca359d160d67e3efe9",
+      "selected_plan_sha256": "f9a69721468d918f9b66efcd2178ec628833aeef22b638ca359d160d67e3efe9",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/octave-sources.json",
+      "sha256": "6b0a8ce0f6d909c9071dd3e0a999ea005d359071fc03d1cdb671b16d190d533c",
+      "selected_plan_sha256": "6b0a8ce0f6d909c9071dd3e0a999ea005d359071fc03d1cdb671b16d190d533c",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-vifvec-primary-source-20261019T1449/image-quality-tools/metrix_mux/metrix/vif/vifvec_release/vifvec.m",
+      "sha256": "9fcdf661cd4566aa4b2872959cbdb35e91098e3d07b810f555dc59029384367e",
+      "selected_plan_sha256": "9fcdf661cd4566aa4b2872959cbdb35e91098e3d07b810f555dc59029384367e",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-vifvec-primary-source-20261019T1449/matlabPyrTools/buildSpyr.m",
+      "sha256": "4348295ee719cc937a56639fe05a7bb8e96e311497af41ee7b9b875161cc7aa1",
+      "selected_plan_sha256": "4348295ee719cc937a56639fe05a7bb8e96e311497af41ee7b9b875161cc7aa1",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    },
+    {
+      "path": "/home/lilith/tmp/portcheck-vifvec-primary-panel-20261019T1506-r2/oracle-bindings/vifsub_est_m.m",
+      "sha256": "0f3396d48f48d33dc511c568642362e4921e20c1b01a7e18f16eccc0bd7f4a8f",
+      "selected_plan_sha256": "0f3396d48f48d33dc511c568642362e4921e20c1b01a7e18f16eccc0bd7f4a8f",
+      "selected_plan_matches": true,
+      "receipt_expected_sha256": null,
+      "proof": "plan-bound source"
+    }
+  ],
+  "native_source_records": [
+    {
+      "repo_path": "crates/zenmetrics-cli/src/metrics/mod.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+      "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/msssim/src/lib.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/msssim/src/lib.rs",
+      "sha256": "41a9229e18208f1222bd1c169bcc9f1583dc01e0bd1a3872e8f2d7ed923cbc42",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/msssim/src/kernel.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/msssim/src/kernel.rs",
+      "sha256": "51b4f3e0c766775eb3145a5f1c5df0e2763dd7da5c1181e07fbc1c945244cf87",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/vif/src/lib.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vif/src/lib.rs",
+      "sha256": "f34f992fae1a4e9ad747e3ca28510d18d801c085e30cff747477d1e44730dcb6",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/vif/src/kernel.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vif/src/kernel.rs",
+      "sha256": "bc6be091cae273f943b6749dcd6e345faf2f9c4d4d53d2a60f7a246107184874",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    },
+    {
+      "repo_path": "crates/vif/src/vifvec.rs",
+      "frozen_path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/vif/src/vifvec.rs",
+      "sha256": "37ac6e6b779535a2729dbd03b01b4db7354987c222d08e78b0acee8ba424e043",
+      "verified_build_matches": true,
+      "revision": "ea767ba1a4029963bc56a74fb824e64455e4599e"
+    }
+  ],
+  "common_source_registry": "../source-registry.json",
+  "shared_warm_boundary": {
+    "native_boundary": "EA iqa_compete.rs:98-149,345-382,476-507: resident RGB files and closure/display setup outside; untimed initial score and zenbench warmup/calibration before samples. b.iter clocks the whole run_metric_display CPU callback, scalar extraction, error handling and temporary destruction. No reference-image feature cache is selected. Native warm stage fixes ten rounds; reference requests its explicit samples count. These are different sampling protocols, not a boundary or numerical proof.",
+    "native_thread_budget": "Consumer writes requested 1/8 into native config and RAYON_NUM_THREADS; native global Rayon pool is primed before clocks and row records rayon_threads_observed. metrics-parallel feature enabled. A configured budget does not imply every kernel uses eight workers.",
+    "canonical_outside": "Raw RGB file reads, imports, script construction and fixed configuration outside sample clocks. One COLD/prime call precedes requested SAMPLE calls unless stated. No decoded-image or encoded-file timing is claimed.",
+    "destruction": "Function-local pixel/tensor/map/scratch temporaries are released before the wrapper stops its sample clock; immutable runtime/package state and input arrays remain resident. Python reference-count destruction does not imply a forced cyclic GC or OS allocator trim.",
+    "thread_environment": "compare_canonical.py run_arm supplies RAYON_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS and OPENBLAS_NUM_THREADS from the exact case budget before child launch. Every selected argv contains literal {threads}. No requirement for an existing t1/t8 row is added when the callable templates it.",
+    "audit_limit": "Source review only. No scorer, build, model import, CI, runtime worker census or numerical recheck was run. Existing bounds and observations remain unchanged. Null bound means unassigned, not automatic numerical acceptance."
+  },
+  "route_review": {
+    "reference_kind": "Original author M-file functions with owned RGB8 ingress wrapper; VIF-vector also binds PyrTools and oracle compatibility files.",
+    "native_call": "mod.rs:3273-3324 -> msssim_rgb8/vif_rgb8/vifvec_rgb8; owned luma conversion, multiscale/pyramid scratch, core score and destruction inside callback. MSSSIM has f32 luma coefficients .2989/.587/.114; VIF uses its source-defined unrounded luma; VIFvec explicitly rounds .299/.587/.114. No sRGB EOTF.",
+    "canonical_call": "canonical_octave_cell.py:31-60: path/function checks, raw fread, level/weights setup outside sample clocks. reshape/permute RGB8, double luma conversion and original M call inside tic/toc. MSSSIM also constructs fspecial(gaussian11,1.5) inside; clear ref/dist before toc. One COLD then N SAMPLE calls.",
+    "parameters": "No learned/spectral files. Original MSSSIM/VIF construct Gaussian filters inside evaluator; VIFvec creates original steerable pyramid inside. MSSSIM level/weights configuration is outside canonical clock, native determines level inside; declare this small configuration placement without a timing estimate.",
+    "library_threads": "argv templates1/8; Octave wrapper does not call a thread-count API, inherits OMP/BLAS env. Generic adapter invokes both --no-gui and --no-window-system. Root coordinator already verified FFTW budgets1/8; source-only review adds no new runtime evidence. Native MSSSIM255x257 is below2^21 parallel threshold; VIF/VIFvec feature-gated Rayon kernels can dispatch.",
+    "limits": "Selected odd255x257 pair, not photo512. Numeric luma precision and function/library runtime behavior remain subject to original per-route bounds; names alone do not prove equivalent ingress. Original M function hash and spec path bound in each row."
+  },
+  "numerical_contract": {
+    "absolute_bound": 1e-09,
+    "relative_bound": 0,
+    "native_parity_qualified": null,
+    "assigned_new_bound": false
+  },
+  "original_scope_claim": {
+    "matched_scope": true,
+    "scope": "resident RGB8: ingress, original function, output release inside each callable"
+  },
+  "audit_disposition": "reviewed declared boundary with explicit route/provenance/thread limits; no runtime qualification by this audit"
+}
