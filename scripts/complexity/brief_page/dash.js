@@ -49,14 +49,14 @@
       }
       return { median: med, mean, ci, lo: r[F.p10_ms] ?? med, hi: r[F.p90_ms] ?? med, fast: rounds.length ? Math.min(...rounds) : (r[F.p10_ms] ?? med),
         n, dots: rounds, flags: new Set(r[F.flagged_rounds] || []), clean: r[F.clean], flagged: r[F.flagged], rss: r[F.rss_gib],
-        simd: r[F.simd], place: r[F.placement], spread: 'p10–p90 of rounds' };
+        simd: r[F.simd], place: r[F.placement], src: r[F.source], spread: 'p10–p90 of rounds' };
     }
     const v = (r[F.cold_ms] || []).slice().sort((a, b) => a - b);
     if (!v.length) return null;
     const n = v.length, mean = sum(v) / n, med = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
     let ci = null;
     if (n > 1) { const sd = Math.sqrt(sum(v.map(x => (x - mean) ** 2)) / (n - 1)), hw = tq(n) * sd / Math.sqrt(n); ci = [Math.max(mean - hw, v[0] / 2), mean + hw]; }
-    return { median: med, mean, ci, lo: v[0], hi: v[n - 1], fast: v[0], n, dots: v, flags: new Set(), rss: r[F.rss_gib], spread: 'min–max of fresh processes' };
+    return { median: med, mean, ci, lo: v[0], hi: v[n - 1], fast: v[0], n, dots: v, flags: new Set(), rss: r[F.rss_gib], src: r[F.source], spread: 'min–max of fresh processes' };
   }
   const cell = (host, m, size, th, ph) => cellStats(CELL.get([host, m, size, +th, ph].join('|')));
   const perPx = size => 1e6 / (SIZE[size].w * SIZE[size].h);
@@ -522,7 +522,7 @@
           tipRow(tip, series[si].color, `${fmt(pick(s) * k)} ${u}`, series[si].label + (S.show === 'fast' ? ' (fastest)' : ' (median)'),
             `mean ${fmt(s.mean * k)}${s.ci ? ` [${fmt(s.ci[0] * k)}, ${fmt(s.ci[1] * k)}]` : ''} · ${s.spread} ${fmt(s.lo * k)}–${fmt(s.hi * k)} · n ${s.n}`
             + (s.clean != null ? ` (${s.clean} clean, ${s.flagged || 0} flagged)` : '') + (s.rss != null ? ` · peak RSS ${s.rss} GiB` : '')
-            + (s.simd ? ` · ${s.simd}` : '') + (s.place ? ` · ${s.place}` : ''));
+            + (s.simd ? ` · ${s.simd}` : '') + (s.place ? ` · ${s.place}` : '') + (s.src ? ` · build ${s.src.slice(0, 8)}` : ''));
         });
         tip.append(h('div', 'note', 'Click for all sizes and CPUs.'));
       });

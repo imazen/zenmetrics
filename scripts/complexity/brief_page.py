@@ -135,7 +135,8 @@ def write_csvs(d, meta, out):
         w = csv.writer(fh)
         w.writerow(['host', 'cpu', 'metric', 'family', 'parity_evidence', 'size', 'width', 'height', 'threads', 'phase',
                     'median_ns_per_px', 'mean_ns_per_px', 'ci95_lo_ns_per_px', 'ci95_hi_ns_per_px', 'spread_lo_ns_per_px', 'spread_hi_ns_per_px',
-                    'fastest_ns_per_px', 'median_ms', 'n', 'clean_rounds', 'flagged_rounds', 'peak_rss_gib', 'simd_tier', 'placement', 'cold_runs_ms'])
+                    'fastest_ns_per_px', 'median_ms', 'n', 'clean_rounds', 'flagged_rounds', 'peak_rss_gib', 'simd_tier', 'placement', 'cold_runs_ms',
+                    'source_commit', 'binary_sha256'])
         for r in sorted(perf.get('rows', []), key=lambda r: (r[F['host']], r[F['metric']], sizes[r[F['size']]]['w'] * sizes[r[F['size']]]['h'], r[F['threads']], r[F['phase']])):
             s = cell_stats(F, r)
             if not s: continue
@@ -147,7 +148,8 @@ def write_csvs(d, meta, out):
                         sc(s['lo']), sc(s['hi']), sc(s['fast']), g(s['median']), s['n'],
                         '' if r[F['clean']] is None else r[F['clean']], '' if r[F['flagged']] is None else r[F['flagged']],
                         g(r[F['rss_gib']]), r[F['simd']] or '', r[F['placement']] or '',
-                        ';'.join(g(v) for v in (r[F['cold_ms']] or []))])
+                        ';'.join(g(v) for v in (r[F['cold_ms']] or [])),
+                        r[F['source']] if 'source' in F else '', r[F['binary']] if 'binary' in F else ''])
     tables = [t['id'] for t in d['tables']]
     with (out / 'complexity.csv').open('w', newline='') as fh:
         w = csv.writer(fh)

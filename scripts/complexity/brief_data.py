@@ -300,18 +300,34 @@ def sig(v, n=4):
     return float(f'{v:.{n}g}')
 
 
+_ANCESTRY = {}
+
+
+def newer_source(a, b):
+    """The newer of two source commits when one descends from the other, else None (equal or unrelated)."""
+    if a == b:
+        return None
+    if (a, b) not in _ANCESTRY:
+        q = lambda x, y: subprocess.run(['jj', '-R', str(ROOT), 'log', '--no-graph', '-r', f'{x} & ::{y}', '-T', 'commit_id'],
+                                        capture_output=True, text=True).stdout.strip()
+        _ANCESTRY[(a, b)] = b if q(a, b) else a if q(b, a) else None
+    return _ANCESTRY[(a, b)]
+
+
 def canonical_perf():
     """Cross-host canonical timings (benchmarks/iqa_saved_latest): preferred, qualified, ok rows only.
 
     Warm cells keep the published summary of their rounds (median, mean, p10, p90, n); cold cells keep
-    each fresh-process repeat. Different binaries are never pooled: each (host, metric, size, threads,
-    phase) must come from one implementation identity, otherwise the cell is dropped and counted.
+    each fresh-process repeat. Different binaries are never pooled: a (host, metric, size, threads, phase)
+    cell measured by several builds uses the newest source (commit ancestry) once it has as many rows, and
+    the others are counted as superseded; unrelated or equal sources keep the earlier series.
     """
     d = ROOT / 'benchmarks/iqa_saved_latest'
     if not d.exists():
         return None
-    cells, ident, conflicts = {}, {}, 0
-    sizes = {}
+    # Group rows by cell and implementation identity first; a cell measured by two builds (a remeasurement of a
+    # changed metric) is never pooled: the newer source wins once it has as many cold repeats, else the older stays.
+    groups, sizes = {}, {}
     for f in sorted(d.glob('*-observations.csv')):
         for r in csv.DictReader(f.open()):
             if r['status'] != 'ok' or r['preferred'] != 'True' or r['qualified_timing'] != 'True' or r['only_mode'] != 'score':
@@ -319,10 +335,22 @@ def canonical_perf():
             key = (r['host'], r['metric_name'], r['size_name'], int(r['threads']), r['timing_phase'])
             sizes[r['size_name']] = (int(r['width']), int(r['height']))
             idn = (r['impl_binary_sha'], r['engine'], r['reference_sha256'], r['distorted_sha256'])
-            if ident.setdefault(key, idn) != idn:
-                conflicts += 1
-                continue
-            c = cells.setdefault(key, {})
+            groups.setdefault(key, {}).setdefault(idn, []).append(r)
+    ident, cells, conflicts, superseded = {}, {}, 0, 0
+    for key, by in groups.items():
+        order = sorted(by, key=lambda i: max(r['capture_utc'] for r in by[i]))
+        best = order[0]
+        for cand in order[1:]:
+            newer = newer_source(by[best][0]['source_commit'], by[cand][0]['source_commit'])
+            if newer is None:
+                conflicts += 1  # same or unrelated sources: keep the earlier series, count the other
+            elif newer == by[cand][0]['source_commit'] and len(by[cand]) >= len(by[best]):
+                best = cand
+            superseded += 1
+        ident[key] = best
+        c = cells.setdefault(key, {})
+        for r in by[best]:
+            c['source'] = r['source_commit'][:12]; c['binary'] = r['impl_binary_sha'][:12]
             if r['timing_phase'] == 'warm':
                 c.update(med=sig(float(r['median_ns']) / 1e6), mean=sig(float(r['mean_ns']) / 1e6) if r['mean_ns'] else None,
                          p10=sig(float(r['p10_ns']) / 1e6) if r['p10_ns'] else None, p90=sig(float(r['p90_ns']) / 1e6) if r['p90_ns'] else None,
@@ -353,7 +381,8 @@ def canonical_perf():
         if c.get('reps'):
             c['reps'] = [v for _, v in sorted(c['reps'])]
     rows = [[h, m, s, t, ph, c.get('med'), c.get('mean'), c.get('p10'), c.get('p90'), c.get('n'), c.get('reps'), c.get('rounds'),
-             c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus'), c.get('flagged_rounds')]
+             c.get('clean'), c.get('flagged'), c.get('rss'), c.get('simd_tier'), c.get('placement_policy'), c.get('placement_cpus'), c.get('flagged_rounds'),
+             c.get('source'), c.get('binary')]
             for (h, m, s, t, ph), c in sorted(cells.items())]
     cov = json.loads((d / 'coverage.json').read_text()) if (d / 'coverage.json').exists() else {}
     coverage = {}
@@ -364,10 +393,10 @@ def canonical_perf():
     sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
     order = sorted(sizes, key=lambda s: sizes[s][0] * sizes[s][1])
     return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms', 'rounds_ms',
-                        'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus', 'flagged_rounds'],
+                        'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus', 'flagged_rounds', 'source', 'binary'],
                 rows=rows, hosts={h: HOSTS.get(h, h) for h in sorted({r[0] for r in rows})},
                 sizes=[dict(name=s, w=sizes[s][0], h=sizes[s][1]) for s in order],
-                coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts,
+                coverage=coverage, synced_utc=sync.get('updated_utc'), identity_conflicts_dropped=conflicts, superseded_series=superseded,
                 protocol=json.loads((d / 'protocol.json').read_text()).get('protocol') if (d / 'protocol.json').exists() else None)
 
 
@@ -497,6 +526,8 @@ def coherence(metrics, perf, repro, aic):
         if age.total_seconds() > 3 * 3600:
             add('warn', 'no new timings', f"newest timing evidence is from {perf['synced_utc'][:16]} UTC, {age.total_seconds() / 3600:.0f} h before this build; "
                 "the five-minute sync commits only when the campaigns produce new results, so the campaigns have produced none since")
+    if perf and perf.get('superseded_series'):
+        add('info', 'timings superseded', f"{perf['superseded_series']} cell series measured by an older build are superseded by a newer build's complete series (or kept until it is complete)")
     if perf and perf.get('identity_conflicts_dropped'):
         add('warn', 'timings identity', f"{perf['identity_conflicts_dropped']} rows dropped: one cell came from more than one binary or input")
     return out

@@ -99,6 +99,36 @@ it has no earlier timing panel. Progress denominators must follow the active
 scope (1296 changed cells versus 4608 full-inventory cells), not silently mark
 excluded unchanged cells complete.
 
+### Completion and master remeasurement (owner direction, 2026-10-20)
+
+The owner asked to bring the dataset to 100 % on i265, mac and r7900x, re-measuring only methods whose code
+changed and never repeating finished cells. Every public classical series on the three hosts was built from
+`519a6ecb`. Between that and master `d1950fa2` exactly 12 routes changed: the eight PSNR routes
+(`psnr_kernels.rs`/`classical.rs` SIMD kernels), `flip`, `flip-v17` (SIMD kernels and the `zenmetrics-math`
+powf lanes), `ws-hv` (SIMD kernels) and `dssim` (dependency pin 331b56cf → 22e9ab03). Sibling pins did not
+change. The worker crate's `compete` feature newly enables AVX-512, but the CLI crate's `cpu-metrics` already
+did at `519a6ecb`; the worker's directly compiled CLI modules serve maps only, which these scalar campaigns
+do not measure. Find this list again with
+`jj diff --from 519a6ecb --to <rev> --name-only crates Cargo.toml Cargo.lock ci/sibling-pins.tsv benchmarks/heaptrack/drivers/cpu_profile`.
+
+- Unchanged routes keep their original worker: `prepare_changed_successor.py --purpose remaining` froze each
+  parked parent's unfinished cells for the 51 routes not owned by its earlier changed successor and not among the
+  12 (i265: 796 cells, mac: 1,536), with the parent's remaining attempt caps. mac's parked dvifmish larger-size
+  campaign resumed with its own frozen worker (522 cells pending at resume).
+- The 12 routes are re-measured on all three hosts with a master worker (`build_canonical_worker.sh … d1950fa2`;
+  i265 binary `041081cf`, mac `f1a41d4f` with the private counter correction, r7900x `f26d5a01`), 576 cells
+  each, the full six-size, two-thread, cold-and-warm protocol, attempts 2, timeout 1,100 s, with i265 placed on
+  CPUs 0–7 as before.
+- `brief_data.py` never pools builds: a cell measured by both uses the newer source once its series has as
+  many rows, and counts the older one as superseded.
+- r7900x needs no completion run: its 144 failed cells are input-contract refusals. mac's 65 exhausted
+  `private-nn-production` cells hit the 12 GiB monitored memory guard; they stay refusals unless the guard
+  is changed by the owner.
+
+Resolve the live state rather than trusting this list: `systemctl --user list-units 'iqa-*20261020*'` on Linux,
+`launchctl list | grep iqa-rerun` on mac, and each campaign's `progress.json`. mac's controllers are
+Background LaunchAgents (`LimitLoadToSessionType=Background`), which load without a console login.
+
 ### Saved-result publication during an active campaign
 
 `bench-iqa-capture-saved` reads atomic reports and finalized sealed attempts,
