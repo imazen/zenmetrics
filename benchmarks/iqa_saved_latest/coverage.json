@@ -159,12 +159,12 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 71,
-        "qualified_attempt_rows": 69,
-        "gate_flagged_attempt_rows": 2,
+        "saved_attempt_rows": 75,
+        "qualified_attempt_rows": 72,
+        "gate_flagged_attempt_rows": 3,
         "observed_cell_statuses": {
-          "ok": 71,
-          "pending": 237
+          "ok": 75,
+          "pending": 233
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -173,11 +173,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:15:01.767696+00:00",
-      "2026-10-20T03:15:02.070379+00:00"
+      "2026-10-20T03:20:01.758674+00:00",
+      "2026-10-20T03:20:02.059913+00:00"
     ],
-    "saved_attempt_rows": 3019,
-    "preferred_qualified_cells": 2854,
+    "saved_attempt_rows": 3023,
+    "preferred_qualified_cells": 2857,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -284,7 +284,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 9276,
+    "individual_measurement_rows": 9289,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -397,219 +397,28 @@
       {
         "campaign": "private-nn-controls",
         "manifest_cells": 28,
-        "saved_attempt_rows": 23,
-        "qualified_attempt_rows": 22,
-        "gate_flagged_attempt_rows": 0,
-        "observed_cell_statuses": {
-          "ok": 22,
-          "pending": 6
-        },
-        "excluded_attempts": {},
-        "rejected_overlays": 0,
-        "failure_class_attempts": {
-          "timeout": 1
-        },
-        "exhausted_saved_cells": 0
-      }
-    ],
-    "capture_window_utc": [
-      "2026-10-20T03:15:01.434541+00:00",
-      "2026-10-20T03:15:01.565304+00:00"
-    ],
-    "saved_attempt_rows": 3887,
-    "preferred_qualified_cells": 3685,
-    "exact_metric_names": [
-      "ahiq-pyiqa",
-      "brisque",
-      "butteraugli",
-      "butteraugli-original",
-      "cambi",
-      "cambi-aic2026",
-      "ciede2000",
-      "cvvdp",
-      "cw-ssim",
-      "cw-ssim-pyiqa",
-      "dssim",
-      "dvifmish-port-2d-v0.2",
-      "dvifmish-port-lap-v0.2",
-      "dvifmish-port-lap-v0.3",
-      "dvifmish-port-min-v0.2",
-      "dvifmish-talk-faithful-luma-float",
-      "dvifmish-talk-faithful-luma-int",
-      "flip",
-      "flip-v17",
-      "fsim",
-      "fsim-k2",
-      "fsim-k3",
-      "fsim-k4",
-      "fsim-nodownscale",
-      "fsim-y",
-      "gmsd",
-      "haarpsi",
-      "haarpsi-y",
-      "hdrvdp",
-      "hdrvdp-aic2026",
-      "hdrvdp3",
-      "hdrvdp3-aic2026",
-      "idfiqa",
-      "iwssim",
-      "iwssim-piq",
-      "mad",
-      "mdctpsnr",
-      "mdsi",
-      "ms-gmsd",
-      "ms-gmsdc",
-      "ms-ssim-pyiqa",
-      "ms-ssim-pyiqa-f32",
-      "ms-ssim-pyiqa-f32-k2",
-      "ms-ssim-pyiqa-f32-k3",
-      "ms-ssim-pyiqa-f32-k4",
-      "ms-ssim-pyiqa-f32-k5",
-      "ms-ssim-pyiqa-f32-k6",
-      "msssim",
-      "msssim-libvmaf",
-      "msswd",
-      "niqe",
-      "nlpd",
-      "nlpd-iqa",
-      "piqe",
-      "proposal-butteraugli",
-      "psnr",
-      "psnr-cb",
-      "psnr-cr",
-      "psnr-y",
-      "psnr-y-libvmaf",
-      "psnr-y-studio601",
-      "psnr-y601",
-      "psnr-ycbcr611",
-      "psnrhvs",
-      "psnrhvs-daala",
-      "psnrhvs-y",
-      "ssim",
-      "ssim-libvmaf",
-      "ssim-pyiqa",
-      "ssim-pyiqa-f32",
-      "ssim-pyiqa-f32-k2",
-      "ssim-pyiqa-f32-k3",
-      "ssim-pyiqa-f32-k4",
-      "ssim-pyiqa-f32-k5",
-      "ssim-pyiqa-f32-k6",
-      "ssim2",
-      "ssimc",
-      "ssimc-pyiqa-f32",
-      "ssimc-pyiqa-f32-k2",
-      "ssimc-pyiqa-f32-k3",
-      "ssimc-pyiqa-f32-k4",
-      "ssimc-pyiqa-f32-k5",
-      "ssimc-pyiqa-f32-k6",
-      "ssimulacra1",
-      "topiq_fr",
-      "topiq_fr-pipal",
-      "vif",
-      "vifvec",
-      "vmaf",
-      "vmaf-4k",
-      "vmaf-neg",
-      "vmaf-neg-studio601",
-      "vmaf-studio601",
-      "vmaf-v1",
-      "vsi",
-      "vsi-k2",
-      "vsi-k3",
-      "vsi-k4",
-      "vsi-nodownscale",
-      "wadiqam-pyiqa",
-      "ws-hv",
-      "zensim"
-    ],
-    "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 12209,
-    "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
-  },
-  "r7900x": {
-    "campaigns": [
-      {
-        "campaign": "ordinary-all",
-        "manifest_cells": 4560,
-        "saved_attempt_rows": 4704,
-        "qualified_attempt_rows": 4358,
-        "gate_flagged_attempt_rows": 58,
-        "observed_cell_statuses": {
-          "ok": 4416,
-          "failed": 144
-        },
-        "excluded_attempts": {},
-        "rejected_overlays": 0,
-        "failure_class_attempts": {
-          "input_contract_fixed_window": 96,
-          "input_contract_absolute_luminance": 192
-        },
-        "exhausted_saved_cells": 144
-      },
-      {
-        "campaign": "gate-retry58",
-        "manifest_cells": 58,
-        "saved_attempt_rows": 58,
-        "qualified_attempt_rows": 47,
-        "gate_flagged_attempt_rows": 11,
-        "observed_cell_statuses": {
-          "ok": 58
-        },
-        "excluded_attempts": {},
-        "rejected_overlays": 0,
-        "failure_class_attempts": {},
-        "exhausted_saved_cells": 0
-      },
-      {
-        "campaign": "private-nn-controls",
-        "manifest_cells": 28,
         "saved_attempt_rows": 28,
-        "qualified_attempt_rows": 27,
-        "gate_flagged_attempt_rows": 1,
-        "observed_cell_statuses": {
-          "ok": 28
-        },
-        "excluded_attempts": {},
-        "rejected_overlays": 0,
-        "failure_class_attempts": {},
-        "exhausted_saved_cells": 0
-      },
-      {
-        "campaign": "private-nn-control-retry",
-        "manifest_cells": 1,
-        "saved_attempt_rows": 1,
-        "qualified_attempt_rows": 1,
+        "qualified_attempt_rows": 26,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 1
+          "ok": 26,
+          "pending": 2
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
-        "failure_class_attempts": {},
-        "exhausted_saved_cells": 0
-      },
-      {
-        "campaign": "private-nn-production",
-        "manifest_cells": 308,
-        "saved_attempt_rows": 103,
-        "qualified_attempt_rows": 100,
-        "gate_flagged_attempt_rows": 3,
-        "observed_cell_statuses": {
-          "ok": 103,
-          "pending": 205
+        "failure_class_attempts": {
+          "timeout": 1,
+          "worker_failure_unclassified": 1
         },
-        "excluded_attempts": {},
-        "rejected_overlays": 0,
-        "failure_class_attempts": {},
         "exhausted_saved_cells": 0
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:15:02.258399+00:00",
-      "2026-10-20T03:15:02.384946+00:00"
+      "2026-10-20T03:20:01.437304+00:00",
+      "2026-10-20T03:20:01.568379+00:00"
     ],
-    "saved_attempt_rows": 4942,
-    "preferred_qualified_cells": 4581,
+    "saved_attempt_rows": 3892,
+    "preferred_qualified_cells": 3689,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -716,7 +525,200 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 15397,
+    "individual_measurement_rows": 12231,
+    "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
+  },
+  "r7900x": {
+    "campaigns": [
+      {
+        "campaign": "ordinary-all",
+        "manifest_cells": 4560,
+        "saved_attempt_rows": 4704,
+        "qualified_attempt_rows": 4358,
+        "gate_flagged_attempt_rows": 58,
+        "observed_cell_statuses": {
+          "ok": 4416,
+          "failed": 144
+        },
+        "excluded_attempts": {},
+        "rejected_overlays": 0,
+        "failure_class_attempts": {
+          "input_contract_fixed_window": 96,
+          "input_contract_absolute_luminance": 192
+        },
+        "exhausted_saved_cells": 144
+      },
+      {
+        "campaign": "gate-retry58",
+        "manifest_cells": 58,
+        "saved_attempt_rows": 58,
+        "qualified_attempt_rows": 47,
+        "gate_flagged_attempt_rows": 11,
+        "observed_cell_statuses": {
+          "ok": 58
+        },
+        "excluded_attempts": {},
+        "rejected_overlays": 0,
+        "failure_class_attempts": {},
+        "exhausted_saved_cells": 0
+      },
+      {
+        "campaign": "private-nn-controls",
+        "manifest_cells": 28,
+        "saved_attempt_rows": 28,
+        "qualified_attempt_rows": 27,
+        "gate_flagged_attempt_rows": 1,
+        "observed_cell_statuses": {
+          "ok": 28
+        },
+        "excluded_attempts": {},
+        "rejected_overlays": 0,
+        "failure_class_attempts": {},
+        "exhausted_saved_cells": 0
+      },
+      {
+        "campaign": "private-nn-control-retry",
+        "manifest_cells": 1,
+        "saved_attempt_rows": 1,
+        "qualified_attempt_rows": 1,
+        "gate_flagged_attempt_rows": 0,
+        "observed_cell_statuses": {
+          "ok": 1
+        },
+        "excluded_attempts": {},
+        "rejected_overlays": 0,
+        "failure_class_attempts": {},
+        "exhausted_saved_cells": 0
+      },
+      {
+        "campaign": "private-nn-production",
+        "manifest_cells": 308,
+        "saved_attempt_rows": 111,
+        "qualified_attempt_rows": 107,
+        "gate_flagged_attempt_rows": 4,
+        "observed_cell_statuses": {
+          "ok": 111,
+          "pending": 197
+        },
+        "excluded_attempts": {},
+        "rejected_overlays": 0,
+        "failure_class_attempts": {},
+        "exhausted_saved_cells": 0
+      }
+    ],
+    "capture_window_utc": [
+      "2026-10-20T03:20:02.271095+00:00",
+      "2026-10-20T03:20:02.408562+00:00"
+    ],
+    "saved_attempt_rows": 4950,
+    "preferred_qualified_cells": 4588,
+    "exact_metric_names": [
+      "ahiq-pyiqa",
+      "brisque",
+      "butteraugli",
+      "butteraugli-original",
+      "cambi",
+      "cambi-aic2026",
+      "ciede2000",
+      "cvvdp",
+      "cw-ssim",
+      "cw-ssim-pyiqa",
+      "dmm-pyiqa",
+      "dssim",
+      "dvifmish-port-2d-v0.2",
+      "dvifmish-port-lap-v0.2",
+      "dvifmish-port-lap-v0.3",
+      "dvifmish-port-min-v0.2",
+      "dvifmish-talk-faithful-luma-float",
+      "dvifmish-talk-faithful-luma-int",
+      "flip",
+      "flip-v17",
+      "fsim",
+      "fsim-k2",
+      "fsim-k3",
+      "fsim-k4",
+      "fsim-nodownscale",
+      "fsim-y",
+      "gmsd",
+      "haarpsi",
+      "haarpsi-y",
+      "hdrvdp",
+      "hdrvdp-aic2026",
+      "hdrvdp3",
+      "hdrvdp3-aic2026",
+      "idfiqa",
+      "iwssim",
+      "iwssim-piq",
+      "mad",
+      "mdctpsnr",
+      "mdsi",
+      "ms-gmsd",
+      "ms-gmsdc",
+      "ms-ssim-pyiqa",
+      "ms-ssim-pyiqa-f32",
+      "ms-ssim-pyiqa-f32-k2",
+      "ms-ssim-pyiqa-f32-k3",
+      "ms-ssim-pyiqa-f32-k4",
+      "ms-ssim-pyiqa-f32-k5",
+      "ms-ssim-pyiqa-f32-k6",
+      "msssim",
+      "msssim-libvmaf",
+      "msswd",
+      "niqe",
+      "nlpd",
+      "nlpd-iqa",
+      "piqe",
+      "proposal-butteraugli",
+      "psnr",
+      "psnr-cb",
+      "psnr-cr",
+      "psnr-y",
+      "psnr-y-libvmaf",
+      "psnr-y-studio601",
+      "psnr-y601",
+      "psnr-ycbcr611",
+      "psnrhvs",
+      "psnrhvs-daala",
+      "psnrhvs-y",
+      "ssim",
+      "ssim-libvmaf",
+      "ssim-pyiqa",
+      "ssim-pyiqa-f32",
+      "ssim-pyiqa-f32-k2",
+      "ssim-pyiqa-f32-k3",
+      "ssim-pyiqa-f32-k4",
+      "ssim-pyiqa-f32-k5",
+      "ssim-pyiqa-f32-k6",
+      "ssim2",
+      "ssimc",
+      "ssimc-pyiqa-f32",
+      "ssimc-pyiqa-f32-k2",
+      "ssimc-pyiqa-f32-k3",
+      "ssimc-pyiqa-f32-k4",
+      "ssimc-pyiqa-f32-k5",
+      "ssimc-pyiqa-f32-k6",
+      "ssimulacra1",
+      "topiq_fr",
+      "topiq_fr-pipal",
+      "vif",
+      "vifvec",
+      "vmaf",
+      "vmaf-4k",
+      "vmaf-neg",
+      "vmaf-neg-studio601",
+      "vmaf-studio601",
+      "vmaf-v1",
+      "vsi",
+      "vsi-k2",
+      "vsi-k3",
+      "vsi-k4",
+      "vsi-nodownscale",
+      "wadiqam-pyiqa",
+      "ws-hv",
+      "zensim"
+    ],
+    "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
+    "individual_measurement_rows": 15423,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   }
 }
