@@ -2,13 +2,27 @@
 import csv
 import io
 import json
+import hashlib
 from pathlib import Path
+import tempfile
 import unittest
 from catalog import rows as catalog_rows
-from model_cards import cards, exports, readme_section, documentation
+from model_cards import cards, exports, readme_section, documentation, comparison_results
 
 
 class ModelCards(unittest.TestCase):
+    def test_comparative_shards_reject_changed_evidence(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root=Path(directory);shard=root/'results-00.json'
+            shard.write_text(json.dumps({'example':{'ratio':.5}}))
+            index=root/'results.json'
+            index.write_text(json.dumps(dict(schema=2,metrics=1,shards=[dict(
+                file=shard.name,metrics=1,sha256=hashlib.sha256(shard.read_bytes()).hexdigest())])))
+            self.assertEqual(comparison_results(index)['example']['ratio'],.5)
+            shard.write_text(json.dumps({'example':{'ratio':5}}))
+            with self.assertRaisesRegex(ValueError,'hash mismatch'):
+                comparison_results(index)
+
     @classmethod
     def setUpClass(cls):cls.items=list(cards());cls.by_name={c['metric']:c for c in cls.items}
 

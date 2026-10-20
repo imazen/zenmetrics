@@ -43,5 +43,6 @@
     }
   },
   "input_manifest_sha256": "ab7c9f63904799d10558c3e2c08d307ea6f525a4d94c323cd49d49d7a2e039f4",
-  "raw_root": "~/tmp/local-canonical-20261019T2330"
+  "raw_root": "~/tmp/local-canonical-20261019T2330",
+  "input_manifest_file": "nr-inputs-sha256.json"
 }

@@ -188,9 +188,33 @@ def exports(items):
             'model-cards.csv':output.getvalue(),'model-cards.bib':'\n'.join(all_bib.values())}
 
 
+def comparison_results(path):
+    if not path.exists():
+        return {}
+    value=json.loads(path.read_text())
+    if value.get('schema')!=2:
+        return value
+    import hashlib
+    combined={}
+    for shard in value['shards']:
+        source=path.parent/shard['file']
+        if source.resolve().parent!=path.parent.resolve():
+            raise ValueError('comparison shard must be adjacent to its index')
+        content=source.read_bytes()
+        if hashlib.sha256(content).hexdigest()!=shard['sha256']:
+            raise ValueError('comparison shard hash mismatch')
+        rows=json.loads(content)
+        if len(rows)!=shard['metrics'] or combined.keys() & rows.keys():
+            raise ValueError('comparison shard count or duplicate metric')
+        combined.update(rows)
+    if len(combined)!=value['metrics']:
+        raise ValueError('comparison metric count mismatch')
+    return combined
+
+
 def readme_section(items):
     comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
-    comparisons=json.loads(comparison_path.read_text()) if comparison_path.exists() else {}
+    comparisons=comparison_results(comparison_path)
     lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
            '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
            'Code and model terms, paper citations and full reference identities remain in the linked cards.',
@@ -198,7 +222,8 @@ def readme_section(items):
            'Approximate local comparisons are descriptive, with their input size, thread budget and source pins '
            'in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). '
            'A dash means no comparable measurement. “Prior” means older recorded evidence; '
-           '“gate” means a declared bound, not a measured pass.',
+           '“gate” means a declared bound, not a measured pass. ! flags an observed ratio above 1.08; '
+           'see the ledger for confirmation status.',
            '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
         observation=comparisons.get(c['metric'],{})
@@ -208,10 +233,11 @@ def readme_section(items):
         elif ref in ('no evidence','—'):
             ref='unrecorded'
         ref=ref.split(';')[0]
-        if len(ref)>32:ref=ref[:29].rstrip()+'…'
+        if len(ref)>24:ref=ref[:21].rstrip()+'…'
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         ratio=observation.get('ratio')
         speed=f'≈{ratio:.2g}×' if ratio is not None else '—'
+        if ratio is not None and ratio>1.08:speed+=' !'
         metric='[`'+c['metric']+'`](docs/MODEL_CARDS.md#'+c['metric']+')'
         values=[metric,c['kind']+('/NN' if c['family']=='Learned' and c['metric']!='brisque' else ''),ref,check,speed]
         lines.append('| '+' | '.join(str(v).replace('|','\\|').replace('\n',' ') for v in values)+' |')

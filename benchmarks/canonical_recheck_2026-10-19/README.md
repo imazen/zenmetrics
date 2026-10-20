@@ -105,3 +105,27 @@ The wrapper reports rc=0, 23s, peak-RSS 0.73GiB, minimum available 11270MiB,
 peak load 1.13. These are additional validation checks, separate from the
 paired timing cases. Add `--goldens nr-goldens.json` to the publication command
 to preserve this evidence in the compact README.
+
+## SSIMULACRA1 matched-call follow-up
+
+The new `bench-iqa-canonical-ssim1-build` adapter preserves the original metric
+body byte-for-byte in a separately generated reference binary. RGB-to-BGR,
+color conversion, scoring and temporary destruction are all inside the call;
+OpenCV threads are explicitly set. The initial 512×512, one-thread three-block
+result is Rust/canonical 1.121579214567383, with scalar difference
+1.0480505352461478e-13. Its block ratios are 1.121579214567383,
+1.1245052764711023 and 1.024168640307484. This is a provisional flag above
+1.08, with a separate fixed 20-block confirmation and a perf profile in progress.
+It is not a qualified regression acceptance decision. No metric code changes.
+The three wrapper receipts report peak-RSS 0.09GiB each:
+
+```text
+run-heavy: done rc=0 2s | peak-RSS 0.09GiB | min-avail 12244MiB | peak-load 0.42
+run-heavy: done rc=0 3s | peak-RSS 0.09GiB | min-avail 12081MiB | peak-load 1.25
+run-heavy: done rc=0 2s | peak-RSS 0.09GiB | min-avail 12190MiB | peak-load 0.79
+```
+
+Current authoritative per-cohort TSVs and their hashes are listed in
+`cohorts.json`; older unindexed TSV snapshots remain historical. Each current
+row also records maximum measured process RSS for both arms. Large projections
+use hash-checked JSON shards so no generated evidence file exceeds 30 KB.

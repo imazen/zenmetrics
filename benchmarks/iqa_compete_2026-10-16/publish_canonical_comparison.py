@@ -10,6 +10,7 @@ import csv
 import io
 import json
 from pathlib import Path
+import re
 import statistics
 
 from compare_canonical import sha, summarize
@@ -44,6 +45,12 @@ def read_cohort(root, dispositions):
         record['excluded_contract']=dispositions.get(digest+':'+row['metric'],'')
         record['summary_sha256']=sha(path)
         record['blocks']=len(blocks)
+        for role in ('rust','canonical'):
+            rss=[]
+            for memory in path.parent.glob('block-*/'+role+'/memory.txt'):
+                found=re.search(r'Maximum resident set size \(kbytes\):\s*(\d+)',memory.read_text())
+                if found:rss.append(int(found[1]))
+            record[role+'_max_process_rss_kbytes']=max(rss) if rss else None
         rows.append(record)
     return rows
 
@@ -94,6 +101,19 @@ def project(rows):
     return result
 
 
+def attach_goldens(value,goldens,receipt_sha256):
+    for name,receipt in goldens['metrics'].items():
+        if receipt['checks_passed']!=receipt['checks_expected']:
+            raise ValueError('incomplete golden receipt: '+name)
+        if name not in value:
+            raise ValueError('golden receipt has no comparative metric: '+name)
+        row=value[name]
+        row['golden_checks']=receipt
+        if not row.get('failed_cases') and not row.get('process_error_cases'):
+            row['check']=f"{receipt['checks_passed']}/{receipt['checks_expected']} pass"
+        row['golden_receipt_sha256']=receipt_sha256
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('output',type=Path)
@@ -105,6 +125,7 @@ def main():
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
     combined=[];sources={}
     for root in a.cohorts:
+        artifacts=[]
         rows=read_cohort(root,dispositions)
         if not rows:
             raise ValueError('no acquired case summaries: '+str(root))
@@ -120,31 +141,41 @@ def main():
                 w.writeheader();w.writerows(r for r in rows if r['metric']==metric)
                 payload=part.getvalue().encode()
                 if len(payload)>30_000:raise ValueError('metric shard exceeds generated-data cap')
-                (a.output/(root.name+'-'+metric+'.tsv')).write_bytes(payload)
+                artifact=a.output/(root.name+'-'+metric+'.tsv')
+                artifact.write_bytes(payload)
+                artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
         else:
-            (a.output/(root.name+'.tsv')).write_bytes(data)
+            artifact=a.output/(root.name+'.tsv')
+            artifact.write_bytes(data)
+            artifacts.append(dict(file=artifact.name,sha256=sha(artifact)))
         sources[root.name]=dict(plan_sha256=sha(root/'plan.json'),cases=len(rows),
-                               expected_cases=len(json.loads((root/'plan.json').read_text())['cases']))
+                               expected_cases=len(json.loads((root/'plan.json').read_text())['cases']),artifacts=artifacts)
         combined.extend(rows)
     identities=[(r['plan_sha256'],r['case']) for r in combined]
     if len(identities)!=len(set(identities)):
         raise ValueError('duplicate acquired cases across selected cohorts')
     value=project(combined)
     if a.goldens:
-        goldens=json.loads(a.goldens.read_text())
-        for name,receipt in goldens['metrics'].items():
-            if receipt['checks_passed']!=receipt['checks_expected']:
-                raise ValueError('incomplete golden receipt: '+name)
-            if name not in value:
-                raise ValueError('golden receipt has no comparative metric: '+name)
-            value[name]['golden_checks']=receipt
-            value[name]['check']=f"{receipt['checks_passed']}/{receipt['checks_expected']} pass"
-            value[name]['golden_receipt_sha256']=sha(a.goldens)
+        attach_goldens(value,json.loads(a.goldens.read_text()),sha(a.goldens))
     text=json.dumps(value,indent=2)+'\n'
     if len(text.encode())>30_000:
         # Compact projection; per-case detail remains in the indexed TSVs.
         text=json.dumps(value,separators=(',',':'))+'\n'
-    if len(text.encode())>30_000:raise ValueError('README projection exceeds generated-data cap')
+    if len(text.encode())>30_000:
+        shards=[];part={}
+        def emit():
+            name=f'results-{len(shards):02d}.json'
+            path=a.output/name
+            path.write_text(json.dumps(part,indent=2)+'\n')
+            if path.stat().st_size>30_000:raise ValueError('projection shard exceeds generated-data cap')
+            shards.append(dict(file=name,sha256=sha(path),metrics=len(part)))
+        for name,row in sorted(value.items()):
+            candidate=dict(part,**{name:row})
+            if len(json.dumps(candidate,indent=2).encode())>24_000 and part:
+                emit();part={}
+            part[name]=row
+        if part:emit()
+        text=json.dumps(dict(schema=2,metrics=len(value),shards=shards),indent=2)+'\n'
     (a.output/'results.json').write_text(text)
     (a.output/'cohorts.json').write_text(json.dumps(sources,indent=2)+'\n')
     print(json.dumps(dict(metrics=len(value),cases=len(combined),

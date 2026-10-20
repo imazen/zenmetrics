@@ -37,6 +37,14 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(result['check'],'Δ 0.001')
         self.assertEqual(result['passed_cases'],0)
 
+    def test_golden_pass_does_not_hide_a_comparative_finding(self):
+        from publish_canonical_comparison import attach_goldens
+        value={'example':dict(check='1 findings',failed_cases=1)}
+        goldens={'metrics':{'example':dict(checks_passed=170,checks_expected=170)}}
+        attach_goldens(value,goldens,'receipt')
+        self.assertEqual(value['example']['check'],'1 findings')
+        self.assertEqual(value['example']['golden_checks']['checks_passed'],170)
+
 
 if __name__ == '__main__':
     unittest.main()

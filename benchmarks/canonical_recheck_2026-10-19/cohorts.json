@@ -2,36 +2,175 @@
   "retry-run": {
     "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
     "cases": 6,
-    "expected_cases": 6
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "retry-run.tsv",
+        "sha256": "a3e2f35c309096875cc791e71803a04eef94ed2e9f1fde7823c9067d55757df8"
+      }
+    ]
   },
   "octave-run": {
     "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "cases": 94,
-    "expected_cases": 102
+    "cases": 99,
+    "expected_cases": 102,
+    "artifacts": [
+      {
+        "file": "octave-run-dssim.tsv",
+        "sha256": "e58b18890fcf215480fb01be2720911eb2a547b0ca07b550dd186ab0210c4525"
+      },
+      {
+        "file": "octave-run-fsim.tsv",
+        "sha256": "97071aaf72583f710cf282fa67f3627834a882ec11f37357f391e1389192bd30"
+      },
+      {
+        "file": "octave-run-fsim-k2.tsv",
+        "sha256": "a778bdfb806ca478d208eb9a58bd628cccaab2de52f0bf4fa1380d2ee70b4970"
+      },
+      {
+        "file": "octave-run-fsim-k3.tsv",
+        "sha256": "6d62d7c9368db59a96a06cdb83452ce8a60ec6f46a40c4aa33ae08e8aa27cb4d"
+      },
+      {
+        "file": "octave-run-fsim-k4.tsv",
+        "sha256": "365cacc67673d69660baab6f26f0fe83ee1bc73a9175b7cd24894f0e614b9f35"
+      },
+      {
+        "file": "octave-run-fsim-nodownscale.tsv",
+        "sha256": "0ce14dc6e27705e7421765dbfb3dca105a13167a69c3d5f1c90e932ebbc2db40"
+      },
+      {
+        "file": "octave-run-haarpsi.tsv",
+        "sha256": "0008f17fbc612ef2abef5fbbfdde20870d647ed6663b22b73c4a6f0c7da36d54"
+      },
+      {
+        "file": "octave-run-haarpsi-y.tsv",
+        "sha256": "be2493b61718ccaf770510aa34843353c7b2ba97d785e4098088d4902f5fb0fb"
+      },
+      {
+        "file": "octave-run-mdsi.tsv",
+        "sha256": "353d0d35691e20ba5d36a053cb50e6d837a7e2c06767b42969e8e16c7ee8cb58"
+      },
+      {
+        "file": "octave-run-msssim.tsv",
+        "sha256": "36796fcabcd41f5c1767699c7aac3a5eba84a5b4915a3987fb24271716ce1ab2"
+      },
+      {
+        "file": "octave-run-vif.tsv",
+        "sha256": "26883b0fcf9fd1a53eb738e1134da86c42b4de80014b2ffe020f63dacca0d6c3"
+      },
+      {
+        "file": "octave-run-vifvec.tsv",
+        "sha256": "d367774e06f8c0c0963702e264a89e2680042bf9fe3a1b3c946df962c96eade1"
+      },
+      {
+        "file": "octave-run-vsi.tsv",
+        "sha256": "65e1e0bc46cb06c538e8825a4495428006de861f0ebdfd9c55f5dc8d75832c19"
+      },
+      {
+        "file": "octave-run-vsi-k2.tsv",
+        "sha256": "63d5aea87e38aa8e620d265c78cefa5781dce5c7bfee54748e482642a9ec5064"
+      },
+      {
+        "file": "octave-run-vsi-k3.tsv",
+        "sha256": "cdd04fd6233cd658c7bba49ad6b9c22d1bd2b5cd1490647f46f74bd9696071c5"
+      },
+      {
+        "file": "octave-run-vsi-k4.tsv",
+        "sha256": "8ffb952cb5c9c4da4fdf177d709818b73616b934d8198acf2181c903e5c26f58"
+      },
+      {
+        "file": "octave-run-vsi-nodownscale.tsv",
+        "sha256": "4ac464daa28378a8eafb4f7dc5f34e9d029d362ddbf619f9896f88a3b07dfcf7"
+      }
+    ]
   },
   "vif-corrected-run": {
     "plan_sha256": "eabc27785fd4262b6a01f44ef2f8fd6f4c7f2bbb287c7df6e3e2754bd4310978",
     "cases": 6,
-    "expected_cases": 6
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "vif-corrected-run.tsv",
+        "sha256": "410493b344086b640a782f0500aea1171897bbd46fa032f5b75fa7813287d577"
+      }
+    ]
   },
   "vmaf-run": {
     "plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
     "cases": 22,
-    "expected_cases": 22
+    "expected_cases": 22,
+    "artifacts": [
+      {
+        "file": "vmaf-run.tsv",
+        "sha256": "dc7a4ada80ab16efda10638cf05314579129771730c124647650fd8f06f7f4e2"
+      }
+    ]
   },
   "pyiqa-run": {
     "plan_sha256": "7c9060da7b774cfefbe2310765dfa447f44c8689c92bfac48f715601bbe47d51",
     "cases": 1,
-    "expected_cases": 60
+    "expected_cases": 60,
+    "artifacts": [
+      {
+        "file": "pyiqa-run.tsv",
+        "sha256": "afef705bb433d460fad727d93063a8350e688104be3ad83eaff294c00ad5cfc2"
+      }
+    ]
   },
   "pyiqa1152-run": {
     "plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "cases": 3,
-    "expected_cases": 60
+    "cases": 8,
+    "expected_cases": 60,
+    "artifacts": [
+      {
+        "file": "pyiqa1152-run.tsv",
+        "sha256": "2b39541a61a994a233287805f7ac10e94513b42916164e74581364873331bdd4"
+      }
+    ]
   },
   "remaining-run": {
     "plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "cases": 6,
+    "expected_cases": 36,
+    "artifacts": [
+      {
+        "file": "remaining-run.tsv",
+        "sha256": "93237132c668c0f8f2bd210f0c9a9dfc9fb863bda8811f592970fe093b5398cd"
+      }
+    ]
+  },
+  "matlab-extra-run": {
+    "plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
     "cases": 1,
-    "expected_cases": 36
+    "expected_cases": 10,
+    "artifacts": [
+      {
+        "file": "matlab-extra-run.tsv",
+        "sha256": "d7b582fb68a4019d478780081065ee62835158705f7d85382144abbe6a97085d"
+      }
+    ]
+  },
+  "ssim1-rgb-run": {
+    "plan_sha256": "6e1ad806dc033cd0cd990b138e984260e494bb8fd2c4ca78d4da7eeebc6ab60f",
+    "cases": 1,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "ssim1-rgb-run.tsv",
+        "sha256": "af2a894cc6042433dc62dc03c02ee1fb34bef8bad531b31649f35384eb009532"
+      }
+    ]
+  },
+  "flip-f64-run": {
+    "plan_sha256": "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
+    "cases": 1,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "flip-f64-run.tsv",
+        "sha256": "c34724bfa90609805388ead3230a9b1ca8f164f5bccec6914696216dd98ff94f"
+      }
+    ]
   }
 }
