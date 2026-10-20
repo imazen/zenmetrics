@@ -1,0 +1,620 @@
+{
+  "schema": "canonical-runtime-cleanliness-source-review/1",
+  "scope": "3 routes, two completed retained blocks each; no inference",
+  "sources": [
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_first_evaluation.py",
+      "bytes": 3613,
+      "sha256": "cff48a43b79eb71e369d28671e368bfda7bf13765b14fac86a8636557802487c"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py",
+      "bytes": 9056,
+      "sha256": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical_budgeted.py",
+      "bytes": 2928,
+      "sha256": "70463f6c395cc0112c7b5f010441db52eee2f0170c39e7ad2ca0a9561a5cdd85"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/haarpsi_primary.py",
+      "bytes": 8360,
+      "sha256": "72a44d50bae591c2835a13cf378cfc4827283f4d604c90159ede208b36e56a2b"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/supervision.py",
+      "bytes": 1665,
+      "sha256": "c80d5d8a5ef7ecd34d946107a29fa1db370c6649ddd38d2e8cd07b69e28b56f3"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_original_model_cell.py",
+      "bytes": 2693,
+      "sha256": "8b38fb9db4e31db0f5ca104bfff96bf6094aabcfd3915029297d47035506e033"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_author_network_cell.py",
+      "bytes": 9090,
+      "sha256": "c6ebc05c2703d9cbfa45b80ebed23350ab992feb63e7f9a00b2e213a50f7cc30"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/contention.py",
+      "bytes": 5447,
+      "sha256": "771d4e4475d100d49cd6c385f560b8472c5db294333f74889bac4c0db6b8cd3a"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/resource-accounting/src/main.rs",
+      "bytes": 5511,
+      "sha256": "4e1471e0fe6b060567be8f42d991d715701e4ca15769bfc8439d77e838c1f7bb"
+    },
+    {
+      "path": "/home/lilith/.cargo/git/checkouts/zenbench-e4c43f3151709158/ac675d3/src/platform.rs",
+      "bytes": 16880,
+      "sha256": "99ca5793392f7cb3aa09675f5f11fbf9767151182ac8f3d549e0a3d1b07c9af9"
+    },
+    {
+      "path": "/home/lilith/.cargo/git/checkouts/zenbench-e4c43f3151709158/ac675d3/src/monitor.rs",
+      "bytes": 3339,
+      "sha256": "dfbd1fa398951502808f7d357f462c187063f063a2cdcc01ba1667aaf3954cf9"
+    },
+    {
+      "path": "/home/lilith/.cargo/git/checkouts/zenbench-e4c43f3151709158/ac675d3/src/gate.rs",
+      "bytes": 27962,
+      "sha256": "cbbaf822e9e3ce7de7e0816272d9eeebc1cf2cdc91e9d7893e6ab2662d220d41"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident_nn_first.rs",
+      "bytes": 2432,
+      "sha256": "89464c53b5e86a32f49c982df4e4b40a2888c6327a50899ea226831856f525e3"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+      "bytes": 26774,
+      "sha256": "2948d4cd37f8ca11d6dcac113513a858e3c30b8c0b01912539a96b78877ba585"
+    }
+  ],
+  "bounded_blocks": [
+    {
+      "cohort": "deepdc",
+      "block": "block-00",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/result.json",
+        "bytes": 479,
+        "sha256": "86ffb7a887c31e8f98debaed0ae871d90fb050c269468c975bf814d19e8afae9"
+      },
+      "arms": [
+        {
+          "role": "canonical",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/canonical-stdout.log",
+              "bytes": 78,
+              "sha256": "8cfd0376d4209afe679bb516b6d5c7361a69ff86d77513af6c5d79b7bd959ab6"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/canonical-stderr.log",
+              "bytes": 669,
+              "sha256": "7d8e2759092fd7bdaa28d96d3053873134c83cdd37bd8209366c48b60be9b783"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/canonical-memory.txt",
+              "bytes": 1168,
+              "sha256": "ab198aa7ca214ca6b2c54aa9ca75c06fcda7a437cfd655cbc3422b2d07b7b494"
+            }
+          ]
+        },
+        {
+          "role": "native",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/native-stdout.log",
+              "bytes": 72,
+              "sha256": "5e05a08b45c6917497eda4f4f6f2d4d80175fba7cc685fb7883b3fda7c6c96d9"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/native-stderr.log",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00/native-memory.txt",
+              "bytes": 988,
+              "sha256": "83e0f38ca4b2ad415e381a726b221f65fbe6ac7c3ad0da17040f19ae6ec6b02c"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-00.log",
+        "bytes": 482,
+        "sha256": "b2a4fa1b741c5cf9aaf88da824d307304e53e1e000da2df337d3ab358d7f74bf"
+      }
+    },
+    {
+      "cohort": "deepdc",
+      "block": "block-19",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/result.json",
+        "bytes": 478,
+        "sha256": "0bdec933c09e2af9964fdf7b06c08b799de74f4cbcfd40cb5f09593f58ad0054"
+      },
+      "arms": [
+        {
+          "role": "native",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/native-stdout.log",
+              "bytes": 72,
+              "sha256": "c9936f9338528050431c0f50d0fdfdec7acf05f8332bd0ca0877e611feabc8c7"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/native-stderr.log",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/native-memory.txt",
+              "bytes": 988,
+              "sha256": "538d7a8ceef15c8e4b5cde976c2f1f9c2688d4af0dfce3738384863f77206224"
+            }
+          ]
+        },
+        {
+          "role": "canonical",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/canonical-stdout.log",
+              "bytes": 78,
+              "sha256": "fee8d5d756c589a3104e4a6d8bb934005e3278153870f699f679873b698226e6"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/canonical-stderr.log",
+              "bytes": 669,
+              "sha256": "7d8e2759092fd7bdaa28d96d3053873134c83cdd37bd8209366c48b60be9b783"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19/canonical-memory.txt",
+              "bytes": 1168,
+              "sha256": "48a2ff2c20252fff7ce4ab22aac394a87352ea3cf54c556044f2440cb5a1b344"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/block-19.log",
+        "bytes": 483,
+        "sha256": "ed29caf96b59249e50f34468591d0d4ce8f594dddc6a64179f48c0caccc39d30"
+      }
+    },
+    {
+      "cohort": "vgg",
+      "block": "block-00",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/result.json",
+        "bytes": 498,
+        "sha256": "109ac8c2c5c6f7bbce6319487e90c0479b2725784ebe537c43775101a7677e47"
+      },
+      "arms": [
+        {
+          "role": "canonical",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/canonical-stdout.log",
+              "bytes": 76,
+              "sha256": "2fd382697d9eeefa60543f3111eca08159830e4aaa642978ae374d109b4841a6"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/canonical-stderr.log",
+              "bytes": 669,
+              "sha256": "59636ad41e6fb31180dc9dd9e0d9c3a7f45616e62ba7b8dc6042811ddc10bfab"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/canonical-memory.txt",
+              "bytes": 1170,
+              "sha256": "08f2f78127b491a9b31fd7ce54dfe9bf88ff4190f667d780db8d984978c72993"
+            }
+          ]
+        },
+        {
+          "role": "native",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/native-stdout.log",
+              "bytes": 72,
+              "sha256": "007a84659fb669fb6761b1db96b1cb03894819ceb05394bca8921a4da146542d"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/native-stderr.log",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00/native-memory.txt",
+              "bytes": 991,
+              "sha256": "f192fa18f5ce9ae37eea97cd051b7bb7447f93be449412379a5dd8565d2beb60"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-00.log",
+        "bytes": 479,
+        "sha256": "b7ea5fe8355d600af51217b8ae7d5ceb24ae4f7eb1122040d00c9eea6a90d93e"
+      }
+    },
+    {
+      "cohort": "vgg",
+      "block": "block-24",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/result.json",
+        "bytes": 499,
+        "sha256": "853c9fb042291e2bf39c9184f7a835905ed05d91cf503f971e668ac8a47be0d8"
+      },
+      "arms": [
+        {
+          "role": "canonical",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/canonical-stdout.log",
+              "bytes": 76,
+              "sha256": "3c5e85c840fda7c75bef0699302ffffd68baab2a4aa9c1896f81dde595c0bd84"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/canonical-stderr.log",
+              "bytes": 669,
+              "sha256": "59636ad41e6fb31180dc9dd9e0d9c3a7f45616e62ba7b8dc6042811ddc10bfab"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/canonical-memory.txt",
+              "bytes": 1171,
+              "sha256": "bc3b1ffc8f73d9ba4c7eba0bafa6c8e0274c56e26794b105d381cb46a73be148"
+            }
+          ]
+        },
+        {
+          "role": "native",
+          "result_keys": [
+            "ns",
+            "score"
+          ],
+          "extra_keys": [],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/native-stdout.log",
+              "bytes": 72,
+              "sha256": "0b64f4dcc95f1d7883aece7e45f9c91a6ee51c1b3a7b43a47d04f6b0856770b0"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/native-stderr.log",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24/native-memory.txt",
+              "bytes": 991,
+              "sha256": "40aa823c42104baf9fbf9dcc51e2059a01bea2007193b965b283d7a144635bad"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-confirmation40/block-24.log",
+        "bytes": 480,
+        "sha256": "410207b425641e58adcc55d90bdac5e6eaf6dda2600483aa21ea98ef1654dc1a"
+      }
+    },
+    {
+      "cohort": "paq",
+      "block": "block-00",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/result.json",
+        "bytes": 8262,
+        "sha256": "72d4b32d35429cca01e2941fe487bf553cae7686f87d7e22a480e1c5d41b6e43"
+      },
+      "arms": [
+        {
+          "role": "canonical",
+          "result_keys": [
+            "score",
+            "times_ns",
+            "median_ns",
+            "extra"
+          ],
+          "extra_keys": [
+            "sample_scores"
+          ],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/canonical/command.json",
+              "bytes": 660,
+              "sha256": "16753b97caeb95fee8a77040cdce5ace4f0e3ee68fe273533168c5155c35bd67"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/canonical/stdout.log",
+              "bytes": 394,
+              "sha256": "f12029583ed224ce2615e46bed5eb3f84ca098e60456edc24acafcf8eac7d587"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/canonical/stderr.log",
+              "bytes": 675,
+              "sha256": "d2ad95f0f8d09973a762b657cd2365bcef2055f794a20647831597ba069a69e4"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/canonical/memory.txt",
+              "bytes": 1141,
+              "sha256": "f61a49f7a9618256d966a3a9ac9fb648fae5f846cf7996e6443b93f08375f193"
+            }
+          ]
+        },
+        {
+          "role": "rust",
+          "result_keys": [
+            "score",
+            "times_ns",
+            "median_ns",
+            "extra"
+          ],
+          "extra_keys": [
+            "width",
+            "height",
+            "reference",
+            "distorted",
+            "metric_name",
+            "threads",
+            "only_mode",
+            "timing_phase",
+            "required_samples",
+            "sample_target_ns",
+            "chunk_budget_ms",
+            "locked_process_accounting",
+            "mode",
+            "input_load_ns",
+            "load_before",
+            "admitted_unix_ns",
+            "model_preload_adapter",
+            "declared_columns",
+            "headline_declared_column",
+            "round_means_ns",
+            "zenbench_arm_index",
+            "zenbench_samples",
+            "rayon_threads_observed",
+            "simd_tier",
+            "n",
+            "median_ns",
+            "p10_ns",
+            "p90_ns",
+            "mean_ns",
+            "score",
+            "score_bits",
+            "map_score_matches_scalar_bits",
+            "ref_score",
+            "self_warmup_score",
+            "abs_delta",
+            "relative_delta",
+            "status",
+            "load_after",
+            "notes"
+          ],
+          "native_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/rust/command.json",
+              "bytes": 486,
+              "sha256": "d8c9e75f583e805836c484e0e5186c0314c5c337462ac1b55d0113164889d41f"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/rust/stdout.log",
+              "bytes": 4806,
+              "sha256": "880bbb028d5b1eeb2a8e164889b441ffa955b8c79d686d38ffc834d7118008ef"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/rust/stderr.log",
+              "bytes": 1986,
+              "sha256": "66be370c5032ba362010474950cd0b2f76ed1b739545c6c39ffe32efd6d6f72b"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00/rust/memory.txt",
+              "bytes": 998,
+              "sha256": "87838341c76876fd38e4bb92e3dc229e3f734e9fab477732f160f81f5c26a50a"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-00-wrapper.log",
+        "bytes": 590,
+        "sha256": "27b67715d337a5dd0b9085624272c9741dc7aef5b8f30167380183d8d8053555"
+      }
+    },
+    {
+      "cohort": "paq",
+      "block": "block-19",
+      "result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/result.json",
+        "bytes": 8294,
+        "sha256": "b4b6b287a88b38ad433bcaa34e9277f21205f386012d530770e2eb50d48ab838"
+      },
+      "arms": [
+        {
+          "role": "rust",
+          "result_keys": [
+            "score",
+            "times_ns",
+            "median_ns",
+            "extra"
+          ],
+          "extra_keys": [
+            "width",
+            "height",
+            "reference",
+            "distorted",
+            "metric_name",
+            "threads",
+            "only_mode",
+            "timing_phase",
+            "required_samples",
+            "sample_target_ns",
+            "chunk_budget_ms",
+            "locked_process_accounting",
+            "mode",
+            "input_load_ns",
+            "load_before",
+            "admitted_unix_ns",
+            "model_preload_adapter",
+            "declared_columns",
+            "headline_declared_column",
+            "round_means_ns",
+            "zenbench_arm_index",
+            "zenbench_samples",
+            "rayon_threads_observed",
+            "simd_tier",
+            "n",
+            "median_ns",
+            "p10_ns",
+            "p90_ns",
+            "mean_ns",
+            "score",
+            "score_bits",
+            "map_score_matches_scalar_bits",
+            "ref_score",
+            "self_warmup_score",
+            "abs_delta",
+            "relative_delta",
+            "status",
+            "load_after",
+            "notes"
+          ],
+          "native_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/rust/command.json",
+              "bytes": 486,
+              "sha256": "89c3b6d995af52355c5d096a1977c44a917de14a6a94ce197f2f86e5c9f1f266"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/rust/stdout.log",
+              "bytes": 4834,
+              "sha256": "871bc8dd7bd4b68f1654b760988b3a0b6830bb128592bfca8d2f07886d8c81df"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/rust/stderr.log",
+              "bytes": 1985,
+              "sha256": "b8112930bbcdda23c27b7f4c8dd449627e33459d1c5c1dbf7177435e97d8e3f6"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/rust/memory.txt",
+              "bytes": 997,
+              "sha256": "781ec2b4aa1cb2a783b2542adfefc2626c2353934a612ca60e37a24f96403e65"
+            }
+          ]
+        },
+        {
+          "role": "canonical",
+          "result_keys": [
+            "score",
+            "times_ns",
+            "median_ns",
+            "extra"
+          ],
+          "extra_keys": [
+            "sample_scores"
+          ],
+          "native_gate_clean": [],
+          "retained_files": [
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/canonical/command.json",
+              "bytes": 660,
+              "sha256": "d4de777884ca1dfdc8a7e44e0aa5bc6fb89d0a245be78756640d7f31704c970a"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/canonical/stdout.log",
+              "bytes": 395,
+              "sha256": "26801fcfe93e67dbeef0264cbf0aa1fcbc4b050348e7df883fa6a7503d29395f"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/canonical/stderr.log",
+              "bytes": 675,
+              "sha256": "d2ad95f0f8d09973a762b657cd2365bcef2055f794a20647831597ba069a69e4"
+            },
+            {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19/canonical/memory.txt",
+              "bytes": 1145,
+              "sha256": "2d7e63df441b6a6222f9d9a04ee344c135934a7da30f19c515311b2efa908d2a"
+            }
+          ]
+        }
+      ],
+      "wrapper": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/paq2piq-original-cid22-t8/block-19-wrapper.log",
+        "bytes": 591,
+        "sha256": "891668600db552bc91e2f65bd7519be7de498ef60cfffb957d5cc614a3f7706e"
+      }
+    }
+  ]
+}

@@ -662,3 +662,7 @@ existing timing flags and numerical decisions retain their qualifications.
 The [new command receipt](local40-scoped-fullcall-dssim-command.json) selects the source-bound author DSSIM reference with context construction and destruction inside each call. It preserves the forty-route ascending scheduling order and every numerical bound; four HDR and six VMAF model routes still withhold comparable timing ratios. Earlier plans and results remain unchanged.
 
 [Three further CPU profiles](grid-latest-profiles-2026-10-20/index.json) retain FLIP at 4K/28 workers and the small screen-pair DSSIM/SSIMULACRA2 GPU flags. CPU samples describe host execution and do not measure GPU kernel time or establish the full cause of a timing gap. Resource receipts accompany every profile.
+
+## Canonical runtime evidence limits, 2026-10-20
+
+The [bounded three-route source review](runtime-cleanliness-review.md) finds no independent canonical foreign-CPU observations in the selected retained PaQ2PiQ warm and DeepDC/VGG first-call arms. Whole-process memory/time receipts and admission locks do not establish call-local cleanliness. Numerical observations remain unchanged; timing intervals retain their descriptive qualification.

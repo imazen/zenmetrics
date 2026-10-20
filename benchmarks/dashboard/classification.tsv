@@ -1606,3 +1606,4 @@ benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-
 benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/profile-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/grid-latest-profiles-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/runtime-cleanliness-evidence.json	ignored	Bounded source and raw receipt identities for canonical runtime evidence limits; not new timings.
