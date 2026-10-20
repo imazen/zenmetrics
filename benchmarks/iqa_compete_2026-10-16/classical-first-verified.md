@@ -53,3 +53,12 @@ It acquires no measurements and assigns no missing numerical bound. Every
 capture uses a new output file; partially written summaries remain pending.
 The flags require fixed-stage confirmation and profiling before interpretation;
 the capture does not qualify runtime cleanliness or confidence intervals.
+
+After a complete fixed confirmation stage, use
+`just bench-iqa-canonical-classical-first-interval RESULTS NEW_OUTPUT` under
+shared heavy admission. An additional fixed stage uses `--additional RESULTS`;
+it must link to the initial confirmation plan and retain its exact cases and
+bindings. The analysis retains every block, verifies order and numerical gate
+records, and needs at least twenty blocks. A missing bound produces an explicit
+unqualified numerical result. These intervals describe acquired first-call
+variability and never accept a regression or establish runtime cleanliness.
