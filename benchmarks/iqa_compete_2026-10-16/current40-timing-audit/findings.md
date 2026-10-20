@@ -33,7 +33,8 @@ Reference interpolation is outside and native interpolation inside the clock.
 Passing array/ABBA/protocol/native score controls establish numerical behavior,
 not equal parameter-preparation placement.
 
-Owner disposition: retain numerical controls and raw base-HDR timings as
+Coordinator/root provisional judgment (no human-approved new exception): retain
+numerical controls and raw base-HDR timings as
 explicitly asymmetric descriptive evidence, excluded from strict acceptance.
 The [future raw-table-resident design](hdr-parameter-design.md) excludes file
 loading while keeping original interpolation timed, and names residual CSV-
@@ -54,3 +55,18 @@ No C-harness source path appears in the selected plan's bindings. Exact harness
 source-to-binary correspondence therefore needs supporting retained build
 provenance before treating this C source as independently proven binary input.
 This is a source-proof limit, not evidence of a different observed binary.
+
+## VMAF model preparation placement
+
+Six selected routes (`vmaf`, `vmaf-neg`, `vmaf-4k`, `vmaf-v1`,
+`vmaf-studio601`, `vmaf-neg-studio601`) parse embedded JSON and SVM support
+vectors inside each native warm callback. EA `metrics/vmaf.rs:67–83` calls
+`v0_score.rs:332–340` or `score.rs:402–410`; both construct a scorer on every
+call. Constructors (`v0_score.rs:53`, `score.rs:51`) call model constructors
+(`v0.rs:61–95`, `lib.rs:171–205`) which parse JSON/SVM, without a model cache
+on this path. The selected original wrapper `libvmaf_rgb_compare.cpp:97–103`
+loads its model before clocks 109–126 and destroys it after the loop at 129.
+Per-call VmafContext construction and destruction remain timed. Immutable-model
+preparation placement therefore differs; priming does not remove native parsing.
+No timing magnitude or numerical failure follows from source alone. Feature-only
+SSIM/MS-SSIM/PSNR/CAMBI routes do not load VmafModel and are excluded.

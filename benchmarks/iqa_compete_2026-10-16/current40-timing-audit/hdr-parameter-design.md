@@ -1,7 +1,8 @@
 # Future HDR raw-table-resident control design
 
 Source/design only. No new scorer, fixture execution, build or production edit.
-The retained numerical controls remain valid. Existing base-HDR timings remain
+The retained numerical controls remain valid. Under coordinator/root provisional
+judgment, with no human-approved new exception, existing base-HDR timings remain
 asymmetric descriptive observations, outside strict acceptance; no frozen plan
 or result is changed by this design. Base sRGB-display and 200-nit XYZ AIC
 conventions remain separate cohorts.
