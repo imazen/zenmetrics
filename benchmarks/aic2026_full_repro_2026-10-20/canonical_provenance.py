@@ -43,6 +43,8 @@ def main():
                   report_writer=dict(path=str(Path(__file__).resolve()), sha256=sha(__file__)),
                   bindings=manifest['bindings'],
                   metrics={}, addendum={}, exports={})
+    published = root/'fsim-vsi-reference.json'
+    report['published_comparisons'] = json.loads(published.read_text()) if published.exists() else None
     for group in ('metrics', 'addendum'):
         for name, spec in manifest[group].items():
             entry = dict(spec)
