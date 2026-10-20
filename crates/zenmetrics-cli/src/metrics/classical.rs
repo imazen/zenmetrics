@@ -6,6 +6,7 @@
 
 use crate::decode::Rgb8Image;
 
+#[path = "classical/psnr_kernels.rs"]
 mod psnr_kernels;
 
 /// True while an integer-valued squared-error sum of `count` terms (each

@@ -561,6 +561,15 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **Direct classical benchmark module resolution (2026-10-20).** The
+  MS-SSIM benchmark includes the CLI classical module by path; rustfmt then
+  sought its PSNR child beside the parent instead of in `classical/`.
+  An explicit child path selects the existing kernel source for both the
+  normal module and direct benchmark include. The formatter reproduces the
+  missing-file failure before this annotation and passes after it. No metric
+  arithmetic or numerical expectation changed; no local binary rebuild was
+  performed for this source-path correction.
+
 - **NR AVX-512 feature build exposed missing generated arms (2026-10-19).**
   Enabling NIQE/PIQE `avx512` called three `_v4x_t` functions omitted by the
   default `attune(_*_t)` expansion. The integration explicitly generates those
