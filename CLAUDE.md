@@ -2115,3 +2115,24 @@ these attempts contain no neural scores or timings. Original-network preparers
 now validate their 1100-second budget against the actual supervisor before
 writing plans. Replacements use new plan and result paths, retaining the refused
 attempts. Numerical bounds and native warm-round gates are unchanged.
+
+### Known Bugs: local canonical performance flags (2026-10-20)
+
+The Ryzen 9 7950X / WSL2 resident-RGB comparisons flag FLIP and FLIP-v17 at
+eight threads, and RTEN LPIPS-Alex at one and eight threads. Fixed-stage
+Rust/canonical medians and descriptive 95% intervals are:
+
+| Case (512×512) | Blocks | Rust/canonical | 95% interval |
+| --- | ---: | ---: | --- |
+| FLIP, 8 threads | 60 | 1.957927961720583 | 1.917466421937279–1.973160062353411 |
+| FLIP-v17, 8 threads | 20 | 1.9073448386822038 | 1.873063545529841–1.9386291310864587 |
+| LPIPS-Alex RTEN, 1 thread | 20 | 1.162649413650009 | 1.1455797183886958–1.1843805843799495 |
+| LPIPS-Alex RTEN, 8 threads | 20 | 1.3014597690629857 | 1.2544969542532667–1.3354180677802032 |
+
+The last interval misses ±3% precision; its fixed additional stage remains in
+progress. SSIMULACRA1 and LPIPS-VGG one-thread intervals straddle 1.08 and are
+borderline. These are comparison flags, with native resource flags retained,
+not independently qualified regression acceptance. No optimization is merged.
+The [local ledger](benchmarks/canonical_recheck_2026-10-19/README.md) owns the
+full intervals, per-case process RSS, resource-wrapper receipts and profile
+hashes. Its raw cohorts remain separate from the multi-host benchmark series.

@@ -337,3 +337,9 @@ LPIPS-VGG at one thread is borderline after the fixed 20-block follow-up:
 [1.0688039346866853, 1.094678059488856]. The interval meets ±3% precision
 and straddles 1.08. Its 22 flagged native observations among 200 remain
 recorded; regression qualification is still absent.
+
+For learned metrics, "warm" means resident immutable weights. Reference-image
+features are recomputed inside each complete pair call. In particular, the
+PyIQA CLI calls `Metric::evaluate`, whose port implementation uses `score_cold`;
+the separate warm-reference API is not used by these comparisons. The
+canonical PyTorch calls likewise evaluate both images inside the timed call.

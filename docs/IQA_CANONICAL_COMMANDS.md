@@ -197,6 +197,11 @@ those cases. Each acquired block still obtains both host locks and its memory
 cap. Process failures remain in their cohort and do not discard later queued
 checks. Existing output directories are refused.
 
+`bench-iqa-canonical-status MANIFEST --details` reads completed-case and block
+counts, pending cases and retained process/numerical findings. It starts no
+workers and does not qualify results; historical setup failures remain counted
+even when a separate replacement cohort succeeds.
+
 `bench-iqa-canonical-interval RESULTS NEW_JSON --additional SUCCESSOR_RESULTS`
 combines a completed fixed follow-up only when its recorded parent plan, source,
 worker and case contract agree. All blocks remain in the primary estimate. A

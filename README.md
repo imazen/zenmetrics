@@ -62,7 +62,7 @@ drivers and fleet executors with pinned build identities.
 
 Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 
-**Rust/C** is Rust time divided by canonical time (lower is faster). Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. ! flags any observed case above 1.08; R/O identifies RTEN/ORT CPU for neural ratios. see the ledger for confirmation status.
+**Rust/C** is Rust time divided by canonical time (lower is faster), using a representative warm cohort, preferring one thread. Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. ! flags any observed case above 1.08; R/O identifies RTEN/ORT CPU for neural ratios. See the ledger for confirmation status.
 
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
@@ -166,7 +166,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.096× |
 | [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.1× ! |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈1.1× R ! |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 3/3 pass | ≈1.1× R ! |
 | [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈0.96× R |
 | [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈1× O |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
@@ -187,7 +187,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | dmaniry/deepIQA | prior | — |
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | dmaniry/deepIQA | prior | — |
-| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | prior | — |
+| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.78× O |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Coo… | prior | — |
 | [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 1.1e-16 | ≈0.92× |
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | self reference | — |
@@ -823,7 +823,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
 | [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
-| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | pyiqa 0.1.16 create_metric('wadiqam_fr'), CPU fp32, metric(dist, ref) | not recorded | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
+| [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.000000002092197051023481 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
 
 </details>
 

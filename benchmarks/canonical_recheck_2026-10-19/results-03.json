@@ -87,20 +87,20 @@
   },
   "stlpips-alex": {
     "canonical": "stlpips-pytorch 0.0.2",
-    "check": "2/2 pass",
-    "ratio": 1.0978676014023583,
+    "check": "3/3 pass",
+    "ratio": 1.0565326061418554,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "1d3aa20e5582f0085dd2568db643d788ca34e06cd332315cede452bb342bf580",
+    "ratio_plan_sha256": "c15f657535f9e55369f2cd9b5b94c9a972c91ec1a33e5f71ebc6569a1c12af91",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.114611860253559,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 2.6342972345595045e-10,
@@ -108,7 +108,8 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "1d3aa20e5582f0085dd2568db643d788ca34e06cd332315cede452bb342bf580"
+      "1d3aa20e5582f0085dd2568db643d788ca34e06cd332315cede452bb342bf580",
+      "c15f657535f9e55369f2cd9b5b94c9a972c91ec1a33e5f71ebc6569a1c12af91"
     ],
     "qualified": false
   },
@@ -542,6 +543,33 @@
     ],
     "plan_sha256": [
       "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "wadiqam-pyiqa": {
+    "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+    "check": "2/2 pass",
+    "ratio": 0.7751317355001583,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
+    "ratio_engine": "ort-cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.7990613373164661,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 2.092197051023481e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
     ],
     "qualified": false
   },

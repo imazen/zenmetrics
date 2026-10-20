@@ -282,14 +282,16 @@ def readme_section(items):
     lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
            '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
            'Code and model terms, paper citations and full reference identities remain in the linked cards.',
-           '', '**Rust/C** is Rust time divided by canonical time (lower is faster). '
+           '', '**Rust/C** is Rust time divided by canonical time (lower is faster), '
+           'using a representative warm cohort, preferring one thread. '
            'Approximate local comparisons are descriptive, with their input size, thread budget and source pins '
            'in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). '
            'A dash means no comparable measurement. “Prior” means older recorded evidence; '
            '“gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. '
+           'Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. '
            '! flags any observed case above 1.08; '
            'R/O identifies RTEN/ORT CPU for neural ratios. '
-           'see the ledger for confirmation status.',
+           'See the ledger for confirmation status.',
            '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
         observation=comparisons.get(c['metric'],statuses.get(c['metric'],{}))
