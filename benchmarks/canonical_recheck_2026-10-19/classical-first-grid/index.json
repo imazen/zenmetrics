@@ -2,7 +2,7 @@
   "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
   "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
   "expected_cases": 240,
-  "completed_cases": 21,
+  "completed_cases": 28,
   "phase": "scorer_construct_first_eval",
   "shards": [
     {
@@ -18,27 +18,42 @@
     {
       "file": "cases-02.json",
       "cases": 3,
-      "sha256": "b695a4e7f69dafbd0943ea4d309a12d8fb8d333f00d22760fec507c971960feb"
+      "sha256": "0dfb7fa678c116920ab8ce7cddad48a966b5dced5035e7123a529e2aec533099"
     },
     {
       "file": "cases-03.json",
       "cases": 3,
-      "sha256": "62d9e9b6f7a5a5f194c31187e08d8059d5395cf25e6259de9bbce3b89ebb5087"
+      "sha256": "6e75864be9385ebe4a7183c6667360fe770b1ed8f44d268453639b5b988462d6"
     },
     {
       "file": "cases-04.json",
       "cases": 3,
-      "sha256": "7558bde3df6e2a7a458f491e2d0ff6eaa741275750a3281bdf0bcf3bfd362b58"
+      "sha256": "62d9e9b6f7a5a5f194c31187e08d8059d5395cf25e6259de9bbce3b89ebb5087"
     },
     {
       "file": "cases-05.json",
       "cases": 3,
-      "sha256": "8a6cdb6e19bc708daa78630328cea3e13d01fa6b366a3ad93053fda15544552b"
+      "sha256": "7558bde3df6e2a7a458f491e2d0ff6eaa741275750a3281bdf0bcf3bfd362b58"
     },
     {
       "file": "cases-06.json",
       "cases": 3,
-      "sha256": "6abdc13a9306e6aec919f4f9a4f6d80b8df3784aaa5057349b626d8235f5e941"
+      "sha256": "8a6cdb6e19bc708daa78630328cea3e13d01fa6b366a3ad93053fda15544552b"
+    },
+    {
+      "file": "cases-07.json",
+      "cases": 3,
+      "sha256": "1fbfa1fcbcf5dcf6d40c6f48a0e4cf56cdc2c48143b1452687220f32fe88de5c"
+    },
+    {
+      "file": "cases-08.json",
+      "cases": 3,
+      "sha256": "f842f2b580ad750cfb99df7fb29272d55086d84c10ffb9be3e255ad6a8dcd9e6"
+    },
+    {
+      "file": "cases-09.json",
+      "cases": 1,
+      "sha256": "fb1778fd9cec4df36720555a6bd6f1624bd04cc43da015e04bff70185b098c2e"
     }
   ],
   "fixture_amendment": {

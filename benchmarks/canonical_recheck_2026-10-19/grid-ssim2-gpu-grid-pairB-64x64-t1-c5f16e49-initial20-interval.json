@@ -1,0 +1,57 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "ssim2-gpu-grid-pairB-64x64-t1",
+      "blocks": 20,
+      "ratio": 1.0522325992745456,
+      "lower_95": 0.9661781323540197,
+      "upper_95": 1.380492465492493,
+      "relative_halfwidth": 0.31196511726044596,
+      "precision_within_three_percent": false,
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": "a194c4ab40b0eeb9f078be5d466497c866a898ede53e69a79dbaecaeb8d3d0e9",
+      "summary_sha256": "5e43af1c784d53c6af7847d025cc93595cb5c659817e28b9b8bd43e688d5660c",
+      "stage_summary_sha256": [
+        "5e43af1c784d53c6af7847d025cc93595cb5c659817e28b9b8bd43e688d5660c"
+      ],
+      "block_sha256": [
+        "39cb71f5db6dbc78dfa04127d8cbb8957f338aea2854fa41cf78bff634f3ab20",
+        "5d234263b00682cc039d61f4c40919cb1e06e2879db7e4b98b4be08c2693f7a3",
+        "1eef492dee02c8234c0a8a87970889f83859176726c71705d155c744b1250e8a",
+        "88539955204153c5173adb33e301f7d698758afe3da37feab429bbf20a409634",
+        "63f8ac1eac496a547db4620202212ad411ac1b2b8db3c9a9ca2be47bb0d04b1e",
+        "c8cf2732d13e71b6826dbb899bb1c37c602d298298e17e06e48cfbd4a8f91a15",
+        "f9bfd88409467eb7e766033eaa79c32812ad8228a74c76328b16c5b5d37e6960",
+        "326af4f019e0fc4e10d05b6fcf15c78d2605863903c6b9e46d895b818eb92e22",
+        "b762bb0b22e369b9736adb5308698f584f7c1feaa3da5eaaf55575c5cc1847d7",
+        "641d330b5ebf9cd1fcb1aa62df421346a320992dc9aba22955590691340b539b",
+        "524e7c6ccb2744354f75d26941b3e63cc3b9cf34f99c25467beb5e30a1cc07e0",
+        "ed24ed69cddcf34d2119980646be5770ed41830af397a8faa9f046b9ac8e47b9",
+        "52f26acbdcb572c8711cb93bf2e133dc55ca0021585a7a248f1ea6800e54fe61",
+        "96cf788230c3e79b26f178b0a4e6b56bed7dac1c6aaec5dd865096525b2eed23",
+        "a100d3e118f5c3ffa4313f732b6d7b6881cfaba2acf241a71414276fe8b34932",
+        "3c6ec62591805ffe9495a53b912c8aab2fdf00f645ee087200630e796cec7fde",
+        "0ab86e1de5cf5cf5ede9590584f2f1aac60e8502212ac792b4b8aa6f1a3c04a6",
+        "4bd39e99011b16e9a23d1697e4e46e34bdfe54a0a9cc16c91880e0536232dfe1",
+        "0ce6db2e2be261e0255f9db93ff081ba732efefa022f1436986bb2432f51c74c",
+        "0ea77425ce4954a4b5aaa45a921d6c47f0e125d15c5992db5093a02a72b4835c"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 60,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 14,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ],
+  "raw_interval": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/initial20-interval.json",
+    "sha256": "c9baf668cf7614afa2016265c10c4a07f22b8c550e0c3b48db95c5f78a7755e2"
+  },
+  "scope_note": "Descriptive interval; numerical bounds and resource flags remain unchanged. Older-fork DSSIM alternatives are not primary canonical evidence."
+}

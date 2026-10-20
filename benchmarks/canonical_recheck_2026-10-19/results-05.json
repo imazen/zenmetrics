@@ -1,10 +1,10 @@
 {
   "ws-hv": {
     "canonical": "IVP-Lab original WS_HV notebook",
-    "check": "\u0394 1.2e-09",
-    "ratio": 0.67124630369755,
-    "ratio_width": 64,
-    "ratio_height": 64,
+    "check": "\u0394 5.3e-09",
+    "ratio": 0.8890774588950012,
+    "ratio_width": 255,
+    "ratio_height": 257,
     "ratio_threads": 1,
     "ratio_cases": 2,
     "ratio_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
@@ -13,12 +13,12 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 1.2599111006016168,
-    "observed_cases": 17,
+    "observed_cases": 19,
     "expected_cases": 31,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 1.2442569197190778e-09,
+    "max_abs_delta": 5.311563633370042e-09,
     "rust_sources": [
       "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"

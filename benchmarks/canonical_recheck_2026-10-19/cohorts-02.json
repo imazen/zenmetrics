@@ -1,25 +1,109 @@
 {
+  "ssim2-gpu-grid-pairB-64x64-t1-c5f16e49-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/confirmation-run",
+    "plan_sha256": "a194c4ab40b0eeb9f078be5d466497c866a898ede53e69a79dbaecaeb8d3d0e9",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ssim2-gpu-grid-pairB-64x64-t1-c5f16e49-confirmation-run.tsv",
+        "sha256": "670e37fd974db7d4df759b35c428bcec59a583f95bdf31221edd638153ad17da"
+      }
+    ]
+  },
+  "stlpips-alex-pair-cid22-t1-1d3aa20e-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t1-1d3aa20e/confirmation-run",
+    "plan_sha256": "c15f657535f9e55369f2cd9b5b94c9a972c91ec1a33e5f71ebc6569a1c12af91",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "stlpips-alex-pair-cid22-t1-1d3aa20e-confirmation-run.tsv",
+        "sha256": "38f94ef71454038b124239674ed3f0de8e11a831fc854c52ca9b1b49356b277b"
+      }
+    ]
+  },
+  "stlpips-alex-pair-cid22-t8-1d3aa20e-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t8-1d3aa20e/confirmation-run",
+    "plan_sha256": "2ff5d5dd47727d64105c7d18b8c579e343d52823b5511551825dc19da8e1af2f",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "stlpips-alex-pair-cid22-t8-1d3aa20e-confirmation-run.tsv",
+        "sha256": "6f4531911592791435dfeaf009968f2bd004772936f818c1a9f4ccf9db777dba"
+      }
+    ]
+  },
+  "stlpips-alex-pair-cid22-t8-1d3aa20e-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t8-1d3aa20e/fixed-add40-run",
+    "plan_sha256": "ac1169840df1506726b29c15819f1af945530980a8980fb76522558f46f5d2a6",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "stlpips-alex-pair-cid22-t8-1d3aa20e-fixed-add40-run.tsv",
+        "sha256": "40f0c10c6b150115f04891fd31232b4be4dec2635879b46e2cdc2a351f59e472"
+      }
+    ]
+  },
+  "stlpips-runtime-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/stlpips-runtime-run",
+    "plan_sha256": "1d3aa20e5582f0085dd2568db643d788ca34e06cd332315cede452bb342bf580",
+    "cases": 3,
+    "expected_cases": 3,
+    "artifacts": [
+      {
+        "file": "stlpips-runtime-run.tsv",
+        "sha256": "31220f93683adfd3aac59b15590aafd8e981ec7b9aedaf90fc0fa7676ff6b9d4"
+      }
+    ]
+  },
+  "vif-corrected-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/vif-corrected-run",
+    "plan_sha256": "eabc27785fd4262b6a01f44ef2f8fd6f4c7f2bbb287c7df6e3e2754bd4310978",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "vif-corrected-run.tsv",
+        "sha256": "15d16a89e1428b75bc63a55095602f0dc227cec02def7bf1f312d977a0b8d8ca"
+      }
+    ]
+  },
+  "vmaf-current-grid-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-current-grid-run",
+    "plan_sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
+    "cases": 15,
+    "expected_cases": 168,
+    "artifacts": [
+      {
+        "file": "vmaf-current-grid-run.tsv",
+        "sha256": "0630737fda2f94cc5c6a8793935fd70109051f1b118b96a7793621dfa9fff531"
+      }
+    ]
+  },
   "vmaf-fullcall-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run",
     "plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
-    "cases": 3,
+    "cases": 10,
     "expected_cases": 144,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current-grid-run.tsv",
-        "sha256": "7acac99812492722479c554355b079f3e6b394ef46e0d355791a6ebd32c3fcd4"
+        "sha256": "ed5f297b393bb0b72b5f7dc1e7424f3796ea111934da9685219bcb5b130c9682"
       }
     ]
   },
   "vmaf-fullcall-current40-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run",
     "plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
-    "cases": 4,
+    "cases": 11,
     "expected_cases": 12,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current40-run.tsv",
-        "sha256": "79b5ae5f347ff7784954a0add0ae53bf9f7e050bf2839aecc80aa26962dc72fa"
+        "sha256": "9bb33e1772894f5092a723cb0a4d4bfdeb59d7528ff6e16f4726053c058a5bd8"
       }
     ]
   },

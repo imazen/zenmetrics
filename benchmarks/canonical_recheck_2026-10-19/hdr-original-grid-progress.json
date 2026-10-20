@@ -1,0 +1,83 @@
+{
+  "expected_cases": 48,
+  "expected_metric_children": 96,
+  "acquired_case_records": 6,
+  "cases": [
+    {
+      "case": "original12-hdrvdp-grid-pairA-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 4.4966493675246966e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-255x257-t1-warm-current40/result.json",
+        "sha256": "42bab70b386b884dbc38b2c500d3c841196c37c49d27e63543c524db6ef19fe4"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 1.596125044756036e-05,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-64x64-t1-warm-current40/result.json",
+        "sha256": "bd733b572457869da9628d2936fdb45799258eb0f932b4ee0892751d21094802"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 1.596125044756036e-05,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-64x64-t28-warm-current40/result.json",
+        "sha256": "adb92e3a20271f98c76a4b3873f9b64d2429ec3ba16392dd4d71dad9c41b7e98"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40/result.json",
+        "sha256": "ba70f8a133ac00d539d6324c42a839cf5486f0d5e97f01988ef2e37223bde736"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-64x64-t1-warm-current40/result.json",
+        "sha256": "370e170a35227d92ad0dc760ed53608ec1a8492c3a362de3c525e8b251a0cdd0"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-64x64-t28-warm-current40/result.json",
+        "sha256": "a08886e2c6ca27f77389e0ceeb51a6955cf9204b2dc4316559bd44450e35369b"
+      }
+    }
+  ],
+  "ratio": null,
+  "matched_scope": false,
+  "qualified_timing_cells": 0,
+  "qualification": "Separate warm numerical panel; not original/direct or ABBA or first-call qualification. CPU row scalar comes from initialization/warmup, not every timed return. V3 bounds remain null; no timing ratio supplied."
+}
