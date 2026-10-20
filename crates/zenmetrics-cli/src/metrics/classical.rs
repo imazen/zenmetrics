@@ -98,7 +98,7 @@ pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, Str
             // (65.481R + 128.553G + 24.966B)/255)` — the JPEG/JFIF
             // YUV420 luma convention, the ffmpeg/libvmaf Y plane, and
             // the JPEG AIC-4 `PSNR-Y` column. Same per-pixel formula
-            // (and f32 arithmetic) as `studio601_y_plane`.
+            // (and f32 arithmetic) as `studio601_y_plane_u16`.
             let mse = if sse_fits_f64(n) {
                 psnr_kernels::studio601_y_sse(&r.pixels, &d.pixels) as f64 / n as f64
             } else {
