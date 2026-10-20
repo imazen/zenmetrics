@@ -1649,7 +1649,7 @@ bench-iqa-changed *options:
 
 # Compare Rust with explicit, hash-bound original/reference implementations.
 bench-iqa-canonical plan output *options:
-    python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical.py '{{plan}}' '{{output}}' {{options}}
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical_budgeted.py '{{plan}}' '{{output}}' {{options}}
 
 # Finish missing blocks only, after the original coordinator has stopped.
 bench-iqa-canonical-resume output *options:
@@ -1659,7 +1659,10 @@ bench-iqa-canonical-plan +options:
     python3 -B benchmarks/iqa_compete_2026-10-16/prepare_canonical_comparison.py {{options}}
 
 bench-iqa-canonical-check:
-    python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_compare_canonical.py
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_compare_canonical test_canonical_samples test_canonical_intervals test_resume_canonical
+
+bench-iqa-canonical-interval results output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/canonical_intervals.py '{{results}}' '{{output}}'
 
 bench-iqa-canonical-publish output +cohorts:
     python3 -B benchmarks/iqa_compete_2026-10-16/publish_canonical_comparison.py '{{output}}' {{cohorts}}
@@ -1672,6 +1675,9 @@ bench-iqa-canonical-ssim1-build source output:
 
 bench-iqa-canonical-gpu-build source target:
     CARGO_TARGET_DIR='{{target}}' CARGO_PROFILE_RELEASE_LTO=thin CUDARC_CUDA_VERSION=12000 RUSTFLAGS='--cfg iqa_compete_ingress --cfg iqa_compete_cached' cargo build --locked --release --manifest-path '{{source}}/Cargo.toml' -p cpu-profile --features compete,metrics-parallel,study-gpu-cuda --bin iqa-compete
+
+bench-iqa-canonical-cpu-build source target:
+    CARGO_TARGET_DIR='{{target}}' CARGO_PROFILE_RELEASE_LTO=thin RUSTFLAGS='--cfg iqa_compete_ingress --cfg iqa_compete_cached' cargo build --locked --release --manifest-path '{{source}}/Cargo.toml' -p cpu-profile --features compete,metrics-parallel,zenmetrics-cli/nr --bin iqa-compete
 
 bench-iqa-canonical-profile binary config output:
     perf record -F 999 --call-graph dwarf -o '{{output}}.data' -- '{{binary}}' '{{config}}'
@@ -1694,9 +1700,21 @@ bench-iqa-canonical-export-original source python ladder output:
     done
     '{{python}}' -I '{{source}}/crates/zenmetrics-nn/models/deepdc/export.py' '{{ladder}}' '{{output}}' 512
 
+bench-iqa-canonical-model-verify root output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/verify_copied_models.py '{{root}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-copy-assets manifest output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/copy_canonical_assets.py '{{manifest}}' '{{output}}'
+
+bench-iqa-canonical-original-nn-plan +options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_original_nn_comparison.py {{options}}
+
 # Link an explicitly supplied original libvmaf archive; no replacement kernel.
 bench-iqa-canonical-vmaf-build source library output:
     c++ -O3 -Wall -Wextra -ffp-contract=off -std=c++17 -I '{{source}}/libvmaf/include' benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp '{{library}}' -pthread -lm -o '{{output}}'
+
+bench-iqa-canonical-daala-build source library output:
+    c++ -O3 -Wall -Wextra -ffp-contract=off -std=c++17 -I '{{source}}/libvmaf/include' benchmarks/iqa_compete_2026-10-16/libvmaf_daala_rgb.cpp '{{library}}' -pthread -lm -o '{{output}}'
 
 bench-iqa-canonical-nr-goldens source target root:
     ZENMETRICS_NR_GOLDEN_ROOT='{{root}}' CARGO_TARGET_DIR='{{target}}' cargo test --locked --release --manifest-path '{{source}}/Cargo.toml' -p brisque -p niqe -p piqe --all-features --test parity -- --nocapture

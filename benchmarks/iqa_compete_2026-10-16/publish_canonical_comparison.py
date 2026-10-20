@@ -51,11 +51,21 @@ def read_cohort(root, dispositions):
                 found=re.search(r'Maximum resident set size \(kbytes\):\s*(\d+)',memory.read_text())
                 if found:rss.append(int(found[1]))
             record[role+'_max_process_rss_kbytes']=max(rss) if rss else None
+        resources=[]
+        for log in sorted(path.parent.glob('block-*-wrapper.log')):
+            match=re.search(r'run-heavy: done rc=(\d+) .*?peak-RSS ([\d.]+)GiB \| min-avail (\d+)MiB \| peak-load ([\d.]+)',log.read_text())
+            if match:
+                resources.append((int(match[1]),float(match[2]),int(match[3]),float(match[4])))
+        record['wrapper_receipts']=len(resources)
+        record['wrapper_peak_rss_gib']=max((r[1] for r in resources),default=None)
+        record['wrapper_min_available_mib']=min((r[2] for r in resources),default=None)
+        record['wrapper_peak_load']=max((r[3] for r in resources),default=None)
         rows.append(record)
     return rows
 
 
-def project(rows):
+def project(rows, preferred_sources=None):
+    preferred_sources=preferred_sources or {}
     grouped=defaultdict(list)
     for row in rows:
         if not row['excluded_contract']:
@@ -79,27 +89,30 @@ def project(rows):
         # The row has room for one representative ratio. Keep its actual shape,
         # worker count and sample cohort in the expanded evidence model.
         eligible=[r for r in entries if r['ratio'] is not None]
+        preferred=preferred_sources.get(name)
+        candidates=[r for r in eligible if not preferred or r['rust_source']==preferred]
         key=None
         # Runtime failures stay visible in `check` and the case ledger. They
         # do not erase a separate completed measurement; numerical findings do.
-        if eligible and not failed:
+        if candidates and not failed:
             group_counts=defaultdict(int)
-            for r in eligible:
+            for r in candidates:
                 group_counts[(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])]+=1
             def preference(r):
                 size=(r['width'],r['height'])
                 group=(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])
                 return (r['threads']!=1, -min(3,group_counts[group]),size!=(1024,1024),
                         size!=(512,512),-r.get('blocks',0),-r['width']*r['height'],r['threads'])
-            chosen=min(eligible,key=preference)
+            chosen=min(candidates,key=preference)
             key=(chosen['width'],chosen['height'],chosen['threads'],chosen['rust_source'],chosen['plan_sha256'])
-            selected=[r for r in eligible if (r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])==key]
+            selected=[r for r in candidates if (r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])==key]
         else:
             selected=[]
         result[name]=dict(canonical=entries[0]['canonical'],check=check,
             ratio=statistics.median(r['ratio'] for r in selected) if selected else None,
             ratio_width=key[0] if key else None,ratio_height=key[1] if key else None,
             ratio_threads=key[2] if key else None,ratio_cases=len(selected),
+            ratio_source=key[3] if key else None,ratio_plan_sha256=key[4] if key else None,
             ratio_blocks=min(r.get('blocks',0) for r in selected) if selected else 0,
             worst_ratio=max(r['ratio'] for r in eligible) if eligible else None,
             observed_cases=len(entries),expected_cases=expected,passed_cases=passed,failed_cases=failed,
@@ -129,6 +142,7 @@ def main():
     p.add_argument('cohorts',nargs='+',type=Path)
     p.add_argument('--dispositions',type=Path,help='Explicit plan-sha:metric -> contract-mismatch reason')
     p.add_argument('--goldens',type=Path,help='Separate completed local golden-test receipts')
+    p.add_argument('--prefer-source',action='append',default=[],metavar='METRIC=COMMIT',help='Select an explicitly revised source for the representative ratio; retain all historical cases')
     a=p.parse_args()
     a.output.mkdir(exist_ok=True)
     dispositions=json.loads(a.dispositions.read_text()) if a.dispositions else {}
@@ -163,7 +177,7 @@ def main():
     identities=[(r['plan_sha256'],r['case']) for r in combined]
     if len(identities)!=len(set(identities)):
         raise ValueError('duplicate acquired cases across selected cohorts')
-    value=project(combined)
+    value=project(combined,dict(item.split('=',1) for item in a.prefer_source))
     if a.goldens:
         attach_goldens(value,json.loads(a.goldens.read_text()),sha(a.goldens))
     text=json.dumps(value,indent=2)+'\n'

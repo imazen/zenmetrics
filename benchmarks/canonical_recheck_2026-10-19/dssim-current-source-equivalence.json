@@ -1,0 +1,15 @@
+{
+  "frozen_source": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+  "compared_remote": "287921882c7d47c8ffcaa13226e20794be2408b0",
+  "tracked_inputs": 1857,
+  "source_digest_sha256": "6bf8e09d240dbb290b8ce95ca804a2b232df97eeee379191b490492f92f83468",
+  "benchmark_adapters": [
+    "crates/fsim/src/lib.rs",
+    "crates/haarpsi/src/lib.rs",
+    "crates/vmaf/src/lib.rs",
+    "crates/vmaf/src/v0.rs",
+    "crates/zenmetrics-cli/src/metrics/vmaf.rs"
+  ],
+  "dssim_revision": "22e9ab033d5e5ac41ee961de00e7ae9bd959b634",
+  "meaning": "Tracked crate inputs, manifests, lock and pinned CI sibling configuration match; known snapshot-only benchmark adapters are compared using their recorded original hashes."
+}

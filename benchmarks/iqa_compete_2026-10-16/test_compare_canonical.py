@@ -57,6 +57,18 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(result['ratio'],.5)
         self.assertEqual(result['process_error_cases'],1)
 
+    def test_revised_source_selection_keeps_historical_cases(self):
+        from publish_canonical_comparison import project
+        row=dict(metric='example',excluded_contract='',expected_cases=1,plan_sha256='old-plan',
+                 passed=True,max_abs_delta=0.,ratio=.5,width=512,height=512,threads=1,
+                 rust_source='old-source',canonical='primary')
+        updated=dict(row,plan_sha256='new-plan',rust_source='new-source',ratio=.4)
+        result=project([row,updated],{'example':'new-source'})['example']
+        self.assertEqual(result['ratio'],.4)
+        self.assertEqual(result['ratio_source'],'new-source')
+        self.assertEqual(result['observed_cases'],2)
+        self.assertEqual(result['rust_sources'],['new-source','old-source'])
+
 
 if __name__ == '__main__':
     unittest.main()

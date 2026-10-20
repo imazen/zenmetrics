@@ -146,3 +146,24 @@ remaining original attempts. The exclusive coordinator lock still proves the
 old controller is absent; every prior attempt/config/log seal is verified.
 The default still requires a terminal campaign. Completed clean cells are never
 selected, and create-once reservations prevent reusing the retry cap.
+
+The current comparative entry point checks every canonical warm score against
+the plan's existing bound. Small nondeterministic reductions remain recorded;
+they are not rejected solely for differing between warm calls. Retained older
+plans keep their original runner. Optional plan fields `arm_timeout_seconds`
+and `rust_chunk_budget_ms` extend acquisition budgets for slow neural models;
+the native worker's 850000 ms cap and ten warm rounds remain unchanged.
+
+`just bench-iqa-canonical-resume RESULTS --blocks N --samples N` finishes
+missing blocks after the original coordinator has stopped. It preserves both
+completed and interrupted attempts. `just bench-iqa-canonical-interval RESULTS
+NEW_JSON` bootstraps complete alternating-block ratios, without pooling inner
+samples, and records every native resource flag. An interval is descriptive;
+flagged observations never become an accepted regression through resampling.
+
+Original neural comparisons can use an already frozen graph bundle.
+`bench-iqa-canonical-model-verify` checks explicitly selected copies against its
+existing hash manifest. `bench-iqa-canonical-original-nn-plan` freezes original
+LPIPS, ST-LPIPS, DISTS and DeepDC callables, graph identities, source, reference
+weights and the existing JND/1000 bounds. Build and prepare under shared
+admission; run neural measurements after the classical comparisons.
