@@ -497,7 +497,8 @@ def coherence(metrics, perf, repro, aic):
         import datetime
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(perf['synced_utc'])
         if age.total_seconds() > 3 * 3600:
-            add('warn', 'timings sync', f"benchmarks/iqa_saved_latest last synced {perf['synced_utc'][:16]} UTC, {age.total_seconds() / 3600:.0f} h before this build")
+            add('warn', 'no new timings', f"newest timing evidence is from {perf['synced_utc'][:16]} UTC, {age.total_seconds() / 3600:.0f} h before this build; "
+                "the five-minute sync commits only when the campaigns produce new results, so the campaigns have produced none since")
     if perf and perf.get('identity_conflicts_dropped'):
         add('warn', 'timings identity', f"{perf['identity_conflicts_dropped']} rows dropped: one cell came from more than one binary or input")
     return out
