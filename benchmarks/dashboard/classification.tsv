@@ -1639,3 +1639,4 @@ benchmarks/canonical_recheck_2026-10-19/current-source-lineage/routes-02.json	ig
 benchmarks/canonical_recheck_2026-10-19/current-source-lineage/source-hashes.json	ignored	provenance
 benchmarks/canonical_recheck_2026-10-19/current-source-lineage/cohort-evidence.json	ignored	provenance
 benchmarks/canonical_recheck_2026-10-19/current-source-lineage/review.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/google-butteraugli-completed26.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.

@@ -1,0 +1,428 @@
+{
+  "date": "2026-10-20T21:20:24.973586+00:00",
+  "metric": "butteraugli-original",
+  "completed_warm_cases": 26,
+  "representative_cases": 2,
+  "size_content_grid_cases": 24,
+  "observed_max_abs_delta": 0.0,
+  "observed_max_ratio": 0.8724278528856486,
+  "queue": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-queue.json",
+    "sha256": "0a4a201dcfa9037e7d7930994fd3ad961c1700c16ec20c97e542c572c83c3dc6"
+  },
+  "cohorts": [
+    {
+      "plan": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-plan.json",
+        "sha256": "bb9d7a0cab9df9379418670e64f50704f0f3ff7223e44f7e6f3ad901f69e960c"
+      },
+      "rows": [
+        {
+          "case": "butter-original-budget-512x512-t1",
+          "width": 512,
+          "height": 512,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.7162451419493894,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-run/butter-original-budget-512x512-t1/summary.json",
+            "sha256": "e30220e39b7803c87f0c437de5c573c259ce8029f2d642b5457155a2d6615e5d"
+          }
+        },
+        {
+          "case": "butter-original-budget-512x512-t28",
+          "width": 512,
+          "height": 512,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.7205970602992836,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-run/butter-original-budget-512x512-t28/summary.json",
+            "sha256": "924ac387d911d0f8ed19cac1735c889b140c05a2800356a3ad07b40b3a5c7bd3"
+          }
+        }
+      ]
+    },
+    {
+      "plan": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-plan.json",
+        "sha256": "e24d59f9728f6ed4d64b158e82446f1e1eb3662f52afed852a2de142e2d29b0f"
+      },
+      "rows": [
+        {
+          "case": "butteraugli-original-grid-pairA-64x64-t1",
+          "width": 64,
+          "height": 64,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.8724278528856486,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-64x64-t1/summary.json",
+            "sha256": "153c2beca1324f7197d5bf7b7b27fae48e9db9cdea4de22df02974a9e7e1b6d2"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-64x64-t28",
+          "width": 64,
+          "height": 64,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.867734692693502,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-64x64-t28/summary.json",
+            "sha256": "6e91996e60d0f8fe5c469325413e15bb7c96ae198eef458e7b2fbcb2f6900232"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-255x257-t1",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.7055978750497013,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-255x257-t1/summary.json",
+            "sha256": "e7b07b1ac99df6ad2adac9f839313465c2e88a63f9ab0eabcd668316d2ff5d90"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-255x257-t28",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6411536702967828,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-255x257-t28/summary.json",
+            "sha256": "a80a1a33df3b9d4face358dc3fe8ecf0a181dd21db7c299b9214c11f1204b028"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-1024x1024-t1",
+          "width": 1024,
+          "height": 1024,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.683200704490873,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-1024x1024-t1/summary.json",
+            "sha256": "da8a0688af5e3187e729646967c625b1ac393f60ad131a0e7952b9402dcc1ab0"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-1024x1024-t28",
+          "width": 1024,
+          "height": 1024,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.687942677471362,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-1024x1024-t28/summary.json",
+            "sha256": "1d676c18c35121192e6c13db4144103f3fa01d3f1d2b326da6c2322f50f0cafa"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-3840x2160-t1",
+          "width": 3840,
+          "height": 2160,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6866866968675032,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-3840x2160-t1/summary.json",
+            "sha256": "c59c96576590acba8efe504328e74ee79606d8bc5ede02e39d643348c86d06f2"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairA-3840x2160-t28",
+          "width": 3840,
+          "height": 2160,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.691751152833437,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-3840x2160-t28/summary.json",
+            "sha256": "105452dd1fb8fba4b0df991bb36a60d65eab39cf549779cc9dfa8e1c4a115803"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-64x64-t1",
+          "width": 64,
+          "height": 64,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.8654490989334479,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-64x64-t1/summary.json",
+            "sha256": "b26e11aa4182d13b012d37b853177dac1ae83cbc44237f3ca025cbe6ab16ddab"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-64x64-t28",
+          "width": 64,
+          "height": 64,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.8504931265973883,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-64x64-t28/summary.json",
+            "sha256": "a22b75a34ac16a984b4d62488d9e4035099b7537f4b3d21b9b3764bdca07f41b"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-255x257-t1",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.63818018372585,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-255x257-t1/summary.json",
+            "sha256": "49f01fc8cd8ccf634372777bd59bf8139e5da03566e8454521d85ea8c2eee6ca"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-255x257-t28",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6319369426404324,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-255x257-t28/summary.json",
+            "sha256": "2a6b7f525c9be7b275986cd71549a42f5f175645e333930d976b3fffa2dab41c"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-1024x1024-t1",
+          "width": 1024,
+          "height": 1024,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6961624781080947,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-1024x1024-t1/summary.json",
+            "sha256": "3221233d276f0c624d121da0a36773ce569b60987f0f2e427b9174a4c0ad1d19"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-1024x1024-t28",
+          "width": 1024,
+          "height": 1024,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6869507752512163,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-1024x1024-t28/summary.json",
+            "sha256": "430555cb63cf0904d79f0c907d11c57bdc441337313d6b398081fd6d792b938c"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-3840x2160-t1",
+          "width": 3840,
+          "height": 2160,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6880981076013065,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-3840x2160-t1/summary.json",
+            "sha256": "8997b0f148928300cdfb42137b6a68b7125ffab55b498c12046a5ffecca52272"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairB-3840x2160-t28",
+          "width": 3840,
+          "height": 2160,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6983626341852822,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairB-3840x2160-t28/summary.json",
+            "sha256": "50e3fe7aed76dc81107572827a89a7ed239719bec5e93ce89bf582acca5357c2"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-64x64-t1",
+          "width": 64,
+          "height": 64,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.8690673009776536,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-64x64-t1/summary.json",
+            "sha256": "293cdf1374408b270780d326836c28c7a561446f09e0d71b2fc763582b5d187b"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-64x64-t28",
+          "width": 64,
+          "height": 64,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.8710921697513048,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-64x64-t28/summary.json",
+            "sha256": "3fed74372cc36af0c0f7f2509c557be1f512a1e1cec777220dfaf863514a04ce"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-255x257-t1",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6437937328773021,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-255x257-t1/summary.json",
+            "sha256": "cddcab28d87d31af0095f04f0b9e27e2629f14e5d77a723a020495b127ce27e6"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-255x257-t28",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6338557673069932,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-255x257-t28/summary.json",
+            "sha256": "6a02e91710eda5c4d89195c464d97178d799411a4e03078dabb19b6b5a20d68b"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-1024x1024-t1",
+          "width": 1024,
+          "height": 1024,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.7036202470324386,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-1024x1024-t1/summary.json",
+            "sha256": "6dd8e4ff9fcb4e9c7dbe3f7215b298b1d409006146a7f943fb75cfa1de6ef5a2"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-1024x1024-t28",
+          "width": 1024,
+          "height": 1024,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6989236077440774,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-1024x1024-t28/summary.json",
+            "sha256": "e2d921a4d25e0401f31231bd9eff523db58b2da077412fe011c4e523690ca2f6"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-3840x2160-t1",
+          "width": 3840,
+          "height": 2160,
+          "threads": 1,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6853277771775365,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-3840x2160-t1/summary.json",
+            "sha256": "fd7ed0ee672b2e9062364e3d7f6d629a90a1959f6d5061c46e94a0fe1083a2bf"
+          }
+        },
+        {
+          "case": "butteraugli-original-grid-pairC-3840x2160-t28",
+          "width": 3840,
+          "height": 2160,
+          "threads": 28,
+          "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+          "max_abs_delta": 0.0,
+          "absolute_bound": null,
+          "passed": null,
+          "ratio": 0.6894284207584049,
+          "summary": {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairC-3840x2160-t28/summary.json",
+            "sha256": "4dc9222207078922e0618bc49af68bc0512f21bd106d9ab46647ae3da8b4e6f0"
+          }
+        }
+      ]
+    }
+  ],
+  "highest_recorded_block_rss": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run/butteraugli-original-grid-pairA-3840x2160-t1/block-01-wrapper.log",
+    "sha256": "10a8fa83e34d7f531fb2348c911d167f1fedc51ec091c3e2543a1d147a2466ce",
+    "line": "run-heavy: done rc=0 72s | peak-RSS 1.54GiB | min-avail 13470MiB | peak-load 1.89",
+    "peak_rss_gib": 1.54
+  },
+  "qualification": "Completed retained warm observations only; null numerical bounds stay null. Canonical supports one worker, including requested28-cap cases. Sources retain their original identities; no compiled-source equality, cold-call coverage, confidence interval or canonical runtime-cleanliness acceptance is inferred."
+}
