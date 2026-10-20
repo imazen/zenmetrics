@@ -30,6 +30,15 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result['n'], 0)
         self.assertEqual(result['match'], 'MISS')
 
+    def test_strict_bound_rejects_the_boundary_without_changing_inclusive_default(self):
+        result, _ = compare('metric', 'oracle', {'a': .5}, {'a': 0.}, .5, '<')
+        self.assertEqual(result['match'], 'MISS')
+        self.assertEqual(result['gate'], 'abs<0.5')
+        result, _ = compare('metric', 'oracle', {'a': .25}, {'a': 0.}, .5, '<')
+        self.assertEqual(result['match'], 'MATCH')
+        with self.assertRaisesRegex(ValueError, 'unsupported comparison bound'):
+            compare('metric', 'oracle', {'a': 0.}, {'a': 0.}, .5, '>')
+
     def test_no_bound_stays_unqualified(self):
         result, _ = compare('metric', 'oracle', {'a': 10.}, {'a': 1.}, None)
         self.assertEqual(result['match'], 'no-gate')

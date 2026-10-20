@@ -52,6 +52,9 @@ def main():
     parser.add_argument('--runtime-qualifications', type=Path)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
+    analysis_predecessor = manifest.get('analysis_predecessor')
+    if analysis_predecessor and sha(analysis_predecessor['path']) != analysis_predecessor['sha256']:
+        raise ValueError('analysis predecessor manifest changed')
     config = json.loads(Path(manifest['config']).read_text())
     root = Path(manifest['scratch'])
     output = Path(manifest['output']).parent
@@ -70,6 +73,7 @@ def main():
                   bindings=manifest['bindings'],
                   execution=manifest.get('execution'),
                   schedule_predecessor=manifest.get('schedule_predecessor'),
+                  analysis_predecessor=analysis_predecessor,
                   metrics={}, addendum={}, exports={})
     report['published_reference_plan'] = manifest.get('published_comparison')
     published = root/'fsim-vsi-reference.json'

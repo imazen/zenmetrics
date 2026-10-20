@@ -68,7 +68,8 @@ def main():
         raise ValueError('unknown reference identity')
     values = {key: row.get('value') for key, row in reference.items() if not row.get('error')}
     summary, worst = compare(args.metric, spec['reference'],
-        {key: row[columns[0]] for key, row in own.items()}, values, spec.get('gate'))
+        {key: row[columns[0]] for key, row in own.items()}, values,
+        spec.get('gate'), spec.get('gate_operator', '<='))
     report = dict(scope='partial; completed reference bundles only', cohort_rows=manifest['cohort_rows'],
         full_cohort_qualification='pending', reference_rows=len(reference), bundles=prior_bundles+len(receipts),
         reference_errors=sum(bool(row.get('error')) for row in reference.values()),

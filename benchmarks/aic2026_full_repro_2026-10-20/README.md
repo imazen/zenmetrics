@@ -215,3 +215,13 @@ absolute residual from 23.67050931176972 to 5.4671792248939255e-6.
 These controls explain a large tail in the opposite direction to the
 earlier infinite-HI example. The aggregate table retains both panels
 separately; neither qualifies unmeasured rows or native MATLAB execution.
+
+The [comparison-bound audit](canonical_comparison_bounds.tsv) retains five
+existing bounds omitted from the original planning manifest: BRISQUE, NIQE
+and PIQE use their frozen JND/1000 image gates; IW-SSIM uses its distorted-pair
+bound; VIF uses its strict author-reference bound. Reporting views bind the
+unchanged scoring manifest through `analysis_predecessor` and retain the
+audited source hashes. They change no scorer, environment, input or numerical
+expectation. The comparator preserves strict versus inclusive operators.
+VIF's bound is finer than the supplied binary's six-decimal batch output;
+a CSV miss alone does not establish a port error.

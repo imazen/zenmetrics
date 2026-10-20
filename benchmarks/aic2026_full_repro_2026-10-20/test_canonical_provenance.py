@@ -89,11 +89,17 @@ class SourceBindings(unittest.TestCase):
             qualifications.write_text(json.dumps({'mad': note}))
             schedule = dict(rows_per_worker=32)
             predecessor = dict(manifest_sha256='test predecessor')
+            scoring_manifest = root/'frozen-scoring.json'
+            scoring_manifest.write_text('{"invented_frozen_fixture":true}\n')
+            analysis_predecessor = dict(path=str(scoring_manifest),
+                sha256=hashlib.sha256(scoring_manifest.read_bytes()).hexdigest(),
+                reason='reporting view; frozen scoring bytes unchanged')
             manifest = dict(config=str(config), scratch=str(root), output=str(root/'work'),
                             cohort_rows=2, source_commit='test source', binary='test binary',
                             binary_sha256='test digest', batch_precision='test precision',
                             driver_source='test driver', bindings={}, execution=schedule,
                             schedule_predecessor=predecessor, addendum={},
+                            analysis_predecessor=analysis_predecessor,
                             metrics={'mad': dict(kind='octave', python='python3', gate=None)})
             path = root/'manifest.json'
             path.write_text(json.dumps(manifest))
@@ -109,8 +115,12 @@ class SourceBindings(unittest.TestCase):
             self.assertIsNone(entry['gate'])
             self.assertEqual(report['execution'], schedule)
             self.assertEqual(report['schedule_predecessor'], predecessor)
+            self.assertEqual(report['analysis_predecessor'], analysis_predecessor)
             qualifications.write_text(json.dumps({'unplanned-metric': note}))
             with patch('sys.argv', argv), self.assertRaisesRegex(ValueError, 'unplanned metrics'):
+                main()
+            scoring_manifest.write_text('{"changed_fixture":true}\n')
+            with patch('sys.argv', argv), self.assertRaisesRegex(ValueError, 'analysis predecessor'):
                 main()
 
 

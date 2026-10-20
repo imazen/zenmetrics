@@ -30,7 +30,9 @@ def finite(value):
         return None
 
 
-def compare(metric, label, ours, reference, gate):
+def compare(metric, label, ours, reference, gate, gate_operator='<='):
+    if gate_operator not in ('<', '<='):
+        raise ValueError('unsupported comparison bound operator: '+gate_operator)
     from scipy.stats import pearsonr, spearmanr
     cases = []
     for identity in ours.keys() & reference.keys():
@@ -42,14 +44,15 @@ def compare(metric, label, ours, reference, gate):
     n = len(cases)
     result = dict.fromkeys(FIELDS, '')
     result.update(cli=metric, reference=label, n=n, exact_eq=sum(c['ours'] == c['reference'] for c in cases),
-                  gate='none' if gate is None else f'abs<={gate:.17g}', match='no-gate')
+                  gate='none' if gate is None else f'abs{gate_operator}{gate:.17g}', match='no-gate')
     if n:
         result.update(median_d=statistics.median(c['delta'] for c in cases),
                       max_d=max(c['delta'] for c in cases),
                       median_rel=statistics.median(c['relative'] for c in cases),
                       max_rel=max(c['relative'] for c in cases))
         if gate is not None:
-            result['match'] = 'MATCH' if result['max_d'] <= gate else 'MISS'
+            inside = result['max_d'] < gate if gate_operator == '<' else result['max_d'] <= gate
+            result['match'] = 'MATCH' if inside else 'MISS'
         xs, ys = [c['ours'] for c in cases], [c['reference'] for c in cases]
         if n >= 2 and len(set(xs)) > 1 and len(set(ys)) > 1:
             result.update(pearson=float(pearsonr(xs, ys).statistic), spearman=float(spearmanr(xs, ys).statistic))
@@ -113,7 +116,8 @@ def main():
                     canonical[metric][identity] = row.get('value')
                 else:
                     errors.append(dict(distorted=identity, error=row['error']))
-        summary, cases = compare(metric, spec['reference'], native[metric], canonical[metric], spec.get('gate'))
+        summary, cases = compare(metric, spec['reference'], native[metric], canonical[metric],
+                                 spec.get('gate'), spec.get('gate_operator', '<='))
         summaries.append(summary)
         worst[metric] = cases
         statuses[metric] = dict(native_rows=len(native[metric]), canonical_rows=len(canonical[metric]),
