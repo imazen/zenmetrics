@@ -1,0 +1,27 @@
+{
+  "manifest": "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-local38-current40worker.json",
+  "manifest_sha256": "4fa82fab9e7fe0e15894cdb44dcb1438f006dcfa8d25d04045006e50ca78a6a7",
+  "validated_plan": "/home/lilith/tmp/local-canonical-20261019T2330/current40worker-local38-command-plan.json",
+  "validated_plan_sha256": "19efc6389f271074eae048611e62f37c2dbba24aa8389e7747155de0b0f0540b",
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "native_binary": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+  "metrics": 38,
+  "cases": 76,
+  "threads": [
+    1,
+    8
+  ],
+  "order": "Subset of the local common 1152x1152 native scheduling workload, ascending; each reference keeps its valid input geometry",
+  "pending_references": [
+    "hdrvdp",
+    "hdrvdp3"
+  ],
+  "command": [
+    "just",
+    "bench-iqa-canonical-compare",
+    "/home/lilith/tmp/local-canonical-20261019T2330/changed-canonical-sources-local38-current40worker.json",
+    "/absolute/new-results",
+    "1,8"
+  ],
+  "qualification": "Plan preparation and source/input bindings verified. Revised base HDR reference controls remain pending; this manifest does not silently include or qualify them."
+}

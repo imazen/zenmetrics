@@ -1529,3 +1529,4 @@ benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-01.json	i
 benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/local38-current40worker-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

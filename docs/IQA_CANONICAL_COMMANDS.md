@@ -207,7 +207,7 @@ LPIPS, ST-LPIPS, DISTS and DeepDC callables, graph identities, source, reference
 weights and the existing JND/1000 bounds. Build and prepare under shared
 admission; run neural measurements after the classical comparisons.
 
-For a comparative run restricted to the 27 changed routes since `f7668c7`, use:
+For a comparative run over an explicitly declared changed-route manifest, use:
 
 ```sh
 just bench-iqa-canonical-changed /absolute/reference-manifest.json /absolute/new-results
