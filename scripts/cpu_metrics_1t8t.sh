@@ -46,8 +46,13 @@ leg() {
   local name=$1 size=$2 wall=$3 minr=$4 cpus=$5 threads=$6
   claim "leg $name"
   note "leg $name begin (size=$size wall=${wall}s cpus=$cpus threads=$threads)"
+  # zenbench certifies the affinity mask against the cgroup cpuset, but
+  # run-heavy's systemd scope widens that boundary to the whole host while
+  # taskset still narrows the real sched affinity — `unrestricted` trusts
+  # the taskset mask (override with ZENBENCH_CPU_POLICY=... if needed).
   TMPDIR="$HOME/tmp" NMW_CONTENT=photo NMW_MODES=lat NMW_GROUP_WALL_S=$wall NMW_CELL_MAX_S=$wall NMW_MIN_ROUNDS=$minr \
     "$RH" --mem 16G -- env RAYON_NUM_THREADS=$threads OMP_NUM_THREADS=$threads \
+    ZENBENCH_CPU_POLICY="${ZENBENCH_CPU_POLICY:-unrestricted}" \
     taskset -c "$cpus" "$BIN" "$size" "$OUT/$name.tsv" > "$OUT/logs/$name.log" 2>&1
   note "leg $name rc=$? $(grep 'run-heavy: done' "$OUT/logs/$name.log")"
 }
