@@ -2106,3 +2106,12 @@ its temporary directory; its hash-mismatch expectation is unchanged. The
 existing complexity-brief publication watcher is registered under its distinct
 report-publication concern in the tooling inventory; no fleet launcher or
 worker is added.
+
+### Resolved: local canonical neural plan timeout (2026-10-20)
+
+The first local original-network plans requested 1200 seconds per arm, above the
+existing supervisor's 1100-second maximum. Both arms refused before execution;
+these attempts contain no neural scores or timings. Original-network preparers
+now validate their 1100-second budget against the actual supervisor before
+writing plans. Replacements use new plan and result paths, retaining the refused
+attempts. Numerical bounds and native warm-round gates are unchanged.

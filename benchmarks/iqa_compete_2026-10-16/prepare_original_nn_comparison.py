@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from compare_canonical import sha
+from supervision import timeout_command
 
 
 METRICS = ['lpips-alex','lpips-vgg','lpips-squeeze','stlpips-alex','stlpips-vgg','dists','deepdc']
@@ -20,6 +21,7 @@ def main():
     p.add_argument('--metrics', default=','.join(METRICS))
     p.add_argument('--weight', action='append', type=Path, default=[])
     a = p.parse_args()
+    timeout_command("Linux", 1100)
     selected = a.metrics.split(',')
     if not set(selected) <= set(METRICS):
         p.error('unsupported original model')
@@ -82,7 +84,7 @@ def main():
     if not cases:p.error('no selected inputs')
     with a.output.open('x') as stream:
         json.dump(dict(schema=1,binary=str(worker.resolve()),rust_source=a.source,
-                       arm_timeout_seconds=1200,rust_chunk_budget_ms=850_000,
+                       arm_timeout_seconds=1100,rust_chunk_budget_ms=850_000,
                        bindings={str(path):sha(path) for path in bound},cases=cases),stream,indent=2)
         stream.write('\n')
     print(json.dumps(dict(cases=len(cases),metrics=selected)))

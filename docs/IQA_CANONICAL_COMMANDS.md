@@ -213,3 +213,6 @@ and measured rounds remain included. It adds no metric timers or counters.
 Run under the same host locks, thread budget and resource wrapper as the compared
 case. The command retains perf's report, raw recording hashes, full logs and
 configuration identity. Its default sampling frequency is 199 Hz.
+
+Original-network plan preparation validates the 1100-second arm budget against
+the existing supervisor; a larger plan value is refused before scoring.

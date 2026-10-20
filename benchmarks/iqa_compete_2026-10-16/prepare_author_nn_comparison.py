@@ -11,6 +11,7 @@ from pathlib import Path
 import shlex
 
 from compare_canonical import sha
+from supervision import timeout_command
 
 
 def main():
@@ -18,6 +19,7 @@ def main():
     p.add_argument('manifest', type=Path)
     p.add_argument('output', type=Path)
     a = p.parse_args()
+    timeout_command("Linux", 1100)
     manifest = json.loads(a.manifest.read_text())
     here = Path(__file__).resolve().parent
     scales_path = here.parents[1]/'crates/zenmetrics-nn/models/jnd_scale.tsv'
@@ -81,7 +83,7 @@ def main():
         path = a.output/(metric+'.plan.json')
         with path.open('x') as stream:
             json.dump(dict(schema=1, binary=str(worker.resolve()), rust_source=manifest['rust_source'],
-                arm_timeout_seconds=1200, rust_chunk_budget_ms=850_000,
+                arm_timeout_seconds=1100, rust_chunk_budget_ms=850_000,
                 bindings={str(item.absolute()): sha(item) for item in bound}, cases=cases), stream, indent=2)
             stream.write('\n')
         print(json.dumps(dict(metric=metric, cases=len(cases), plan=str(path))), flush=True)
