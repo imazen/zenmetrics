@@ -13,8 +13,10 @@
 #include <jxl/cms.h>
 #include <jxl/cms_interface.h>
 #include <jxl/types.h>
+#include "lib/extras/metrics.h"
 #include "lib/jxl/enc_butteraugli_comparator.h"
 #include "lib/jxl/enc_comparator.h"
+#include "lib/jxl/butteraugli/butteraugli.h"
 #include "lib/jxl/enc_external_image.h"
 #include "lib/jxl/image_bundle.h"
 #include "lib/jxl/image_metadata.h"
@@ -22,6 +24,7 @@
 #include "tools/no_memory_manager.h"
 #include "tools/thread_pool_internal.h"
 #include <chrono>
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -36,12 +39,16 @@ static std::vector<unsigned char> read(const char* path,size_t bytes) {
 static jxl::Status ssim_score(const jxl::ImageBundle& r,const jxl::ImageBundle& d,double* score) {
     JXL_ASSIGN_OR_RETURN(auto result,ComputeSSIMULACRA2(r,d));*score=result.Score();return true;
 }
+static jxl::Status proposal_score(const jxl::ImageF& map,const jxl::ButteraugliParams& params,double* score) {
+    JXL_ASSIGN_OR_RETURN(double n,jxl::ComputeDistanceP(map,params,3.));
+    *score=std::max(0.00459792*n,2.0938201*n-1.1033102);return true;
+}
 int main(int argc,char**argv) {try {
     if(argc!=9 && argc!=10)throw std::runtime_error("metric width height ref.rgb dist.rgb threads mode samples [native-buffer|rgb-input]");
     const std::string metric=argv[1],mode=argv[7],scope=argc==10?argv[9]:"native-buffer";
     const unsigned w=std::stoul(argv[2]),h=std::stoul(argv[3]),threads=std::stoul(argv[6]),samples=std::stoul(argv[8]);
     if(!w || !h || !threads || !samples)throw std::runtime_error("positive dimensions/threads/samples");
-    if(metric!="butteraugli" && metric!="ssim2")throw std::runtime_error("unknown metric");
+    if(metric!="butteraugli" && metric!="proposal-butteraugli" && metric!="ssim2")throw std::runtime_error("unknown metric");
     if(scope!="native-buffer" && scope!="rgb-input")throw std::runtime_error("unknown scope");
     if(metric=="ssim2" && mode=="score+map"){std::cout<<"UNSUPPORTED_MAP no native pixel-map output in the v0.12 SSIMULACRA2 API\n";return 0;}
     const auto rb=read(argv[4],static_cast<size_t>(w)*h*3),db=read(argv[5],static_cast<size_t>(w)*h*3);
@@ -58,7 +65,15 @@ int main(int argc,char**argv) {try {
     auto run_metric=[&](const jxl::ImageBundle&r,const jxl::ImageBundle&d,jxl::Comparator*comparator,jxl::ImageF&map,double&score){
         float butter_score=0;
         if(metric=="ssim2"){if(!ssim_score(r,d,&score))throw std::runtime_error("SSIMULACRA2");}
-        else{if(!jxl::ComputeScore(r,d,comparator,cms,&butter_score,mode=="score+map"?&map:nullptr,pool.get(),false))throw std::runtime_error("Butteraugli");score=butter_score;}
+        else{
+            if(!jxl::ComputeScore(r,d,comparator,cms,&butter_score,
+                mode=="score+map" || metric=="proposal-butteraugli"?&map:nullptr,pool.get(),false))
+                throw std::runtime_error("Butteraugli");
+            score=butter_score;
+            if(metric=="proposal-butteraugli") {
+                if(!proposal_score(map,params,&score))throw std::runtime_error("Butteraugli p-norm");
+            }
+        }
     };
     auto emit_header=[&]{
         std::cout<<std::setprecision(17)<<"VERSION libjxl-v0.12.0\n";
@@ -87,7 +102,7 @@ int main(int argc,char**argv) {try {
                 jxl::ImageMetadata rm,dm;init_meta(rm);init_meta(dm);
                 jxl::ImageBundle r(manager,&rm),d(manager,&dm);jxl::ImageF map;
                 if(!convert(rb,r) || !convert(db,d))throw std::runtime_error("BufferToImageBundle");
-                if(metric=="butteraugli") {
+                if(metric!="ssim2") {
                     jxl::JxlButteraugliComparator comparator(params,cms);
                     run_metric(r,d,&comparator,map,score);
                 } else run_metric(r,d,nullptr,map,score);

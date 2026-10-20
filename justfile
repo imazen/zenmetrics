@@ -1673,6 +1673,23 @@ bench-iqa-canonical-profile binary config output:
     perf record -F 999 --call-graph dwarf -o '{{output}}.data' -- '{{binary}}' '{{config}}'
     perf report --stdio --no-children -i '{{output}}.data' > '{{output}}.txt'
 
+bench-iqa-canonical-original-butter-build source output:
+    c++ -O3 -std=c++17 -ffp-contract=off -I '{{source}}' benchmarks/iqa_compete_2026-10-16/butteraugli_original_rgb.cpp '{{source}}/butteraugli/butteraugli.cc' -lpng -ljpeg -pthread -o '{{output}}'
+
+# Explicit original-model exports; invoke under the host heavy lock/resource wrapper.
+bench-iqa-canonical-export-original source python ladder output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir '{{output}}'
+    for net in alex vgg squeeze; do
+        '{{python}}' -I '{{source}}/crates/zenmetrics-nn/models/lpips/export.py' '{{ladder}}' '{{output}}' "$net" 512
+    done
+    '{{python}}' -I '{{source}}/crates/zenmetrics-nn/models/dists/export.py' '{{ladder}}' '{{output}}' 512
+    for net in alex vgg; do
+        '{{python}}' -I '{{source}}/crates/zenmetrics-nn/models/stlpips/export.py' '{{ladder}}' '{{output}}' "$net" 512
+    done
+    '{{python}}' -I '{{source}}/crates/zenmetrics-nn/models/deepdc/export.py' '{{ladder}}' '{{output}}' 512
+
 # Link an explicitly supplied original libvmaf archive; no replacement kernel.
 bench-iqa-canonical-vmaf-build source library output:
     c++ -O3 -Wall -Wextra -ffp-contract=off -std=c++17 -I '{{source}}/libvmaf/include' benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp '{{library}}' -pthread -lm -o '{{output}}'

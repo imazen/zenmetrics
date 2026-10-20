@@ -81,9 +81,14 @@ def project(rows):
         eligible=[r for r in entries if r['ratio'] is not None]
         key=None
         if eligible and not failed and not errored:
+            group_counts=defaultdict(int)
+            for r in eligible:
+                group_counts[(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])]+=1
             def preference(r):
                 size=(r['width'],r['height'])
-                return (r['threads']!=1, size!=(1024,1024), size!=(512,512), -r['width']*r['height'],r['threads'])
+                group=(r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])
+                return (r['threads']!=1, -min(3,group_counts[group]),size!=(1024,1024),
+                        size!=(512,512),-r.get('blocks',0),-r['width']*r['height'],r['threads'])
             chosen=min(eligible,key=preference)
             key=(chosen['width'],chosen['height'],chosen['threads'],chosen['rust_source'],chosen['plan_sha256'])
             selected=[r for r in eligible if (r['width'],r['height'],r['threads'],r['rust_source'],r['plan_sha256'])==key]
@@ -93,6 +98,8 @@ def project(rows):
             ratio=statistics.median(r['ratio'] for r in selected) if selected else None,
             ratio_width=key[0] if key else None,ratio_height=key[1] if key else None,
             ratio_threads=key[2] if key else None,ratio_cases=len(selected),
+            ratio_blocks=min(r.get('blocks',0) for r in selected) if selected else 0,
+            worst_ratio=max(r['ratio'] for r in eligible) if eligible else None,
             observed_cases=len(entries),expected_cases=expected,passed_cases=passed,failed_cases=failed,
             process_error_cases=errored,
             max_abs_delta=max(deltas) if deltas else None,

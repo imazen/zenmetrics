@@ -1,0 +1,14 @@
+{
+  "frozen_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "verified_master": "f0226c3d5d5f768474df086e05b35c01f8f5c921",
+  "git_object_ids": {
+    "crates": "f59e453c96912e81d9cd3e5ce29531d4e4a63208",
+    "Cargo.toml": "be4768b6482680f09cc4ec6df1776979601f1449",
+    "Cargo.lock": "254731927277aa00b04d65520f1f14a6694e4e42",
+    "ci/sibling-pins.tsv": "9389474202fb2004f1927317fb8be26943f94e3a",
+    "benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs": "cd2e1d7bb006df272564ec93ff0087ba51a016fb",
+    "benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_maps.rs": "590ffe16c0563c5c2a7834363028d774ccc231a7"
+  },
+  "scope": "Tracked production crate tree, dependency graph/pins and benchmark driver before the separately recorded snapshot adapters; comparison scripts and docs may differ.",
+  "command": "git rev-parse REV:PATH for both revisions"
+}

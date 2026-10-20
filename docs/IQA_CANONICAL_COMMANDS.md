@@ -110,3 +110,32 @@ without per-image scores. Different binaries remain separate series; portable
 panels cannot substitute for canonical cells. The
 [2026-10-20 saved snapshot](../benchmarks/iqa_saved_2026-10-20T0056Z/README.md)
 retains partial observations, refusals and gates separately.
+
+### Rust versus original implementations
+
+`just bench-iqa-canonical PLAN NEW_RESULTS` runs the explicit original/reference
+commands in a frozen comparison plan. Select a subset with `--metrics name,name`;
+`--blocks 3 --samples 5` controls the alternating acquisition blocks. Every arm
+retains its command, stdout, stderr, process memory receipt and numerical result.
+The runner serializes measurements under the local host resource locks.
+
+Create the plan with `just bench-iqa-canonical-plan` and explicit `--binary`,
+`--pairs`, `--source`, `--python`, `--extras`, `--brisque-weights`, `--ssim1`,
+`--ssim2`, `--output`, `--metrics`, `--sizes` and `--threads`. These paths name
+installed reference assets; the command does not download or silently substitute
+an implementation. Additional original implementations use `--registry FILE`,
+which supplies their commands, numerical bounds, scope and artifact hashes.
+Both RGB inputs and executable/reference assets are verified before and after
+each block. Existing plan and result paths are refused.
+
+Ratios mean **Rust runtime / canonical runtime**: below 1 is faster. They are
+descriptive medians of alternating block ratios. A missing bound remains an
+observed numerical difference, rather than an asserted parity pass. A mismatched
+input or timed boundary withholds its ratio. This comparative protocol is
+separate from the frozen cold3/warm10 CPU campaign above.
+
+`just bench-iqa-canonical-publish NEW_DIRECTORY RESULTS...` validates retained
+blocks and emits compact source-bound tables for the README generator.
+`just bench-iqa-canonical-check` checks parsing and result projection. Builder
+recipes for original DSSIM, SSIMULACRA1, Butteraugli and libvmaf accept explicit
+source paths; run builds under the same resource wrapper and host locks.
