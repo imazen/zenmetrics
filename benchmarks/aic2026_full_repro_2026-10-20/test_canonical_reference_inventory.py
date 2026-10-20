@@ -62,6 +62,30 @@ class ReferenceInventory(unittest.TestCase):
                                             str(package/'vocabulary.txt.gz'), str(info/'METADATA'), str(info/'RECORD')})
             self.assertNotIn('canonical_inventory_fixture', sys.modules)
 
+    def test_copied_module_scope_lists_external_entries_and_still_refuses_missing_runtime(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root = Path(directory)
+            source = root/'fixture.py'
+            source.write_text('reference code\n')
+            from email.message import Message
+            from types import SimpleNamespace
+            headers = Message()
+            headers['Name'] = 'fixture'
+            dist = SimpleNamespace(files=[Path('fixture.py'), Path('../bin/missing-console')],
+                                   metadata=headers, version='1.0', locate_file=lambda p: root/p)
+            with patch('canonical_reference_inventory.metadata.distribution', return_value=dist):
+                full, _ = package_bindings(['fixture'])
+                with self.assertRaises(FileNotFoundError):
+                    inventory(full)
+                scoped, packages = package_bindings(['fixture'], module_runtime_only=True)
+                self.assertEqual(set(scoped), {str(source)})
+                self.assertEqual(packages['fixture']['excluded_files'][0]['entry'], '../bin/missing-console')
+                self.assertEqual(packages['fixture']['scope'], 'module files')
+                inventory(scoped)
+                source.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    inventory(scoped)
+
 
 if __name__ == '__main__':
     unittest.main()

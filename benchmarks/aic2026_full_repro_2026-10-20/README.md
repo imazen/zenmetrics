@@ -181,6 +181,9 @@ so retained rows remain distinguishable from successor bundles.
 with the selected reference interpreter, without importing models. Explicit
 asset plans can require existing checkpoint hashes. Missing files and changed
 expected bytes refuse the inventory; bytecode caches are excluded.
+For copied module fixtures, `--module-runtime-only` explicitly lists wheel
+entries outside the library root that were excluded; missing module files
+still refuse the inventory. The default captures the full distribution.
 
 For `msssim`, the retained `msssim.m` and `ssim_index_new.m` both match the
 [authors' MS-SSIM archive](https://ece.uwaterloo.ca/~z70wang/research/iwssim/msssim.zip)
