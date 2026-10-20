@@ -85,14 +85,17 @@ def main():
         native[metric], canonical[metric] = {}, {}
         filename = out/(metric+'.native.tsv')
         if filename.exists():
-            rows = list(csv.DictReader(filename.open(), delimiter='\t'))
+            with filename.open() as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                rows = list(reader)
+                headers = reader.fieldnames or []
             indexed = unique(rows)
-            score_columns = [name for name in (list(rows[0]) if rows else [])
+            score_columns = [name for name in headers
                              if name not in ('ref_path', 'dist_path', *metadata)]
             prefix = spec.get('native_prefix')
             if prefix:
                 score_columns = [name for name in score_columns if name.startswith(prefix)]
-            if not score_columns:
+            if rows and not score_columns:
                 raise ValueError('no score column: '+metric)
             for identity, row in indexed.items():
                 if identity not in published_by_id or any(row[k] != published_by_id[identity][k] for k in metadata):

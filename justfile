@@ -2260,3 +2260,6 @@ aic-canonical-inputs source destination:
 
 aic-canonical-fsim-vsi python manifest summary:
     {{python}} benchmarks/aic2026_full_repro_2026-10-20/compare_fsim_vsi.py {{manifest}} {{summary}}
+
+aic-canonical-campaign manifest *options:
+    python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_campaign.py {{manifest}} {{options}}

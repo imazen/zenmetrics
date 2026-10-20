@@ -83,6 +83,39 @@ def scorer(metric, config):
         return lambda r, d: float(oracle.score_image(model, d, r) if '-fr-' in metric
                                  else oracle.score_image(model, d))
     import torch
+    if metric == 'pieapp':
+        # The reference is opaque. Use only its documented public entry point;
+        # absence of the official runtime/checkpoint is an explicit refusal.
+        root = Path(config['pieapp_upstream'])
+        sys.path.insert(0, str(root))
+        from model.PieAPPv0pt1_PT import PieAPP
+        checkpoint = Path(config['pieapp_checkpoint'])
+        state = torch.load(checkpoint, map_location='cpu', weights_only=False)
+        models = {}
+        def score(r, d):
+            positions = [(y, x) for y in range(0, r.shape[0]-63, 6)
+                         for x in range(0, r.shape[1]-63, 6)]
+            numerator = denominator = 0.
+            for start in range(0, len(positions), 32):
+                points = positions[start:start+32]
+                n = len(points)
+                if n not in models:
+                    model = PieAPP(1, n)
+                    model.load_state_dict(state)
+                    models[n] = model.eval()
+                inputs = [torch.from_numpy(np.stack([image[y:y+64, x:x+64, ::-1].transpose(2, 0, 1)
+                          for y, x in points]).astype(np.float32)) for image in (d, r)]
+                values = models[n].compute_score(*inputs)
+                errors, weights = [values[i].detach().cpu().numpy().reshape(-1) for i in (1, 2)]
+                for error, weight in zip(errors, weights):
+                    if not np.isfinite(error) or not np.isfinite(weight):
+                        raise ValueError('nonfinite public PieAPP patch output')
+                    numerator += float(error)*float(weight)
+                    denominator += float(weight)
+            if denominator == 0:
+                raise ValueError('zero public PieAPP pooling denominator')
+            return numerator/denominator
+        return score
     if metric in config.get('resident_adapters', {}):
         return resident_adapter(config['resident_adapters'][metric], metric)
     if metric in ('pyiqa-fsim', 'pyiqa-fsimc', 'pyiqa-vsi'):
