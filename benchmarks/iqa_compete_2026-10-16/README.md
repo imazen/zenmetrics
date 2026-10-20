@@ -344,3 +344,18 @@ admission for the probes.
 source and dependency snapshot before compiling a fresh CPU worker. The
 existing `bench-iqa-canonical-cpu-build SOURCE TARGET` builds an already
 prepared source tree; both require caller-supplied heavy-job admission.
+
+## Ordered comparative selection after further metric changes
+
+`bench-iqa-canonical-changed MANIFEST NEW_OUTPUT` accepts an optional manifest
+`order` path. The declared routes must match that table exactly; reference
+bindings, compiled native coverage, numerical bounds and output preservation
+are checked before acquisition. `bench-iqa-canonical-ordered-check` exercises
+those controls. A manifest without `order` retains the historical 27-route
+table, and `bench-iqa-canonical-changed-plan` remains the frozen legacy preparer.
+
+The current native `changed` selection includes the eight PSNR routes revised
+on October 20, for 35 routes total. Its separate scheduling table preserves
+[the original table](../rebenchmark_since_f7668c7/order.tsv) for retained
+comparison plans. Both tables use recorded historical durations as scheduling
+hints; their values are not current speed measurements.

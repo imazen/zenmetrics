@@ -1643,7 +1643,7 @@ dashboard-regenerate:
 bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     python3 benchmarks/iqa_compete_2026-10-16/canonical_bench.py '{{sizes}}' '{{metrics}}' {{options}}
 
-# Exact 27 changed/added routes, using the same canonical protocol.
+# Exact changed/added scope, including the eight revised PSNR routes.
 bench-iqa-changed *options:
     just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k changed {{options}}
 
@@ -1677,9 +1677,9 @@ bench-iqa-canonical-niqe-plan +options:
 bench-iqa-canonical-butteraugli-maps python +options:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_butteraugli_maps.py {{options}}
 
-# Freeze and run the 27 changed routes in ascending retained duration.
+# Freeze and run the manifest scope in ascending retained duration.
 bench-iqa-canonical-changed manifest output *options:
-    just bench-iqa-canonical-changed-plan '{{manifest}}' '{{output}}.plan.json'
+    just bench-iqa-canonical-ordered-plan '{{manifest}}' '{{output}}.plan.json'
     just bench-iqa-canonical '{{output}}.plan.json' '{{output}}' {{options}}
 
 # One current native worker plus explicit original-reference plans, changed routes only.
@@ -2220,3 +2220,10 @@ bench-iqa-canonical-nr-auxiliary python manifest output:
 
 bench-iqa-canonical-nr-auxiliary-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 TMPDIR="$HOME/tmp" python3 -B -m unittest test_nr_auxiliary
+
+# The manifest can bind a current scheduling table; legacy manifests retain the 27-route table.
+bench-iqa-canonical-ordered-plan manifest output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_ordered_canonical.py '{{manifest}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-ordered-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 TMPDIR="$HOME/tmp" python3 -B -m unittest test_ordered_canonical

@@ -1,7 +1,8 @@
 //! Scheduling policy only; explicit names and scoring behavior are unchanged.
 use std::collections::BTreeSet;
 
-const CHANGED_ORDER: &str = include_str!("../../../../rebenchmark_since_f7668c7/order.tsv");
+const CHANGED_ORDER: &str =
+    include_str!("../../../../rebenchmark_since_f7668c7/order_current_2026-10-20.tsv");
 
 fn changed_order() -> Vec<String> {
     CHANGED_ORDER
@@ -90,7 +91,7 @@ mod tests {
             .map(|line| line.split('\t').nth(1).unwrap().parse().unwrap())
             .collect();
         assert!(times.windows(2).all(|pair| pair[0] <= pair[1]));
-        assert_eq!(ordered.first().unwrap(), "ms-ssim-pyiqa-f32-k6");
+        assert_eq!(ordered.first().unwrap(), "psnr");
         assert_eq!(ordered.last().unwrap(), "hdrvdp3-aic2026");
         assert_ne!(ordered, selected.into_iter().collect::<Vec<_>>());
     }

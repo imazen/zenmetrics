@@ -21,3 +21,11 @@ vmaf-v1
 vmaf-studio601
 vmaf-neg-studio601
 cambi
+psnr
+psnr-cb
+psnr-cr
+psnr-y
+psnr-y-libvmaf
+psnr-y-studio601
+psnr-y601
+psnr-ycbcr611
