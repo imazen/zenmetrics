@@ -43,3 +43,13 @@ admission to run the inert controls normally and with assertions disabled.
 prepared successor plan; each block admits itself, so give the coordinator no
 outer heavy lock. The plan must bind the successor as well as every original
 helper and source artifact.
+
+To surface completed cold-call flags while a campaign continues, run
+`just bench-iqa-canonical-classical-first-flags NEW_SNAPSHOT REGRESSION_LOG
+--root RESULTS_ROOT` (repeat `--root` for separately frozen campaigns). This
+reads constructor/first-evaluation summaries, records every matched ratio
+above 1.08 and retains the case geometry, worker budget and original bounds.
+It acquires no measurements and assigns no missing numerical bound. Every
+capture uses a new output file; partially written summaries remain pending.
+The flags require fixed-stage confirmation and profiling before interpretation;
+the capture does not qualify runtime cleanliness or confidence intervals.

@@ -1681,6 +1681,10 @@ bench-iqa-canonical-first-confirm plan case output *options:
 bench-iqa-canonical-first-profile plan case output:
     python3 -B benchmarks/iqa_compete_2026-10-16/profile_first_evaluation.py '{{plan}}' '{{case}}' '{{output}}'
 
+# Read finalized classical cold-call summaries; retain a new snapshot each time.
+bench-iqa-canonical-classical-first-flags output regressions *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/capture_classical_first_flags.py '{{output}}' --regressions '{{regressions}}' {{options}}
+
 bench-iqa-canonical-first-confirm-test:
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_first_confirmation.py -v
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_scored_first_confirmation.py -v
