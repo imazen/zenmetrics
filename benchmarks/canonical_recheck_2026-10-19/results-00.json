@@ -82,7 +82,7 @@
   },
   "arniqa": {
     "canonical": "original ARNIQA / kadid10k",
-    "check": "4/4 pass",
+    "check": "5/5 pass",
     "ratio": 1.1507064694296374,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -93,9 +93,9 @@
     "ratio_engine": "rten",
     "ratio_blocks": 20,
     "worst_ratio": 1.4371044692018131,
-    "observed_cases": 4,
-    "expected_cases": 4,
-    "passed_cases": 4,
+    "observed_cases": 5,
+    "expected_cases": 5,
+    "passed_cases": 5,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.1920928955078125e-07,
@@ -103,6 +103,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "0fa9bc43c310b35839a9c722103dfdf588227b7571e959c3c5cffbc5e4206bb0",
       "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
       "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
       "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc"
@@ -234,7 +235,7 @@
   },
   "cambi": {
     "canonical": "libvmaf 3.2.0 / named RGB ingress",
-    "check": "\u0394 0",
+    "check": "2 process errors",
     "ratio": 1.0004570236271104,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -245,23 +246,24 @@
     "ratio_engine": null,
     "ratio_blocks": 3,
     "worst_ratio": 1.0004570236271104,
-    "observed_cases": 2,
-    "expected_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 26,
     "passed_cases": 0,
     "failed_cases": 0,
-    "process_error_cases": 0,
+    "process_error_cases": 2,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
     ],
     "qualified": false
   },
   "cambi-aic2026": {
     "canonical": "libvmaf 3.2.0 / named RGB ingress",
-    "check": "\u0394 0",
+    "check": "2 process errors",
     "ratio": 0.6761586941395279,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -272,17 +274,18 @@
     "ratio_engine": null,
     "ratio_blocks": 3,
     "worst_ratio": 0.6761586941395279,
-    "observed_cases": 2,
-    "expected_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 26,
     "passed_cases": 0,
     "failed_cases": 0,
-    "process_error_cases": 0,
+    "process_error_cases": 2,
     "max_abs_delta": 0.0,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
     ],
     "qualified": false
   },
@@ -369,7 +372,7 @@
   },
   "cvvdp-gpu": {
     "canonical": "pycvvdp 0.5.7 CPU / standard_fhd",
-    "check": "3/25 pass",
+    "check": "4/47 pass",
     "ratio": 0.021438893589516016,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -380,17 +383,18 @@
     "ratio_engine": null,
     "ratio_blocks": 3,
     "worst_ratio": 0.701641789307398,
-    "observed_cases": 3,
-    "expected_cases": 25,
-    "passed_cases": 3,
+    "observed_cases": 4,
+    "expected_cases": 47,
+    "passed_cases": 4,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 2.288818359375e-05,
+    "max_abs_delta": 2.6702880859375e-05,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
       "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -424,23 +428,23 @@
   },
   "cw-ssim-pyiqa": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
-    "check": "9/26 pass",
+    "check": "24/26 pass",
     "ratio": 0.10681038551572229,
     "ratio_width": 1024,
     "ratio_height": 1024,
     "ratio_threads": 1,
-    "ratio_cases": 1,
+    "ratio_cases": 3,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
     "ratio_plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
     "ratio_engine": "rust",
     "ratio_blocks": 3,
     "worst_ratio": 0.20159945838071727,
-    "observed_cases": 9,
+    "observed_cases": 24,
     "expected_cases": 26,
-    "passed_cases": 9,
+    "passed_cases": 24,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 2.1094237467877974e-15,
+    "max_abs_delta": 5.551115123125783e-15,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
@@ -620,7 +624,7 @@
   },
   "dssim-gpu": {
     "canonical": "original dssim-core eec33f55 / CPU reference",
-    "check": "\u0394 5.3e-06",
+    "check": "\u0394 2.6e-05",
     "ratio": 0.49662437662833686,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -630,18 +634,20 @@
     "ratio_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 15.983711306101481,
-    "observed_cases": 3,
-    "expected_cases": 25,
+    "worst_ratio": 21.488217267082078,
+    "observed_cases": 7,
+    "expected_cases": 27,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 5.282498001468738e-06,
+    "max_abs_delta": 2.572207521112091e-05,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
       "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+      "8285f0a46374b9106ebbc77d21699fdffe2e7389d8a3397fdf57a24c487e2270",
+      "c5454a51f138d622fa5cbe9707406a55c26e046292b137b85f99ea439d7408dc",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -701,33 +707,6 @@
       "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
       "3e0d5e2ea2d617aa34654e46838c16d6521e5e9783c769612a3241551c73c497",
       "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8"
-    ],
-    "qualified": false
-  },
-  "fsim": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.21859190502808892,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.22285189686723708,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.329927450832713e-06,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
     ],
     "qualified": false
   }

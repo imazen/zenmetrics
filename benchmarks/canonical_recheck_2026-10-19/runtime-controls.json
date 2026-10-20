@@ -1,0 +1,249 @@
+{
+  "controls": [
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/resident-first-family-controls/dists",
+      "receipt_sha256": "c3659703d47cd20805aaf31cf36f5a21453bb4a922f70fda45f1242722ff1948",
+      "result": {
+        "metric": "dists",
+        "family": "original",
+        "case": "dists-pair-cid22-t1",
+        "phase": "First evaluation after resident model cache priming, excluding input/model file I/O and outer CLI dispatch",
+        "observed": {
+          "native": {
+            "ns": 3481914228,
+            "score": 0.009233295917510986
+          },
+          "canonical": {
+            "ns": 2966343592,
+            "score": 0.009233295917510986
+          }
+        },
+        "passed": true,
+        "delta": 0.0,
+        "bound": 9.4498e-05,
+        "native_matches_retained_warm_bits": "3f82e8e800000000",
+        "native_build_receipt_sha256": "48a5aa8f464eb3282fca701af7e023573afcfaaea0e111a9458250249273a40b",
+        "plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+        "commands": {
+          "native": [
+            "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+            "original",
+            "dists",
+            "512",
+            "512",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+            "1"
+          ],
+          "canonical": [
+            "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/bin/python",
+            "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_original_model_cell.py",
+            "dists",
+            "512",
+            "512",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+            "1",
+            "1",
+            "--deepdc-convention",
+            "/home/lilith/work/zen/zenmetrics/crates/zenmetrics-nn/models/deepdc/export.py"
+          ]
+        },
+        "warm_log_sha256": "573c61cd5071ccbda77dab1eff96c3134bf8d18f0f42c994b679ca55a8708e22",
+        "files": {
+          "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "canonical-memory.txt": "07e62f47c4627430b0b4c973d9639976a3a578262b312a9706cfd6f1d98137bc",
+          "canonical-stderr.log": "59636ad41e6fb31180dc9dd9e0d9c3a7f45616e62ba7b8dc6042811ddc10bfab",
+          "native-stdout.log": "6e238dd3ba928793f0b13ef5ff03e753ffc0c4fc9f945512121fae749c556173",
+          "canonical-stdout.log": "a5bae846988ab53b68e7ff1c204d4d31a7d17b3c14b691a9ad69ec6cecb42785",
+          "native-memory.txt": "6ca1b510a447d7d321e5bc6106da134167cb141352be120a70675058d58740cc"
+        },
+        "qualification": "Setup/accuracy control only; no timing result or matrix coverage claim"
+      }
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/resident-first-pyiqa-control-v2/topiq-fr",
+      "receipt_sha256": "af39aa6d1f985ddbef7992cf09cbba90124ae8958dac0ab45f0fdc72edd64a30",
+      "result": {
+        "metric": "topiq-fr",
+        "family": "pyiqa",
+        "case": "topiq-fr-pair-cid22-t1",
+        "phase": "First evaluation after resident model cache priming, excluding input/model file I/O and outer CLI dispatch",
+        "observed": {
+          "native": {
+            "ns": 980067629,
+            "score": 0.9147323966026306
+          },
+          "canonical": {
+            "ns": 1172445044,
+            "score": 0.9147325158119202
+          }
+        },
+        "passed": true,
+        "delta": 1.1920928955078125e-07,
+        "bound": 3.0642e-05,
+        "native_matches_retained_warm_bits": "3fed457ce0000000",
+        "native_build_receipt_sha256": "48a5aa8f464eb3282fca701af7e023573afcfaaea0e111a9458250249273a40b",
+        "plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
+        "commands": {
+          "native": [
+            "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+            "pyiqa",
+            "topiq-fr",
+            "512",
+            "512",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+            "1"
+          ],
+          "canonical": [
+            "env",
+            "TORCH_HOME=/home/lilith/tmp/portcheck/torch-home",
+            "/home/lilith/tmp/portcheck/pyiqa-env/bin/python",
+            "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_pyiqa_model_cell.py",
+            "topiq-fr",
+            "512",
+            "512",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+            "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+            "1",
+            "1"
+          ]
+        },
+        "warm_log_sha256": "71e8e491a079498cee6ac343239c5b06773192fbf2bf9224d8e700781760efd9",
+        "files": {
+          "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          ".ses": "6b92d2f832cf99c1f0c5f456234bd3bf9ca2edcca589c7e45e8378b0fefd7ddc",
+          "canonical-memory.txt": "584edbafa4d090d93c4267f8b3d9b3b51bf3ba1458ceb6d4d55095fbc1b2cdb9",
+          "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "native-stdout.log": "6e6fc77479ae2a0bc975476c8b09a1bd54e095b8c8bbe0b0a1f9daf1e0e98543",
+          "canonical-stdout.log": "16ddcbb650415602ed810c74a34af9e99bd5ebe4b4e4314e8ff9366f7a3eec6c",
+          "native-memory.txt": "74a1ebf6072e842be97781e85f6d892cb22aaf5bd3e5dd7e9b0e87ebc6792197"
+        },
+        "qualification": "Setup/accuracy control only; no timing result or matrix coverage claim"
+      }
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/cuda-reference-controls/iwssim",
+      "receipt_sha256": "1cc225efed4d4020a7cbcc28371b4a1b4a7560d3a939db7104d5f2002ff76fc8",
+      "result": {
+        "metric": "iwssim-gpu",
+        "native_retained_score": 0.9991087237426518,
+        "native_log_sha256": "e103169e7da4efab006f24dbf7268fe9f9c144ca683dd5b75112b5e1afcaf4e2",
+        "native_plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
+        "bound": null,
+        "process_exit": 0,
+        "command": [
+          "/home/lilith/tmp/portcheck/pyiqa-env/bin/python",
+          "/home/lilith/tmp/local-canonical-20261019T2330/canonical_cuda_reference_cell.py",
+          "iwssim",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1",
+          "1",
+          "--iwssim-source",
+          "/home/lilith/tmp/portcheck/sources/Python-IW-SSIM",
+          "--extra-path",
+          "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/lib/python3.12/site-packages"
+        ],
+        "helper_sha256": "d83185eeb94b7cfa80238d0993c4cf435335506aa33be8608a9c5918ae82458e",
+        "qualification": "Backend setup/accuracy control only; no comparative timing result",
+        "canonical_scores": [
+          0.9991101622581482,
+          0.9991101622581482
+        ],
+        "max_abs_delta": 1.4385154963880709e-06,
+        "passed": null,
+        "files": {
+          "canonical-memory.txt": "b1a0622602c58d61e0d11dc30a9203f5c3de760cf3eff0a14dd19a4e4a4d1ae2",
+          "canonical-stderr.log": "082f4f055fccdcf9455a7f288863f0ebf535308518dbc43042fd5ca656489e60",
+          "canonical-stdout.log": "dda4530908c757cf1aea621f81964b79dc57be25b3ad141732b6423e622c7f00"
+        }
+      }
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/cuda-reference-controls-v2/cvvdp",
+      "receipt_sha256": "42b892e5ce9764cda9cd2f3f2380b1354d77babf0282411ecab4a77f673a290e",
+      "result": {
+        "metric": "cvvdp-gpu",
+        "native_retained_score": 9.951984405517578,
+        "native_log_sha256": "d236c1595088f7ead8640d803f4ecdcbe5f835048373568e66098bf20ea95a09",
+        "native_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
+        "bound": 0.001,
+        "process_exit": 0,
+        "command": [
+          "/home/lilith/tmp/portcheck/pyiqa-env/bin/python",
+          "/home/lilith/tmp/local-canonical-20261019T2330/canonical_cuda_reference_cell.py",
+          "cvvdp",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1",
+          "1",
+          "--cvvdp-package",
+          "/home/lilith/tmp/portcheck/python/lib/python3.12/site-packages/pycvvdp",
+          "--extra-path",
+          "/home/lilith/tmp/portcheck/python/lib/python3.12/site-packages"
+        ],
+        "helper_sha256": "d83185eeb94b7cfa80238d0993c4cf435335506aa33be8608a9c5918ae82458e",
+        "qualification": "Backend setup/accuracy control only; no comparative timing result",
+        "canonical_scores": [
+          9.951983451843262,
+          9.951983451843262
+        ],
+        "max_abs_delta": 9.5367431640625e-07,
+        "passed": true,
+        "files": {
+          "canonical-memory.txt": "c9f4376a8090ab2faa18ae1724c442157c26a326e807c03fccc3575afe0496ea",
+          "canonical-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "canonical-stdout.log": "2757233051c29bc3bef09e6f446eb0ec75b01db9391d9aa9a772afba0208a58d"
+        }
+      }
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/musiq-numpy125-control",
+      "receipt_sha256": "dae60153f27249cf0381597feb1001e49277b7325329543fc66e21abd5daae81",
+      "result": {
+        "native_score": 71.77246856689453,
+        "canonical_scores": [
+          71.7724380493164,
+          71.7724380493164
+        ],
+        "max_abs_delta": 3.0517578125e-05,
+        "bound": 0.0019689250000000003,
+        "passed": true,
+        "runtime": {
+          "numpy": "1.25.2",
+          "numpy_path": "/home/lilith/tmp/local-canonical-20261019T2330/musiq-numpy125-site/numpy/__init__.py",
+          "scipy": "1.9.3",
+          "tensorflow": "2.15.1",
+          "jax": "0.3.25"
+        },
+        "command": [
+          "/home/lilith/tmp/local-canonical-20261019T2330/musiq-numpy125-env/bin/python",
+          "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_musiq_cell.py",
+          "/home/lilith/tmp/local-canonical-20261019T2330/musiq-reference-config.json",
+          "musiq",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1",
+          "1"
+        ],
+        "native_warm_log_sha256": "0091cf7db1b9fc5720b30b5fc874a8b9552d5f6e0b16afb0e33c580343455d33",
+        "parent_plan_sha256": "198658801b4781ec9fcf837664eedb0039c5ce76bd0d30953b85ec067c617262",
+        "files": {
+          "canonical-memory.txt": "df939ea1ec4980c2ab27d8993efcc055cafc2048cf4645f309ad7737b6013e26",
+          "canonical-stderr.log": "d2f1b7d5d248f75b2f805b66d82fead876540b1bd626545d580d3bdc7ae9d53b",
+          "canonical-stdout.log": "e5d4c0fcfaf39f01682d2a45665ab826658dfff4949920e72bad1ab1f3f6e838"
+        },
+        "qualification": "One input/runtime compatibility control; no comparative timing or broad parity claim"
+      }
+    }
+  ],
+  "qualification": "Setup and numerical controls only; these do not qualify broad cold coverage or author-CUDA timing ratios"
+}

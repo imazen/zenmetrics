@@ -1400,3 +1400,29 @@ benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/ms-ssim.csv	ignored
 benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/fsim.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
 benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/fsimc.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
 benchmarks/fixed_factor_verify_2026-10-20/aic61/calculations/vsi.csv	ignored	Per-pair fixed-factor numerical calculations; not a timing panel.
+benchmarks/canonical_recheck_2026-10-19/runtime-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/gpu-reference-fixture-amendment.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-04.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-05.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/nr-auxiliary-learned-06.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t8-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t8-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/hyperiqa-original-cid22-t8-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/original-maniqa-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-musiq-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-paq2piq-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-wadiqam-fr-live-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-wadiqam-fr-tid-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-wadiqam-nr-live-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-wadiqam-nr-tid-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/full-gpu-grid-v2-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/psnr-current-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/hyperiqa-original-cid22-t8-dd2c2213-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t8-7a07601a-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t8-1d3aa20e-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-gpu-grid-pairA-64x64-t1-3cb87691-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-gpu-grid-pairA-64x64-t28-3cb87691-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

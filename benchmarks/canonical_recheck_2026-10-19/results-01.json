@@ -1,4 +1,31 @@
 {
+  "fsim": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.21859190502808892,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.22285189686723708,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.329927450832713e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "fsim-k2": {
     "canonical": "original FeatureSIM / Octave 6.4",
     "check": "6/6 pass",
@@ -273,7 +300,7 @@
   },
   "hyperiqa": {
     "canonical": "original HyperIQA / fixed grid",
-    "check": "2/2 pass",
+    "check": "3/3 pass",
     "ratio": 0.7359127134367215,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -283,10 +310,10 @@
     "ratio_plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
     "ratio_engine": "rten",
     "ratio_blocks": 3,
-    "worst_ratio": 1.1735828371350236,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "worst_ratio": 1.2225781509493818,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 3,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 0.0,
@@ -294,6 +321,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "36ab072c0cd73b6e191b1a93d8b5f670aea3ee1dbdcf50a3b8e233263ce81fe0",
       "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf"
     ],
     "qualified": false
@@ -339,19 +367,19 @@
     "ratio_plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 0.08777759212993642,
-    "observed_cases": 4,
+    "worst_ratio": 0.2918621344877682,
+    "observed_cases": 6,
     "expected_cases": 26,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 3,
-    "max_abs_delta": 1.259701562061899e-06,
+    "max_abs_delta": 2.5359321661477807e-05,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
       "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
+      "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -523,6 +551,33 @@
     ],
     "qualified": false
   },
+  "maniqa": {
+    "canonical": "original MANIQA / KonIQ",
+    "check": "2/2 pass",
+    "ratio": 0.902605272848543,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "56ad32fc525f267a01e9f0f0f8c28d3eac9863ae2feababbfd1c63799a6728da",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9605476946986256,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.960464477539063e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "56ad32fc525f267a01e9f0f0f8c28d3eac9863ae2feababbfd1c63799a6728da"
+    ],
+    "qualified": false
+  },
   "mdctpsnr": {
     "canonical": "thorfdbg mDCTpsnr 9a27a4b / compiled reference",
     "check": "2/2 pass",
@@ -679,34 +734,6 @@
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 6.910840899543302e-09,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "479cd70c076e6ce817ea0d8454e31db5abc770ccc57f5d8b605e5a37f9cd29ab",
-      "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
-    ],
-    "qualified": false
-  },
-  "ms-ssim-pyiqa-f32-k4": {
-    "canonical": "PyIQA 0.1.16 / named convention",
-    "check": "4/4 pass",
-    "ratio": 0.07522375361973979,
-    "ratio_width": 1152,
-    "ratio_height": 1152,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.17609443408672082,
-    "observed_cases": 4,
-    "expected_cases": 4,
-    "passed_cases": 4,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 4.4734951298863734e-09,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

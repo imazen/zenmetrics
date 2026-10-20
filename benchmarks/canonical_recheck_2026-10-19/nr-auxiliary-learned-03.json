@@ -1,0 +1,105 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nr-auxiliary-learned-run",
+  "completion_sha256": "f46cec85139ae0ce5cd38d17ebbde271649a603a1c120ea5bfde97d441bba0b7",
+  "cases": [
+    {
+      "metric": "musiq",
+      "case": "musiq-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "plan_sha256": "198658801b4781ec9fcf837664eedb0039c5ce76bd0d30953b85ec067c617262",
+      "headline_summary_sha256": "fe5561c3cd196f4ba217889c8ed63f050a7b4580e564f764fe765c46499d85b9",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t1/block-00/canonical/stdout.log": "5b303a5a52741c64ea6bce7f81c5cc39eff533462b3aa54836d2b561823354b8",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t1/block-01/canonical/stdout.log": "400ca2fcbafc3853299197b40fb1e06ca2c7c5388c09f71ef7d913c1cba6a31b",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t1/block-02/canonical/stdout.log": "893d862aa5143fe040b37c8b1bc53bd1abbd68167b097611b43ccb33d849b43b"
+      },
+      "canonical_reference_scores": [
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211,
+        71.2933578491211
+      ],
+      "absolute_bound": 0.0019689250000000003,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "musiq_ref",
+      "native_reference_score": 71.29338836669922,
+      "max_abs_delta": 3.0517578125e-05,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "e76525f4799eaa644504640953df926bfeced23acdb04f4125ef2322667714ef",
+        "native-stdout.log": "4357fb9dceaf59515a45c88e70232882e2abaf2b4c5ce4e9569e1d923a6cdc63",
+        "native-memory.txt": "8c533410907fa012b561c32035fa77e02a66655ab334a954c7d4a1b78246a2eb"
+      }
+    },
+    {
+      "metric": "musiq",
+      "case": "musiq-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "plan_sha256": "198658801b4781ec9fcf837664eedb0039c5ce76bd0d30953b85ec067c617262",
+      "headline_summary_sha256": "2cb998d37d77100ea3635544bd318339a4b923c91ed515803152a311e2f28b77",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t8/block-00/canonical/stdout.log": "293a15080788df9f8e9d72be3f415e26e11d503b06a45708c8dccf0c72b5a739",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t8/block-01/canonical/stdout.log": "1539e44b55d71dd85da7446495871a46a156ddbcf9022b0f5c76bc0d6bc378c9",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-musiq-1100-run/musiq-original-cid22-t8/block-02/canonical/stdout.log": "720a5871c227fef6b6b7a6a44bdddbcec4956e05b067c74f79072f42771354a8"
+      },
+      "canonical_reference_scores": [
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016,
+        71.29337310791016
+      ],
+      "absolute_bound": 0.0019689250000000003,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "musiq_ref",
+      "native_reference_score": 71.29338836669922,
+      "max_abs_delta": 1.52587890625e-05,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "6fa3ee76a328b7debe599e1240223a8671cc7215ae82875e33ede9dfec305bde",
+        "native-stdout.log": "668a01fff66f317972a4078a76e89e34bdb09234a2dea2a07b27f5554e3413a3",
+        "native-memory.txt": "f2844bc5b2aa434aae2f30eff38b0834fe80243fb637e5d5f12061e436a0ae49"
+      }
+    }
+  ],
+  "qualification": "Accuracy-only reference-image columns, unchanged bounds"
+}

@@ -1,4 +1,116 @@
 {
+  "vmaf-neg": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "6/26 pass",
+    "ratio": 0.8732582806645126,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.8732582806645126,
+    "observed_cases": 6,
+    "expected_cases": 26,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0002482166810153785,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
+    ],
+    "qualified": false
+  },
+  "vmaf-neg-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "4/26 pass",
+    "ratio": 0.9451284726258932,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9451284726258932,
+    "observed_cases": 4,
+    "expected_cases": 26,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 7.238667720343983e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
+    ],
+    "qualified": false
+  },
+  "vmaf-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "4/26 pass",
+    "ratio": 0.9108358432538288,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9108358432538288,
+    "observed_cases": 4,
+    "expected_cases": 26,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 7.264956991548388e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
+    ],
+    "qualified": false
+  },
+  "vmaf-v1": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2 process errors",
+    "ratio": 0.7430638158871904,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.8104301992930858,
+    "observed_cases": 4,
+    "expected_cases": 26,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 2,
+    "max_abs_delta": 0.00022515701154190992,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+      "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
+    ],
+    "qualified": false
+  },
   "vsi": {
     "canonical": "original VSI / Octave 6.4",
     "check": "6/6 pass",
@@ -131,6 +243,114 @@
     ],
     "plan_sha256": [
       "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "wadiqam-fr-live": {
+    "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+    "check": "2/2 pass",
+    "ratio": 0.4133534414690186,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "acc1c981a7ea605ceb3d2e6f01e83440f5618f6028e248fdc0910b9c46fef983",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.4133534414690186,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 2.0318011344500064e-05,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "acc1c981a7ea605ceb3d2e6f01e83440f5618f6028e248fdc0910b9c46fef983"
+    ],
+    "qualified": false
+  },
+  "wadiqam-fr-tid": {
+    "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+    "check": "2/2 pass",
+    "ratio": 0.508311180374634,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "046a3407298f865b37b00c9fd33589a8abb19f7f0c416db60db1af9db5d24026",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.508311180374634,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.988584045875541e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "046a3407298f865b37b00c9fd33589a8abb19f7f0c416db60db1af9db5d24026"
+    ],
+    "qualified": false
+  },
+  "wadiqam-nr-live": {
+    "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+    "check": "2/2 pass",
+    "ratio": 0.47693544323357806,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "567092530804c539c830525e43d01fa81cf789f2fde7ffbdebd877256d8c799a",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.47693544323357806,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 4.283867300891586e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "567092530804c539c830525e43d01fa81cf789f2fde7ffbdebd877256d8c799a"
+    ],
+    "qualified": false
+  },
+  "wadiqam-nr-tid": {
+    "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+    "check": "2/2 pass",
+    "ratio": 0.38490076551432867,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "721d1c308ea90534e0d23f12a655689ea6ca34020251189a55f9793d6c38b48b",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.38490076551432867,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 3.328961255988361e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "721d1c308ea90534e0d23f12a655689ea6ca34020251189a55f9793d6c38b48b"
     ],
     "qualified": false
   },

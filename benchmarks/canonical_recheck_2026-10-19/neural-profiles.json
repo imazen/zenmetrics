@@ -102,6 +102,28 @@
       "wrapper_receipt": "run-heavy: done rc=0 46s | peak-RSS 0.51GiB | min-avail 12007MiB | peak-load 2.64"
     },
     {
+      "binary_sha256": "8bf505f042fc3cf3d55638a9ddb121408e923c88d6977461a1e8b6de8a4583ab",
+      "config_sha256": "18370be33e3c3f6d86c769cccfd41b2ef7fd0daf8be8c5da81a9dd6ec4b17347",
+      "profile_sha256": "3f07df417a76e2dcd7285389e0393357e96cd533e5e6ae4cce40983f294705b7",
+      "report_sha256": "a590dd51f2bc7ba765ec9851e5d6d55ce5aa2e204e2f4af840f28b6e12349a63",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "case": "paq2piq-original-cid22-t1-3bc4fc38",
+      "threads": 1,
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t1-3bc4fc38/profile",
+      "wrapper_receipt": "run-heavy: done rc=0 10s | peak-RSS 0.16GiB | min-avail 12032MiB | peak-load 3.36"
+    },
+    {
+      "binary_sha256": "8bf505f042fc3cf3d55638a9ddb121408e923c88d6977461a1e8b6de8a4583ab",
+      "config_sha256": "691ce8e2121379aa6381cc9714b508b5b2c7bf7093391c53b7537567c744cf4e",
+      "profile_sha256": "0acd83c2c735df5387b34f7ae59783034708d6de1a6ab7720735dcbb1765e2be",
+      "report_sha256": "5cee9148e6cea8840ed96ce27bb9ea05a1354afc1e962ac05896963dabe60002",
+      "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds",
+      "case": "paq2piq-original-cid22-t8-3bc4fc38",
+      "threads": 8,
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/profile",
+      "wrapper_receipt": "run-heavy: done rc=0 6s | peak-RSS 0.17GiB | min-avail 12115MiB | peak-load 3.72"
+    },
+    {
       "binary_sha256": "274f9179fac1eef9c9c6ab3b7d100fa80347d8c6fd666d1513ff7870d71ef7ea",
       "config_sha256": "bd6b1cae2e78e54c0461d983048d423ffe5e320fddebf88d00bbdbd16a7c3db6",
       "profile_sha256": "8f43666014c674bf7b71f9d64cd917daf0d3d2f2fb91875e9f137bca22a62e6c",

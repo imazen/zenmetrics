@@ -1,0 +1,105 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nr-auxiliary-learned-run",
+  "completion_sha256": "f46cec85139ae0ce5cd38d17ebbde271649a603a1c120ea5bfde97d441bba0b7",
+  "cases": [
+    {
+      "metric": "hyperiqa",
+      "case": "hyperiqa-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
+      "headline_summary_sha256": "eb7cc2d49530d856583fc03410a472a34fa019a800186a4deb8f9aeeab3da865",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t1/block-00/canonical/stdout.log": "6b644ede8d7d3ce476c5777d5deb8f9973c10e76b529cfb9bdec52e9c3cee24c",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t1/block-01/canonical/stdout.log": "6a2376790cdad9557ebdea42fe4a0f8a92ed1c7018101bb39052c92540d1aab9",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t1/block-02/canonical/stdout.log": "78b9a9700dc920d9b4bcb06b76294ccdeca96e006d150ab9580aaf1231ff255e"
+      },
+      "canonical_reference_scores": [
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625
+      ],
+      "absolute_bound": 0.004461776000000001,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "hyperiqa_ref",
+      "native_reference_score": 72.51031494140625,
+      "max_abs_delta": 0.0,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "22b140acd92bb7a02ed8d71e8d610ec654c68831b1eadf4adcca33ec94b285c9",
+        "native-stdout.log": "8baa0dc6ed777476f92aa484e5eb39067b757d40c9bc0f80485cc4cf5f498b05",
+        "native-memory.txt": "9788a3b200f58dc0596900d8bb998c69a973f361ce0672b031c9baf181d23ccc"
+      }
+    },
+    {
+      "metric": "hyperiqa",
+      "case": "hyperiqa-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
+      "headline_summary_sha256": "92d4f2a0109dc214c1f31b4f4ede2eef4d9b63e6bb9b32e90c9f4de3f628a579",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t8/block-00/canonical/stdout.log": "c11de3a61957764354a459c45ad4518bf97529cf39ee56f09504c0383a37a05d",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t8/block-01/canonical/stdout.log": "1af87e91b7a11494143252b9e2b774fdccbb7aad066430e6079a48efe71bcd7b",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-hyperiqa-1100-run/hyperiqa-original-cid22-t8/block-02/canonical/stdout.log": "9f65226ac4b0099c9fb4f543d161a503c2e396dbc22d4362b6f39a138b2893a8"
+      },
+      "canonical_reference_scores": [
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625,
+        72.51031494140625
+      ],
+      "absolute_bound": 0.004461776000000001,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "hyperiqa_ref",
+      "native_reference_score": 72.51031494140625,
+      "max_abs_delta": 0.0,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "b77f8eb052f25ebf2b4de8d4eec957fc60e555dca9f642a8c7643965a07d02e5",
+        "native-stdout.log": "c6b1d358c7890709be519f7a6d1cdd3eecda1903a523ca1b4a57da8033d44994",
+        "native-memory.txt": "d1210eb10262a167ea8d1cfe40041be989d2fa15013049e1b1efc4cff68291a0"
+      }
+    }
+  ],
+  "qualification": "Accuracy-only reference-image columns, unchanged bounds"
+}

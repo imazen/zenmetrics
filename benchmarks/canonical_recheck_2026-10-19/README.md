@@ -513,3 +513,9 @@ The [six auxiliary comparisons](nr-auxiliary.json) check reference-image columns
 [ARNIQA one-thread initial 20 blocks](arniqa-original-cid22-t1-initial20-interval.json) give 1.1507064694296374, 95% [1.1374999626952738, 1.1772551172274746], meeting precision with 19 resource flags among 200 observations. Last block: 35s, peak-RSS 0.90 GiB, minimum available 11854 MiB, load 2.28. Its eight-thread 20-block interval misses precision; a fixed additional 40 blocks retain that original stage. These intervals remain descriptive.
 
 The [GPU-grid profiles](gpu-grid-profiles.json) retain the two 64×64 DSSIM CUDA recordings. Host-side CubeCL CUDA enqueue accounts for 30.21% / 27.81% of sampled CPU cycles at threads 1/28; this is not GPU-kernel timing or proof of the complete slowdown's cause. Profiling receipts: 8s / 7s, peak-RSS 0.33 GiB each, minimum available 11971 / 12147 MiB, peak load 3.85 / 4.71.
+
+## Later learned and revised-source update, 2026-10-20
+
+The summary retains subsequent MANIQA, MUSIQ, PaQ2PiQ and WaDIQaM observations and prefers the revised PSNR source when that route has completed. Every older observation keeps its source identity. [Runtime controls](runtime-controls.json) check resident first-evaluation probes in both NN families, author CUDA references for CVVDP and IW-SSIM, and a separate compatible NumPy 1.25.2 MUSIQ runtime. These are setup/accuracy controls, not comparative timing claims or full cold-matrix coverage.
+
+The [GPU reference amendment](gpu-reference-fixture-amendment.json) retains the first IW-SSIM setup failures and replaces the incomplete reference environment with the previously controlled author runner. Its 64×64 refusal is a genuine size-domain observation; the 255×257 scores are acquired without assigning a new bound.

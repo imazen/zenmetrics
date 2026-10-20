@@ -1,0 +1,105 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nr-auxiliary-learned-run",
+  "completion_sha256": "f46cec85139ae0ce5cd38d17ebbde271649a603a1c120ea5bfde97d441bba0b7",
+  "cases": [
+    {
+      "metric": "maniqa",
+      "case": "maniqa-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "plan_sha256": "56ad32fc525f267a01e9f0f0f8c28d3eac9863ae2feababbfd1c63799a6728da",
+      "headline_summary_sha256": "5454f30f3823a89dd3dd66e7678bb22fce574495e1cf480090a6864effbd5a2b",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t1/block-00/canonical/stdout.log": "518b2a19cd090c73863fccd1ec52a25ac8561debc191cdd28a697e509bbbc89a",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t1/block-01/canonical/stdout.log": "b065f0e4def8f5fe955408ee2c522c98e181a2b2a89ee9eb86bbfa67fd73ffa8",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t1/block-02/canonical/stdout.log": "888efae51a6caf7e97d3c9ff05281fa1c91452fb4e7dce0c9362d2138b710519"
+      },
+      "canonical_reference_scores": [
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247
+      ],
+      "absolute_bound": 2.1396e-05,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "maniqa_ref",
+      "native_reference_score": 0.8014461398124695,
+      "max_abs_delta": 5.960464477539063e-08,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "dfc249bd8b861f110652ef4f815248d3b28561a6e3edb344fed5fef0d853b08f",
+        "native-stdout.log": "e0be06f441e8f5a43a66e7661a93926c7feaf6b1838e7966715650646c8a32f8",
+        "native-memory.txt": "d723d4623f521f2338f879dfee4503f2b08a81bc56c7e2a3e6c85bd2c49bcc0e"
+      }
+    },
+    {
+      "metric": "maniqa",
+      "case": "maniqa-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "plan_sha256": "56ad32fc525f267a01e9f0f0f8c28d3eac9863ae2feababbfd1c63799a6728da",
+      "headline_summary_sha256": "9907d8ca034d06106205ffebb68673d4d29f983f35a464d7f93bb725798bc5d3",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t8/block-00/canonical/stdout.log": "0b5bcce698e062529fa0d7cff946a2d1ad7bdc6d23ede5892aafc35649c90192",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t8/block-01/canonical/stdout.log": "3cbacc70b908f3c9e898eb3c7ed716a11732be3582ea4af2da8fdb145fbd486e",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-maniqa-1100-run/maniqa-original-cid22-t8/block-02/canonical/stdout.log": "f889b5050b0b9e6b902f20835843f117ed5289d1d763807afccb6e22b431019e"
+      },
+      "canonical_reference_scores": [
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247,
+        0.8014460802078247
+      ],
+      "absolute_bound": 2.1396e-05,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "maniqa_ref",
+      "native_reference_score": 0.8014461398124695,
+      "max_abs_delta": 5.960464477539063e-08,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "4894b8d41ea753b823cb609103b202ff991b7242539a73f0d119a12ead202930",
+        "native-stdout.log": "2c8a5c7b42195e5b247d1bb08fc38ac9c20aeb1b6d1ae5eb9a687f6a148f03f1",
+        "native-memory.txt": "aa9f3cfd19c2fd40971161fa2e35e0d2fcdec6ab1a4f62acb0c285e6838f415a"
+      }
+    }
+  ],
+  "qualification": "Accuracy-only reference-image columns, unchanged bounds"
+}

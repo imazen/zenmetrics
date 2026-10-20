@@ -69,26 +69,26 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`afine`](docs/MODEL_CARDS.md#afine) | FR/NN | original A-FINE / pin… | 2/2 pass | ≈0.95× R |
 | [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | original AHIQ / pinne… | 2/2 pass | ≈0.55× R |
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.45× O |
-| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | original ARNIQA / kad… | 4/4 pass | ≈1.15× R ! |
+| [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | original ARNIQA / kad… | 5/5 pass | ≈1.15× R ! |
 | [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl 0.12.0 origina… | Δ 5e-05 | ≈0.39× |
 | [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl 0.12.0 origina… | Δ 0.0083 | ≈0.026× |
 | [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | original google/butte… | Δ 0 | ≈0.72× |
-| [`cambi`](docs/MODEL_CARDS.md#cambi) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈1× |
-| [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.68× |
+| [`cambi`](docs/MODEL_CARDS.md#cambi) | NR | libvmaf 3.2.0 / named… | 2 process errors | ≈1× |
+| [`cambi-aic2026`](docs/MODEL_CARDS.md#cambi-aic2026) | NR | libvmaf 3.2.0 / named… | 2 process errors | ≈0.68× |
 | [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | scikit-image CIEDE200… | Δ 9.2e-15 | ≈0.6× |
 | [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | original CKDN / pinne… | 2/2 pass | ≈0.49× R |
 | [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.031× |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 3/25 pass | ≈0.021× |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | pycvvdp 0.5.7 CPU / s… | 4/47 pass | ≈0.021× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 9/26 pass | ≈0.11× |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / native… | 24/26 pass | ≈0.11× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 5/5 pass | ≈1.21× R ! |
 | [`dists`](docs/MODEL_CARDS.md#dists) | FR/NN | DISTS-pytorch 0.1 | 3/3 pass | ≈1.11× R ! |
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | original DMM / pinned… | partial; 2/2 pass | ≈0.61× R |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | DreamSim 0.2.1 / ense… | 2/2 pass | ≈0.921× R |
 | [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | original dssim-core e… | 1 process errors | ≈0.48× |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | original dssim-core e… | Δ 5.3e-06 | ≈0.5× ! |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | original dssim-core e… | Δ 2.6e-05 | ≈0.5× ! |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.33× ! |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.34× ! |
 | [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | original FeatureSIM /… | 6/6 pass | ≈0.22× |
@@ -104,7 +104,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | official HDR-VDP 2.2.… | Δ 0.092 | ≈0.12× |
 | [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | typed input | — |
 | [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | official HDR-VDP 3.0.… | Δ 0.00029 | ≈0.18× |
-| [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | original HyperIQA / f… | 2/2 pass | ≈0.74× R ! |
+| [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | original HyperIQA / f… | 3/3 pass | ≈0.74× R ! |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.084× |
 | [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.088× |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | FR | author IW-SSIM / PIQ… | 2/2 pass | ≈0.072× |
@@ -113,7 +113,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`lpips-squeeze`](docs/MODEL_CARDS.md#lpips-squeeze) | FR/NN | lpips 0.1.4 | 2/2 pass | ≈0.64× R |
 | [`lpips-vgg`](docs/MODEL_CARDS.md#lpips-vgg) | FR/NN | lpips 0.1.4 | 4/4 pass | ≈1.08× R ! |
 | [`mad`](docs/MODEL_CARDS.md#mad) | FR | author HI/LO + paper… | Δ 0 | ≈0.12× |
-| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | IIGROUP/MANIQA | prior | — |
+| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | NR/NN | original MANIQA / KonIQ | 2/2 pass | ≈0.903× R |
 | [`mdctpsnr`](docs/MODEL_CARDS.md#mdctpsnr) | FR | thorfdbg mDCTpsnr 9a2… | 2/2 pass | ≈0.804× |
 | [`mdsi`](docs/MODEL_CARDS.md#mdsi) | FR | original MDSI / Octav… | 6/6 pass | ≈0.21× |
 | [`ms-gmsd`](docs/MODEL_CARDS.md#ms-gmsd) | FR | unrecorded | paper variant | — |
@@ -126,29 +126,29 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.22× |
 | [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.26× |
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 6/6 pass | ≈0.028× |
-| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 1.5e-07 | ≈0.35× |
-| [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | google-research/googl… | prior | — |
+| [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 2 process errors | ≈0.35× |
+| [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 2/2 pass | ≈0.58× R |
 | [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 170/170 pass | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.06× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.04× |
-| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | baidut/paq2piq | prior | — |
+| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | original Paq2piq / 40… | 2/2 pass | ≈1.3× R ! |
 | [`pieapp`](docs/MODEL_CARDS.md#pieapp) | FR/NN | Official v0.1 public… | excluded | — |
 | [`pieapp-pyiqa`](docs/MODEL_CARDS.md#pieapp-pyiqa) | FR/NN | pyiqa 0.1.16 create_m… | excluded | — |
 | [`piqe`](docs/MODEL_CARDS.md#piqe) | NR | pypiqe 1.2 | 170/170 pass | ≈0.1× |
 | [`proposal-butteraugli`](docs/MODEL_CARDS.md#proposal-butteraugli) | FR | libjxl 0.12.0 origina… | Δ 1.6e-08 | ≈0.42× |
-| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.21× |
-| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.27× |
-| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.26× |
-| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | scikit-image 0.26 / d… | Δ 2e-12 | ≈0.14× |
-| [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.76× |
-| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.21× |
-| [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | scikit-image 0.26 / d… | Δ 2.4e-12 | ≈0.14× |
-| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | NumPy / declared floa… | Δ 0 | ≈0.16× |
+| [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.0057× |
+| [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.11× |
+| [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.093× |
+| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | scikit-image 0.26 / d… | Δ 2e-12 | ≈0.041× |
+| [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.15× |
+| [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.011× |
+| [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | scikit-image 0.26 / d… | Δ 2.4e-12 | ≈0.048× |
+| [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | NumPy / declared floa… | Δ 0 | ≈0.036× |
 | [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00016× |
 | [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf 3.2.0 / origi… | 2/2 pass | ≈0.67× |
 | [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00029× |
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | scikit-image SSIM / d… | Δ 6.7e-16 | ≈0.15× |
-| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 6e-08 | ≈0.36× |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 2.4e-07 | ≈0.36× |
 | [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.013× |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 4/6 pass | ≈0.014× |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.025× |
@@ -166,15 +166,15 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ssimc-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.096× |
 | [`ssimc-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ssimc-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.54× |
 | [`ssimulacra1`](docs/MODEL_CARDS.md#ssimulacra1) | FR | original SSIMULACRA1… | Δ 3.8e-09 | ≈1.07× ! |
-| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 4/4 pass | ≈1.06× R ! |
+| [`stlpips-alex`](docs/MODEL_CARDS.md#stlpips-alex) | FR/NN | stlpips-pytorch 0.0.2 | 5/5 pass | ≈1.06× R ! |
 | [`stlpips-vgg`](docs/MODEL_CARDS.md#stlpips-vgg) | FR/NN | stlpips-pytorch 0.0.2 | 2/2 pass | ≈0.958× R |
 | [`topiq-fr`](docs/MODEL_CARDS.md#topiq-fr) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈1.05× O |
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
-| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.885× |
+| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / named… | 6/26 pass | ≈0.885× |
 | [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / named… | Δ 6.9e-06 | ≈0.895× |
-| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.873× |
+| [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / named… | 6/26 pass | ≈0.873× |
 | [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.945× |
 | [`vmaf-studio601`](docs/MODEL_CARDS.md#vmaf-studio601) | FR | libvmaf 3.2.0 / named… | 4/26 pass | ≈0.911× |
 | [`vmaf-v1`](docs/MODEL_CARDS.md#vmaf-v1) | FR | libvmaf 3.2.0 / named… | 2 process errors | ≈0.74× |
@@ -183,10 +183,10 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`vsi-k3`](docs/MODEL_CARDS.md#vsi-k3) | FR | original VSI / Octave… | 6/6 pass | ≈0.063× |
 | [`vsi-k4`](docs/MODEL_CARDS.md#vsi-k4) | FR | original VSI / Octave… | 6/6 pass | ≈0.062× |
 | [`vsi-nodownscale`](docs/MODEL_CARDS.md#vsi-nodownscale) | FR | original VSI / Octave… | 6/6 pass | ≈0.078× |
-| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | FR/NN | dmaniry/deepIQA | prior | — |
-| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | dmaniry/deepIQA | prior | — |
-| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | dmaniry/deepIQA | prior | — |
-| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | dmaniry/deepIQA | prior | — |
+| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | FR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.41× R |
+| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | FR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.51× R |
+| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | NR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.48× R |
+| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.38× R |
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.78× O |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | Orange-OpenSource/Coo… | prior | — |
 | [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 1.1e-16 | ≈0.925× |
@@ -307,7 +307,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 CPU / standard_fhd | 0.00002288818359375 | not recorded | not recorded / not applicable |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 CPU / standard_fhd | 0.000026702880859375 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -317,7 +317,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | author CW-SSIM / original pointOp MEX | 0.0000000000000006661338147750939 | not recorded | not recorded / not applicable |
-| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.0000000000000021094237467877974 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / none |
+| [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.000000000000005551115123125783 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / none |
 
 </details>
 
@@ -380,7 +380,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.000005282498001468738 | not recorded | not recorded / not applicable |
+| [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | original dssim-core eec33f55 / CPU reference | 0.00002572207521112091 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -478,7 +478,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | Python-IW-SSIM f9de37c / float32 | 0.0000006861363495147543 | not recorded | not recorded / not applicable |
-| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | Python-IW-SSIM f9de37c / float32 / CPU reference | 0.000001259701562061899 | not recorded | not recorded / not applicable |
+| [`iwssim-gpu`](docs/MODEL_CARDS.md#iwssim-gpu) | Python-IW-SSIM f9de37c / float32 / CPU reference | 0.000025359321661477807 | not recorded | not recorded / not applicable |
 | [`iwssim-piq`](docs/MODEL_CARDS.md#iwssim-piq) | author IW-SSIM / PIQ 0.8 rgb2yiq Y | 0.0000003003878045193531 | not recorded | not recorded / not applicable |
 
 </details>
@@ -517,7 +517,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | git clone of IIGROUP/MANIQA (no pip package; vendored timm 0.5.5 in-repo), pinned f573d862401243c45641951a0303b8059c1c8577 | not recorded | not recorded | Apache-2.0 / permissive |
+| [`maniqa`](docs/MODEL_CARDS.md#maniqa) | original MANIQA / KonIQ | 0.00000005960464477539063 | not recorded | Apache-2.0 / permissive |
 
 </details>
 
@@ -587,7 +587,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`musiq`](docs/MODEL_CARDS.md#musiq) | git clone of google-research (sparse musiq/), pinned 3ef5211; legacy stack jax 0.3.25 + flax 0.3.3 (flax.nn) + tensorflow CPU on python 3.9 — Kaggle/TF-Hub google/musiq instances are conversions of the same npz checkpoints (docs/pyiqa_licenses_2026-10-15/deep_origins.tsv) | not recorded | not recorded | Apache-2.0 / permissive |
+| [`musiq`](docs/MODEL_CARDS.md#musiq) | Google MUSIQ 3ef5211 / JAX 0.3.25 | 0.000030517578125 | not recorded | Apache-2.0 / permissive |
 
 </details>
 
@@ -623,7 +623,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | git clone of baidut/paq2piq revision 48c91e844e9f7a768f6ddcfc744dddfdd1160fea (the first author's official inference repo; LICENSE.md added 2024-10-25) | not recorded | not recorded | MIT / noncommercial |
+| [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | original Paq2piq / 401 ROIs | 0.00000762939453125 | not recorded | MIT / noncommercial |
 
 </details>
 
@@ -696,7 +696,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | scikit-image SSIM / declared mirror full map | 0.0000000000000006661338147750939 | not recorded | not recorded / not applicable |
-| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.00000005960464477539063 | not recorded | not recorded / not applicable |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0000002384185791015625 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | PyIQA 0.1.16 / named convention | 0.0000020900847584881532 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000011643768749181049 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000055390560693702184 | not recorded | not recorded / not applicable |
@@ -819,10 +819,10 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
-| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
-| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
-| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | git clone of dmaniry/deepIQA revision 51dece994d73f43dbd2ea44d3f2ef581014194ad (the authors' official repo; the paper's 'code available' link) | not recorded | not recorded | MIT / permissive |
+| [`wadiqam-fr-live`](docs/MODEL_CARDS.md#wadiqam-fr-live) | original deepIQA / Chainer 7.8.1 / inference | 0.000020318011344500064 | not recorded | MIT / permissive |
+| [`wadiqam-fr-tid`](docs/MODEL_CARDS.md#wadiqam-fr-tid) | original deepIQA / Chainer 7.8.1 / inference | 0.000001988584045875541 | not recorded | MIT / permissive |
+| [`wadiqam-nr-live`](docs/MODEL_CARDS.md#wadiqam-nr-live) | original deepIQA / Chainer 7.8.1 / inference | 0.0000004283867300891586 | not recorded | MIT / permissive |
+| [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | original deepIQA / Chainer 7.8.1 / inference | 0.000003328961255988361 | not recorded | MIT / permissive |
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | PyIQA 0.1.16 / native ORT CPU comparison | 0.000000002092197051023481 | not recorded | PolyForm Noncommercial 1.0.0 + S-Lab 1.0 (../../LICENSE-pyiqa, ../../LICENSE-S-Lab) / nc |
 
 </details>

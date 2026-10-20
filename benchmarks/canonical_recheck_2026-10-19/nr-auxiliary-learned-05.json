@@ -1,0 +1,105 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nr-auxiliary-learned-run",
+  "completion_sha256": "f46cec85139ae0ce5cd38d17ebbde271649a603a1c120ea5bfde97d441bba0b7",
+  "cases": [
+    {
+      "metric": "wadiqam-nr-live",
+      "case": "wadiqam-nr-live-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "plan_sha256": "567092530804c539c830525e43d01fa81cf789f2fde7ffbdebd877256d8c799a",
+      "headline_summary_sha256": "322cc437b5274fc7f3eef8ec41e067c32ec9eac1f4aca4d21a3851a30cd42bda",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t1/block-00/canonical/stdout.log": "76cc31cad46f9720e7b80691d6755e0385dc346aa6c0a03b7d5146b994a9feb3",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t1/block-01/canonical/stdout.log": "96669e23018cc1aeb9be8f23ff6f8e4cae26c43272b29d789ffb8957276cd205",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t1/block-02/canonical/stdout.log": "24d7404ab5bfa26fd61d8cc4a7d271e24e4eb08d2e31a5670d7009e8c4818010"
+      },
+      "canonical_reference_scores": [
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986,
+        1.2270405292510986
+      ],
+      "absolute_bound": 0.023551063,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "wadiqam_nr_live_ref",
+      "native_reference_score": 1.22704031777895,
+      "max_abs_delta": 2.1147214868122433e-07,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "3978d99470f4e4c81c3a91896f289d948f5e8ae9bf1cf729c6f9790c45ceaca8",
+        "native-stdout.log": "ff1e85815b970b2dfcf40d49aebb35f2b55ee72559dcb67838978130e197c1c8",
+        "native-memory.txt": "abf4b29d32eee46a7a729f3f177894570100bcae13ba27d77dfeb9f0bf2dd6ab"
+      }
+    },
+    {
+      "metric": "wadiqam-nr-live",
+      "case": "wadiqam-nr-live-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "plan_sha256": "567092530804c539c830525e43d01fa81cf789f2fde7ffbdebd877256d8c799a",
+      "headline_summary_sha256": "e7472ed15f82db23a2d54d9a8a7fd7445cb4722739178ae8297135b5b656b97f",
+      "canonical_logs": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t8/block-00/canonical/stdout.log": "81e72285cc345ee2a478f41b74f6ba59b527beee79a3f84ac6562cf0312e2546",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t8/block-01/canonical/stdout.log": "6deb19f15dbcc6af0c3ddd4fb9467d23324055bcd551d4ca5a0711586fec85cc",
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-wadiqam-nr-live-1100-run/wadiqam-nr-live-original-cid22-t8/block-02/canonical/stdout.log": "823ab70c57833071b7c7c0c42632aae3e6ddc4693794f40a859d879c350edded"
+      },
+      "canonical_reference_scores": [
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195,
+        1.2270402908325195
+      ],
+      "absolute_bound": 0.023551063,
+      "relative_bound": 0,
+      "process_exit": 0,
+      "qualification": "Accuracy-only auxiliary-column comparison; no timing ratio",
+      "column": "wadiqam_nr_live_ref",
+      "native_reference_score": 1.22704031777895,
+      "max_abs_delta": 2.6946430420338174e-08,
+      "passed": true,
+      "binding_relocations": {},
+      "files": {
+        "native-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "config.json": "0f55053209285cfa575268e0bd51b83999de949307d8f85e5d351e899ee9f40a",
+        "native-stdout.log": "c190b0b981b2e4e6aafd529010e16082b5a657ba640a8839579a012295ddc000",
+        "native-memory.txt": "f695eaf4c6c73f3a1acec3d49094023497f1639ab9854fb754e4c3ae300336d8"
+      }
+    }
+  ],
+  "qualification": "Accuracy-only reference-image columns, unchanged bounds"
+}

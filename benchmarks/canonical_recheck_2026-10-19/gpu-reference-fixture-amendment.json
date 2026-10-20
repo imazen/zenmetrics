@@ -1,0 +1,82 @@
+{
+  "old_plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+  "new_plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
+  "old_queue_retained": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid",
+  "replacement_queue": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2",
+  "preparation": {
+    "previous_plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "corrected_plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
+    "reference_control_plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
+    "reason": "Missing pyrtools and absent torch.eig API shim in the newly prepared original GPU-grid reference; use the already validated reference callable and runtime",
+    "unchanged": "Native binary, numerical bounds, inputs, timing budgets and samples; all existing raw attempts preserved",
+    "completed_non_iwssim_cases": [
+      {
+        "case": "butteraugli-gpu-grid-pairA-64x64-t1",
+        "summary_sha256": "0b786cc82476e6bb8dee4451590cdc3fe8a3a67860ddc708e6ba0739838394bf"
+      },
+      {
+        "case": "butteraugli-gpu-grid-pairA-64x64-t28",
+        "summary_sha256": "24224dbc12909def46a7e2f6383a42853a6b1ba9a3717ec8c67770050daf4bf3"
+      },
+      {
+        "case": "dssim-gpu-grid-pairA-64x64-t1",
+        "summary_sha256": "076817976576192f90c7cdb437eebdd4249cea8767d60d7e1a83cd11e437b652"
+      },
+      {
+        "case": "dssim-gpu-grid-pairA-64x64-t28",
+        "summary_sha256": "9da2415497e4eac044a93ac5a0f4ee46879460815cbe7bdafe50bd957336498a"
+      },
+      {
+        "case": "ssim2-gpu-grid-pairA-64x64-t1",
+        "summary_sha256": "b565e61951d2742f71d6e0e38de9fbfc8174552de637dd7865d30a5a29687de4"
+      },
+      {
+        "case": "ssim2-gpu-grid-pairA-64x64-t28",
+        "summary_sha256": "967994bb249d647f6ddb8f01a26f1ef63fec97aab473eaafb4bcad73c377775b"
+      },
+      {
+        "case": "cvvdp-gpu-grid-pairA-64x64-t1",
+        "summary_sha256": "c7cac70778b24cb7e6e7dd050f0d98a1cdbe396f03521714e1fe1559a345c93b"
+      },
+      {
+        "case": "cvvdp-gpu-grid-pairA-64x64-t28",
+        "summary_sha256": "dd4e11b62413b1225e632e408f21c2960c3b59450b8d2e1a7921c53b16bee792"
+      },
+      {
+        "case": "butteraugli-gpu-grid-pairA-255x257-t1",
+        "summary_sha256": "53a2f63e076627938908136b031a8187a0f32d380cd36d34762961f4e2583d46"
+      },
+      {
+        "case": "butteraugli-gpu-grid-pairA-255x257-t28",
+        "summary_sha256": "edd4b098b0933c05340f58015a5e17e18165ada84c0121e37b85fd34ba75e161"
+      },
+      {
+        "case": "dssim-gpu-grid-pairA-255x257-t1",
+        "summary_sha256": "a30beec62bf3e8094cb8475bd5ef8b3d911c49802c4061bf4120f9b2dbebef13"
+      },
+      {
+        "case": "dssim-gpu-grid-pairA-255x257-t28",
+        "summary_sha256": "ac0230037f49d5351f24f51bb95520741548d343708b4f6c023b534301304938"
+      },
+      {
+        "case": "ssim2-gpu-grid-pairA-255x257-t1",
+        "summary_sha256": "9f2654c2bfc34fa08ad4ab64a212f4025737e4641f0f424e011bf379794dc991"
+      },
+      {
+        "case": "ssim2-gpu-grid-pairA-255x257-t28",
+        "summary_sha256": "835700088175a1a209164284fa4f6f1ff68d0be7ebc92897c8d67d4d88c9eb7a"
+      }
+    ],
+    "remaining_or_replayed_cases": 106,
+    "corrected_iwssim_cases": 24,
+    "relocations": []
+  },
+  "stop": {
+    "utc": "2026-10-20T10:31:58.232830+00:00",
+    "coordinator": 2904820,
+    "pending_admission": 3464936,
+    "reason": "Correct missing pyrtools and absent legacy eig API shim in newly prepared IW-SSIM reference cases",
+    "preserved": "All existing plans, raw blocks, finished cases and failed attempts; no active scoring process terminated"
+  },
+  "scope": "Fix benchmark reference setup only; retain fourteen completed non-IW cases and replay the remaining 106 cases, including both old setup failures; no metric, input or numerical-bound change"
+}
