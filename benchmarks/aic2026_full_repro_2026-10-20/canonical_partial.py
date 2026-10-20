@@ -9,7 +9,7 @@ import csv
 import json
 from pathlib import Path
 
-from canonical_chunks import merge, records
+from canonical_chunks import continuation_records, merge, records
 from canonical_compare import compare
 from canonical_provenance import json_safe
 from canonical_run import sha
@@ -41,9 +41,17 @@ def main():
     if not columns:
         raise ValueError('native score column missing')
     reference, sources = {}, {str(native_receipt): sha(native_receipt)}
+    continuation = manifest.get('continuations', {}).get(args.metric+'.canonical')
+    prior_bundles = 0
+    if continuation:
+        reference, _ = continuation_records(continuation, spec['kind'] != 'octave')
+        sources[continuation['path']] = continuation['sha256']
+        for binding in continuation['receipts']:
+            sources[binding['path']] = binding['sha256']
+        prior_bundles = len(continuation['receipts'])
     chunks = work/(args.metric+'.canonical.chunks')
     receipts = sorted(chunks.glob('bundle-*.receipt.json'))
-    if not receipts:
+    if not receipts and not reference:
         raise ValueError('no completed reference bundles')
     for path in receipts:
         receipt = json.loads(path.read_text())
@@ -62,7 +70,7 @@ def main():
     summary, worst = compare(args.metric, spec['reference'],
         {key: row[columns[0]] for key, row in own.items()}, values, spec.get('gate'))
     report = dict(scope='partial; completed reference bundles only', cohort_rows=manifest['cohort_rows'],
-        full_cohort_qualification='pending', reference_rows=len(reference), bundles=len(receipts),
+        full_cohort_qualification='pending', reference_rows=len(reference), bundles=prior_bundles+len(receipts),
         reference_errors=sum(bool(row.get('error')) for row in reference.values()),
         comparison=summary, worst_five=worst, files=sources,
         manifest_sha256=sha(args.manifest), worker_sha256=sha(__file__))
