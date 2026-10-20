@@ -274,7 +274,9 @@ class Controls(unittest.TestCase):
         with self.assertRaises(v.Drift):
             v.audit_cell(self.f.root,self.f.cases[0],0,self.f.cohort_sha,self.f.setup_sha,self.f.worker,setup)
         (self.f.root/'preflight-seal.json').write_text('{}')
-        with self.assertRaises(v.Drift):
+        # The pinned worker raises ValueError here; require its exact rejection,
+        # while the earlier altered-log check exercises our own Drift subtype.
+        with self.assertRaisesRegex(ValueError,'^preflight seal differs from explicit queue argument$'):
             v.checked_setup(self.f.root,v.load(self.f.root/'cohort.json'),self.f.cohort_sha,self.f.setup_sha,self.f.worker)
 
     def test_missing_evidence_never_gracefully_skipped(self):
