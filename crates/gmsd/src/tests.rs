@@ -600,14 +600,26 @@ fn lsb_drift_score_sensitivity() {
     for i in (0..w * h).step_by(641) {
         b[i] += 2.0;
     }
-    let base = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&a, w, h).unwrap());
+    let base = gmsd(
+        GrayImage::packed(&a, w, h).unwrap(),
+        GrayImage::packed(&a, w, h).unwrap(),
+    );
     // Second plane: same texture, all pixels perturbed ±1 (dense drift).
     let c: Vec<f32> = a
         .iter()
         .enumerate()
         .map(|(i, &v)| v + if i % 2 == 0 { 1.0 } else { -1.0 })
         .collect();
-    let d_sparse = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&b, w, h).unwrap());
-    let d_dense = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&c, w, h).unwrap());
-    eprintln!("identical: {:?}  sparse: {:?}  dense: {:?}", base, d_sparse, d_dense);
+    let d_sparse = gmsd(
+        GrayImage::packed(&a, w, h).unwrap(),
+        GrayImage::packed(&b, w, h).unwrap(),
+    );
+    let d_dense = gmsd(
+        GrayImage::packed(&a, w, h).unwrap(),
+        GrayImage::packed(&c, w, h).unwrap(),
+    );
+    eprintln!(
+        "identical: {:?}  sparse: {:?}  dense: {:?}",
+        base, d_sparse, d_dense
+    );
 }
