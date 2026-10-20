@@ -159,25 +159,27 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 79,
-        "qualified_attempt_rows": 76,
-        "gate_flagged_attempt_rows": 3,
+        "saved_attempt_rows": 102,
+        "qualified_attempt_rows": 96,
+        "gate_flagged_attempt_rows": 4,
         "observed_cell_statuses": {
-          "ok": 79,
-          "pending": 229
+          "ok": 100,
+          "pending": 208
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
-        "failure_class_attempts": {},
+        "failure_class_attempts": {
+          "worker_failure_unclassified": 2
+        },
         "exhausted_saved_cells": 0
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:30:01.801460+00:00",
-      "2026-10-20T03:30:02.102480+00:00"
+      "2026-10-20T03:35:01.792379+00:00",
+      "2026-10-20T03:35:02.103165+00:00"
     ],
-    "saved_attempt_rows": 3027,
-    "preferred_qualified_cells": 2861,
+    "saved_attempt_rows": 3050,
+    "preferred_qualified_cells": 2881,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -284,7 +286,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 9302,
+    "individual_measurement_rows": 9377,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -414,8 +416,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:30:01.426496+00:00",
-      "2026-10-20T03:30:01.554616+00:00"
+      "2026-10-20T03:35:01.436424+00:00",
+      "2026-10-20T03:35:01.572384+00:00"
     ],
     "saved_attempt_rows": 3892,
     "preferred_qualified_cells": 3689,
@@ -593,12 +595,12 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 127,
-        "qualified_attempt_rows": 122,
+        "saved_attempt_rows": 135,
+        "qualified_attempt_rows": 130,
         "gate_flagged_attempt_rows": 5,
         "observed_cell_statuses": {
-          "ok": 127,
-          "pending": 181
+          "ok": 135,
+          "pending": 173
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -607,11 +609,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:30:02.245639+00:00",
-      "2026-10-20T03:30:02.385212+00:00"
+      "2026-10-20T03:35:02.181941+00:00",
+      "2026-10-20T03:35:02.317757+00:00"
     ],
-    "saved_attempt_rows": 4966,
-    "preferred_qualified_cells": 4603,
+    "saved_attempt_rows": 4974,
+    "preferred_qualified_cells": 4611,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -718,7 +720,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 15475,
+    "individual_measurement_rows": 15501,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   }
 }
