@@ -2302,3 +2302,7 @@ bench-iqa-canonical-dssim-maps python +options:
 
 bench-iqa-canonical-flip-maps python build inputs output *options:
     '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_flip_maps.py '{{build}}' '{{inputs}}' '{{output}}' {{options}}
+
+# Publish resident-model first calls separately from warm comparison tables.
+bench-iqa-canonical-nn-first-publish output receipt +roots:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_nn_first_evaluation.py '{{output}}' '{{receipt}}' {{roots}}

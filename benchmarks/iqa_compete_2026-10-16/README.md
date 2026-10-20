@@ -450,3 +450,10 @@ regenerated in an owned export. It supersedes primary-reference claims from
 the older fork; those alternative observations remain retained. The combined
 public-tool validation reports 143s, peak-RSS 1.36 GiB, minimum available
 11942 MiB and peak load 2.07. These are accuracy checks, without speed ratios.
+
+Resident-model first-call results have a separate publication recipe:
+`just bench-iqa-canonical-nn-first-publish NEW_OUTPUT BUILD_RECEIPT RESULTS…`.
+It recomputes numerical decisions from acquired arms, withholds ratios for
+numerical failures, and preserves unknown bounds. Shards remain below 30 KB.
+These observations exclude immutable-model construction and do not replace
+warm timing rows or complete process-startup measurements.
