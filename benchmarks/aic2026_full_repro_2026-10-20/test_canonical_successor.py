@@ -33,6 +33,8 @@ class Successor(unittest.TestCase):
             result = chunks/'worker.tsv'
             result.write_text('distorted\tvalue\terror\na.png\t1.25\t\n')
             (chunks/'bundle-0000.receipt.json').write_text(json.dumps(dict(returncode=0, outputs={str(result): sha(result)})))
+            metadata = old_scratch/'metrics_cropped.csv'
+            metadata.write_text('distorted,codec,bpp\na.png,JPG,1.00\nb.png,JPG,2.00\n')
             manifest = old_scratch/'manifest.json'
             original = dict(scratch=str(old_scratch), output=str(old_output), driver_freeze=str(source),
                 binary=str(binary), binary_sha256=sha(binary), bindings={str(binary): sha(binary)},
@@ -46,6 +48,8 @@ class Successor(unittest.TestCase):
             self.assertEqual(sha(manifest), before)
             self.assertEqual(new['execution']['rows_per_worker'], 32)
             self.assertEqual(new['pairs'], str(pairs))
+            self.assertEqual((root/'successor/metrics_cropped.csv').read_bytes(), metadata.read_bytes())
+            self.assertEqual(new['bindings'][str(root/'successor/metrics_cropped.csv')], sha(metadata))
             self.assertEqual(new['metrics'], original['metrics'])
             self.assertEqual(new['execution']['environment_root'], str(old_scratch))
             self.assertEqual(new['schedule_predecessor']['retained_rows'], {'mad.native': 2, 'mad.canonical': 1})

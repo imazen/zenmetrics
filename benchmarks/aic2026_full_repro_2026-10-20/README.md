@@ -140,4 +140,18 @@ receipt externally, retries errno-12 reads from the beginning, and refuses
 changed or missing inputs during verification. The provenance writer accepts
 that inventory with `--input-bindings` and rechecks its bytes before export.
 
-Scheduling successors use `just aic-canonical-successor` after the prior controller reaches a completed bundle boundary. The new manifest retains the full cohort, metric specifications, scorer bytes and explicit scoring environment. Completed reference bundles carry their receipt/output hashes into the successor; their identities are imported without re-scoring. Unstarted work uses 32 rows per worker and the same ordered heavy locks. Original manifests, plans and results remain preserved.
+Scheduling successors use `just aic-canonical-successor` after the prior
+controller reaches a completed bundle boundary. The new manifest retains
+the full cohort, metric specifications, scorer bytes and explicit scoring
+environment. Completed reference bundles carry their receipt/output hashes
+into the successor; their identities are imported without re-scoring.
+Unstarted work uses 32 rows per worker and the same ordered heavy locks.
+Original manifests, plans and results remain preserved. The original July
+metadata CSV is copied and hash-bound for later aggregation.
+
+The 2026-10-20 scheduling transition retained all 9,618 native MAD rows and
+2,304 completed reference rows. Its first new bundle completed 96 new
+identities, exactly 32 per worker, without re-scoring any retained identity.
+That scope recorded `run-heavy: done rc=0 84s | peak-RSS 0.68GiB |
+min-avail 12706MiB | peak-load 4.39`. This is a scheduling observation on
+that bundle; no full-cohort canonical comparison is qualified yet.

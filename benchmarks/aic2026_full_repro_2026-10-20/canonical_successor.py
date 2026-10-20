@@ -22,6 +22,8 @@ def prepare(predecessor, scratch, output, freeze, locks, rows_per_worker):
         raise ValueError('rows_per_worker outside supported range')
     if any(path.exists() for path in (scratch, output, freeze)):
         raise ValueError('successor paths must be new; retain all previous artifacts')
+    metadata = Path(old['scratch'])/'metrics_cropped.csv'
+    metadata_sha = sha(metadata)
     source = Path(old['driver_freeze'])
     here = Path(__file__).parent
     relative = here.relative_to(next(p for p in here.parents if (p/'justfile').exists()))
@@ -50,6 +52,10 @@ def prepare(predecessor, scratch, output, freeze, locks, rows_per_worker):
             new['bindings'][str(path)] = sha(path)
     scratch.mkdir(parents=True)
     (scratch/'logs').mkdir()
+    shutil.copyfile(metadata, scratch/'metrics_cropped.csv')
+    if sha(scratch/'metrics_cropped.csv') != metadata_sha:
+        raise ValueError('metadata copy changed')
+    new['bindings'][str(scratch/'metrics_cropped.csv')] = metadata_sha
     output.mkdir(parents=True)
     with Path(old['pairs']).open() as stream:
         pairs = list(csv.DictReader(stream, delimiter='\t'))
