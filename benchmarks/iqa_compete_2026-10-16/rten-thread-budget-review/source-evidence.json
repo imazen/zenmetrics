@@ -1,0 +1,381 @@
+{
+  "schema": "rten-thread-budget-source-review/1",
+  "date": "2026-10-20",
+  "kind": "source and retained metadata only; no runtime experiment",
+  "worker_sha256_recorded": "30aac95db79e7286bef93e2f137046ef273bc82fa05bde2f9ef8583c81a5e01f",
+  "first_probe_sha256_recorded": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+  "metadata": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/metadata.json",
+    "bytes": 4436530,
+    "sha256": "ad46b74c56d13d07272f2d52f1918ad764908c556216fe5bcea782ee99f61d4a"
+  },
+  "lockfile": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/Cargo.lock",
+    "bytes": 199892,
+    "sha256": "821f26d4097c624239a2c17a05147831449ccb7e7eaec43401a0e92eed73e0e8"
+  },
+  "packages": [
+    {
+      "name": "rayon",
+      "version": "1.12.0",
+      "registry_source": "registry+https://github.com/rust-lang/crates.io-index",
+      "lock_archive_sha256": "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d",
+      "archive_bytes": 183391,
+      "cargo_read_exact_spec": "rayon==1.12.0",
+      "vcs": {
+        "git": {
+          "sha1": "c9ced185ae3508246a9eb70c8407a1199bb1b77f"
+        },
+        "path_in_vcs": ""
+      },
+      "sources": [
+        {
+          "relative_path": "src/lib.rs",
+          "sha256": "40b39bfb9a469f8a4d78d0833166e7ce2b89bbd9cf199e5dac86ad5e6301d16d",
+          "archive_exact": true
+        }
+      ],
+      "retained_dep_info": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon-ea07e479bc5dfaca.d",
+        "bytes": 39910,
+        "sha256": "c0e99a80fa9ad486391f9bd660d7f0093c33089828530b8720dfb5fb9330e4e6"
+      }
+    },
+    {
+      "name": "rayon-core",
+      "version": "1.13.0",
+      "registry_source": "registry+https://github.com/rust-lang/crates.io-index",
+      "lock_archive_sha256": "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91",
+      "archive_bytes": 73151,
+      "cargo_read_exact_spec": "rayon-core==1.13.0",
+      "vcs": {
+        "git": {
+          "sha1": "7af20d7692d5decbcb4adcaa079cd607e3e50814"
+        },
+        "path_in_vcs": "rayon-core"
+      },
+      "sources": [
+        {
+          "relative_path": "src/lib.rs",
+          "sha256": "5da845890b55010d8f5e243ac9d112c60c710a0f412dce8ebf6f8b6987bd261c",
+          "archive_exact": true
+        },
+        {
+          "relative_path": "src/thread_pool/mod.rs",
+          "sha256": "f071a1bc766cde10ec844cc3b53e53479c3f1ade97ceaff1cc9e3f9913ade9f3",
+          "archive_exact": true
+        }
+      ],
+      "retained_dep_info": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.d",
+        "bytes": 10058,
+        "sha256": "b978d5a8acc72cb96891b0e6b832470119fcf68afaf58358398e6954e20a02b0"
+      }
+    },
+    {
+      "name": "rten",
+      "version": "0.27.0",
+      "registry_source": "registry+https://github.com/rust-lang/crates.io-index",
+      "lock_archive_sha256": "639c5d2ce961f3e154878d1d48c2ac3451e5a6ea5d9c0b0d5f0da362f4c57dab",
+      "archive_bytes": 485797,
+      "cargo_read_exact_spec": "rten==0.27.0",
+      "vcs": {
+        "git": {
+          "sha1": "bc1b852cb0ef70a6e8616e884c026f3ce3577c4f"
+        },
+        "path_in_vcs": ""
+      },
+      "sources": [
+        {
+          "relative_path": "src/threading.rs",
+          "sha256": "b6fb463ed23986ddec685d131448e45c0296ed71d8141c9f80378084412261e0",
+          "archive_exact": true
+        },
+        {
+          "relative_path": "src/graph.rs",
+          "sha256": "f9df5ce7793ce43dfd606ffeea7a4a7f29e803f3a95f6590f5d3af134d325d2d",
+          "archive_exact": true
+        },
+        {
+          "relative_path": "src/model.rs",
+          "sha256": "eeba12449431f1d9c0c9d1aa79b00ac8264d092db2df2e222133acbf1e05975e",
+          "archive_exact": true
+        },
+        {
+          "relative_path": "src/ops/operators.rs",
+          "sha256": "213429a1a6515e72536b53c0599b804610a1c7b09860fa4920b9d3e70556be4c",
+          "archive_exact": true
+        }
+      ],
+      "retained_dep_info": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten-002e9e8193d1cdad.d",
+        "bytes": 27992,
+        "sha256": "4984ee9e91c7ab2a61a0ca4e33406c3e465a6367e4cc41c1532ec095377b6a4d"
+      }
+    },
+    {
+      "name": "rten-parallel",
+      "version": "0.27.0",
+      "registry_source": "registry+https://github.com/rust-lang/crates.io-index",
+      "lock_archive_sha256": "75e29f5ffc5bfd9a53dc31dbbbb1e18d7adebf4ac6c97f0e4778db0c92fad7ac",
+      "archive_bytes": 3819,
+      "cargo_read_exact_spec": "rten-parallel==0.27.0",
+      "vcs": {
+        "git": {
+          "sha1": "bc1b852cb0ef70a6e8616e884c026f3ce3577c4f"
+        },
+        "path_in_vcs": "rten-parallel"
+      },
+      "sources": [
+        {
+          "relative_path": "src/lib.rs",
+          "sha256": "913a8677f3b7076dd4a7459fa5c9edb6cf246b297ad1fbf77b6c5b59223eb105",
+          "archive_exact": true
+        },
+        {
+          "relative_path": "src/par_iter.rs",
+          "sha256": "f375faeb53efd25fd2552fd9da2c3ffce297d44bdd788113fd956845f1292e30",
+          "archive_exact": true
+        }
+      ],
+      "retained_dep_info": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_parallel-5d8065b2dcb9619e.d",
+        "bytes": 1134,
+        "sha256": "4daa21b2cc1fbdfa436bf359c5a343b45a38adc7a1590883e8cd882115cbd433"
+      }
+    }
+  ],
+  "fingerprints": [
+    {
+      "directory": "cpu-profile-bdec5755a9704f61",
+      "json_sha256": "6c68cd209048f6a943c7ec70529e66bd2fcc82739cafb6e0806527dd2ae6f841",
+      "fingerprint_hex_le": "c4d428f598e1ff96",
+      "fingerprint_numeric": 10880663271814780100,
+      "features": [
+        "compete",
+        "compete-nn",
+        "metrics-parallel"
+      ],
+      "dependencies": [
+        {
+          "name": "rayon",
+          "fingerprint_numeric": 13388680059263463667
+        },
+        {
+          "name": "zenmetrics_cli",
+          "fingerprint_numeric": 10627009990905261593
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "zenmetrics-cli-a80756846728fca2",
+      "json_sha256": "658759cc70dc9d3030374c00e78ce1cc3b00c28e102880308ef7d3a0b626f70f",
+      "fingerprint_hex_le": "196e6f4c48b97a93",
+      "fingerprint_numeric": 10627009990905261593,
+      "features": [
+        "avx512",
+        "cpu-cvvdp",
+        "cpu-fsim",
+        "cpu-gmsd",
+        "cpu-haarpsi",
+        "cpu-hdrvdp",
+        "cpu-iwssim",
+        "cpu-iwssim-piq",
+        "cpu-mad",
+        "cpu-mdctpsnr",
+        "cpu-metrics",
+        "cpu-msssim",
+        "cpu-psnrhvs",
+        "cpu-vif",
+        "cpu-vifvec",
+        "cpu-vmaf",
+        "cpu-vsi",
+        "jpeg",
+        "nn",
+        "nn-ort",
+        "nr",
+        "png",
+        "pyiqa-ports"
+      ],
+      "dependencies": [
+        {
+          "name": "zenmetrics_nn",
+          "fingerprint_numeric": 11011116677556218647
+        },
+        {
+          "name": "rayon",
+          "fingerprint_numeric": 13388680059263463667
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "zenmetrics-nn-fdbcb6ab56d2bc9b",
+      "json_sha256": "f51a1a217a39581e0c349da5a06f3205319c7119bac9a298c2780087b4de44d8",
+      "fingerprint_hex_le": "172b1e624758cf98",
+      "fingerprint_numeric": 11011116677556218647,
+      "features": [
+        "default",
+        "ort",
+        "rten"
+      ],
+      "dependencies": [
+        {
+          "name": "rten",
+          "fingerprint_numeric": 15606982555467757512
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "rten-002e9e8193d1cdad",
+      "json_sha256": "7062af0f8192aea3d3ef2aca60035423662b37b54201c791c937d8189c113e0b",
+      "fingerprint_hex_le": "c8b75fe2f12397d8",
+      "fingerprint_numeric": 15606982555467757512,
+      "features": [
+        "onnx_format"
+      ],
+      "dependencies": [
+        {
+          "name": "rten_parallel",
+          "fingerprint_numeric": 7717002471242574897
+        },
+        {
+          "name": "rayon",
+          "fingerprint_numeric": 13388680059263463667
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "rten-parallel-5d8065b2dcb9619e",
+      "json_sha256": "ac92b74548c848bb90eb350226639c0bf03a679086f5423db060e3c374fa4908",
+      "fingerprint_hex_le": "31ac3975dc4c186b",
+      "fingerprint_numeric": 7717002471242574897,
+      "features": [],
+      "dependencies": [
+        {
+          "name": "rayon",
+          "fingerprint_numeric": 13388680059263463667
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "rayon-ea07e479bc5dfaca",
+      "json_sha256": "ce99c65bf5b860740e24f39e2308f07e5d14ecdf794cab2198192d8a4f5e0e6f",
+      "fingerprint_hex_le": "f330c1df9325ceb9",
+      "fingerprint_numeric": 13388680059263463667,
+      "features": [],
+      "dependencies": [
+        {
+          "name": "rayon_core",
+          "fingerprint_numeric": 14390867411049618704
+        }
+      ],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    },
+    {
+      "directory": "rayon-core-3be2740412d73375",
+      "json_sha256": "8f086d63648d41b9b2f584b6a891d7508e779a9842180ad31e8f1fcf004453f1",
+      "fingerprint_hex_le": "109d5b0daaa1b6c7",
+      "fingerprint_numeric": 14390867411049618704,
+      "features": [],
+      "dependencies": [],
+      "rustflags": [
+        "--cfg",
+        "iqa_compete_ingress",
+        "--cfg",
+        "iqa_compete_cached"
+      ]
+    }
+  ],
+  "local_sources": [
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/build-receipt.json",
+      "bytes": 3449,
+      "sha256": "48a5aa8f464eb3282fca701af7e023573afcfaaea0e111a9458250249273a40b"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident_nn_first.rs",
+      "bytes": 2432,
+      "sha256": "89464c53b5e86a32f49c982df4e4b40a2888c6327a50899ea226831856f525e3"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/author-plans-1100/paq2piq.worker",
+      "bytes": 272,
+      "sha256": "8bf505f042fc3cf3d55638a9ddb121408e923c88d6977461a1e8b6de8a4583ab"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/author-plans-1100/paq2piq.settings.json",
+      "bytes": 328,
+      "sha256": "2610df9b7e7a5d3dcfa80e12b77a48d745d6aedc8cc64bfce25bd38274880019"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-deepdc-confirmation20/plan.json",
+      "bytes": 285659,
+      "sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/confirmation-run/plan.json",
+      "bytes": 7504,
+      "sha256": "f943334a59b65e735b6fef626411bb0575caac74890c1d68ac38b51e8f730552"
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/work/zenmetrics/crates/zenmetrics-nn/src/engine.rs",
+      "bytes": 35711,
+      "sha256": "a117334e4bb6895fe67bf040a14396eb4d9080a8cafd0d35c8bf333ba9206f8a"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics--rten-thread-budget/benchmarks/iqa_compete_2026-10-16/compare_first_evaluation.py",
+      "bytes": 3613,
+      "sha256": "cff48a43b79eb71e369d28671e368bfda7bf13765b14fac86a8636557802487c"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics--rten-thread-budget/benchmarks/iqa_compete_2026-10-16/compare_canonical.py",
+      "bytes": 9056,
+      "sha256": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c"
+    },
+    {
+      "path": "/home/lilith/work/zen/zenmetrics--rten-thread-budget/benchmarks/iqa_compete_2026-10-16/canonical_worker_env.py",
+      "bytes": 1160,
+      "sha256": "2b4eb29c2ef3fe134eb4d8accb6387685ad94e42a3dc379933059ff50802969d"
+    }
+  ],
+  "limits": [
+    "No surviving NN dependency rlibs to rehash; first-probe receipt recorded library hashes retained.",
+    "Original compiler-input bytes are not exhaustively certified by fresh extraction or Cargo fingerprints.",
+    "Configured pool sizes do not establish actual active utilization, total process threads or canonical runtime cleanliness."
+  ]
+}
