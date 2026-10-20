@@ -1,0 +1,81 @@
+{
+  "cases": [
+    {
+      "metric": "dmm-pyiqa",
+      "case": "dmm-pyiqa-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "ort-cpu",
+      "absolute_bound": 0.00017843800000000003,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 9.830724124742759e-06,
+      "ratio": 0.5215109086913187,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3550269371,
+              "score": 0.0019136545015498996
+            },
+            "native": {
+              "ns": 1789365904,
+              "score": 0.0019038237774251568
+            }
+          },
+          "delta": 9.830724124742759e-06,
+          "passed": true,
+          "ratio": 0.5040084897828447
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 1849208077,
+              "score": 0.0019038237774251568
+            },
+            "canonical": {
+              "ns": 3374125642,
+              "score": 0.0019136545015498996
+            }
+          },
+          "delta": 9.830724124742759e-06,
+          "passed": true,
+          "ratio": 0.5480554885039459
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3376557822,
+              "score": 0.0019136545015498996
+            },
+            "native": {
+              "ns": 1760911738,
+              "score": 0.0019038237774251568
+            }
+          },
+          "delta": 9.830724124742759e-06,
+          "passed": true,
+          "ratio": 0.5215109086913187
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 36s | peak-RSS 1.92GiB | min-avail 13886MiB | peak-load 3.72",
+        "run-heavy: done rc=0 32s | peak-RSS 1.93GiB | min-avail 14182MiB | peak-load 2.36",
+        "run-heavy: done rc=0 32s | peak-RSS 1.91GiB | min-avail 13976MiB | peak-load 3.84"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "9342dfb8e18df2cf536b353c6f7498659715294430f3f17f1098ffbd1212f856",
+      "block_sha256": [
+        "2573174d2a3aceb9007e68d37cef76bba080a2015b15029a1368f1e76a24ecbe",
+        "15ed46fe7509aeae6a3255d815d13ec3455645c4311d031e09b9efd389e7bebc",
+        "e0d8905f68dcda03d3024ff1b2fe9b61f510fe8a07dcad45196d69a09c386a94"
+      ]
+    }
+  ]
+}

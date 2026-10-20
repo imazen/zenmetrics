@@ -7,6 +7,20 @@
       "max_abs_delta": 0.0007070822066168603,
       "ratio": 0.13981098836898156,
       "summary_sha256": "044fe0e6c5d43238a929981ace49796a3fe52e62b2a696bf7f3ddef2a1d2daf8"
+    },
+    {
+      "case": "hdrvdp-changed-512x512-t8",
+      "passed": true,
+      "max_abs_delta": 0.0007070822066168603,
+      "ratio": 0.06855327805646974,
+      "summary_sha256": "f5db9777f6010a7107b2833feee9819cf2d82d431cded8115ac3dc95fed85cff"
+    },
+    {
+      "case": "hdrvdp3-changed-512x512-t1",
+      "passed": null,
+      "max_abs_delta": 1.7763568394002505e-15,
+      "ratio": 0.1609751647281059,
+      "summary_sha256": "7c7ac1cc3cbaacf2cd1776e3e9bf72c040db9e47f3741b641a60a3244b12bc01"
     }
   ],
   "plan_sha256": "c000cd89ef40652764780a143aa13439af97ac79f38fc5180b2fcd8771567244",

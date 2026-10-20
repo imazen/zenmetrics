@@ -1,0 +1,21 @@
+{
+  "expected": 168,
+  "completed": 1,
+  "scope_caveated_cases": 144,
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "native_binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+  "plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-current-grid-plan.json",
+    "sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284"
+  },
+  "queue": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-current-grid-queue.json",
+    "sha256": "107f36bbd4ac5508f95899f3589e4a17aaf1afe0a4d18b92b9d09e4bec3ee162"
+  },
+  "frozen_preparer": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-scope-preparation-source/prepare_canonical_grid_scope.py",
+    "sha256": "7d30b05c3efbfca0ea1a37b46c2796a2fb18e6842fad68fd3c42fff9402b33d7",
+    "public_source": "benchmarks/iqa_compete_2026-10-16/frozen_grid_scope_20261020.py"
+  },
+  "qualification": "Seven revised routes x12rawpairs x1/28 budgets; warm numerical acquisition, six model preparation caveats retained. Preparation/partial summaries do not establish168completed comparisons."
+}

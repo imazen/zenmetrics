@@ -217,18 +217,18 @@
   "butteraugli-original": {
     "canonical": "original google/butteraugli 71b18b6 / 1 effective worker",
     "check": "\u0394 0",
-    "ratio": 0.6896815912994838,
-    "ratio_width": 1024,
-    "ratio_height": 1024,
+    "ratio": 0.8690673009776536,
+    "ratio_width": 64,
+    "ratio_height": 64,
     "ratio_threads": 1,
-    "ratio_cases": 2,
+    "ratio_cases": 3,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
     "ratio_plan_sha256": "e24d59f9728f6ed4d64b158e82446f1e1eb3662f52afed852a2de142e2d29b0f",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.8724278528856486,
-    "observed_cases": 18,
+    "observed_cases": 20,
     "expected_cases": 27,
     "passed_cases": 0,
     "failed_cases": 0,
@@ -619,31 +619,33 @@
     "qualified": false
   },
   "dssim": {
-    "canonical": "author dssim-core 3.5.1 / 0e44c9b7",
+    "canonical": "author dssim-core3.5.1 / source-bound full-call C API",
     "check": "\u0394 0",
-    "ratio": 0.21292669582114263,
-    "ratio_width": 1024,
-    "ratio_height": 1024,
+    "ratio": 0.13668431594073618,
+    "ratio_width": 512,
+    "ratio_height": 512,
     "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
-    "ratio_plan_sha256": "3e57d8485a9828e47c85c61a83a21580e9da8ed14feccf54bfe0440f52e9d3bf",
+    "ratio_cases": 1,
+    "ratio_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+    "ratio_plan_sha256": "e7e3a7a94fbec750bcbe3b6376c27864560317d929ea6540611f01cdb18418ee",
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.5952825984060535,
-    "observed_cases": 23,
-    "expected_cases": 26,
+    "observed_cases": 26,
+    "expected_cases": 28,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 0.0,
     "rust_sources": [
-      "5fa7be7d42b51af3dd27b42dd50159972132ef12"
+      "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+      "ea767ba1a4029963bc56a74fb824e64455e4599e"
     ],
     "plan_sha256": [
       "3e57d8485a9828e47c85c61a83a21580e9da8ed14feccf54bfe0440f52e9d3bf",
-      "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4"
+      "e543e3f753575578504b228ed63655b81e82c6c042a24e12f6139d9b21476af4",
+      "e7e3a7a94fbec750bcbe3b6376c27864560317d929ea6540611f01cdb18418ee"
     ],
     "qualified": false
   },
@@ -661,8 +663,8 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 2.0289245567679464,
-    "observed_cases": 15,
-    "expected_cases": 31,
+    "observed_cases": 16,
+    "expected_cases": 32,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -677,7 +679,8 @@
       "5082f0021bb8548e259719470aafd60dc42beacff3f2adccc6bc9e8f50cd223d",
       "5a3e304d02eb5cb9d54fb600fc8b44e0d07c89a8bbf339d939110bbf1fd9f4b1",
       "b9d19f48bb37503308f57f27c481704cd8559d709995eb544e67dbaf657673a8",
-      "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b"
+      "bb7819c0f0430b4ef6c4f8a9d94a02d7f0209243271d081fd4c6f10e252d219b",
+      "d771ae8d69b44810b865be083c907ffaf69a55bcc5f6f36677776339ca9312c3"
     ],
     "qualified": false
   }

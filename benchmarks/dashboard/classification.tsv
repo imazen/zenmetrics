@@ -1593,3 +1593,10 @@ benchmarks/canonical_recheck_2026-10-19/current40-hdr-comparative-run.tsv	ignore
 benchmarks/canonical_recheck_2026-10-19/local40-scoped-current40worker-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/vmaf-worker-scope-lineage.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/dssim-fullcall-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-current-source-grid.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/deepdc-first-pair-cid22-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/cases-03.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/grid-flip-grid-pairA-255x257-t28-060d464f-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/vmaf-current-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/flip-grid-pairA-255x257-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/dssim-fullcall-current40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
