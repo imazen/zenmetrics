@@ -12,7 +12,7 @@ FIELDS=('host campaign source source_commit build_receipt_sha256 metric_name siz
         'cell_id attempt status cell_status qualified_timing warm_rounds_clean warm_rounds_flagged '
         'median_ns mean_ns p10_ns p90_ns n peak_rss_gib_rounded peak_rss_precision_gib '
         'os_time_max_rss_bytes memory_evidence_status config_sha256 log_sha256 sealed_result_sha256 '
-        'capture_utc protocol failure_class preferred round_means_ns placement_policy placement_cpus simd_tier rayon_threads_observed numerical_qualification').split()
+        'capture_utc protocol failure_class preferred round_means_ns placement_policy placement_cpus simd_tier rayon_threads_observed numerical_qualification resource_guard_stop').split()
 
 
 def key(row):
@@ -23,7 +23,8 @@ def key(row):
 def public_row(row, meta, host, campaign):
     out={k:row.get(k) for k in FIELDS}
     error=str(row.get('error') or row.get('reason') or '').lower()
-    failure=('input_contract_absolute_luminance' if 'absolute' in error and ('luminance' in error or 'nits' in error) else
+    failure=('resource_guard_monitored_memory' if row.get('resource_guard_stop')=='monitored_memory_guard' else
+             'input_contract_absolute_luminance' if 'absolute' in error and ('luminance' in error or 'nits' in error) else
              'input_contract_fixed_window' if '11x11' in error else
              'timeout' if 'timeout' in error else
              'worker_failure_unclassified' if row.get('status')=='failed' else None)

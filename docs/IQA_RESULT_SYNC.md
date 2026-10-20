@@ -49,6 +49,13 @@ mean within a round, not an invented timing for each iteration. The sync's
 evidence fingerprint covers both attempt and round CSVs. No raw image-quality
 scores enter either table. Missing individual round arrays stay missing.
 
+An explicit monitored-memory stop in a hash-bound worker log is exported as
+`resource_guard_stop=monitored_memory_guard` and a resource failure class. Exit
+137 alone does not establish that classification. A killed macOS scope may
+have no finalized BSD peak-RSS value; that value stays unavailable rather than
+being replaced with the configured guard limit. These failed attempts remain
+unqualified and retain their original retry lineage.
+
 Private NN campaigns can enter the same timing-only projection after explicit
 selection in the private sync config. Their campaign names start with
 `private-nn-`; provenance exposes content hashes without model file names or

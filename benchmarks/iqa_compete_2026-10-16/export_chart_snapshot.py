@@ -20,7 +20,8 @@ FIELDS = ('metric_name width height size_name threads timing_phase cold_repeat o
 def resource_evidence(log, expected_sha256, host):
     """Only project memory measurements from the exact retained worker log."""
     empty = dict(peak_rss_gib_rounded=None, os_time_max_rss_bytes=None,
-                 resource_summary=None, memory_evidence_status='missing log or unbound hash')
+                 resource_summary=None, resource_guard_stop=None,
+                 memory_evidence_status='missing log or unbound hash')
     if not log.is_file() or expected_sha256 is None:
         return empty
     raw = log.read_bytes()
@@ -32,10 +33,13 @@ def resource_evidence(log, expected_sha256, host):
         return dict(empty, memory_evidence_status='no unique finalized wrapper receipt')
     match = re.search(r'peak-RSS\s+([0-9.]+)\s*GiB', summaries[0])
     exact = re.findall(r'^\s*(\d+)\s+maximum resident set size\s*$', text, re.MULTILINE) if host == 'mac' else []
+    stopped = ('rc=137 ' in summaries[0] and any(line.startswith(
+        'run-heavy: monitored memory guard stopped the process group') for line in text.splitlines()))
     return dict(peak_rss_gib_rounded=float(match.group(1)) if match else None,
                 peak_rss_precision_gib=0.01 if match else None,
                 os_time_max_rss_bytes=int(exact[0]) if len(exact) == 1 else None,
                 resource_summary=summaries[0], memory_evidence_status='bound worker log',
+                resource_guard_stop='monitored_memory_guard' if stopped else None,
                 memory_scope='Wrapper worker scope including input/setup; not metric heap or GPU VRAM')
 
 

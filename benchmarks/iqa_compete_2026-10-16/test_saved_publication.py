@@ -2,6 +2,16 @@ import unittest
 from publish_saved_results import public_row,key
 
 class Projection(unittest.TestCase):
+    def test_explicit_guard_evidence_has_a_resource_failure_class(self):
+        row=dict(metric_name='topiq_fr',status='failed',reason='worker/wrapper exited 137',
+                 resource_guard_stop='monitored_memory_guard',qualified_timing=False)
+        meta=dict(capture=dict(captured_utc='now'))
+        out=public_row(row,meta,'mac','private-nn-production')
+        self.assertEqual(out['failure_class'],'resource_guard_monitored_memory')
+        row['resource_guard_stop']=None
+        self.assertEqual(public_row(row,meta,'mac','private-nn-production')['failure_class'],
+                         'worker_failure_unclassified')
+
     def test_no_scores_paths_or_unrequested_fields(self):
         row=dict(metric_name='zensim',score=12.3,score_bits='x',reference='/private/input',weights_consent='secret',qualified_timing=True)
         out=public_row(row,dict(capture=dict(captured_utc='now')),'mac','ordinary')

@@ -8,6 +8,19 @@ from export_chart_snapshot import export, resource_evidence
 
 
 class ChartExport(unittest.TestCase):
+    def test_explicit_memory_guard_stop_does_not_impute_peak_rss(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            log=Path(directory)/'worker.log'
+            log.write_text('run-heavy: done rc=137 19s | peak-RSS unavailableGiB | min-avail 10844MiB\n'
+                           'run-heavy: monitored memory guard stopped the process group; BSD peak RSS may be unavailable\n')
+            result=resource_evidence(log,durable.file_hash(log),'mac')
+            self.assertEqual(result['resource_guard_stop'],'monitored_memory_guard')
+            self.assertIsNone(result['peak_rss_gib_rounded'])
+            self.assertIsNone(result['os_time_max_rss_bytes'])
+            self.assertIsNone(resource_evidence(log,'wrong-hash','mac')['resource_guard_stop'])
+            log.write_text('run-heavy: done rc=137 19s | peak-RSS unavailableGiB\n')
+            self.assertIsNone(resource_evidence(log,durable.file_hash(log),'mac')['resource_guard_stop'])
+
     def test_resource_receipt_binds_hash_and_preserves_units(self):
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
             log = Path(directory)/'worker.log'
