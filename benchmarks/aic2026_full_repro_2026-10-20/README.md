@@ -66,3 +66,29 @@ dump) 30 s for the full set.
 
 Full-resolution pass streams the 23 GB archive one source at a time
 (extract → score → delete); see `compare_fullres.tsv` when complete.
+
+## Canonical reference extension (execution in progress)
+
+The separate canonical study schedules 60 CLI variants without exact July
+columns: 43 classical, three no-reference and 14 learned routes. After the
+classical group, a separate PyIQA 0.1.16 FSIM/FSIMc/VSI panel tests which
+implementation agrees with the July columns. Original-author CW-SSIM,
+f64-pooled FLIP and original nine-crop AHIQ are included. Published July
+routes, GPU twins, zensim and dvifmish are outside this extension.
+
+`canonical_campaign.py` runs the groups in that order from a supplied local
+manifest. `canonical_run.py` serializes each native/reference call through the
+shared admission locks and resource wrapper. `canonical_compare.py` joins by
+distorted-image identity, verifies the nine original metadata fields, and
+retains missing scores as empty fields. The supplied native binary is the
+same `4d833195` build described above; its ordinary batch export rounds to
+six decimal places. Comparisons therefore include that export rounding.
+Existing numerical bounds remain unchanged; an absent bound is `no-gate`,
+and a zero-comparison row does not establish a numerical mismatch or match.
+
+Full-cohort canonical results are pending. External score exports and
+`provenance.canonical.json` belong under the dated reproduction output root
+in `metrics.pointer.md`. The provenance writer records exact calls, source
+bindings, installed package metadata, coverage and retained attempt receipts.
+Per-image third-party reference values remain external; this directory will
+receive aggregates and the compressed CSV of native values after validation.
