@@ -42,7 +42,14 @@ pub fn score(
 ) -> Result<f64, Box<dyn std::error::Error>> {
     check_dims(r, d)?;
     let (w, h) = even_size(r);
-    let widen = |p: Vec<u8>| p.into_iter().map(u16::from).collect::<Vec<u16>>();
+    let widen = |p: Vec<u8>| {
+        if p.len() >= (1 << 20) && rayon::current_num_threads() > 1 {
+            use rayon::prelude::*;
+            p.into_par_iter().map(u16::from).collect::<Vec<u16>>()
+        } else {
+            p.into_iter().map(u16::from).collect::<Vec<u16>>()
+        }
+    };
     let (ry, ru, rv) = to_yuv420_even(r, ingress)?;
     let (dy, du, dv) = to_yuv420_even(d, ingress)?;
     let (ry, ru, rv) = (widen(ry), widen(ru), widen(rv));
@@ -111,7 +118,9 @@ fn to_yuv420_even(
     let mut y = vec![0u8; w * h];
     let mut cb = vec![0u8; w * h / 4];
     let mut cr = vec![0u8; w * h / 4];
-    for by in 0..h / 2 {
+    // One `by` block row: two luma rows plus one chroma row, all disjoint
+    // writes — parallelizes bit-exactly.
+    let fill = |by: usize, yrows: &mut [u8], cbrow: &mut [u8], crrow: &mut [u8]| {
         for bx in 0..w / 2 {
             let (mut u_sum, mut v_sum) = (0.0f64, 0.0f64);
             for dy in 0..2 {
@@ -124,14 +133,14 @@ fn to_yuv420_even(
                         Ingress::Bt709 => {
                             let (r, g, b) = (r / 255.0, g / 255.0, b / 255.0);
                             let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                            y[row * w + col] =
+                            yrows[dy * w + col] =
                                 (16.0_f64 + 219.0 * lum).round().clamp(16.0, 235.0) as u8;
                             u_sum += -0.114572 * r - 0.385428 * g + 0.5 * b;
                             v_sum += 0.5 * r - 0.454153 * g - 0.045847 * b;
                         }
                         Ingress::Studio601 => {
                             let lum = 16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0;
-                            y[row * w + col] = lum.round().clamp(0.0, 255.0) as u8;
+                            yrows[dy * w + col] = lum.round().clamp(0.0, 255.0) as u8;
                             u_sum += (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0;
                             v_sum += (112.0 * r - 93.786 * g - 18.214 * b) / 255.0;
                         }
@@ -142,9 +151,23 @@ fn to_yuv420_even(
                 Ingress::Bt709 => (224.0 * u_sum / 4.0, 224.0 * v_sum / 4.0),
                 Ingress::Studio601 => (u_sum / 4.0, v_sum / 4.0),
             };
-            cb[by * (w / 2) + bx] = (128.0_f64 + u).round().clamp(16.0, 240.0) as u8;
-            cr[by * (w / 2) + bx] = (128.0_f64 + v).round().clamp(16.0, 240.0) as u8;
+            cbrow[bx] = (128.0_f64 + u).round().clamp(16.0, 240.0) as u8;
+            crrow[bx] = (128.0_f64 + v).round().clamp(16.0, 240.0) as u8;
         }
+    };
+    if w * h >= (1 << 20) && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        y.par_chunks_mut(2 * w)
+            .zip(cb.par_chunks_mut(w / 2))
+            .zip(cr.par_chunks_mut(w / 2))
+            .enumerate()
+            .for_each(|(by, ((yrows, cbrow), crrow))| fill(by, yrows, cbrow, crrow));
+    } else {
+        y.chunks_mut(2 * w)
+            .zip(cb.chunks_mut(w / 2))
+            .zip(cr.chunks_mut(w / 2))
+            .enumerate()
+            .for_each(|(by, ((yrows, cbrow), crrow))| fill(by, yrows, cbrow, crrow));
     }
     Ok((y, cb, cr))
 }
@@ -179,7 +202,9 @@ pub(crate) fn to_yuv420(
     let mut y = vec![0u8; w * h];
     let mut cb = vec![0u8; w * h / 4];
     let mut cr = vec![0u8; w * h / 4];
-    for by in 0..h / 2 {
+    // Same block-row split as `to_yuv420_even` — disjoint writes,
+    // bit-exact at any thread count.
+    let fill = |by: usize, yrows: &mut [u8], cbrow: &mut [u8], crrow: &mut [u8]| {
         for bx in 0..w / 2 {
             let mut u_sum = 0.0;
             let mut v_sum = 0.0;
@@ -191,16 +216,29 @@ pub(crate) fn to_yuv420(
                     let g = f64::from(rgb[1]) / 255.0;
                     let b = f64::from(rgb[2]) / 255.0;
                     let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                    y[p] = (16.0_f64 + 219.0 * lum).round().clamp(16.0, 235.0) as u8;
+                    yrows[dy * w + 2 * bx + dx] =
+                        (16.0_f64 + 219.0 * lum).round().clamp(16.0, 235.0) as u8;
                     u_sum += -0.114572 * r - 0.385428 * g + 0.5 * b;
                     v_sum += 0.5 * r - 0.454153 * g - 0.045847 * b;
                 }
             }
-            cb[by * (w / 2) + bx] =
-                (128.0_f64 + 224.0 * u_sum / 4.0).round().clamp(16.0, 240.0) as u8;
-            cr[by * (w / 2) + bx] =
-                (128.0_f64 + 224.0 * v_sum / 4.0).round().clamp(16.0, 240.0) as u8;
+            cbrow[bx] = (128.0_f64 + 224.0 * u_sum / 4.0).round().clamp(16.0, 240.0) as u8;
+            crrow[bx] = (128.0_f64 + 224.0 * v_sum / 4.0).round().clamp(16.0, 240.0) as u8;
         }
+    };
+    if w * h >= (1 << 20) && rayon::current_num_threads() > 1 {
+        use rayon::prelude::*;
+        y.par_chunks_mut(2 * w)
+            .zip(cb.par_chunks_mut(w / 2))
+            .zip(cr.par_chunks_mut(w / 2))
+            .enumerate()
+            .for_each(|(by, ((yrows, cbrow), crrow))| fill(by, yrows, cbrow, crrow));
+    } else {
+        y.chunks_mut(2 * w)
+            .zip(cb.chunks_mut(w / 2))
+            .zip(cr.chunks_mut(w / 2))
+            .enumerate()
+            .for_each(|(by, ((yrows, cbrow), crrow))| fill(by, yrows, cbrow, crrow));
     }
     Ok((y, cb, cr))
 }
