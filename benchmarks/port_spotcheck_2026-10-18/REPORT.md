@@ -392,3 +392,30 @@ paired thread selection and manifest scheduling. Its retained 38-route manifest
 freezes 76 cases successfully; the two revised base HDR routes remain pending.
 Native changed-only selection already includes all 40 current routes in measured
 local ascending order. CI was not run or consulted, as directed.
+
+## 2026-10-20: site-readable warm observation export
+
+MISSING: the full declared size/content grids, remaining first-call comparisons,
+revised HDR paired timing qualification and accepted regression decisions.
+
+The site can read [summary.tsv](local_canonical_2026-10-20/summary.tsv): one row
+for each of the 126 CLI names, with 117 measured representative timing rows and
+nine explicit statuses without comparable timing. AIMOS is recorded once as an
+excluded method outside that CLI inventory. All 630 acquired warm observations
+are retained in 16 [indexed tables](local_canonical_2026-10-20/index.json), with
+canonical labels, source revisions, plan identities and contract exclusions.
+These counts include repeated cohorts and historical sources; they do not mean
+630 distinct inputs or accepted passes. First-call and map evidence stays separate.
+
+Each representative row points through its `observation` number to one actual
+cell. When the README reports a median across several content pairs without an
+exact median observation, the table selects a deterministic measured case from
+that geometry/source/cohort. Its times and ratio belong to that case; no per-case
+time is derived from an aggregate ratio. Blank bounds remain unassigned, and
+flags above 1.08 do not establish an accepted regression.
+
+Reproduce this projection under shared heavy admission with
+`just bench-iqa-canonical-summary SOURCE_DIRECTORY INVENTORY_RECEIPT NEW_DIRECTORY`.
+The output refuses existing paths and changed evidence. The emitted input
+manifests bind every input table and the exporter source. The publication wrapper
+reports rc=0, 0s, peak-RSS 0.02GiB, minimum available 15322MiB, peak load 0.90.

@@ -1,0 +1,110 @@
+{
+  "inventory_names": 126,
+  "headline_rows": 126,
+  "observed_warm_cells": 630,
+  "shards": [
+    {
+      "file": "cells-000.tsv",
+      "rows": 40,
+      "sha256": "59b11a23def564f3c1ab5aabe4c7ad6deecd59300b47f7504c727860889d33b0"
+    },
+    {
+      "file": "cells-001.tsv",
+      "rows": 40,
+      "sha256": "2f7c8cb41fd3602a8b2c294f3ddb9ebf3ee2b00df56e28fdcda22afc6bd08b59"
+    },
+    {
+      "file": "cells-002.tsv",
+      "rows": 40,
+      "sha256": "2ed8ada566ea0071738c0946a7a386de1310466c69e52b83a97acd3e02fd5038"
+    },
+    {
+      "file": "cells-003.tsv",
+      "rows": 40,
+      "sha256": "04c4c53c947b4a75efb4720c3b85e948a502e2f2ca4499213c27c5c160e8990c"
+    },
+    {
+      "file": "cells-004.tsv",
+      "rows": 40,
+      "sha256": "c571751e0f29fed3d2b6e4aaa93448b92f4c29f9b2cf7fbadd29c8e975a375fe"
+    },
+    {
+      "file": "cells-005.tsv",
+      "rows": 40,
+      "sha256": "3653889882513666060d1d97010dd1b599303b8e68bad6b83ef9f2578a9beb93"
+    },
+    {
+      "file": "cells-006.tsv",
+      "rows": 40,
+      "sha256": "8faf9c7b36d286022e203d95627433194c63e7ef332e74997d064ffce35aa21a"
+    },
+    {
+      "file": "cells-007.tsv",
+      "rows": 40,
+      "sha256": "f1f583ca5c296e9d126a2229b00cf40620c189e291685338eb63d088a06029d9"
+    },
+    {
+      "file": "cells-008.tsv",
+      "rows": 40,
+      "sha256": "3cf890d040b0408569b6b75a8b2a73780091013f3130ad7256279b3926fbd722"
+    },
+    {
+      "file": "cells-009.tsv",
+      "rows": 40,
+      "sha256": "97813cc61f939995e538e52ab18321be353279009fc8e872672b7ef8551f6ae1"
+    },
+    {
+      "file": "cells-010.tsv",
+      "rows": 40,
+      "sha256": "685c6b731d5ecd1ef7651e7e5d1c9e13eb830a8a60086afbcb93adac0faa53ac"
+    },
+    {
+      "file": "cells-011.tsv",
+      "rows": 40,
+      "sha256": "9b3db5599ed3e4bbd0d730a0327c50084e66c07cc454945643aec35b82832d51"
+    },
+    {
+      "file": "cells-012.tsv",
+      "rows": 40,
+      "sha256": "2a33375b4686cf3ef45c10536f3fd867f6c42fc287ec1777b5aa80848c7c2c39"
+    },
+    {
+      "file": "cells-013.tsv",
+      "rows": 40,
+      "sha256": "2c72277fd75d9505524fe44b9ff7cf8bb0b18535cbfab45adce0166921e23311"
+    },
+    {
+      "file": "cells-014.tsv",
+      "rows": 40,
+      "sha256": "4799d7d45614bff20b939a61d5f251db159e477b49ac805e3adce2aaea3df576"
+    },
+    {
+      "file": "cells-015.tsv",
+      "rows": 30,
+      "sha256": "6629d417abf8d40232376005132f62e5dca9bd4d62bb83e263508352a210d4b3"
+    }
+  ],
+  "input_binding_shards": [
+    {
+      "file": "inputs-00.json",
+      "sha256": "db37083e4ad681da7df5a328c6977ca6f1e3ffc48afc0f6d58ca4e144710928e"
+    },
+    {
+      "file": "inputs-01.json",
+      "sha256": "8d6322ac23217d27d1383559b4be53c112b6894a2f5006676fe84dac59560ec6"
+    },
+    {
+      "file": "inputs-02.json",
+      "sha256": "d5899c7f6dfddcba811c41fc32a4e42828e750c34b70b610aff6dacbbc86a8e4"
+    },
+    {
+      "file": "inputs-03.json",
+      "sha256": "c723ab09acb1dd3ca6fa6db8eed0aca8929495a8bbcd3568ccb88edc1c7e5696"
+    }
+  ],
+  "ratio_definition": "Rust/canonical. Flag is ratio > 1.08; not an accepted regression.",
+  "qualification": "Warm full-call observations only. First-evaluation and map evidence remain separate. All source cohorts, including exclusions and historical sources, are retained. summary.tsv prefers an exact retained README timing cell. When the README reports an aggregate without an exact median cell, it selects a deterministic actual case from that same geometry/source/cohort. Its times, ratio, delta and bound always describe that individual observed cell, not an invented decomposition of the aggregate or a pooled all-size parity claim. observation identifies the zero-based row in the concatenated cells shards.",
+  "exclusions": {
+    "aimos": "excluded: proprietary, unreleased; outside the 126-name CLI inventory"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/remaining-run.tsv": "0dc5cbc36310387d6e67b6695782d58b11b26a701929db938890d4e70a31b1ab",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/retry-run.tsv": "38afce218a1ae9ae8472b16132910237d090b91afe03bd653d7553d93a6e78d0",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/rgb-variants-corrected-run.tsv": "a99c6619295f252850477fd18f1fe8a9393b3e2da23f7db4d994ec33e6f04d3e",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/run.tsv": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/ssim1-confirm-run.tsv": "468e7ef51d49d0b55aafba3475e27fb59e0efaa055219f51e3a23e7186e1d5ef",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/ssim1-confirm40-run.tsv": "952f807884bbcd27363803ed79cfafdc5eda37eed96a19abe5cb2a52fdda679e",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/ssim1-rgb-run.tsv": "7d5172b22a56bc6297d00895a112454ff4c67e293b16ecb1476339b5f37311ec",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t1-1d3aa20e-confirmation-run.tsv": "38f94ef71454038b124239674ed3f0de8e11a831fc854c52ca9b1b49356b277b",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t8-1d3aa20e-confirmation-run.tsv": "6f4531911592791435dfeaf009968f2bd004772936f818c1a9f4ccf9db777dba",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/stlpips-alex-pair-cid22-t8-1d3aa20e-fixed-add40-run.tsv": "40f0c10c6b150115f04891fd31232b4be4dec2635879b46e2cdc2a351f59e472",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/stlpips-runtime-run.tsv": "31220f93683adfd3aac59b15590aafd8e981ec7b9aedaf90fc0fa7676ff6b9d4",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/vif-corrected-run.tsv": "15d16a89e1428b75bc63a55095602f0dc227cec02def7bf1f312d977a0b8d8ca",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/vmaf-run.tsv": "16af13c4a350d114fd93397e05ab5b5da8fde345f2c3b4c1ffb2259546a12a01",
+  "/home/lilith/work/zen/zenmetrics/benchmarks/canonical_recheck_2026-10-19/ws-hv-current-512x512-t1-bb7819c0-confirmation-run.tsv": "9d98edc02e03f7c2f8d5879e797dda4209b607e8f17c16b0fef40bf208bc0ea6"
+}

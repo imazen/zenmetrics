@@ -1507,3 +1507,25 @@ benchmarks/canonical_recheck_2026-10-19/classical-first-grid/index.json	ignored	
 benchmarks/canonical_recheck_2026-10-19/lpips-vgg-first-pair-cid22-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/cases-02.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/flip-v17-grid-pairA-64x64-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/summary.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-000.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-001.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-002.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-003.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-004.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-005.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-006.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-007.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-008.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-009.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-010.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-011.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-012.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-013.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-014.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/cells-015.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/inputs-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.

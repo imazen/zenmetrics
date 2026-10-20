@@ -310,3 +310,14 @@ selects the native worker and reference implementations; it performs no build or
 download. The current native changed-only inventory has 40 routes. A comparison
 manifest covers only its declared routes; the retained 38-route manifest does
 not include the two revised base HDR routes pending reference qualification.
+
+### Per-name and per-cell spot-check tables
+
+`just bench-iqa-canonical-summary SOURCE_DIRECTORY INVENTORY_RECEIPT NEW_DIRECTORY`
+exports one status/representative row for every inventory name and separate
+source-bound tables of all acquired warm cells. Run it under shared heavy
+admission. Aggregate README ratios never supply invented individual timings:
+the representative table always uses a retained case and links its observation
+number to the full tables. `bench-iqa-canonical-summary-check` checks this
+selection and refusal of changed evidence. See the
+[local export](../benchmarks/port_spotcheck_2026-10-18/local_canonical_2026-10-20/index.json).
