@@ -318,3 +318,29 @@ The caller must provide heavy-job admission. The tool accepts captured CMake
 Makefiles or Ninja link commands, records library/probe/input hashes, retains
 raw maps outside git, and refuses an existing output directory. This accuracy
 probe does not supply comparative timing measurements.
+
+## No-reference auxiliary scores
+
+`bench-iqa-canonical-nr-auxiliary` compares a native metric's `_ref` column
+against every retained canonical reference-image observation. The native probe
+also checks all returned columns for bit stability across two evaluations.
+It requires a passed headline comparison, validates the original source/input
+bindings before and after each probe, and uses that case's unchanged bound.
+It records accuracy observations and process maximum RSS, without timing ratios.
+
+```sh
+just bench-iqa-canonical-nr-auxiliary PYTHON MANIFEST NEW_OUTPUT
+just bench-iqa-canonical-nr-auxiliary-check
+```
+
+The manifest supplies `cases` with `results` and `case` entries. An explicit
+`binding_relocations` mapping may point nonexecuted preparation provenance to
+retained historical bytes with the original hash. Runtime commands cannot be
+relocated this way. Missing reference-image observations fail the check; the
+caller must select actual no-reference routes. The caller supplies heavy-job
+admission for the probes.
+
+`bench-iqa-canonical-cpu-revision-build REVISION NEW_BUILD` exports the pinned
+source and dependency snapshot before compiling a fresh CPU worker. The
+existing `bench-iqa-canonical-cpu-build SOURCE TARGET` builds an already
+prepared source tree; both require caller-supplied heavy-job admission.

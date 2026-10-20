@@ -2209,3 +2209,14 @@ bench-iqa-canonical-flags manifest output regression-log:
 bench-iqa-canonical-flag-profiles index:
     python3 -B benchmarks/iqa_compete_2026-10-16/profile_canonical_queue.py '{{index}}'
 
+
+# Caller supplies heavy admission; exports the pinned revision before compiling.
+bench-iqa-canonical-cpu-revision-build revision output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/build_primary_cpu.py '{{revision}}' '{{output}}'
+
+# Caller supplies heavy admission; checks NR reference-image auxiliary columns.
+bench-iqa-canonical-nr-auxiliary python manifest output:
+    '{{python}}' -B benchmarks/iqa_compete_2026-10-16/check_nr_auxiliary.py '{{manifest}}' '{{output}}'
+
+bench-iqa-canonical-nr-auxiliary-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 TMPDIR="$HOME/tmp" python3 -B -m unittest test_nr_auxiliary
