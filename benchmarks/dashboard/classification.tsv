@@ -1640,3 +1640,8 @@ benchmarks/canonical_recheck_2026-10-19/current-source-lineage/source-hashes.jso
 benchmarks/canonical_recheck_2026-10-19/current-source-lineage/cohort-evidence.json	ignored	provenance
 benchmarks/canonical_recheck_2026-10-19/current-source-lineage/review.json	ignored	provenance
 benchmarks/canonical_recheck_2026-10-19/google-butteraugli-completed26.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/flip-v17-grid-pairA-3840x2160-t28-initial20-new-analysis.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/dssim-gpu-grid-pairA-64x64-t1-initial20-new-analysis.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/dssim-gpu-grid-pairA-64x64-t28-initial20-new-analysis.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/ws-hv-current-512x512-t1-all60-new-analysis.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

@@ -1,0 +1,51 @@
+{
+  "analysis_only": true,
+  "metric_children_acquired": 0,
+  "observations": [
+    {
+      "file": "flip-v17-grid-pairA-3840x2160-t28-initial20-new-analysis.json",
+      "sha256": "4d150fca0ef065b5997c7bff4d2779b71270f2f2fac3d154b0813e9887be268c",
+      "case": "flip-v17-grid-pairA-3840x2160-t28",
+      "blocks": 20,
+      "ratio": 1.618384999563828,
+      "lower_95": 1.5814481189756702,
+      "upper_95": 1.6588486071497412,
+      "precision_within_three_percent": true
+    },
+    {
+      "file": "dssim-gpu-grid-pairA-64x64-t1-initial20-new-analysis.json",
+      "sha256": "a1dcb1b9bfd966fd74ea56c98490cc59ab29b94dd93b8312ba77663933d576d2",
+      "case": "dssim-gpu-grid-pairA-64x64-t1",
+      "blocks": 20,
+      "ratio": 21.488217267082078,
+      "lower_95": 17.118276086866977,
+      "upper_95": 30.25212769876577,
+      "precision_within_three_percent": false
+    },
+    {
+      "file": "dssim-gpu-grid-pairA-64x64-t28-initial20-new-analysis.json",
+      "sha256": "553796b03954a8ec7bf965020c559147ddcf228926dd18a3455c31bcb93de14e",
+      "case": "dssim-gpu-grid-pairA-64x64-t28",
+      "blocks": 20,
+      "ratio": 1.0938907220363734,
+      "lower_95": 0.7750674350959333,
+      "upper_95": 1.5292918339151762,
+      "precision_within_three_percent": false
+    },
+    {
+      "file": "ws-hv-current-512x512-t1-all60-new-analysis.json",
+      "sha256": "6680ad467b27f8d587422f7f542a0e87f4cc88e34f5f439794067b1827d4919f",
+      "case": "ws-hv-current-512x512-t1",
+      "blocks": 60,
+      "ratio": 1.037876516035066,
+      "lower_95": 1.019771642796523,
+      "upper_95": 1.0675403761258244,
+      "precision_within_three_percent": true
+    }
+  ],
+  "analysis_wrapper": {
+    "path": "/home/lilith/tmp/handoff/canonical-confirmation-queue-audit-20261020/root-retained-analyses-wrapper.log",
+    "sha256": "1a11146563fc120ae4ec42966df1029643cebb4f7c04b1a64afd526a048241f0"
+  },
+  "qualification": "Every fixed-stage block retained. Intervals descriptive; canonical runtime cleanliness unobserved. DSSIM-GPU64 rows use the historical fork CPU alternative, not the separately acquiring author canonical reference. No numerical bound, source identity or regression acceptance changed."
+}

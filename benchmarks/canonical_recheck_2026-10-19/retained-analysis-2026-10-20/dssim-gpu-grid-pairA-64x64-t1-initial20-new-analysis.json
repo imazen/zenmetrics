@@ -1,0 +1,52 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "dssim-gpu-grid-pairA-64x64-t1",
+      "blocks": 20,
+      "ratio": 21.488217267082078,
+      "lower_95": 17.118276086866977,
+      "upper_95": 30.25212769876577,
+      "relative_halfwidth": 0.40784725520758647,
+      "precision_within_three_percent": false,
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": "c5454a51f138d622fa5cbe9707406a55c26e046292b137b85f99ea439d7408dc",
+      "summary_sha256": "34c2393fc7d505b244cdf0f2b702456e797f9e6f2a29f4c62716bafc40240fa7",
+      "stage_summary_sha256": [
+        "34c2393fc7d505b244cdf0f2b702456e797f9e6f2a29f4c62716bafc40240fa7"
+      ],
+      "block_sha256": [
+        "7f5798b3c9d92ab997e32dc4ff92a26cbdee406d69e8110cd27048610fab8d75",
+        "08964617b813a572a21bc4284cccd6ecefcfad0428f386b0b2bca550a40fe0cb",
+        "211e2efbc9bb6829a631e3e39fe1107452c9d665ed54eafcec37fc9f5faf992e",
+        "bd9665a71fd551c0d2e324864311635c4743d2d15e0852dde5db20c0d6beec75",
+        "10addc0d0c1a67d91649a21390b759d95e13292911eb52d2386622bb59197104",
+        "ae14bca50204629d49f14c7855507bedb8999b25f075b775c126f2f846efcd00",
+        "d2b2a42d4311b39e5f050c2f48252067084fd0252c37227bf8427e9d38da26a0",
+        "e11dcdf23350bc12d3d7bc8d6af77be2d01b229349c310132d1b569cf6e49212",
+        "8c522cef4234369e0d2d366956881576d66045fabaa13840c2a509731603b679",
+        "d4337c2073762e174a122dce309747677335809b5f61287b5fde7952d903db40",
+        "cd3365d983d0856590f46f4daea9546e99fae7e638888762c46db64696873680",
+        "7a3c8fc7ed0e1ee72b2aec3b5bff15b8afd60f7ff15b87521229def80f6e8ace",
+        "f78affa4d031d6e0c482e0669e13f558ccaa2cef8310be91897b69c871a31889",
+        "aba7f3a6be5cfd0e4743e6b49bd9efd11a2b0900b93a28433dc9be91f25b6e31",
+        "e1b5cfbd008e978028239c3ca03cc556677982280f2a4247bbe94f450a2b5de5",
+        "908ce6283ae7e790ab4536fe5f9382f3f001a30db2f6e299a48602e391bfe57d",
+        "7f765c5a69396b61af199801d65b4a6c841edbae08a21308789190a9b58069e6",
+        "e84e346ac61a1e51fb4b3ce50c35bc6bc13bfe804b8de92490cd572904a6172b",
+        "148455d34706dfd9bfdd1a8c63c4137b346a9a2c86ae07359236bcd2b21af5bf",
+        "87b6f2d993705c631add82c9386a3adbba7403cc2ec57277bbf5b2a7da774d9b"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 78,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 12,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ]
+}
