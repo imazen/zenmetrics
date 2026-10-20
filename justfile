@@ -1694,6 +1694,15 @@ bench-iqa-canonical-classical-first-interval-check:
     python3 -I -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_classical_first_intervals.py -v
     python3 -I -O -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_classical_first_intervals.py -v
 
+# Explicit CUDA scalar first calls; each block acquires shared admission.
+bench-iqa-canonical-gpu-first plan output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/compare_gpu_first_verified.py '{{plan}}' '{{output}}' {{options}}
+
+# Caller supplies admission; these inert controls launch no scorer or CUDA process.
+bench-iqa-canonical-gpu-first-check:
+    python3 -I -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_gpu_first.py -v
+    python3 -I -O -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_gpu_first.py -v
+
 bench-iqa-canonical-first-confirm-test:
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_first_confirmation.py -v
     python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_scored_first_confirmation.py -v

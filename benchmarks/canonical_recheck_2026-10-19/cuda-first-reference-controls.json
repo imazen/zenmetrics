@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "native_worker_executions": 0,
+  "reference_cuda_processes": 16,
+  "raw_directory": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/cuda-original-controls-run",
+  "result_sha256": "0e573102319c5c8d57394f98a19ba28dce9fee087fe3e2e9c425210a4b71ef0b",
+  "plan_sha256": "49f1af466efad97dd9eee121fe8caf3e68e21d0c90c0d75c83c86e8bbc1d61b0",
+  "reference_source_sha256": "9ae7bdafccee41f6f2e5f41d7f702a80391f66a7e3704ca1620c355e8a107717",
+  "reference_source_exact_copy_of": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/canonical_cuda_first_reference_v1.py",
+  "public_transport_controls": {
+    "normal_cases": 9,
+    "optimized_cases": 9,
+    "scorer_subprocesses": 0,
+    "log_sha256": "10ebe3b28101a248cd43db0a81ef63babad2952e036b8ddaa6e361e8ca0d7251",
+    "resource_receipts": [
+      "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 15014MiB | peak-load 1.73"
+    ],
+    "source_sha256": {
+      "compare_gpu_first_verified.py": "816b47ef8d65abaa0b78c5fd9d2542eacf45f5954c64a4a0e114fc38c3fc706d",
+      "native_gpu_first_cell.py": "cb489ddc66bdb9cc5a39dac9223aea5e106aa96f8ed93fefd22a33cd75b4ab5c",
+      "test_gpu_first.py": "e3fd85a82fe784ef208cdc4cca50b7abadfcccac95a696fbc66323ebc4b41b5a"
+    }
+  },
+  "resource_receipts": [
+    "run-heavy: done rc=0 56s | peak-RSS 1.61GiB | min-avail 13133MiB | peak-load 6.52"
+  ],
+  "cases": [
+    {
+      "case": "iwssim-gpu-cuda-reference-pair-cid22-t1-constructor-control",
+      "metric": "iwssim-gpu",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "fresh_processes": 4,
+      "exact_original_candidate_bits": true,
+      "errors": []
+    },
+    {
+      "case": "iwssim-gpu-cuda-reference-pair-cid22-t28-constructor-control",
+      "metric": "iwssim-gpu",
+      "width": 512,
+      "height": 512,
+      "threads": 28,
+      "fresh_processes": 4,
+      "exact_original_candidate_bits": true,
+      "errors": []
+    },
+    {
+      "case": "cvvdp-gpu-cuda-reference-pair-cid22-t1-constructor-control",
+      "metric": "cvvdp-gpu",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "fresh_processes": 4,
+      "exact_original_candidate_bits": true,
+      "errors": []
+    },
+    {
+      "case": "cvvdp-gpu-cuda-reference-pair-cid22-t28-constructor-control",
+      "metric": "cvvdp-gpu",
+      "width": 512,
+      "height": 512,
+      "threads": 28,
+      "fresh_processes": 4,
+      "exact_original_candidate_bits": true,
+      "errors": []
+    }
+  ],
+  "qualification": "Reference wiring and inert transport controls only. Native first-call parity, costs, intervals and runtime cleanliness remain unqualified; no score or performance bound changed."
+}
