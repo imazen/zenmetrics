@@ -1325,3 +1325,6 @@ benchmarks/canonical_recheck_2026-10-19/ssim1-confirm40-run.tsv	ignored	Native r
 benchmarks/canonical_recheck_2026-10-19/original-engine-refusal.json	ignored	Native reference engine-contract refusal diagnostic; not a qualified canonical timing observation.
 benchmarks/canonical_recheck_2026-10-19/ort-plans-original-seven-1100-run.tsv	ignored	Native reference comparison cohort with explicit engine identity; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/stlpips-runtime-run.tsv	ignored	Native reference comparison cohort with explicit engine identity; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/confirmation-run.tsv	ignored	Native reference comparison cohort with explicit engine identity; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/lpips-alex-t1-initial20-interval.json	ignored	Descriptive fixed-block native reference ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/pyiqa-five-1100-run.tsv	ignored	Native reference comparison cohort with explicit engine identity; separate from canonical multi-host timing and published-column agreement series.
