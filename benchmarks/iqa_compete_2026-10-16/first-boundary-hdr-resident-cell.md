@@ -44,12 +44,28 @@ canonical Octave cell. Active resident controls used only `--no-gui`; the new
 headless invocation therefore also needs exact controls. Root's separate startup
 trace attributes 62.753337 seconds of syscall wall to two poll calls and less
 than 0.4 seconds to file-stat/readlink calls. That observation excludes broad
-file rescanning as its explanation; poll endpoints remain unassigned here.
+file rescanning as its explanation. Root's subsequent detailed trace identifies
+an X11 UNIX connection followed by a 35.774787-second poll. Its headless array
+control has no X11 connection and passes in one second. This does not substitute
+for the new cohort's exact controls.
 
 `first_boundary_hdrvdp_resident_cell_check.py` prepares files and checks exact
 body slices, setup/input placement, cache suffix, explicit sample counts and
 thread templates. It never invokes Octave or a native scorer. Static preparation
 does not promote scope or qualify numerical/timing output.
+
+The corrected photo512 source passed four admitted body/layout controls (both
+metrics at explicit sample counts 1 and 3), invalid-sample refusal and 1/8 plan
+template/bound checks. No evaluator ran. Frozen candidate config SHA256:
+`863234f847bc82090abc2e66de2f7eaa20484a15a12e2ed8c55d45337f8236c7`.
+Static result SHA256:
+`51c5f48a63acbe1bc693a76e0dc5db649ecee2c746f13b6d6005733a90aa9d2b`.
+Bundle index SHA256:
+`d33cf7ae5b6bd589bb4368f3010f8cb96281ac8fd102a0dc1b9b6fe65a9b2a73`.
+Wrapper: rc=0, 2 seconds, peak RSS 0.03 GiB, minimum available 15328 MiB,
+peak load 0.83. This bundle binds the original passed non-headless preflight
+seal and stays false-scoped; a distinct config must bind the fresh headless
+parent/seal after those preflights pass. Source commit: `ad18efc0`.
 
 Root should review the new source/config, acquire the corresponding ABBA and
 native controls under shared admission, and use a distinct qualifying successor
