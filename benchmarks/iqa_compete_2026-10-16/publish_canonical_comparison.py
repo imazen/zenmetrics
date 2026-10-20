@@ -272,12 +272,8 @@ def main():
         if part:emit()
         text=json.dumps(dict(schema=2,metrics=len(value),shards=shards),indent=2)+'\n'
     (a.output/'results.json').write_text(text)
-    cohort_index=json.dumps(sources,indent=2)+'\n'
-    if len(cohort_index.encode())>30_000:
-        cohort_index=json.dumps(sources,separators=(',',':'))+'\n'
-    if len(cohort_index.encode())>30_000:
-        raise ValueError('cohort index exceeds generated-data cap')
-    (a.output/'cohorts.json').write_text(cohort_index)
+    from reference_publication import write_cohort_index
+    published.extend((path,'provenance') for path in write_cohort_index(a.output/'cohorts.json',sources))
     published.extend([(a.output/'results.json','summary'),(a.output/'cohorts.json','provenance')])
     register_outputs(published)
     print(json.dumps(dict(metrics=len(value),cases=len(combined),

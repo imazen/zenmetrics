@@ -34,3 +34,24 @@ class ReferencePublication(unittest.TestCase):
             with self.assertRaises(ValueError):
                 register_outputs([(scratch,'unknown')],repo)
             self.assertEqual(registry.read_text(),'# unchanged\n')
+
+
+class CohortIndex(unittest.TestCase):
+    def test_shards_preserve_every_record_and_reject_changed_bytes(self):
+        from reference_publication import write_cohort_index,read_cohort_index
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            path=Path(directory)/'cohorts.json'
+            records={str(i):dict(raw_directory='source/'+str(i),evidence='x'*1200,link='https://example.com/reference') for i in range(50)}
+            shards=write_cohort_index(path,records)
+            self.assertGreater(len(shards),1)
+            self.assertTrue(all(p.stat().st_size<=30000 for p in [path,*shards]))
+            self.assertEqual(read_cohort_index(path),records)
+            shards[0].write_text('{}')
+            with self.assertRaisesRegex(ValueError,'hash mismatch'):read_cohort_index(path)
+
+    def test_legacy_flat_index_stays_flat(self):
+        from reference_publication import write_cohort_index,read_cohort_index
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            path=Path(directory)/'cohorts.json';records={'one':dict(raw_directory='retained')}
+            self.assertEqual(write_cohort_index(path,records),[])
+            self.assertEqual(read_cohort_index(path),records)
