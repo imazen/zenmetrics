@@ -6,82 +6,82 @@
     "artifacts": [
       {
         "file": "retry-run.tsv",
-        "sha256": "a3e2f35c309096875cc791e71803a04eef94ed2e9f1fde7823c9067d55757df8"
+        "sha256": "81fd0c2b78520ddaccb82a58293affbbaf07415fd4f05ed0f490c8a7c9e1d994"
       }
     ]
   },
   "octave-run": {
     "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "cases": 100,
+    "cases": 102,
     "expected_cases": 102,
     "artifacts": [
       {
         "file": "octave-run-dssim.tsv",
-        "sha256": "e58b18890fcf215480fb01be2720911eb2a547b0ca07b550dd186ab0210c4525"
+        "sha256": "495d528c82c834a1937da0436b773aef49018c211257bd0855b0c94bc092aaed"
       },
       {
         "file": "octave-run-fsim.tsv",
-        "sha256": "97071aaf72583f710cf282fa67f3627834a882ec11f37357f391e1389192bd30"
+        "sha256": "cf2aa6ef7269b66b83fa9ea5da0ed576ae5a69a7aab556c3d59de2144f0b4941"
       },
       {
         "file": "octave-run-fsim-k2.tsv",
-        "sha256": "a778bdfb806ca478d208eb9a58bd628cccaab2de52f0bf4fa1380d2ee70b4970"
+        "sha256": "caa1ffaeb6f7cfcb2bb390267fc44f4635f3b143037e46060882407c990d50ed"
       },
       {
         "file": "octave-run-fsim-k3.tsv",
-        "sha256": "6d62d7c9368db59a96a06cdb83452ce8a60ec6f46a40c4aa33ae08e8aa27cb4d"
+        "sha256": "4ec1f8333a1e99a443a357f05788c10a1aff28ba1135c1a1568f6ef4d32d52ae"
       },
       {
         "file": "octave-run-fsim-k4.tsv",
-        "sha256": "365cacc67673d69660baab6f26f0fe83ee1bc73a9175b7cd24894f0e614b9f35"
+        "sha256": "32d7697eb24de209f3eaf702cc30abeb0f5a5b023ab5bfd65943dcc2651fa9df"
       },
       {
         "file": "octave-run-fsim-nodownscale.tsv",
-        "sha256": "0ce14dc6e27705e7421765dbfb3dca105a13167a69c3d5f1c90e932ebbc2db40"
+        "sha256": "1dbb1a9d22b1e226df0465e62c5f47a7735d42385b1297189173e5ef7d3fdc25"
       },
       {
         "file": "octave-run-haarpsi.tsv",
-        "sha256": "0008f17fbc612ef2abef5fbbfdde20870d647ed6663b22b73c4a6f0c7da36d54"
+        "sha256": "6a18142f334952069911d32bff8825874938cc88d79157009d63d8cfb1c88d45"
       },
       {
         "file": "octave-run-haarpsi-y.tsv",
-        "sha256": "be2493b61718ccaf770510aa34843353c7b2ba97d785e4098088d4902f5fb0fb"
+        "sha256": "4baa770709bf96078f39ce8ecf644851ef4b35966d94e53d53984ecb98c5cc32"
       },
       {
         "file": "octave-run-mdsi.tsv",
-        "sha256": "353d0d35691e20ba5d36a053cb50e6d837a7e2c06767b42969e8e16c7ee8cb58"
+        "sha256": "27722ee4b6799a0f2e72d869f73b12c5fbc3b8325616ad202a5e04195d38ef0b"
       },
       {
         "file": "octave-run-msssim.tsv",
-        "sha256": "36796fcabcd41f5c1767699c7aac3a5eba84a5b4915a3987fb24271716ce1ab2"
+        "sha256": "0e453e23cf6dd7aa50b71441f06735e46c0e3fe3070ce988b702427d65f498d6"
       },
       {
         "file": "octave-run-vif.tsv",
-        "sha256": "26883b0fcf9fd1a53eb738e1134da86c42b4de80014b2ffe020f63dacca0d6c3"
+        "sha256": "e366253116e027d67792213f75730f8cc6383dff6a048c2f92ebc3b2bd66e629"
       },
       {
         "file": "octave-run-vifvec.tsv",
-        "sha256": "d367774e06f8c0c0963702e264a89e2680042bf9fe3a1b3c946df962c96eade1"
+        "sha256": "3e370a2b8ecf07b47c9f386f40c61dad9ad3459e1d2f253912ffef777aec57c7"
       },
       {
         "file": "octave-run-vsi.tsv",
-        "sha256": "65e1e0bc46cb06c538e8825a4495428006de861f0ebdfd9c55f5dc8d75832c19"
+        "sha256": "b471348dd86e3aa6f923901940eea9a5e6dbb81a1f7523c5bb33d839d6be4915"
       },
       {
         "file": "octave-run-vsi-k2.tsv",
-        "sha256": "63d5aea87e38aa8e620d265c78cefa5781dce5c7bfee54748e482642a9ec5064"
+        "sha256": "663e6a9161584be410bb9be9e0725ecd73aec0dc152128a0bf4e3a7d26f80443"
       },
       {
         "file": "octave-run-vsi-k3.tsv",
-        "sha256": "cdd04fd6233cd658c7bba49ad6b9c22d1bd2b5cd1490647f46f74bd9696071c5"
+        "sha256": "4e410984252cecfee602a1baa7e6c94079e6dc3923bff12a97705f18e4a8ce97"
       },
       {
         "file": "octave-run-vsi-k4.tsv",
-        "sha256": "f1b52072aa8f18b02a801312441984a366c5b08140151800a9aa1bdc33b7f12d"
+        "sha256": "5def5afb6591cd5bee9080c941363583ea9844d822a3bdd911ab77a08406e4e2"
       },
       {
         "file": "octave-run-vsi-nodownscale.tsv",
-        "sha256": "4ac464daa28378a8eafb4f7dc5f34e9d029d362ddbf619f9896f88a3b07dfcf7"
+        "sha256": "6e58ff5dcc248977ab8a9ed0c6301ac4725b36e865fd9cfea453c5bd3fdc0027"
       }
     ]
   },
@@ -92,7 +92,7 @@
     "artifacts": [
       {
         "file": "vif-corrected-run.tsv",
-        "sha256": "410493b344086b640a782f0500aea1171897bbd46fa032f5b75fa7813287d577"
+        "sha256": "dd18269fa41de5bebf2857fd89e135bce534fb93fd4702efdee9f2918fe37c2c"
       }
     ]
   },
@@ -103,7 +103,7 @@
     "artifacts": [
       {
         "file": "vmaf-run.tsv",
-        "sha256": "dc7a4ada80ab16efda10638cf05314579129771730c124647650fd8f06f7f4e2"
+        "sha256": "8b714b271f2ac1355255aed50557809436e4bc3fd6672b5be6d5524c2e60080c"
       }
     ]
   },
@@ -114,29 +114,29 @@
     "artifacts": [
       {
         "file": "pyiqa-run.tsv",
-        "sha256": "afef705bb433d460fad727d93063a8350e688104be3ad83eaff294c00ad5cfc2"
+        "sha256": "9856a053dc2339ecb5f05c54c5d438aff1711a4045a7016419d24ab53f72373f"
       }
     ]
   },
   "pyiqa1152-run": {
     "plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "cases": 17,
+    "cases": 39,
     "expected_cases": 60,
     "artifacts": [
       {
         "file": "pyiqa1152-run.tsv",
-        "sha256": "8a6db40e3b165992f998a4069b81b61f614cb4d6c3b8fce2c740173a9d075056"
+        "sha256": "87eeeb2f5a46742f28355dc23636670998708af60f40dc9e4cbc64a081b1cd0a"
       }
     ]
   },
   "remaining-run": {
     "plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
-    "cases": 15,
+    "cases": 36,
     "expected_cases": 36,
     "artifacts": [
       {
         "file": "remaining-run.tsv",
-        "sha256": "6dcf84b03b2c8032384dfc2cbeea2d665aed6e72dcd11ef1211607022e083772"
+        "sha256": "32f024df6859c8cf7e2919f1b5f51407791ecf609bffbbb64e5b8d731f511aad"
       }
     ]
   },
@@ -147,7 +147,18 @@
     "artifacts": [
       {
         "file": "matlab-extra-run.tsv",
-        "sha256": "d7b582fb68a4019d478780081065ee62835158705f7d85382144abbe6a97085d"
+        "sha256": "69b9176bfeda8b1c9398778f2ea4830d44d2fc777a055da58782711a971c57bf"
+      }
+    ]
+  },
+  "matlab-extra-rest-run": {
+    "plan_sha256": "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
+    "cases": 8,
+    "expected_cases": 10,
+    "artifacts": [
+      {
+        "file": "matlab-extra-rest-run.tsv",
+        "sha256": "c11574c439237c55d1ed708ba402d9afd37be37c7343c09d7c44967e248e089b"
       }
     ]
   },
@@ -158,7 +169,7 @@
     "artifacts": [
       {
         "file": "cw-mex-run.tsv",
-        "sha256": "20bf3271883851b28bb1d158e94fba907eb73f9022400fdccfab7fba062a19f3"
+        "sha256": "608ef55956a023b9681fc1b290d406970f15c4a062a4e4992eefcf021f1727cc"
       }
     ]
   },
@@ -169,7 +180,7 @@
     "artifacts": [
       {
         "file": "cw-pyiqa-run.tsv",
-        "sha256": "658528d215cc394c116cc807f81e35e2d0ddd1565989a25ba008d8de4c78291f"
+        "sha256": "2934b4029f72665066eda2082800fc51c72adbd130129851adc77d9d6d375138"
       }
     ]
   },
@@ -180,7 +191,18 @@
     "artifacts": [
       {
         "file": "ssim1-rgb-run.tsv",
-        "sha256": "1a4520727924835465a6c3b6c896c9c390038f696f6f5cd3c94e67d74d2c80d5"
+        "sha256": "41211b18d6f2487105b67f7166a6e2ac05cf07cc7ec3d66508d2465d53e7870b"
+      }
+    ]
+  },
+  "ssim1-confirm-run": {
+    "plan_sha256": "e76c0282edde347ba84b0249b100d88fec3d0ac0ece244571179a1e250e00c14",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ssim1-confirm-run.tsv",
+        "sha256": "0c016cb5c13622508ab86d62fe59b0a99cd136b4451b1c5a26426c1d6563209f"
       }
     ]
   },
@@ -191,7 +213,7 @@
     "artifacts": [
       {
         "file": "flip-f64-run.tsv",
-        "sha256": "45d566804b8697c679f584ade7754cec4a58a61e493a5187dd7736d30371a157"
+        "sha256": "d5b35030aa24a0259102947f49b04a70d1dc94d35f47a41e859d10e4397ee18a"
       }
     ]
   },
@@ -202,7 +224,7 @@
     "artifacts": [
       {
         "file": "flip-v17-eight-run.tsv",
-        "sha256": "b71f77cfa8d5cd8c2470da2fc2e4d477b4038e3d7846be9bcb9c623b8804a32a"
+        "sha256": "fbb0f70e398971d5f8e61ec4d1af0666c5d16d539f44c1f9d9c7aec2d268e0f9"
       }
     ]
   },
@@ -213,7 +235,7 @@
     "artifacts": [
       {
         "file": "flip-confirm-run.tsv",
-        "sha256": "2d687f259b97e9833ff15e9d11a073d57845624a09b9c024329df3a45f21d475"
+        "sha256": "8bf86bd8b7d82d63dadb36bb50668d4e8eca3a6efb553f7c5f8f29795ceb7028"
       }
     ]
   },
@@ -224,7 +246,7 @@
     "artifacts": [
       {
         "file": "butter-original-run.tsv",
-        "sha256": "5b8e5aaae76bf8bad2ce8e86923b666ce4ab458bed39737f2eea38c8c0a25033"
+        "sha256": "750ad64daeec6f3ef32f989be9f7ae52d27df99c9b840e40ad6c10751bc0febc"
       }
     ]
   },
@@ -235,7 +257,7 @@
     "artifacts": [
       {
         "file": "gpu-run.tsv",
-        "sha256": "c7b99335c80a547f67a138e8972d97d165eb2c652a849f2746f11d6fa21823b9"
+        "sha256": "b4302170408a17e10c5da5450e790853e2cf835be46f534a6f51db2ba71802a6"
       }
     ]
   },
@@ -246,18 +268,84 @@
     "artifacts": [
       {
         "file": "psnrhvs64-run.tsv",
-        "sha256": "1350ee755cb80853995a04089975a39f814e02a7d6df7ea2cf5267a5b79fc555"
+        "sha256": "a312dbecc601bceaa31248c86ffa76dfc1d5d5bbe503ab27f57789261ed06691"
       }
     ]
   },
   "iw-compat-run": {
     "plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
-    "cases": 1,
+    "cases": 3,
     "expected_cases": 3,
     "artifacts": [
       {
         "file": "iw-compat-run.tsv",
-        "sha256": "1dd63b45cfca949a0a0a9c77b2d364bbc11b250cb6d405b67b8534c4c31c0842"
+        "sha256": "21d93a08cc79226ed825c5746d26e01f6829f33ed54979f1d001a9f5fcedc64d"
+      }
+    ]
+  },
+  "iw-piq-run": {
+    "plan_sha256": "9a011381a9d5d7398704df9551ecec5c35b6bfcb1f1e0b101189549fd4ffb0e6",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "iw-piq-run.tsv",
+        "sha256": "be69770dbd5750b2331df78cf4e9965c55e298c1d28a7a5f9bfe7646bf08b10e"
+      }
+    ]
+  },
+  "daala-run": {
+    "plan_sha256": "02ab9084ce35d2f2b3e9b4e5bb0fa0aa99a6affd7e75701925fd9d05ca88d4a5",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "daala-run.tsv",
+        "sha256": "424401c4bee3443dd972a2967a131e8bfa1d146adf2b4e3a2302a6330db40578"
+      }
+    ]
+  },
+  "dssim-pr199-run": {
+    "plan_sha256": "06d9c3ea139a0f1c7de741f76bcefc14522dbff40bfacd93b3b6fb4b39cc9698",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "dssim-pr199-run.tsv",
+        "sha256": "71ef12283c57edfd50f163991b0e6591c6090503aad84de4f2e1c266803c2557"
+      }
+    ]
+  },
+  "psnr-planes-corrected-run": {
+    "plan_sha256": "59dbf6ad89208fdda6b69f41673798d9d3c8e49a86de9202494477bff286f4c7",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "psnr-planes-corrected-run.tsv",
+        "sha256": "fe567702fcfa8dc7bdaea1c2d27a64760db894c6b62d7495efc507c8d6d78988"
+      }
+    ]
+  },
+  "rgb-variants-corrected-run": {
+    "plan_sha256": "686e73b40966b95704d510d4166ae92544627f255fe849c44559aa3112b44634",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "rgb-variants-corrected-run.tsv",
+        "sha256": "58afa2ecf660176a4b1e0a5165101b9cdb96df78e2d4b04dd854940b061d823f"
+      }
+    ]
+  },
+  "gmsd-rgb-run": {
+    "plan_sha256": "0b058519188a908f280eb43b3382cfef1d63ffe0accb187819f5590862662498",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "gmsd-rgb-run.tsv",
+        "sha256": "3f4a2556ded531df6327dfc98b16a9d94459a3fc847473f5999f11e041294f9e"
       }
     ]
   },
@@ -268,7 +356,7 @@
     "artifacts": [
       {
         "file": "coverage-first-20261020-0-run.tsv",
-        "sha256": "ce6d842573fa6b784b56d1db8cacf1ecbe95ac20fb0999f99f366aecd56c3214"
+        "sha256": "94409ff6b8339126a0d3bf73056e43e7fe53bbc0d2221e23c2452c19a88e8ac6"
       }
     ]
   },
@@ -279,7 +367,7 @@
     "artifacts": [
       {
         "file": "coverage-first-20261020-1-run.tsv",
-        "sha256": "9cd6ed917fcc8fe4b8dd7ad47b69f4a0653fb3b86956ed92d331d25c44056d1b"
+        "sha256": "4bed7f8a57d97ee717dc37870c250b8bdb4c97d38421b1fbd789407801fcee5f"
       }
     ]
   },
@@ -290,7 +378,7 @@
     "artifacts": [
       {
         "file": "coverage-first-20261020-2-run.tsv",
-        "sha256": "2d0b7d9b1e2f201b5f703c135eefb0623158c4391793f48eb8e767abbeac5e23"
+        "sha256": "46909103fd19d326c637705a4220db4f2e39ad04b15a3029e2ab052fe74a6c97"
       }
     ]
   }

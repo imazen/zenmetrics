@@ -117,7 +117,7 @@ OpenCV threads are explicitly set. The initial 512×512, one-thread three-block
 result is Rust/canonical 1.121579214567383, with scalar difference
 1.0480505352461478e-13. Its block ratios are 1.121579214567383,
 1.1245052764711023 and 1.024168640307484. This is a provisional flag above
-1.08, with a separate fixed 20-block confirmation and a perf profile in progress.
+1.08, with a separate fixed 20-block confirmation and a completed perf profile retained below.
 It is not a qualified regression acceptance decision. No metric code changes.
 The three wrapper receipts report peak-RSS 0.09GiB each:
 
@@ -164,3 +164,41 @@ pin is 22e9ab033d5e5ac41ee961de00e7ae9bd959b634. Historical measurements
 are not relabeled as the new pin. Its local snapshot lock check passes against
 23 pinned siblings (51s, peak-RSS 0.15 GiB, minimum available 12047 MiB,
 load 0.73). Neither this check nor the comparisons launch or wait for CI.
+
+## Revised sources and matched ingress
+
+The current DSSIM pin `22e9ab033d5e5ac41ee961de00e7ae9bd959b634` now has
+six completed scalar comparisons (three 255×257 content pairs, threads 1/8).
+Its snapshot source is `5fa7be7d42b51af3dd27b42dd50159972132ef12`;
+[source equivalence](dssim-current-source-equivalence.json) verifies the named
+production inputs against the synchronized master snapshot. The largest scalar
+difference is 1.4643110879397625e-7. No external scalar bound is assigned.
+Rust/canonical ratios range from 0.3477999740191757 to 0.47852966037580164;
+the representative one-thread three-content median is 0.47528047145506236.
+The earlier process error remains historical evidence, not a failed new-pin
+comparison. Original standalone DSSIM's 30 core tests also pass; that control
+reports 9s, peak-RSS 0.39 GiB, minimum available 11749 MiB, load 0.82.
+
+The new PSNR Cb/Cr/611 fixtures follow the actual float64 studio-BT.601 ingress
+and all six cases match exactly. Original results with the initial float32
+fixture stay retained with an explicit invalid-contract disposition. Corrected
+CIEDE2000 and SSIM adapters likewise declare their D65 matrix and whole-sample
+mirror boundary; their original scoring bodies are unchanged. Their maximum
+absolute differences are 9.2148511043888e-15 and 6.661338147750939e-16.
+No production metric or numerical bound was changed.
+
+Original Clunie libgmsd at even 512×512, threads 1/8, passes its existing
+relative 1e-12 bound; maximum difference is 1.734723475976807e-18.
+The original single-thread library remains single threaded under both budgets.
+Its resident-RGB builder reports 1s, peak-RSS 0.04 GiB, minimum available
+12448 MiB, load 1.01. Odd-size upstream refusals are not timed as valid scores.
+Per-case process RSS and wrapper peak-RSS receipts remain in the indexed TSVs.
+
+The initial 20-block [SSIMULACRA1 interval](ssim1-initial20-interval.json) is
+1.0716442661769214, 95% interval [1.0317827326283462, 1.098290558074084].
+It straddles 1.08 and misses the requested ±3% precision. The initial
+[FLIP interval](flip-initial20-interval.json) is 1.9754296991678477,
+95% interval [1.9486232227532867, 1.9950047813325684]. Native resource flags
+occur in both panels (49/200 and 17/200 observations). A fixed additional
+40 blocks per case are being acquired; every old observation remains visible.
+These intervals remain descriptive and do not qualify a regression decision.

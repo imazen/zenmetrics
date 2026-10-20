@@ -13,7 +13,30 @@ from pathlib import Path
 import re
 import statistics
 
-from compare_canonical import sha, summarize
+from compare_canonical import compare, sha, summarize
+
+
+def validate_numerics(blocks, case, row):
+    """Recompute scalar decisions from the retained arms before publication."""
+    for block in blocks:
+        arms = block.get('arms', {})
+        if len(arms) != 2:
+            continue
+        canonical = arms['canonical']
+        scores = canonical.get('extra', {}).get('sample_scores', [canonical['score']])
+        checks = [compare(arms['rust']['score'], score, case['absolute_bound'],
+                          case.get('relative_bound', 0)) for score in scores]
+        passed = False if any(ok is False for _, ok in checks) else None if case['absolute_bound'] is None else True
+        if block['delta'] != max(delta for delta, _ in checks) or block['passed'] is not passed:
+            raise ValueError('stored numerical decision differs from acquired arms')
+        for role in ('rust', 'canonical'):
+            if block[role+'_ns'] != statistics.median(arms[role]['times_ns']):
+                raise ValueError('stored timing differs from acquired samples')
+    passed = (False if any(block.get('errors') or block['passed'] is False for block in blocks)
+              else None if any(block['passed'] is None for block in blocks) else True)
+    delta = max((block['delta'] for block in blocks if 'delta' in block), default=None)
+    if row['passed'] is not passed or row['max_abs_delta'] != delta:
+        raise ValueError('summary numerical decision differs from acquired blocks')
 
 
 def read_cohort(root, dispositions):
@@ -31,12 +54,14 @@ def read_cohort(root, dispositions):
             if row[field]!=case[field]:
                 raise ValueError('case contract mismatch: '+field)
         blocks=[json.loads(p.read_text()) for p in sorted(path.parent.glob('block-*/result.json'))]
+        validate_numerics(blocks, case, row)
         expected=summarize(blocks,case['matched_scope'])
         if row['ratio']!=expected:
             raise ValueError('stored ratio differs from acquired blocks')
         record={k:row[k] for k in ('metric','case','width','height','threads','passed','absolute_bound',
                                    'max_abs_delta','ratio','matched_scope','rust_source','plan_sha256')}
         record['canonical']=row['canonical']
+        record['relative_bound']=case.get('relative_bound',0)
         record['process_errors']=sum(bool(b.get('errors')) for b in blocks)
         measured=[b for b in blocks if 'rust_ns' in b and 'canonical_ns' in b]
         record['rust_ms']=statistics.median(b['rust_ns'] for b in measured)/1e6 if measured else None

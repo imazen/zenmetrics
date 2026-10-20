@@ -1,0 +1,237 @@
+{
+  "vmaf-neg-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.9451284726258932,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9451284726258932,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 7.238667720343983e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-studio601": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "2/2 pass",
+    "ratio": 0.9108358432538288,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9108358432538288,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 7.264956991548388e-06,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vmaf-v1": {
+    "canonical": "libvmaf 3.2.0 / named RGB ingress",
+    "check": "\u0394 0.00023",
+    "ratio": 0.7430638158871904,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.8104301992930858,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.00022515701154190992,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707"
+    ],
+    "qualified": false
+  },
+  "vsi": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.07759935634573503,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.0792978266940049,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.0279395091834544e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k2": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.06763523358960699,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.06787439594101455,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 6.297474430816408e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k3": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.06290037547469153,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.06324449901377636,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 6.385277306897308e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-k4": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.06215474365875238,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.06284666060019724,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 4.950456933272562e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "vsi-nodownscale": {
+    "canonical": "original VSI / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.07800291700487023,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.0785181885316739,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 5.0279395091834544e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
+  "ws-hv": {
+    "canonical": "IVP-Lab original WS_HV notebook",
+    "check": "\u0394 1.1e-16",
+    "ratio": 0.9248069225297118,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.9802775920575494,
+    "observed_cases": 3,
+    "expected_cases": 3,
+    "passed_cases": 0,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.1102230246251565e-16,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
+      "ba00f28560c28d8eedacddfb237ba1e8764cb7cce2ea22e4ad5b7865531c0875"
+    ],
+    "qualified": false
+  }
+}

@@ -69,6 +69,18 @@ class CanonicalComparison(unittest.TestCase):
         self.assertEqual(result['observed_cases'],2)
         self.assertEqual(result['rust_sources'],['new-source','old-source'])
 
+    def test_publication_rechecks_every_canonical_score(self):
+        from publish_canonical_comparison import validate_numerics
+        case=dict(absolute_bound=.01)
+        block=dict(delta=0.,passed=True,rust_ns=2.,canonical_ns=4.,arms={
+            'rust':dict(score=.5,times_ns=[2.,2.,2.]),
+            'canonical':dict(score=.5,times_ns=[4.,4.,4.],extra=dict(sample_scores=[.5,.6]))})
+        row=dict(passed=True,max_abs_delta=0.)
+        with self.assertRaisesRegex(ValueError,'acquired arms'):
+            validate_numerics([block],case,row)
+        block['delta']=abs(.5-.6);block['passed']=False
+        validate_numerics([block],case,dict(passed=False,max_abs_delta=abs(.5-.6)))
+
 
 if __name__ == '__main__':
     unittest.main()
