@@ -1,4 +1,31 @@
 {
+  "fsim-k2": {
+    "canonical": "original FeatureSIM / Octave 6.4",
+    "check": "6/6 pass",
+    "ratio": 0.1797351550468677,
+    "ratio_width": 255,
+    "ratio_height": 257,
+    "ratio_threads": 1,
+    "ratio_cases": 3,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "ratio_engine": null,
+    "ratio_blocks": 3,
+    "worst_ratio": 0.18521237274793417,
+    "observed_cases": 6,
+    "expected_cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 8.88441795687811e-08,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
+    ],
+    "qualified": false
+  },
   "fsim-k3": {
     "canonical": "original FeatureSIM / Octave 6.4",
     "check": "6/6 pass",
@@ -244,6 +271,33 @@
     ],
     "qualified": false
   },
+  "hyperiqa": {
+    "canonical": "original HyperIQA / fixed grid",
+    "check": "1/2 pass",
+    "ratio": 0.7359127134367215,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.7359127134367215,
+    "observed_cases": 1,
+    "expected_cases": 2,
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 0.0,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "dd2c221354545f2f8af85dfcb66be6ea012c141f5cb523eaa987a3b391391edf"
+    ],
+    "qualified": false
+  },
   "iwssim": {
     "canonical": "Python-IW-SSIM f9de37c / float32",
     "check": "3 process errors",
@@ -275,7 +329,7 @@
   },
   "iwssim-gpu": {
     "canonical": "Python-IW-SSIM f9de37c / float32 / CPU reference",
-    "check": "1 process errors",
+    "check": "3 process errors",
     "ratio": 0.08777759212993642,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -286,16 +340,17 @@
     "ratio_engine": null,
     "ratio_blocks": 3,
     "worst_ratio": 0.08777759212993642,
-    "observed_cases": 2,
-    "expected_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 26,
     "passed_cases": 0,
     "failed_cases": 0,
-    "process_error_cases": 1,
+    "process_error_cases": 3,
     "max_abs_delta": 1.259701562061899e-06,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
       "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
@@ -387,20 +442,20 @@
   },
   "lpips-vgg": {
     "canonical": "lpips 0.1.4",
-    "check": "3/3 pass",
-    "ratio": 1.082037733147578,
+    "check": "4/4 pass",
+    "ratio": 1.0812546164976913,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "aef59401e3c731d010b1f59d119cebb227074974cbe54801d124f6e576b0d134",
+    "ratio_plan_sha256": "7537d991f937770327341c798d4a58b8871c9a502ae6de2a74bead6f9321b08e",
     "ratio_engine": "rten",
-    "ratio_blocks": 20,
+    "ratio_blocks": 40,
     "worst_ratio": 1.094075289121472,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 3,
+    "observed_cases": 4,
+    "expected_cases": 4,
+    "passed_cases": 4,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 6.3964012003703274e-09,
@@ -408,6 +463,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "7537d991f937770327341c798d4a58b8871c9a502ae6de2a74bead6f9321b08e",
       "aef59401e3c731d010b1f59d119cebb227074974cbe54801d124f6e576b0d134",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
@@ -658,61 +714,6 @@
     "plan_sha256": [
       "479cd70c076e6ce817ea0d8454e31db5abc770ccc57f5d8b605e5a37f9cd29ab",
       "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
-    ],
-    "qualified": false
-  },
-  "ms-ssim-pyiqa-f32-k6": {
-    "canonical": "PyIQA 0.1.16 / named convention",
-    "check": "4/4 pass",
-    "ratio": 0.255468812353607,
-    "ratio_width": 1152,
-    "ratio_height": 1152,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.2816229002817423,
-    "observed_cases": 4,
-    "expected_cases": 4,
-    "passed_cases": 4,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 2.269627596973578e-09,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "479cd70c076e6ce817ea0d8454e31db5abc770ccc57f5d8b605e5a37f9cd29ab",
-      "85cfa5e371cdb008a38e46f2de29960bf87327000fc0b803a3684e84342ff20c"
-    ],
-    "qualified": false
-  },
-  "msssim": {
-    "canonical": "original msssim / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.027846190625725152,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.02838604313470713,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 1.7640623451997683e-06,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
     ],
     "qualified": false
   }

@@ -1,0 +1,178 @@
+{
+  "metrics": 28,
+  "cases": 672,
+  "plans": [
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-00.plan.json",
+      "sha256": "bd274f93bd02a65b14d8a43d8d984dc3b82082016fadbc6ec1dda8a1c7da612d",
+      "cases": 120,
+      "metrics": [
+        "deepdc",
+        "dists",
+        "lpips-alex",
+        "lpips-squeeze",
+        "lpips-vgg"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-01.plan.json",
+      "sha256": "f89d9043736196639b8462211004c4a60d412f0dde69ea71ec00db0308282330",
+      "cases": 120,
+      "metrics": [
+        "ahiq-pyiqa",
+        "dmm-pyiqa",
+        "topiq-fr",
+        "topiq-fr-pipal",
+        "wadiqam-pyiqa"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-02.plan.json",
+      "sha256": "f4f5cf35ae24f587b6fd94faba7d88332af001b412b411f0c1c5d223f51d9301",
+      "cases": 24,
+      "metrics": [
+        "afine"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-03.plan.json",
+      "sha256": "22d4d647d50f8955779025d7f6099f1658c1c96c5a36835153e243dc417820f2",
+      "cases": 24,
+      "metrics": [
+        "ahiq"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-04.plan.json",
+      "sha256": "b33e6c2133699dff01e5b2ef84c0c302e64af30cf95d02adbfc8cab10664b8ca",
+      "cases": 24,
+      "metrics": [
+        "arniqa"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-05.plan.json",
+      "sha256": "2c3968b807444378a64fc65aedc1857eed6873225defbd0393309ae5718f4385",
+      "cases": 24,
+      "metrics": [
+        "ckdn"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-06.plan.json",
+      "sha256": "bb1c1820602164f3b5348d9d9d5382999d243b5c57ca5c7d2e9fcb4c7d957c65",
+      "cases": 24,
+      "metrics": [
+        "dmm"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-07.plan.json",
+      "sha256": "f1a7feb6e6f7f7cd974aa8937b50e5c1c115ba6807c310be14acebc2363c90a8",
+      "cases": 24,
+      "metrics": [
+        "dreamsim"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-08.plan.json",
+      "sha256": "6b70e377f6b83a1f3bc4c3908e2ffe4c957b9a137b70471185ccb0f0a72850d4",
+      "cases": 24,
+      "metrics": [
+        "hyperiqa"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-09.plan.json",
+      "sha256": "f7d17d569ef2ffa3f59528cacb93dac92c916aaf093858cb8631e616fce7bbe0",
+      "cases": 24,
+      "metrics": [
+        "liqe"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-10.plan.json",
+      "sha256": "69c1dbfe7fb03b10f793505c116604799bcdb5d194e591eca6f3e1885428bb71",
+      "cases": 24,
+      "metrics": [
+        "maniqa"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-11.plan.json",
+      "sha256": "20b544fb55773ae695f5b505ff604d9dbbaa6ce4bdd00d3cc31c849df3f2bc52",
+      "cases": 24,
+      "metrics": [
+        "musiq"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-12.plan.json",
+      "sha256": "d99a349bb4346eaea76616f357e3f56080584c3a0b365d8139b3c9991b1b9df1",
+      "cases": 24,
+      "metrics": [
+        "paq2piq"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-13.plan.json",
+      "sha256": "4e51cd39575ab694245723fc657a6a5b99ffec2c6dc41535afab49f26e203084",
+      "cases": 24,
+      "metrics": [
+        "wadiqam-fr-live"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-14.plan.json",
+      "sha256": "ddea4de0f44bf0d85d535386e6cce2d3923f8cca2dcb9da7079a1d1db7a1889a",
+      "cases": 24,
+      "metrics": [
+        "wadiqam-fr-tid"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-15.plan.json",
+      "sha256": "085d1d632138d6f0903cc68043c64c87e706d04db05a3db84a05fea1477f8437",
+      "cases": 24,
+      "metrics": [
+        "wadiqam-nr-live"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-16.plan.json",
+      "sha256": "b242b31868ab72c8197f73a82ac02084fe39b44156114e86630041b976875530",
+      "cases": 24,
+      "metrics": [
+        "wadiqam-nr-tid"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-17.plan.json",
+      "sha256": "30ac4aa3621fcc4d1a1fb9e57523c3af9d2360228eb03c975cf9045892a7fc59",
+      "cases": 24,
+      "metrics": [
+        "wd"
+      ]
+    },
+    {
+      "raw_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid/group-18.plan.json",
+      "sha256": "a917ae7cf25ddc8bafb093f5d8ea5ba4a3240c5a412bf15ec29dec4c643ca819",
+      "cases": 48,
+      "metrics": [
+        "stlpips-alex",
+        "stlpips-vgg"
+      ]
+    }
+  ],
+  "queue_sha256": "0913d64776e8486de4ddf2d396f3dc6ee271a714c6982e38a2e7aaa0cc4d392c",
+  "pairs_manifest_sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712",
+  "threads": [
+    1,
+    28
+  ],
+  "status": "Prepared, not acquired; full classical grids precede this learned-metric grid",
+  "scope": "Existing model/reference contracts, warm scalar only; refusals must be retained; no cold/map claim",
+  "preparation_log": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-grid-preparation.log",
+  "preparation_log_sha256": "8ac26c9a71d3e3bb4dc09d653c657236970d5dff258711c3f80857d9eeb7dee3",
+  "preparation_wrapper": "run-heavy: done rc=0 16s | peak-RSS 0.02GiB | min-avail 12328MiB | peak-load 3.05"
+}

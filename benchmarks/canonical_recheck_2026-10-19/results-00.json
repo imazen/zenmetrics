@@ -82,20 +82,20 @@
   },
   "arniqa": {
     "canonical": "original ARNIQA / kadid10k",
-    "check": "2/2 pass",
-    "ratio": 1.1888128573459844,
+    "check": "4/4 pass",
+    "ratio": 1.1507064694296374,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
+    "ratio_plan_sha256": "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.4371044692018131,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 4,
+    "expected_cases": 4,
+    "passed_cases": 4,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.1920928955078125e-07,
@@ -103,7 +103,9 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
-      "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8"
+      "7a07601a581a8f30bd9813effde1f943c1a0f77727b9cdeb9a5d3d779df9aed8",
+      "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
+      "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc"
     ],
     "qualified": false
   },
@@ -367,7 +369,7 @@
   },
   "cvvdp-gpu": {
     "canonical": "pycvvdp 0.5.7 CPU / standard_fhd",
-    "check": "1/1 pass",
+    "check": "2/25 pass",
     "ratio": 0.021438893589516016,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -377,17 +379,18 @@
     "ratio_plan_sha256": "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988",
     "ratio_engine": null,
     "ratio_blocks": 3,
-    "worst_ratio": 0.021438893589516016,
-    "observed_cases": 1,
-    "expected_cases": 1,
-    "passed_cases": 1,
+    "worst_ratio": 0.701641789307398,
+    "observed_cases": 2,
+    "expected_cases": 25,
+    "passed_cases": 2,
     "failed_cases": 0,
     "process_error_cases": 0,
-    "max_abs_delta": 9.5367431640625e-07,
+    "max_abs_delta": 2.288818359375e-05,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
       "cc9b84e3f67cc6789373abdbb296288f3d1a28da2799159bee7165b159a8e988"
     ],
     "qualified": false
@@ -421,20 +424,20 @@
   },
   "cw-ssim-pyiqa": {
     "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
-    "check": "2/2 pass",
-    "ratio": 0.08364241976933913,
-    "ratio_width": 512,
-    "ratio_height": 512,
+    "check": "7/26 pass",
+    "ratio": 0.10681038551572229,
+    "ratio_width": 1024,
+    "ratio_height": 1024,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "a251397cb7f682e405002f9f8f67934e0e89501ead737f66bd278ec77d1653cd",
+    "ratio_plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
     "ratio_engine": "rust",
     "ratio_blocks": 3,
     "worst_ratio": 0.17192854982911646,
-    "observed_cases": 2,
-    "expected_cases": 2,
-    "passed_cases": 2,
+    "observed_cases": 7,
+    "expected_cases": 26,
+    "passed_cases": 7,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 6.661338147750939e-16,
@@ -442,26 +445,27 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
       "a251397cb7f682e405002f9f8f67934e0e89501ead737f66bd278ec77d1653cd"
     ],
     "qualified": false
   },
   "deepdc": {
     "canonical": "DeepDC-PyTorch 0.2 / input normalization",
-    "check": "3/3 pass",
-    "ratio": 1.2341035018147868,
+    "check": "5/5 pass",
+    "ratio": 1.2143967648674567,
     "ratio_width": 512,
     "ratio_height": 512,
     "ratio_threads": 1,
     "ratio_cases": 1,
     "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca",
+    "ratio_plan_sha256": "03594d57930dde8f811c1141503800f9205abfb621a0b93499be005ffeb9c004",
     "ratio_engine": "rten",
-    "ratio_blocks": 3,
+    "ratio_blocks": 20,
     "worst_ratio": 1.2341035018147868,
-    "observed_cases": 3,
-    "expected_cases": 3,
-    "passed_cases": 3,
+    "observed_cases": 5,
+    "expected_cases": 5,
+    "passed_cases": 5,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 0.0,
@@ -469,6 +473,8 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "03594d57930dde8f811c1141503800f9205abfb621a0b93499be005ffeb9c004",
+      "8d4e791ef629889fc571454ce8fb4f0b7f64848fe809dd21b10be0d699248149",
       "c1640c02d1767e34c32aa5799052ff6207c24c09405e240b41d7f1a2df046d2d",
       "f525415f2912bdc5c5035aeee58f013fdea959be17c5940a6db68d5cf9499fca"
     ],
@@ -504,7 +510,7 @@
   },
   "dmm": {
     "canonical": "original DMM / pinned source",
-    "check": "1/2 pass",
+    "check": "2/2 pass",
     "ratio": 0.6058034560576455,
     "ratio_width": 512,
     "ratio_height": 512,
@@ -515,9 +521,9 @@
     "ratio_engine": "rten",
     "ratio_blocks": 3,
     "worst_ratio": 0.6058034560576455,
-    "observed_cases": 1,
+    "observed_cases": 2,
     "expected_cases": 2,
-    "passed_cases": 1,
+    "passed_cases": 2,
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 2.6667229833488796e-06,
@@ -553,6 +559,33 @@
     ],
     "plan_sha256": [
       "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
+    ],
+    "qualified": false
+  },
+  "dreamsim": {
+    "canonical": "DreamSim 0.2.1 / ensemble",
+    "check": "2/2 pass",
+    "ratio": 0.9213592747135312,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "468905d1865acd24021f5813db5359841e1d9426f43753eaaf1aaf27475aece8",
+    "ratio_engine": "rten",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.99196739072533,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.2509752433942367e-07,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "468905d1865acd24021f5813db5359841e1d9426f43753eaaf1aaf27475aece8"
     ],
     "qualified": false
   },
@@ -690,33 +723,6 @@
     "failed_cases": 0,
     "process_error_cases": 0,
     "max_abs_delta": 1.329927450832713e-06,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153"
-    ],
-    "qualified": false
-  },
-  "fsim-k2": {
-    "canonical": "original FeatureSIM / Octave 6.4",
-    "check": "6/6 pass",
-    "ratio": 0.1797351550468677,
-    "ratio_width": 255,
-    "ratio_height": 257,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "ratio_engine": null,
-    "ratio_blocks": 3,
-    "worst_ratio": 0.18521237274793417,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 6,
-    "failed_cases": 0,
-    "process_error_cases": 0,
-    "max_abs_delta": 8.88441795687811e-08,
     "rust_sources": [
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],

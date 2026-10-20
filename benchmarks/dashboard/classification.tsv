@@ -1370,3 +1370,22 @@ benchmarks/canonical_recheck_2026-10-19/original-dmm-1100-run.tsv	ignored	Native
 benchmarks/psnr_opt_2026-10-20/grid.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.
 benchmarks/psnr_opt_2026-10-20/f32_candidates.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.
 benchmarks/psnr_opt_2026-10-20/grid_par.tsv	ignored	SWE-2 PSNR kernel optimization evidence; not a dashboard dataset.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-current-maps/pairA.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-current-maps/pairB.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-current-maps/pairC.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-current-maps/build-receipt.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-current-maps/butteraugli-maps.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-grid-plan.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/lpips-vgg-pair-cid22-t1-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t1-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t8-combined60-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t1-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t8-initial20-interval.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/original-dreamsim-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/original-hyperiqa-1100-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/full-cw-pyiqa-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t1-f525415f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t8-7a07601a-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-original-cid22-t1-7a07601a-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/deepdc-pair-cid22-t8-f525415f-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.

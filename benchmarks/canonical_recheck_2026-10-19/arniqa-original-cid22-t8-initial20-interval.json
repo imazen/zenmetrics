@@ -1,0 +1,52 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "arniqa-original-cid22-t8",
+      "blocks": 20,
+      "ratio": 1.3965672003192116,
+      "lower_95": 1.3761659047324233,
+      "upper_95": 1.4465067182834666,
+      "relative_halfwidth": 0.03575876474317912,
+      "precision_within_three_percent": false,
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc",
+      "summary_sha256": "822176f477fadb6ebe0f95a391fd8e52e5a71284d4ad8727b4bb9ce2183c8101",
+      "stage_summary_sha256": [
+        "822176f477fadb6ebe0f95a391fd8e52e5a71284d4ad8727b4bb9ce2183c8101"
+      ],
+      "block_sha256": [
+        "22d205062512209ec8effc933456b34a42e48d552d7673d2fe96ac603fa9b3f1",
+        "c1163916f9542d5234466ef796f42b9369a520d302bceb5700beb5b364f75ddb",
+        "7793eb279249277b3204b351ccf6a9191101f77cc323191b9251f0525a1112ab",
+        "996cd4be47e21fa1f1513e6dacbece68723fba06babe5bbb9b4d7da5281b8725",
+        "87535a694beba2c8a20fdd37d794262dfc17b605f4d752e54b0787d6df9f06e2",
+        "004bdade1a36fe6d8c8107c04ef20c0467270f37a5b3051f08e4d2927519828f",
+        "970c5c44446296dffcb0740adb47e47bd2fc8f5ad649ee20f2316cb1b2fb433c",
+        "88bf6bd069fc7c7eab462c3c1bc1eb327a13515d1c0b780fc7a1568c28a3a305",
+        "369ebd6147f1fd1e4e8f9d84aaeb4662356e321c08ccb84f288e34a62fa5a57f",
+        "7021e5253f9399098770ab9542e971e98bb3b57522b19b4742eef7306578ca59",
+        "5b0b2af401515eab112fb21cb665693d6d923ad12941f0227bc7a3d23109d6d5",
+        "364f49da9ace892b7be72e8ac3e2a3563b771845c52d9e0d09669e7c658f70bf",
+        "ca458b9c7b6777d194893b4c97d900915bafc2cb10ff5ac0b08fcf3a4c71b78f",
+        "32442e520c758f222c53cda5a8c131812981d0605eaf30d72bb165a4c4ab7844",
+        "46558fa145612d535db7be328a4e6ef31abcc035eca85e27be56cc51bbe27639",
+        "a93b8f6ab1b286391191039336ef9d400444b43cfcd70c942972216a92882aa6",
+        "cf9e2b873c1ce9b51e6adf6ed38af1bcd9066e7ee3ab28c0b1578dd85d213c3e",
+        "d0ce78d0cfb8e8b89ffa10f039bc83ca308d15aeac9f073e7b8eca830014c5de",
+        "b723c20f9c991daea2bb1f6177e055425aa3e184c773c825819ff7a3be2ff91b",
+        "8ae208e2eaf6532bce6c572ecd9489af5be59a57c1469ecc8c6464eb82e54789"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 30,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 5,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ]
+}

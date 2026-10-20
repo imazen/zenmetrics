@@ -493,3 +493,13 @@ channel before its norm; pycvvdp folds channels per band, reconstructs a
 pyramid, transforms to `1 - JOD/10`, and stores float16. This is a semantic
 extension recorded in DIVERGENCES.md, with source hashes. No new numerical map
 parity result is claimed from that inspection.
+
+## Current Butteraugli scalar and map acquisition
+
+The [frozen-library probe](butteraugli-current-maps/butteraugli-maps.json) completes 24 cases: four sizes, three content pairs and threads 1/28. All scalar comparisons meet the existing FIR policy (relative 0.001 above canonical 0.001, absolute 0.001 otherwise); the largest absolute scalar difference is 8.344650268554688e-6. Every native map call also matches its scalar-only score bits.
+
+The largest finite-pixel map difference is 0.0002071857452392578, with no nonfinite mismatches. No map bound is assigned. This accuracy-only probe supplies no comparative timing ratio. Its wrapper reports 91s, peak-RSS 1.85 GiB, minimum available 10316 MiB and peak load 4.04. Raw planes and per-arm maximum-RSS records remain outside git; the linked shards preserve their hashes.
+
+## Prepared learned-metric size/content grid
+
+The [28-route learned grid](neural-grid-plan.json) declares 672 warm scalar cases on the same twelve retained pairs at threads 1/28. It is prepared, not acquired; the full classical grids precede it. Existing model/reference contracts and numerical bounds are unchanged. Preparation took 16s with peak-RSS 0.02 GiB, minimum available 12328 MiB and peak load 3.05.

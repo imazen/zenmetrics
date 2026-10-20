@@ -1,0 +1,24 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/butteraugli-current-maps-v3",
+  "completion_sha256": "b78a34d5bc5cf01c9653c08c9ef94ea26e86a4235a45a6dc73c89ca35084f5d1",
+  "build_receipt_sha256": "279424ccd9a158e47d3641859b37d8a6cb1335340dbcee6d2170dc1ff0195a2f",
+  "shards": {
+    "pairA.json": "a4719dc24df77af69dc713ebf71ed169896b7017b326da510b31efed170bc6d5",
+    "pairB.json": "dd45040d7148a5fa2d335256892c21ccba326e43ae362583dabf94c82d38e94b",
+    "pairC.json": "aa8d337769f5f5dca866d735a7a94338beedfb50814c13ef60821d9fc0757cfa"
+  },
+  "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "canonical": "libjxl 0.12.0, existing original comparator, intensity target 80",
+  "cases": 24,
+  "scalar_passes": 24,
+  "scalar_max_abs_delta": 8.344650268554688e-06,
+  "scalar_policy": "relative <= 0.001 above canonical 0.001, absolute <= 0.001 otherwise; existing FIR reference_parity.rs",
+  "map_max_abs_delta": 0.0002071857452392578,
+  "map_bound": null,
+  "nonfinite_mismatches": 0,
+  "qualification": "Accuracy-only scalar and map observations; no timing ratio or new map bound",
+  "log": "/home/lilith/tmp/local-canonical-20261019T2330/butteraugli-current-maps-v3.log",
+  "log_sha256": "e117a5a4f1d1b036da28c49b2bb87c9289e59900c9cb862d7d74e0f2e28550d5",
+  "command": "just bench-iqa-canonical-butteraugli-maps /home/lilith/tmp/portcheck/python/bin/python --native-build /home/lilith/tmp/local-canonical-20261019T2330/build --reference-build /home/lilith/tmp/local-canonical-20261019T2330/jxl-rgb-build --pairs /home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json --output /home/lilith/tmp/local-canonical-20261019T2330/butteraugli-current-maps-v3",
+  "wrapper": "run-heavy: done rc=0 91s | peak-RSS 1.85GiB | min-avail 10316MiB | peak-load 4.04"
+}
