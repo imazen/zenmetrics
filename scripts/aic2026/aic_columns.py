@@ -32,7 +32,7 @@ COLS = {
  'MS-SSIM': ('msssim-libvmaf', 'msssim_libvmaf', 'MS-SSIM'),
  'PSNR-HVS': ('psnrhvs-daala', 'psnrhvs_daala', 'PSNR-HVS-vmaf'),
  'VMAF-neg': ('vmaf-neg-studio601', 'vmaf_neg_studio601', 'VMAF-neg'),
- 'proposal-Butteraugli': ('butteraugli', 'butteraugli_pnorm3', 'proposal-Butteraugli'),
+ 'proposal-Butteraugli': ('proposal-butteraugli', 'auto', 'proposal-Butteraugli'),
  'proposal-mDCTPSNR': ('@mdct_jnd', None, 'proposal-mDCTPSNR'),
  'IW-SSIM': ('iwssim-piq', 'auto', 'IW-SSIM'),
  'VIF': ('vifvec', 'auto', 'VIF'),
@@ -44,7 +44,7 @@ COLS = {
  'DSSIM': ('dssim', 'dssim', 'DSSIM'),
  'VMAF': ('vmaf-studio601', 'vmaf_studio601', 'VMAF'),
  'PSNR-HVS-Y': ('psnrhvs-daala', 'psnrhvs_daala_y', 'PSNR-HVS-Y-vmaf'),
- 'CAMBI': ('cambi', 'cambi', 'CAMBI'),
+ 'CAMBI': ('cambi-aic2026', 'auto', 'CAMBI'),
  'PSNR-Cb': ('psnr-cb', 'psnr_cb', 'PSNR-Cb'),
  'PSNR-Cr': ('psnr-cr', 'psnr_cr', 'PSNR-Cr'),
  'PSNR-HVS-Cb': ('psnrhvs-daala', 'psnrhvs_daala_cb', 'PSNR-HVS-Cb-vmaf'),
@@ -57,12 +57,28 @@ COLS = {
  'PSNR': ('psnr', 'psnr', 'PSNR'),
  'SSIM-pyiqa': ('ssim-pyiqa', 'ssim_pyiqa', 'SSIM-pyiqa'),
  'MS-SSIM-pyiqa': ('ms-ssim-pyiqa', 'ms_ssim_pyiqa', 'MS-SSIM-pyiqa'),
- 'CW-SSIM': ('cw-ssim', 'cw_ssim', 'CW-SSIM'),
+ 'CW-SSIM': ('cw-ssim-pyiqa', 'auto', 'CW-SSIM'),
  'VSI': ('vsi', 'auto', 'VSI'),
  'SSIMc': ('ssimc', 'ssimc', 'SSIMc'),
  'FLIP': ('flip-v17', 'flip_v17', 'FLIP'),
  'PSNR-YCbCr611': ('psnr-ycbcr611', 'psnr_ycbcr611', 'PSNR-YCbCr611'),
  'mDCT-PSNR': ('mdctpsnr', 'auto', 'mDCT-PSNR'),
+ # online-dashboard CSV (online-2026-10-20): renamed July columns and the 17 new columns;
+ # proposal-DVIFM-2d / -min stay unmapped (unpublished implementation, aggregates only).
+ 'WS-HV': ('ws-hv', 'auto', 'WS-HV'),
+ 'SSIMULACRA1': ('ssimulacra1', 'auto', 'SSIMULACRA1'),
+ 'Butteraugli-max': ('butteraugli', 'butteraugli_max', 'Butteraugli-max'),
+ 'Butteraugli-3norm': ('butteraugli', 'butteraugli_pnorm3', 'Butteraugli-3norm'),
+ 'Butteraugli-original': ('butteraugli-original', 'auto', 'Butteraugli-original'),
+ 'VMAF v1': ('vmaf-v1', 'auto', 'VMAF v1'),
+ 'VMAF v0': ('vmaf-studio601', 'vmaf_studio601', 'VMAF v0'),
+ 'VMAF-neg v0': ('vmaf-neg-studio601', 'vmaf_neg_studio601', 'VMAF-neg v0'),
+ 'PSNR-HVS-vmaf': ('psnrhvs-daala', 'psnrhvs_daala', 'PSNR-HVS-vmaf'),
+ 'PSNR-HVS-Y-vmaf': ('psnrhvs-daala', 'psnrhvs_daala_y', 'PSNR-HVS-Y-vmaf'),
+ 'VIF-vmaf-scale0': ('aic_vmaf_features', 'vif_s0', 'VIF-vmaf-scale0'),
+ 'VIF-vmaf-scale1': ('aic_vmaf_features', 'vif_s1', 'VIF-vmaf-scale1'),
+ 'VIF-vmaf-scale2': ('aic_vmaf_features', 'vif_s2', 'VIF-vmaf-scale2'),
+ 'VIF-vmaf-scale3': ('aic_vmaf_features', 'vif_s3', 'VIF-vmaf-scale3'),
 }
 # JND_<x> column -> (our base column, site-map key)
 JNDS = {
@@ -72,6 +88,7 @@ JNDS = {
  'JND_SSIM': ('SSIM', 'SSIM'),
  'JND_MS-SSIM': ('MS-SSIM', 'MS-SSIM'),
  'JND_PSNR-HVS': ('PSNR-HVS', 'PSNR-HVS-vmaf'),
+ 'JND_PSNR-HVS-vmaf': ('PSNR-HVS-vmaf', 'PSNR-HVS-vmaf'),
  'JND_VMAF-neg': ('VMAF-neg', 'VMAF-neg'),
 }
 META = ['distorted', 'source', 'codec', 'codec_acronym', 'distortion_level', 'bpp',
@@ -271,6 +288,8 @@ def write_report(pub, header, ours, report, worst_path, routes=None):
             worst.write('\n')
     # JND_ columns are recomputed-by-construction (site map); report their raw deltas vs published
     for c in sorted(jnd_report_cols):
+        if c not in header:
+            continue
         base, mk = JNDS[c]
         if c not in header or base not in ours:
             continue

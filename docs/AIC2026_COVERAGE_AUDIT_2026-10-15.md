@@ -195,7 +195,7 @@ Status rule: reproduced = max |Δ| ≤ ~0.1% of the column range and ≤ 0.05 JN
 
 | name | in CSV? | zenmetrics metric | n | median \|Δ\| | max \|Δ\| | max \|Δ\| in JND | status | note |
 |---|---|---|---|---|---|---|---|---|
-| proposal-Butteraugli | site+dataset | `butteraugli` (`butteraugli_pnorm3`), affine only | 61 | 1.08 | 3.42 | 1.22 | differs | raw med |Δ| 1.08; but pub ≈ 2.083·pnorm3 − 1.079 (Pearson 0.99994, residual med 0.004, max 0.098): pnorm-3 family, different scale/config |
+| proposal-Butteraugli | site+dataset | `proposal-butteraugli` (settled 2026-10-20; was `butteraugli` raw pnorm3) | 61 | 1.08 | 3.42 | 1.22 | resolved | raw med |Δ| 1.08 as-scored; the column is `max(0.00459792·N, 2.0938201·N − 1.1033102)` of libjxl pnorm3 — verified on all 9,618 crops (median site-JND 2.9e-7) |
 | proposal-mDCTPSNR / mDCTpsnr-JND | site+dataset | `mdctpsnr` + the reference `-jnd` remap (not a CLI column) | 61 | 7.64e-08 | 1e-06 | 6.08e-07 | reproduced | JND = 0.000475997802·max(0, 80 − dB)^2.3182 applied to our dB |
 | proposal-IDFIQA / IDFIQA | site+dataset | private port | 61 | 4.2e-6 | 3.33e-4 |  | implemented | aggregates only; Spearman 1.0; 1e-3 JND gate passes; see AIC2026_REPRODUCTION_STATUS.md |
 | proposal-DVIFM-0.2 / DVIFM-0.2.0 | site+dataset | missing (dvifmish, outside zenmetrics) |  |  |  |  | missing | dvifmish (dev ~/work/dvifmish, publish=false) has port presets of the author's v0.2/v0.3 builds; not compared to these columns here |

@@ -17,8 +17,9 @@ values below.
 
 | file | bytes | sha256 |
 |---|--:|---|
-| `metrics_cropped.zenmetrics.csv` | 5614750 | `289e1a5c291d32549b802c18d9eadbfb2df351b445649459298eb1e66a455236` |
-| `provenance.json` (committed as `provenance_cropped.json`) | 6941 | `76e0fa7c6a6a488d00231477f36f458eb6842a18e5235df75aae22cd357f8b10` |
+| `metrics_cropped.zenmetrics.csv` | 6138816 | `373377ac3aa68feedf2f045e24b4b857a6703a382de1b0039eed65a681698e5e` |
+| `provenance.json` (committed as `provenance_cropped.json`) | 8202 | `547957b4cc3ac3dff8fe437cc34524178e10798646250e8b01c2fc982804e490` |
+| `metrics_cropped-online.zenmetrics.csv` | — | pending last two metric runs |
 | `metrics_fullres.zenmetrics.csv` | — | pending fullres pass |
 
 `provenance.json` records the binary sha256, source commit `4d833195`,

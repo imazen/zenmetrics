@@ -2,7 +2,9 @@
 
 Status of every metric column published with the JPEG AIC2026 dataset
 (`metrics_fullres.csv` / `metrics_cropped.csv`, 9,618 rows) against the
-zenmetrics implementation of the same method, as of 2026-10-18. "Reproduced"
+zenmetrics implementation of the same method, as of 2026-10-20 (all 9,618
+cropped rows scored; the online-dashboard CSV of 2026-10-20 is now also
+compared — see the online section). "Reproduced"
 means our implementation matches the published per-image values within the
 stated error on the 61-pair subset (or more); a mismatch is a question about
 the published pipeline, not a claim that either side is wrong. Evidence links
@@ -21,6 +23,7 @@ Timing for each implementation: [IQA_COMPLEXITY.md](IQA_COMPLEXITY.md)
 | `A-FINE` | `afine` (upstream-verified `afine_all`) | not reproduced. No pyiqa release scores these 840×944 crops as given (0.1.15 and 0.1.16 assert H and W divisible by 32). Upstream and pyiqa inference across crop/pad/resize to a multiple of 32, tiling, every output term, input scaling and normalisation variants, CPU and CUDA: best Spearman 0.94 (fidelity term), best median 0.11 site-JND. On near-lossless pairs the column implies a raw fidelity ≈ 0.097 where every variant gives ≈ 0.015 (2026-10-17) | which A-FINE entry point and output, how inputs were brought to a multiple of 32, which checkpoint | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [afine_aic_2026-10-16](../benchmarks/afine_aic_2026-10-16/README.md), [afine_aic_probe](../benchmarks/afine_aic_probe/README.md) |
 | `WD_s1`–`WD_s5` | `wd` (`wd_s1`–`wd_s5`, Cool-Chic convention) | not reproduced. A 4,480-row grid over the Cool-Chic and google/codex conventions (input normalisation, squared or √ distance, variance floor, σ rescale, VGG taps, pixels as a layer, image pyramid, log2σ 0–6) reaches Spearman 0.98–0.99 with a near-constant scale (published/ours ≈ 0.25), but the best log2σ does not follow the column index (s1→1, s2→3, s3→4, s4→5, s5→6); best median 0.13–0.20 site-JND (2026-10-17) | which implementation, layers, normalisation and pyramid, and how the five columns map to σ | [aic_confsearch_2026-10-17](../benchmarks/aic_confsearch_2026-10-17/README.md), [wd_port_2026-10-16](../benchmarks/wd_port_2026-10-16/README.md) |
 | `proposal-IDFIQA` | private `idfiqa` port | median 4.2e-6, max 3.33e-4 JND, Spearman 1.0 on rten; native oracle 1e-3 JND gate passes on rten, ORT CPU and CUDA | upstream code licence; no code or weights published | aggregate card verified 2026-10-18 |
+| `VMAF v1` (online) | `vmaf-v1` (`vmaf_v1.0.16_3d0h`, in-tree `vmaf` crate, `cpu-vmaf`) | not reproduced. Full set (9,618, 2026-10-20): raw median |Δ| 1.33, max 14.7, median site-JND 0.179, Spearman 0.969 — same family but a clearly different model than either `vmaf_v1.0.16_3d0h` or July `VMAF` (≈ our `vmaf-studio601`, median 1.75 apart) | which model and ingress produced the `VMAF v1` column | [full-set diff](../benchmarks/aic2026_full_repro_2026-10-20/compare_cropped-online.tsv) |
 
 ## Identified by configuration search (ports need the option exposed)
 
@@ -29,12 +32,13 @@ these columns. site-JND is the AIC site's per-metric map; the match gate is 1e-3
 
 | Column | Configuration that reproduces it | median / max site-JND | Spearman | What the zenmetrics port needs |
 |---|---|---|---|---|
-| `proposal-Butteraugli` | `max(0.00459792·N, 2.0938201·N − 1.1033102)` with N = libjxl `butteraugli` 3-norm at defaults; the same map holds on all 9,618 rows of both CSVs | 3.2e-8 / 5.1e-5 | 1.0000 | a column applying this map to `butteraugli_pnorm3`; the constants' provenance is unknown |
-| `CAMBI` | libvmaf 3.2.1 CAMBI defaults on luma from ffmpeg/swscale `-pix_fmt yuv420p` (an exact BT.601 formula differs by one code on 0.45 % of pixels, which CAMBI amplifies) | 8.2e-8 / 2.1e-3 (max raw 4.8e-7, the 6-decimal rounding) | 1.0000 | the swscale luma ingress; `cambi_from_luma` already equals libvmaf |
+| `proposal-Butteraugli` | `max(0.00459792·N, 2.0938201·N − 1.1033102)` with N = libjxl `butteraugli` 3-norm at defaults; the same map holds on all 9,618 rows of both CSVs | 3.2e-8 / 5.1e-5 | 1.0000 | done: `proposal-butteraugli` applies the map; verified on all 9,618 crops 2026-10-20 — median site-JND 2.9e-7, max raw |Δ| 0.18 (JND tail), Pearson/Spearman 1.00000. The constants' provenance is still unknown |
+| `CAMBI` | libvmaf 3.2.1 CAMBI defaults on luma from ffmpeg/swscale `-pix_fmt yuv420p` (an exact BT.601 formula differs by one code on 0.45 % of pixels, which CAMBI amplifies) | 8.2e-8 / 2.1e-3 (max raw 4.8e-7, the 6-decimal rounding) | 1.0000 | done: `cambi-aic2026` verified on all 9,618 crops 2026-10-20 — median site-JND 1.3e-7, max raw |Δ| 5e-7 (the published 6-decimal rounding); the generic `cambi` route also passes (median 1.1e-4) but is ~1000× further off |
 | `DMM` | pyiqa 0.1.16 `dmm` on CUDA, fp32 (square `tar×tar` bilinear resize; torch's CUDA SVD picks a different basis than LAPACK in degenerate clusters) | 2.6e-4 / 2.4e-3 | 0.9999 | pyiqa's square resize, and cuSOLVER's basis choice for an exact match; `dmm` (upstream aspect resize, CPU SVD) differs by median 0.075 |
-| `HDR_VDP_3` | HDR-VDP 3.0.7 `res.Q` (not `Q_JOD`), XYZ input (emission `oled`), display `L = 200·sRGB_EOTF(V)` cd/m² with no black level or reflection, ppd 37.84 (CVVDP `standard_fhd`), task `quality` | 1.36e-3 / 1.29e-2 | 1.0000 | that SDR display ingress, XYZ input, ppd option and a `res.Q` output in `hdrvdp3` |
-| `HDR_VDP_2` (near) | HDR-VDP 2.2.2 `res.Q`, same display and ppd, BT.709 input, codes not rounded to 10 bits | 3.65e-3 / 5.15e-2 (median 0.028 Q) | 0.9998 | the same ingress in `hdrvdp`; the remaining 0.028 Q is ~35× our port's validated distance to MATLAB, so a small setting still differs |
+| `HDR_VDP_3` | HDR-VDP 3.0.7 `res.Q` (not `Q_JOD`), XYZ input (emission `oled`), display `L = 200·sRGB_EOTF(V)` cd/m² with no black level or reflection, ppd 37.84 (CVVDP `standard_fhd`), task `quality` | 1.36e-3 / 1.29e-2 | 1.0000 | `hdrvdp3-aic2026` carries it; full set (9,618, 2026-10-20): median raw |Δ| 1.56e-3 Q, median site-JND 1.53e-3, Spearman 0.99998 — just over the 1e-3 gate |
+| `HDR_VDP_2` (near) | HDR-VDP 2.2.2 `res.Q`, same display and ppd, BT.709 input, codes not rounded to 10 bits | 3.65e-3 / 5.15e-2 (median 0.028 Q) | 0.9998 | `hdrvdp-aic2026` carries it; full set: median raw |Δ| 0.0281 Q, median site-JND 4.8e-3, Spearman 0.9999 — same ~0.028 Q systematic-low residual, ~35× our port's validated distance to MATLAB, so a small setting still differs |
 | `proposal-DVIFM`, `proposal-DVIFM-0.2`, `proposal-DVIFM-0.2-use_chroma` | `dvifmish` port mode (unpublished; ports of the author's four released C++ variants) | no released variant reproduces any column: best Spearman 0.941 (`port-lap-v0.3` vs `proposal-DVIFM-0.2`), 0.751 vs `proposal-DVIFM`, 0.865 vs `-use_chroma` (61 crop pairs, 2026-10-17); the releases were retuned on AIC2026 after the columns were computed. We use the current releases (dvifmish port mode) and do not try to reproduce these older columns | which DVIFM build, constants and JND map produced each column | [aic2026_repro_2026-10-17](../benchmarks/aic2026_repro_2026-10-17/README.md) |
+| `proposal-DVIFM-2d`, `proposal-DVIFM-min` (online CSV, aggregates only) | `dvifmish` `port-2d-v0.2` / `port-min-v0.2` | all 9,618 crops (2026-10-20): Spearman 0.923 vs `proposal-DVIFM-2d` (median site-JND 1.5), 0.989 vs `proposal-DVIFM-min` (median site-JND 1.46) — rank agreement only, not reproduced | which DVIFM build and constants produced these columns | aggregates only; per-image values never committed |
 
 ## Identified: the column matches pyiqa defaults
 
@@ -57,7 +61,7 @@ See [the port receipt](../crates/zenmetrics-pyiqa-ports/README.md).
 | `AHIQ` | `ahiq` | 2.5e-6 | 1.0e-5 | 1.0000 | `ahiq-pyiqa` passes 1e-3 JND (worst 1.2e-5 AIC JND); `ahiq` keeps upstream nine-crop |
 | `PieAPP` | `pieapp` | 2.3e-5 | 1.9e-4 | 0.9999 | `pieapp-pyiqa` stride 27 passes 1e-3 JND (worst 2.3e-6); upstream `pieapp` is distinct |
 | `CKDN` | `ckdn` | 4.0e-5 | 1.4e-4 | 0.9999 | `ckdn` matches to the same residual |
-| `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim-pyiqa` passes 1e-3 JND (worst 5.4e-13 JND); `cw-ssim` remains distinct |
+| `CW-SSIM` | `cw_ssim` | 0 | 2.2e-16 | 1.0000 | `cw-ssim-pyiqa` verified on all 9,618 crops 2026-10-20 — median raw |Δ| 2.5e-7, max 5e-7 (published 6-decimal rounding), median site-JND 1.9e-5; `cw-ssim` also passes (median 5.4e-5) but remains the distinct upstream convention |
 
 Controls scored the same way also match their columns on that 61-pair panel (median \|Δ\| ≤ 3.4e-6, Spearman 1.0000; the full 9,618-crop run moves `NLPD` and `VSI` over the site-JND gate, see Close but not exact):
 `DISTS`, `DeepDC`, `LPIPS-alex`, `LPIPS-VGG`, `STLPIPS`, `STLPIPS-VGG`, `SSIM-pyiqa`,
@@ -68,7 +72,7 @@ Controls scored the same way also match their columns on that 61-pair panel (med
 | Column | Ours | Residual | Open detail |
 |---|---|---|---|
 | `SSIMULACRA1` | `ssimulacra1` | native max 1.9e-5 | exact published convention |
-| `WS-HV` | `ws-hv` | native max 0.021 | exact published convention |
+| `WS-HV` | `ws-hv` | native max 0.021; full set vs the online `WS-HV` column: raw median 7.9e-4, max 5.5e-3, median site-JND 5.1e-3, Spearman 0.99998 — over the 1e-3 gate on the steep JND tail | exact published convention; which libvmaf version produced the column |
 | `FSIM`, `FSIMc` | `fsim-y`, `fsim` | full set (9,618 crops, 2026-10-20): raw median 4.7e-5 / 4.9e-5, max 9.7e-3; median site-JND 1.05e-2 / 9.8e-3, over the 1e-3 gate; ours higher on every differing row, all at scores above 0.96. Ours matches the authors' FSIM.m to a 4.5e-8 maximum on 61 pairs, so the column most likely came from another implementation | which FSIM implementation produced the column; pyiqa `fsim` on all crops is being run to test it ([full-set diff](../benchmarks/aic2026_full_repro_2026-10-20/README.md)) |
 | `VSI` | `vsi` | full set: raw median 1.5e-5, max 4.2e-3; median site-JND 7.4e-3 (the 61-pair panel matched at ≤ 3.4e-6). Ours matches the authors' VSI.m to a 1.1e-8 maximum on 61 pairs, with the resize noted in the VSI known-bug entry | which implementation and resize produced the column |
 | `VMAF` | `vmaf-studio601` | full set: raw median 6.5e-3, median site-JND 1.07e-3, just over the 1e-3 gate; Pearson 1.00000 | libvmaf version used for the column |
@@ -76,6 +80,9 @@ Controls scored the same way also match their columns on that 61-pair panel (med
 | `NLPD` | `nlpd-iqa` | median 2.6e-3, 2.6 % relative (f32 order and bilinear edges) | none needed |
 | `PSNR-Cb`, `PSNR-Cr` | `psnr-cb`, `psnr-cr` | max 1.7e-2 / 5.7e-2 dB | chroma conversion details |
 | `PSNR-YCbCr611` | `psnr-ycbcr611` | max 3.5e-3 dB | none needed |
+| `VMAF v0` (online) | `vmaf-studio601` | full set: raw median 0.035, max 1.22, median site-JND 5.7e-3; the column is NOT the July `VMAF` column (median 0.035 apart) — a nearby but different model/ingress | which model and ingress produced `VMAF v0` |
+| `VMAF-neg v0` (online) | `vmaf-neg-studio601` | full set: raw median 0.039, max 0.87, median site-JND 6.3e-3 | same question as `VMAF v0` |
+| `VIF-vmaf-scale0..3` (online) | `aic_vmaf_features` (`vif_s0`–`vif_s3`) | full set: raw medians 2.6e-3 / 3.9e-4 / 1.9e-4 / 1.2e-4, median site-JND 9.9e-3 / 4.2e-3 / 2.8e-3 / 2.1e-3, Spearman ≥ 0.9994 each — same libvmaf-version-noise family as `VIF_vmaf` | which libvmaf version produced the scale columns |
 
 ## Settled fixed-factor semantics (owner clarification, 2026-10-19)
 
@@ -110,6 +117,13 @@ None: every implemented column has been compared (2026-10-17).
 `IW-SSIM` (piq convention), `mDCT-PSNR`, `proposal-mDCTPSNR`, `FLIP`
 (`flip-v17` exact), `CIEDE2000`, `Butteraugli-original`, `LPIPS-alex`,
 `LPIPS-VGG`, `DISTS`, `STLPIPS`, `STLPIPS-VGG`, `DeepDC`, `DreamSim`.
+Full-set (9,618) verified 2026-10-20 additionally: `proposal-Butteraugli`
+(`proposal-butteraugli`, median site-JND 2.9e-7), `CAMBI` (`cambi-aic2026`,
+median site-JND 1.3e-7), `CW-SSIM` (`cw-ssim-pyiqa`, median site-JND
+1.9e-5), and on the online CSV `Butteraugli-max` and `Butteraugli-3norm`
+(`butteraugli` max/pnorm3 outputs), `PSNR-HVS-vmaf` and `PSNR-HVS-Y-vmaf`
+(`psnrhvs-daala`, the renamed Daala columns), `SSIMULACRA1`
+(`ssimulacra1`, median |Δ| 3e-7 on the scored rows).
 
 ## Explicit AIC routes (2026-10-18)
 
@@ -173,3 +187,40 @@ by at most 7.105427357601002e-14 Q. The modeled modern cubic/spline control
 still has median 0.026448804274338045 Q error and 0/61 exact matches. These
 controls explain neither the published-column gap nor the separate native
 HDR2 residual. Original gates, implementation and qualification labels remain.
+
+## The online-dashboard CSV (second oracle, 2026-10-20)
+
+`metrics_*.online-2026-10-20.csv` (same 9,618 rows and order as July; every
+shared column is numerically value-identical) adds 17 fully populated columns
+and renames three: `PSNR-HVS`→`PSNR-HVS-vmaf`, `PSNR-HVS-Y`→`PSNR-HVS-Y-vmaf`,
+`VMAF`→`VMAF v0`, `VMAF-neg`→`VMAF-neg v0`. Verified on the full cropped set:
+the renames are value-identical for the PSNR-HVS pair but `VMAF v0`/`VMAF-neg
+v0` differ from the July `VMAF`/`VMAF-neg` columns by raw medians 0.035/0.039 —
+the online v0 columns are a nearby but different model or ingress.
+
+Of the 17 new columns, at the 1e-3 median site-JND gate:
+
+- **Match:** `Butteraugli-max`, `Butteraugli-3norm` (`butteraugli` outputs —
+  the dashboard's `proposal-Butteraugli` affine applies to `Butteraugli-3norm`),
+  `Butteraugli-original` (`butteraugli-original`), `SSIMULACRA1`
+  (`ssimulacra1`), `PSNR-HVS-vmaf`, `PSNR-HVS-Y-vmaf` (`psnrhvs-daala`).
+- **Close but over gate:** `WS-HV` (`ws-hv`, median JND 5.1e-3), `VMAF v0`
+  (5.7e-3), `VMAF-neg v0` (6.3e-3), `VIF-vmaf-scale0..3` (2.1e-3–9.9e-3 —
+  same libvmaf-version family as the `VMAF`/`VIF_vmaf` residuals).
+- **Not reproduced:** `VMAF v1` (`vmaf-v1` 1.0.16-3d0h: raw median |Δ| 1.33,
+  Spearman 0.969 — a different model; see the authors-question table),
+  `proposal-DVIFM-2d`, `proposal-DVIFM-min` (dvifmish `port-2d-v0.2`/
+  `port-min-v0.2`: Spearman 0.923/0.989, median site-JND ~1.5 — rank agreement
+  only; per-image values stay unpublished).
+
+Committed artifacts: `benchmarks/aic2026_full_repro_2026-10-20/`
+(`metrics_cropped-online.zenmetrics.csv.gz`, `provenance_cropped-online.json`,
+`compare_cropped-online.tsv`); the July CSV is `metrics_cropped.zenmetrics.csv.gz`
+with `provenance_cropped.json`, `compare_cropped.tsv`. `scripts/aic2026/`
+(`assemble.py` + `aic_columns.py` + `july_diff.py` + `repro_check.py`,
+`just aic-repro-check`) rebuilds and verifies both.
+
+Post-`4d833195` metric-code changes (`flip-v17`, `psnr`, `psnr-cb`, `psnr-cr`,
+`psnr-y-studio601`, `psnr-ycbcr611`) were rescored on the `22bff298` master
+build and every value is byte-identical to the committed CSV — the commits'
+bit-exact claims hold on the full 9,618-row set.

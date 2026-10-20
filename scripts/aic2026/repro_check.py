@@ -53,8 +53,9 @@ def check_set(d, s, out, reference):
     if want != got:
         finding(out, 'error', f'{d.name}/{s}: CSV hash', f'decompressed sha256 {got[:12]} but metrics.pointer.md records {str(want)[:12]}')
     prov = d / f'provenance_{s}.json'
-    if prov.exists() and shas.get('provenance.json') and s == 'cropped':
-        if hashlib.sha256(prov.read_bytes()).hexdigest() != shas['provenance.json']:
+    wantp = shas.get(f'provenance_{s}.json') or (shas.get('provenance.json') if s == 'cropped' else None)
+    if prov.exists() and wantp:
+        if hashlib.sha256(prov.read_bytes()).hexdigest() != wantp:
             finding(out, 'error', f'{d.name}/{s}: provenance hash', 'provenance file differs from the pointer\'s sha256')
     rows = list(csv.DictReader(io.StringIO(raw.decode())))
     header = list(rows[0].keys())
@@ -69,7 +70,7 @@ def check_set(d, s, out, reference):
         finding(out, 'error', f'{d.name}/{s}: unpublished implementations', 'per-image values present for ' + ', '.join(leak))
     bad = 0
     for jc, (base, mk) in JNDS.items():
-        if jc not in header:
+        if jc not in header or base not in header:
             continue
         for r in rows:
             v = r[base]

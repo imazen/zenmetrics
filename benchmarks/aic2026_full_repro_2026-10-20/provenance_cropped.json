@@ -1,275 +1,310 @@
 {
- "batch_flags": "--pairs <tsv> --output <tsv> --jobs 16 --group-by-ref",
- "binary": {
-  "path": "/home/lilith/tmp/aic-full-repro/lock-snap/target/release/zenmetrics",
-  "sha256": "68d0ab9aac2353e8492b5fa4d3514cb2b41f932c17ba6cadc31cea58b716ba3f",
-  "version": "zenmetrics-cli 0.6.0"
+ "batch_flags": "--pairs <tsv> --output <tsv> --jobs 6-16 --group-by-ref",
+ "binaries": {
+  "b4d833195": {
+   "commit": "4d8331955f96b558be0094e98ad10e2863105135 data: synchronize three-host IQA results 20261020T041500957563Z",
+   "features": "default",
+   "path": "/home/lilith/tmp/aic-full-repro/lock-snap/target/release/zenmetrics",
+   "sha256": "68d0ab9aac2353e8492b5fa4d3514cb2b41f932c17ba6cadc31cea58b716ba3f",
+   "version": "zenmetrics-cli 0.6.0"
+  },
+  "m22bff298": {
+   "commit": "f4fb616396774d4bf7948bb63deef6b98c967fee test: bind canonical crop exports to retained reference attempts",
+   "features": "default + cpu-vmaf + pyiqa-ports",
+   "path": "/home/lilith/tmp/aic-full-repro/lock-snap-master/target/release/zenmetrics",
+   "sha256": "d933c6a074f2af497bd7b474c93a3d024d31de60695bd1983809678555760cc7",
+   "version": "zenmetrics-cli 0.6.0"
+  }
  },
  "columns": {
   "ADM2": {
+   "build": "b4d833195",
    "options": "vmaf crate feature",
    "route": "aic_vmaf_features",
    "score_col": "adm2"
   },
   "CAMBI": {
-   "options": "studio-601 distorted-only even-crop",
-   "route": "cambi",
-   "score_col": "cambi"
+   "build": "m22bff298",
+   "options": "integer swscale yuv420p luma ingress",
+   "route": "cambi-aic2026",
+   "score_col": "auto"
   },
   "CIEDE2000": {
+   "build": "b4d833195",
    "options": "",
    "route": "ciede2000",
    "score_col": "ciede2000"
   },
   "CVVDP": {
+   "build": "b4d833195",
    "options": "--display-model standard_fhd",
    "route": "cvvdp",
    "score_col": "cvvdp_imazen_v*"
   },
   "CW-SSIM": {
-   "options": "pyiqa-derived convention",
-   "route": "cw-ssim",
-   "score_col": "cw_ssim"
+   "build": "m22bff298",
+   "options": "pyiqa 0.1.16 convention (settled identification)",
+   "route": "cw-ssim-pyiqa",
+   "score_col": "auto"
   },
   "DSSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "dssim",
    "score_col": "dssim"
   },
   "FLIP": {
-   "options": "flip-evaluator 1.7 row-major f32 sum",
+   "build": "b4d833195",
+   "options": "flip-evaluator 1.7 row-major f32 sum; rescore on m22bff298 byte-identical",
    "route": "flip-v17",
    "score_col": "flip_v17"
   },
   "FSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "fsim-y",
    "score_col": "fsim_y_imazen_v*"
   },
   "FSIMc": {
+   "build": "b4d833195",
    "options": "",
    "route": "fsim",
    "score_col": "fsimc_imazen_v*"
   },
   "GMSD": {
+   "build": "b4d833195",
    "options": "",
    "route": "gmsd",
    "score_col": "gmsd_cpu_imazen_v*"
   },
+  "HDR_VDP_2": {
+   "build": "b4d833195",
+   "options": "HDR-VDP 2.2.2 res.Q, BT.709 input, 200nit sRGB display, ppd 37.84",
+   "route": "hdrvdp-aic2026",
+   "score_col": "hdrvdp_aic2026_q"
+  },
+  "HDR_VDP_3": {
+   "build": "b4d833195",
+   "options": "HDR-VDP 3.0.7 res.Q, XYZ input, oled emission, ppd 37.84",
+   "route": "hdrvdp3-aic2026",
+   "score_col": "hdrvdp3_aic2026_q"
+  },
   "HaarPSI": {
+   "build": "b4d833195",
    "options": "",
    "route": "haarpsi",
    "score_col": "haarpsi_imazen_v*"
   },
   "IW-SSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "iwssim-piq",
    "score_col": "iwssim_piq_imazen_v*"
   },
   "JND_CVVDP": {
-   "options": "a*|sign*(x-b)|^c site-config.json",
+   "build": "b4d833195",
+   "options": "a*|sign*(x-b)|^c site_jnd_mappings.json",
    "route": "site-map",
    "score_col": "CVVDP"
   },
   "JND_MS-SSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "MS-SSIM"
   },
   "JND_PSNR-HVS": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "PSNR-HVS-vmaf"
   },
   "JND_PSNR-Y": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "PSNR-Y"
   },
   "JND_SSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "SSIM"
   },
   "JND_SSIMULACRA2": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "SSIMULACRA2"
   },
   "JND_VMAF-neg": {
+   "build": "b4d833195",
    "options": "",
    "route": "site-map",
    "score_col": "VMAF-neg"
   },
   "MS-SSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "msssim-libvmaf",
    "score_col": "msssim_libvmaf"
   },
   "MS-SSIM-pyiqa": {
+   "build": "b4d833195",
    "options": "",
    "route": "ms-ssim-pyiqa",
    "score_col": "ms_ssim_pyiqa"
   },
   "NLPD": {
+   "build": "b4d833195",
    "options": "",
    "route": "nlpd-iqa",
    "score_col": "nlpd_iqa"
   },
   "PSNR": {
-   "options": "",
+   "build": "b4d833195",
+   "options": "rescore on m22bff298 byte-identical",
    "route": "psnr",
    "score_col": "psnr"
   },
   "PSNR-Cb": {
-   "options": "",
+   "build": "b4d833195",
+   "options": "rescore on m22bff298 byte-identical",
    "route": "psnr-cb",
    "score_col": "psnr_cb"
   },
   "PSNR-Cr": {
-   "options": "",
+   "build": "b4d833195",
+   "options": "rescore on m22bff298 byte-identical",
    "route": "psnr-cr",
    "score_col": "psnr_cr"
   },
   "PSNR-HVS": {
+   "build": "b4d833195",
    "options": "studio-601 YUV444",
    "route": "psnrhvs-daala",
    "score_col": "psnrhvs_daala"
   },
   "PSNR-HVS-Cb": {
+   "build": "b4d833195",
    "options": "",
    "route": "psnrhvs-daala",
    "score_col": "psnrhvs_daala_cb"
   },
   "PSNR-HVS-Cr": {
+   "build": "b4d833195",
    "options": "",
    "route": "psnrhvs-daala",
    "score_col": "psnrhvs_daala_cr"
   },
   "PSNR-HVS-Y": {
+   "build": "b4d833195",
    "options": "",
    "route": "psnrhvs-daala",
    "score_col": "psnrhvs_daala_y"
   },
   "PSNR-Y": {
-   "options": "",
+   "build": "b4d833195",
+   "options": "rescore on m22bff298 byte-identical",
    "route": "psnr-y-studio601",
    "score_col": "psnr_y_studio601"
   },
   "PSNR-YCbCr611": {
-   "options": "",
+   "build": "b4d833195",
+   "options": "rescore on m22bff298 byte-identical",
    "route": "psnr-ycbcr611",
    "score_col": "psnr_ycbcr611"
   },
   "SSIM": {
+   "build": "b4d833195",
    "options": "",
    "route": "ssim-libvmaf",
    "score_col": "ssim_libvmaf"
   },
   "SSIM-pyiqa": {
+   "build": "b4d833195",
    "options": "",
    "route": "ssim-pyiqa",
    "score_col": "ssim_pyiqa"
   },
   "SSIMULACRA2": {
+   "build": "b4d833195",
    "options": "",
    "route": "ssim2",
    "score_col": "ssim2"
   },
   "SSIMc": {
+   "build": "b4d833195",
    "options": "",
    "route": "ssimc",
    "score_col": "ssimc"
   },
   "VIF": {
+   "build": "b4d833195",
    "options": "",
    "route": "vifvec",
    "score_col": "vifvec_imazen_v*"
   },
   "VIF_vmaf": {
+   "build": "b4d833195",
    "options": "sum of vif_scales[0..3]",
    "route": "aic_vmaf_features",
    "score_col": "vif_vmaf"
   },
   "VMAF": {
+   "build": "b4d833195",
    "options": "",
    "route": "vmaf-studio601",
    "score_col": "vmaf_studio601"
   },
   "VMAF-neg": {
+   "build": "b4d833195",
    "options": "",
    "route": "vmaf-neg-studio601",
    "score_col": "vmaf_neg_studio601"
   },
   "VSI": {
+   "build": "b4d833195",
    "options": "",
    "route": "vsi",
    "score_col": "vsi_imazen_v*"
   },
   "mDCT-PSNR": {
+   "build": "b4d833195",
    "options": "",
    "route": "mdctpsnr",
    "score_col": "mdctpsnr_imazen_v*"
   },
   "proposal-Butteraugli": {
-   "options": "raw pnorm-3; no affine",
-   "route": "butteraugli",
-   "score_col": "butteraugli_pnorm3"
+   "build": "m22bff298",
+   "options": "affine max(0.00459792N, 2.0938201N-1.1033102) on butteraugli_pnorm3",
+   "route": "proposal-butteraugli",
+   "score_col": "proposal_butteraugli"
   },
   "proposal-mDCTPSNR": {
+   "build": "b4d833195",
    "options": "0.000475997802*max(0,80-mDCT-PSNR)^2.3182",
    "route": "derived",
    "score_col": "mdctpsnr"
   }
  },
- "commands": {
-  "aic_vmaf_features": "example aic_vmaf_features (vmaf::score_v0_420 Standard+StandardNeg, studio-601 Y ingress)",
-  "butteraugli": "batch --metric butteraugli",
-  "cambi": "batch --metric cambi",
-  "ciede2000": "batch --metric ciede2000",
-  "cvvdp": "batch --metric cvvdp --display-model standard_fhd",
-  "cw-ssim": "batch --metric cw-ssim",
-  "dssim": "batch --metric dssim",
-  "flip-v17": "batch --metric flip-v17",
-  "fsim": "batch --metric fsim",
-  "fsim-y": "batch --metric fsim-y",
-  "gmsd": "batch --metric gmsd",
-  "haarpsi": "batch --metric haarpsi",
-  "iwssim-piq": "batch --metric iwssim-piq",
-  "mdctpsnr": "batch --metric mdctpsnr",
-  "ms-ssim-pyiqa": "batch --metric ms-ssim-pyiqa",
-  "msssim-libvmaf": "batch --metric msssim-libvmaf",
-  "nlpd-iqa": "batch --metric nlpd-iqa",
-  "psnr": "batch --metric psnr",
-  "psnr-cb": "batch --metric psnr-cb",
-  "psnr-cr": "batch --metric psnr-cr",
-  "psnr-y-studio601": "batch --metric psnr-y-studio601",
-  "psnr-ycbcr611": "batch --metric psnr-ycbcr611",
-  "psnrhvs-daala": "batch --metric psnrhvs-daala",
-  "ssim-libvmaf": "batch --metric ssim-libvmaf",
-  "ssim-pyiqa": "batch --metric ssim-pyiqa",
-  "ssim2": "batch --metric ssim2",
-  "ssimc": "batch --metric ssimc",
-  "vifvec": "batch --metric vifvec",
-  "vmaf-neg-studio601": "batch --metric vmaf-neg-studio601",
-  "vmaf-studio601": "batch --metric vmaf-studio601",
-  "vsi": "batch --metric vsi"
- },
- "generated": "2026-10-20T06:51:46.008463+00:00",
+ "generated": "2026-10-20T12:10:36.534863+00:00",
  "host": "dev",
  "images": {
-  "cropped": "/mnt/v/datasets/aic2026/extracted-cropped/PTC-crops-all/ (AIC2026-dataset-cropped.zip)",
-  "fullres": "streamed per-source from AIC2026-dataset-complete.zip"
+  "cropped": "/mnt/v/datasets/aic2026/extracted-cropped/PTC-crops-all/ (AIC2026-dataset-cropped.zip)"
  },
- "jnd": "JND_<col> recomputed from our value via site mapping jnd(x)=a*|sign*(x-b)|^c (~/tmp/aic-full-repro/site-config.json mappings)",
+ "jnd": "JND_<col> recomputed from our value via site mapping jnd(x)=a*|sign*(x-b)|^c (scripts/aic2026/site_jnd_mappings.json)",
  "oracle": {
   "cropped": "/mnt/v/datasets/aic2026/metrics_cropped.csv",
-  "dataset": "AIC2026 July 2026, DaRUS doi:10.18419/DARUS-6156",
-  "fullres": "/mnt/v/datasets/aic2026/metrics_fullres.csv"
+  "cropped-online": "/mnt/v/datasets/aic2026/online-2026-10-20/metrics_cropped.online-2026-10-20.csv",
+  "dataset": "AIC2026 July 2026, DaRUS doi:10.18419/DARUS-6156 + online dashboard export 2026-10-20"
  },
- "run_wrapper": "~/work/claudehints/scripts/run-heavy --mem 24G --jobs 16",
+ "rescore_verification": "flip-v17, psnr, psnr-cb, psnr-cr, psnr-y-studio601, psnr-ycbcr611 rescored on the m22bff298 build after post-4d833195 code changes; every value byte-identical to the committed CSV",
+ "run_wrapper": "~/work/claudehints/scripts/run-heavy",
+ "set": "cropped",
  "source": {
-  "commit": "4d8331955f96b558be0094e98ad10e2863105135 data: synchronize three-host IQA results 20261020T041500957563Z",
+  "master_build": "f4fb616396774d4bf7948bb63deef6b98c967fee test: bind canonical crop exports to retained reference attempts",
+  "primary_commit": "4d8331955f96b558be0094e98ad10e2863105135 data: synchronize three-host IQA results 20261020T041500957563Z",
   "repo": "imazen/zenmetrics",
   "workspace": "zenmetrics--aicfull"
  }

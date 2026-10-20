@@ -35,7 +35,14 @@ sibling snapshot of master `4d833195` + the `aic_vmaf_features` example
 Run: `zenmetrics batch --metric <m> --pairs pairs.tsv --output <m>.tsv
 --jobs 16 --group-by-ref` (cvvdp adds `--display-model standard_fhd`).
 
-## Result: 29 of 35 computed columns inside the 1e-3 median site-JND gate
+## Result: 31 of 37 computed columns inside the 1e-3 median site-JND gate
+
+Regenerated 2026-10-20 on `master@origin` `22bff298` with the settled
+routes `proposal-butteraugli`, `cambi-aic2026` and `cw-ssim-pyiqa`, plus the
+newly scored `HDR_VDP_2`/`HDR_VDP_3` columns. All six rescores on the
+changed-code routes (`flip-v17`, `psnr`, `psnr-cb`, `psnr-cr`,
+`psnr-y-studio601`, `psnr-ycbcr611`) came back byte-identical to the
+values in this CSV.
 
 `compare_cropped.tsv` has the full per-column table (n, exact-equal count
 at published precision, median/max |Δraw|, median/max |Δ site-JND|,
@@ -46,9 +53,10 @@ fits, so they are compared informationally only.
 Exact-level columns (median |Δ| at float-representation scale):
 `SSIMULACRA2` 2.5e-7, `FLIP` 2.5e-7, `mDCT-PSNR` 5e-7, `proposal-mDCTPSNR`
 (derived) 7.8e-8, `SSIMc` 2.6e-7, `SSIM-pyiqa` 4.7e-7, `MS-SSIM-pyiqa`
-2.8e-7, `CW-SSIM` 4.3e-7, `GMSD` 4.4e-7, `DSSIM` 2.6e-7.
+2.8e-7, `CW-SSIM` 2.5e-7, `CAMBI` 2.2e-7, `proposal-Butteraugli` 6.4e-7,
+`GMSD` 4.4e-7, `DSSIM` 2.6e-7.
 
-## The six misses, diagnosed
+## The seven misses, diagnosed
 
 Every miss is a small raw residual amplified by a near-vertical site-JND
 curve, or a documented variant difference — none are route/option errors.
@@ -62,7 +70,8 @@ Worst-five rows per column: `july_diff.py` writes them next to its report
 | `FSIM` | `fsim-y` | 0.0105 | Raw median 4.7e-5; site JND slope ≈ −172/unit at score 0.99 where the column clusters. All diffs at >0.96, ours systematically higher; doc noted "one JPEG tail pair" on the earlier probe |
 | `FSIMc` | `fsim` | 0.0098 | Same mechanism, shared phase-congruency core |
 | `VSI` | `vsi` | 0.0074 | Raw median 1.5e-5; slope ≈ −270/unit at 0.99. Previously verified "reproduced" at ≤3.4e-6 residual; over gate purely from amplification |
-| `proposal-Butteraugli` | `butteraugli` (pnorm3) | 0.374 | Authors' own variant, not stock butteraugli: Pearson 0.99996 vs our pnorm3 but the pub/p3 ratio varies 0.005–2.03 and the log-log exponent is codec-dependent (PNG ≈1.18, JXL ≈2.41, Cool-Chic ≈2.53). Column map already flags it as family-level match only |
+| `HDR_VDP_3` | `hdrvdp3-aic2026` | 0.00153 | Raw median 1.56e-3, Spearman 0.99998 — near miss; the native HDR-VDP 3.0.7 port is slightly off the authors' build |
+| `HDR_VDP_2` | `hdrvdp-aic2026` | 0.00477 | Systematic near-match: raw median 0.0281 Q, ours slightly low. Matlab-vs-native and Octave-vs-native split checks leave a residual that tracks the authors' own build; under investigation (see status doc) |
 
 ## Timing (dev, nice-19, 16 jobs per metric batch)
 
