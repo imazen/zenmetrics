@@ -17,6 +17,7 @@ PRIVATE=${BRIEF_PRIVATE:-$HOME/work/zen/zenmetrics-private}
 export BRIEF_OUT=${BRIEF_OUT:-$HOME/tmp/metric-brief-watch/out} BRIEF_PRIVATE=$PRIVATE
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-$(cat "$HOME/.config/cloudflare/zenmetrics-pages-token")}
 export PATH=$HOME/.local/opt/node/bin:$PATH
+mkdir -p "$BRIEF_OUT"
 [ -d "$WS" ] || (cd "$SELF" && jj workspace add "$WS" -r master@origin)
 last=$(cat "$BRIEF_OUT/.deployed.sha256" 2>/dev/null || true)
 while true; do
