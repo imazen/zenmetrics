@@ -1643,7 +1643,7 @@ dashboard-regenerate:
 bench-iqa sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:
     python3 benchmarks/iqa_compete_2026-10-16/canonical_bench.py '{{sizes}}' '{{metrics}}' {{options}}
 
-# Exact changed/added scope, including the eight revised PSNR routes.
+# Current changed/added scope, including PSNR, FLIP, WS-HV and base HDR revisions.
 bench-iqa-changed *options:
     just bench-iqa cid22,aic-small,aic-medium,aic-large,2k,4k changed {{options}}
 
@@ -1791,9 +1791,12 @@ bench-iqa-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metric
 
 # Standalone checks for exact changed scope and retained timing order.
 bench-iqa-changed-check:
-    mkdir -p "$HOME/tmp/changed-benchmark-selection"
-    rustc --edition 2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/benchmark_selection_tests.rs -o "$HOME/tmp/changed-benchmark-selection/tests"
-    "$HOME/tmp/changed-benchmark-selection/tests"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    task_output=$(mktemp -d "$HOME/tmp/changed-benchmark-selection-XXXXXXXX")
+    rustc --edition 2024 --test benchmarks/heaptrack/drivers/cpu_profile/src/benchmark_selection_tests.rs -o "$task_output/tests"
+    "$task_output/tests"
+    python3 -B -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_current_benchmark_scope.py -v
 
 # Historical Python/GPU/NN panels have their own protocol; supplemental only.
 bench-iqa-advanced-supplemental sizes="cid22,aic-small,aic-medium,aic-large,2k,4k" metrics="all" *options:

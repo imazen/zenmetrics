@@ -32,3 +32,5 @@ psnr-ycbcr611
 flip
 flip-v17
 ws-hv
+hdrvdp
+hdrvdp3

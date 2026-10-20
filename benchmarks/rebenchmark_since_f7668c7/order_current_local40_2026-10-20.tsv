@@ -1,0 +1,44 @@
+# Measured Ryzen 9 7950X / WSL2 native warm medians, one 1152x1152 S67 photo crop. Scheduling hints only.
+# run-heavy: done rc=0 309s | peak-RSS 0.76GiB | min-avail 14205MiB | peak-load 2.16
+# source=ea767ba1a4029963bc56a74fb824e64455e4599e; width=1152; height=1152; threads=1; samples=10
+metric	historical_ms	source
+psnr	0.07768557632993775	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr/stdout.log
+psnr-y-studio601	0.60718551111111119	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-y-studio601/stdout.log
+psnr-y	0.93850900000000004	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-y/stdout.log
+psnr-y601	0.95556615909090914	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-y601/stdout.log
+psnr-y-libvmaf	1.892403625	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-y-libvmaf/stdout.log
+psnr-ycbcr611	2.7624145000000002	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-ycbcr611/stdout.log
+psnr-cb	3.032669666666667	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-cb/stdout.log
+psnr-cr	3.1651574999999998	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/psnr-cr/stdout.log
+cambi-aic2026	10.8501615	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/cambi-aic2026/stdout.log
+ssim-libvmaf	12.211321	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ssim-libvmaf/stdout.log
+ms-ssim-pyiqa-f32-k5	16.662786499999999	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ms-ssim-pyiqa-f32-k5/stdout.log
+ms-ssim-pyiqa-f32-k4	17.139208	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ms-ssim-pyiqa-f32-k4/stdout.log
+ms-ssim-pyiqa-f32-k6	17.1570465	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ms-ssim-pyiqa-f32-k6/stdout.log
+cambi	18.252721999999999	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/cambi/stdout.log
+msssim	18.255755000000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/msssim/stdout.log
+ms-ssim-pyiqa-f32-k3	18.314030500000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ms-ssim-pyiqa-f32-k3/stdout.log
+ms-ssim-pyiqa-f32-k2	23.090902	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ms-ssim-pyiqa-f32-k2/stdout.log
+vmaf-v1	34.902413500000002	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf-v1/stdout.log
+vmaf-studio601	35.649126000000003	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf-studio601/stdout.log
+vmaf-neg	35.661002500000002	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf-neg/stdout.log
+vmaf	35.681451500000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf/stdout.log
+vmaf-neg-studio601	35.754460000000002	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf-neg-studio601/stdout.log
+vmaf-4k	35.849313500000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vmaf-4k/stdout.log
+dssim	45.066284500000002	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/dssim/stdout.log
+brisque	53.418933000000003	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/brisque/stdout.log
+piqe	57.2069695	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/piqe/stdout.log
+msssim-libvmaf	58.381741499999997	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/msssim-libvmaf/stdout.log
+vif	88.462968000000004	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vif/stdout.log
+ws-hv	89.382186500000003	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ws-hv/stdout.log
+ssim2	118.72628949999999	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ssim2/stdout.log
+proposal-butteraugli	158.880976	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/proposal-butteraugli/stdout.log
+niqe	171.16491400000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/niqe/stdout.log
+ssimulacra1	171.45165299999999	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/ssimulacra1/stdout.log
+vifvec	207.650125	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/vifvec/stdout.log
+flip-v17	249.0362935	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/flip-v17/stdout.log
+flip	251.53614300000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/flip/stdout.log
+hdrvdp	2722.2506640000001	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/hdrvdp/stdout.log
+hdrvdp-aic2026	2728.8592509999999	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/hdrvdp-aic2026/stdout.log
+hdrvdp3	4515.4085379999997	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/hdrvdp3/stdout.log
+hdrvdp3-aic2026	5332.9050100000004	/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run/hdrvdp3-aic2026/stdout.log

@@ -3,24 +3,35 @@
 import argparse
 import csv
 import fcntl
+import math
 from pathlib import Path
 import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
 SIZES = 'cid22,aic-small,aic-medium,aic-large,2k,4k'
+SCOPE = HERE.parent / 'rebenchmark_since_f7668c7'
+CURRENT_ORDER = SCOPE / 'order_current_local40_2026-10-20.tsv'
 
 
 def changed_metrics():
-    path = HERE.parent / 'rebenchmark_since_f7668c7/order.tsv'
-    with path.open() as stream:
-        return ','.join(row['metric'] for row in csv.DictReader(
+    with CURRENT_ORDER.open() as stream:
+        rows = list(csv.DictReader(
             (line for line in stream if not line.startswith('#')), delimiter='\t'))
+    names = [row['metric'] for row in rows]
+    times = [float(row['historical_ms']) for row in rows]
+    expected = ((SCOPE / 'existing.txt').read_text().splitlines()
+                + (SCOPE / 'new.txt').read_text().splitlines())
+    if (not names or len(names) != len(set(names)) or set(names) != set(expected)
+            or any(not math.isfinite(t) or t <= 0 for t in times)
+            or times != sorted(times)):
+        raise ValueError('current changed scope must match its complete ascending measured order')
+    return ','.join(names)
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('sizes', choices=(SIZES,))
+    p.add_argument('sizes', help='comma-separated subset of ' + SIZES)
     p.add_argument('metrics', help='all, changed, or comma-separated compiled non-NN routes')
     for name in ('binary', 'pairs', 'build-receipt', 'bundle', 'output', 'lock', 'run-heavy'):
         p.add_argument('--' + name, type=Path, required=True)
@@ -29,6 +40,10 @@ def main():
     p.add_argument('--cpu-set')
     p.add_argument('--prepare-only', action='store_true')
     a = p.parse_args()
+    selected_sizes = a.sizes.split(',')
+    if (len(selected_sizes) != len(set(selected_sizes))
+            or not set(selected_sizes) <= set(SIZES.split(','))):
+        p.error('distinct sizes from ' + SIZES + ' required')
     if a.bundle.exists() or a.output.exists():
         p.error('new bundle and output paths required; resume an existing campaign with iqa-durable-run')
     if bool(a.zenbench) != bool(a.cpu_set):
@@ -38,7 +53,7 @@ def main():
         '--binary', str(a.binary.resolve()), '--pairs', str(a.pairs.resolve()),
         '--build-receipt', str(a.build_receipt.resolve()), '--output', str(a.bundle.resolve()),
         '--source-commit', a.source_commit, '--resource-wrapper', str(a.run_heavy.resolve()),
-        '--metrics', metrics, '--sizes', SIZES, '--modes', 'score', '--threads', '1,8', '--cold-repeats', '3']
+        '--metrics', metrics, '--sizes', a.sizes, '--modes', 'score', '--threads', '1,8', '--cold-repeats', '3']
     if a.zenbench:
         command += ['--zenbench', str(a.zenbench.resolve()), '--cpu-set', a.cpu_set]
     a.lock.parent.mkdir(parents=True, exist_ok=True)

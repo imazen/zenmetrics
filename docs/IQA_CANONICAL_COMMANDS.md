@@ -1,6 +1,11 @@
 # Canonical IQA benchmark commands
 
 `just bench-iqa` and `just bench-iqa-changed` freeze new scalar CPU campaigns.
+The changed-only selector includes 40 current routes, including the revised base
+HDR names. Its [local scheduling table](../benchmarks/rebenchmark_since_f7668c7/order_current_local40_2026-10-20.tsv)
+retains measured warm medians from one common 1152×1152 photo crop; it is not a
+speed prediction for other images or thread budgets. Historical 27- and 38-route
+tables remain available for their frozen plans.
 They require explicit worker, build receipt, source revision, verified RGB pair
 manifest, new bundle/output paths, resource wrapper and shared host lock:
 

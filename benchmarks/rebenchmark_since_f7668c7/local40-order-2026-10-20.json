@@ -1,0 +1,38 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/native-current40-order-run",
+  "plan_sha256": "ab07ea87f406d4c56182d83871f6710da2dc3446c383256a992c293dae9cafea",
+  "observations_sha256": "30058b0b86cf286b46a20fbebecf8c4481db19859a29a09cb00ecc3e81a21767",
+  "order_sha256": "382c30cf48bc93eb94f44c4aec04daf904490b52f9f66e04d8ac70608644acf4",
+  "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+  "measurement_helper_commit": "c6ffbaeee2940cd609679ac3c8ddad0239aaef33",
+  "width": 1152,
+  "height": 1152,
+  "threads": 1,
+  "requested_warm_observations": 10,
+  "metrics": 40,
+  "unchanged_control": {
+    "metric": "haarpsi",
+    "width": 1152,
+    "height": 1152,
+    "threads": 1,
+    "new_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+    "old_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+    "new_score": 0.9647651326247112,
+    "old_score": 0.9647651326247112,
+    "score_bits_identical": true,
+    "new_median_ms": 22.962914,
+    "old_median_ms": 22.9241625,
+    "new_over_old": 1.0016904216239089,
+    "old_observations_sha256": "a924084e04257f684ccd7a0c44cbdf33508853d8cc15a3bc583b60069452f917",
+    "old_wrapper": "run-heavy: done rc=0 2s | peak-RSS 0.12GiB | min-avail 14863MiB | peak-load 4.73",
+    "qualification": "One unchanged common-input control; descriptive, not a drift confidence interval"
+  },
+  "wrapper": "run-heavy: done rc=0 309s | peak-RSS 0.76GiB | min-avail 14205MiB | peak-load 2.16",
+  "qualification": "Measured ordering for one common local workload, not a global speed ranking or canonical ratio. A larger-than-1024 crop admits corrected fixed-factor MS-SSIM k6. Every older ordering table remains preserved.",
+  "measurement_helpers": {
+    "benchmarks/iqa_compete_2026-10-16/measure_native_order.py": "9671ae9f0f7d6e923fcf1d574efbb0af4233c8c9447e249e366ffa08a875b1ef",
+    "benchmarks/iqa_compete_2026-10-16/compare_canonical.py": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c",
+    "benchmarks/iqa_compete_2026-10-16/prepare_spotcheck_raw.py": "9eeb05d6d3a64f81954566fdbb67f774ad0e656eb5197321b1897ccf188fe54e"
+  }
+}

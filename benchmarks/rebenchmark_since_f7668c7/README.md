@@ -4,13 +4,14 @@ The original audited combined tree was `b216412c`, descended from upstream maste
 `7ed7b106`. This is a scope manifest, not a successful build or timing result.
 Use the final landed commit and its pinned siblings for the new measurements.
 
-[existing.txt](existing.txt) contains **34 existing CPU CLI names**;
+[existing.txt](existing.txt) contains **36 existing CPU CLI names**;
 [new.txt](new.txt) contains **4 added names** for first measurements.
 [scope.json](scope.json) preserves the original 27-route audit. The current
-38-route scope also includes the eight PSNR routes revised in `07972529` and
+40-route scope also includes the eight PSNR routes revised in `07972529` and
 `bcadda73`: `psnr`, `psnr-y`, `psnr-y601`, `psnr-y-studio601`,
 `psnr-y-libvmaf`, `psnr-cb`, `psnr-cr` and `psnr-ycbcr611`.
 FLIP, FLIP-v17 and WS-HV are also revised by `f5523a4b` and `7d27d22b`.
+Base `hdrvdp` and `hdrvdp3` gained the upstream sRGB-display route in `4f89155c`.
 The five fixed-factor MS-SSIM variants need score revalidation as well as timing.
 VIF and VIFvec need their existing parity gates retained.
 
@@ -36,11 +37,15 @@ The earlier MS-SSIM gate experiment includes a 4K multithreaded slowdown in
 Re-measure that cell explicitly; the gate is not established as a win at every
 size. Snapshot publication additionally requires green checkpoint tests and CI.
 
-Run `just bench-iqa-changed --host <label> --corpus <AIC2026-img-dir> --skip-native`
-for the current 38-name scope. The coordinator retains the historical fastest-first
-order in [the current table](order_current_after_flip_2026-10-20.tsv) for each size/thread budget instead of sorting
-names alphabetically. The table cites historical 1024×1024 single-thread timing
-sources; it does not claim that the integrated implementation has that ranking.
+Run `just bench-iqa-changed` with the explicit build/input/provenance options in
+[the command guide](../../docs/IQA_CANONICAL_COMMANDS.md) for the current 40-name
+scope. Both native selectors use [the measured local order](order_current_local40_2026-10-20.tsv)
+instead of sorting names alphabetically. Its [receipt](local40-order-2026-10-20.json)
+binds one common 1152×1152 S67 photo crop on Ryzen 9 7950X / WSL2, source
+`ea767ba1`, one thread and at least ten warm observations. This size admits
+corrected MS-SSIM k6. The run took 309s, peak RSS 0.76 GiB, minimum available
+14205 MiB, peak load 2.16. This ordering is a scheduling hint for other workloads.
+The older [38-route table](order_current_after_flip_2026-10-20.tsv) remains unchanged.
 For selected sizes, use `just bench-iqa cid22,4k changed` with the same options.
 
 The original [27-route table](order.tsv) remains unchanged for frozen comparison
