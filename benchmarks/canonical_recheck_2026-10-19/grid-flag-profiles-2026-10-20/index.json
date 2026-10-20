@@ -1,0 +1,29 @@
+{
+  "source_index": "/home/lilith/tmp/local-canonical-20261019T2330/current-grid-next-four-profile-index.json",
+  "source_index_sha256": "2d048e4ced60cbcceff22e1efacda87415e8c98e789306bf37153126d46d81d2",
+  "exporter_sha256": "fa0a4abeb642841309d7084bf60ccb3f067ac7bcf4ac30286e289da43b87dd81",
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "sha256": "c29d738f4eae8dc3cdbf79a64165ea6a637a85eefd67caa315e0d94b8013caa7",
+      "case": "flip-v17-grid-pairA-255x257-t28-060d464f"
+    },
+    {
+      "file": "profile-01.json",
+      "sha256": "47593e300c3894444fae4abb7764b1bc994e1b2f3d090de8e5625c7610fe865f",
+      "case": "flip-grid-pairA-1024x1024-t28-060d464f"
+    },
+    {
+      "file": "profile-02.json",
+      "sha256": "a4153c32c8f4ed7dbc52ac99009a803c8c16950f91040ff79a78328ad93b0b4e",
+      "case": "flip-v17-grid-pairA-1024x1024-t28-060d464f"
+    },
+    {
+      "file": "profile-03.json",
+      "sha256": "0a023677f5a09edfb3b5b2fc371016911dbca7f03da4bed59032c66165b20ecd",
+      "case": "dssim-gpu-grid-pairB-64x64-t1-c5f16e49"
+    }
+  ],
+  "reference_note": "The DSSIM-GPU source cohort uses the retained older CPU-fork alternative; this native profile does not qualify that reference or its ratio.",
+  "qualification": "CPU cycle samples after warmup, including calibration and measured rounds. No GPU-kernel profile, causal share of a timing gap, or qualified regression decision."
+}

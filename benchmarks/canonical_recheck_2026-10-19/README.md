@@ -1,5 +1,17 @@
 # Local canonical rechecks
 
+The [latest four CPU profiles](grid-flag-profiles-2026-10-20/index.json) cover
+three revised FLIP cells and one DSSIM-GPU submission path. Their binary,
+configuration, raw recording and report hashes were verified before publication.
+FLIP profiles contain the AVX-512 `conv_band_t_v4x` entry. CPU samples do not
+measure GPU kernel time or establish the cause of a cross-implementation gap;
+the DSSIM comparison retains its older-fork alternative disposition. Each profile
+has its original resource receipt. Export verification used peak-RSS 0.02 GiB,
+minimum available 14,903 MiB and peak load 7.43.
+
+`just bench-iqa-canonical-profiles-publish INDEX NEW_DIRECTORY` reproduces the
+projection under caller-held heavy admission and refuses existing output paths.
+
 Missing: the full multi-size per-name grid, remaining learned comparisons,
 map comparisons and qualified regression acceptance. The initial classical
 RGB8 cohorts are complete; explicit route/input exceptions remain below. These are scalar checks on

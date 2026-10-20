@@ -1,0 +1,117 @@
+{
+  "case": "dssim-gpu-grid-pairB-64x64-t1-c5f16e49",
+  "threads": 1,
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile",
+  "receipt": {
+    "command": [
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "--call-graph",
+      "dwarf",
+      "--delay=-1",
+      "--control=fifo:/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile/control.fifo,/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile/ack.fifo",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/gpu-worker",
+      "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile-config.json"
+    ],
+    "binary_sha256": "6a9e1e1657268ae719e95f7ec2028a132cd34b997d090390153b29ad44470d9f",
+    "config_sha256": "3bff1abd8fdd7dee64029077913f132615a810f01d8a0e38c5df3a138c67c43c",
+    "profile_sha256": "50fdc4e45f927f50486b56da02b31d98700ae6ed8f9ba5649671d8667bda944d",
+    "report_sha256": "d6cb2fb8afb0017e9cef3d9c5b792ae2ba6a5e6fd5ea5c04ea26b484e3d3fd1a",
+    "recording": "Enabled after existing IQA_WARMUP completed event; disabled after IQA_ROW; includes benchmark calibration and measured rounds"
+  },
+  "receipt_sha256": "c146333975664970c7e526d40b16a1800c733ce4fb3e558efb080736ab04a625",
+  "top_self_symbols": [
+    {
+      "self_percent": 26.66,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvMs_NtNtNtNtCsbcXUjlNwSJo_13cubecl_common6device6handle7channel14custom_channelNtB5_12DeviceClient7enqueueNCINvMs_B7_INtB7_19ChannelDeviceHandleNtNtNtCsbEJqQOSqtzw_11cubecl_cuda7compute6server10CudaServerE12submit_innerNCNvMs_NtCs8YGOPjKvAX6_14cubecl_runtime6clientINtB3F_13ComputeClientNtNtB2r_7runtime11CudaRuntimeE12launch_inner0Kb0_E0ECskuYkYTFj98R_9dssim_gpu"
+    },
+    {
+      "self_percent": 2.1,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vsnprintf"
+    },
+    {
+      "self_percent": 1.42,
+      "process": "DSD-0-0",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtNtCsgHYyB3hU8Ec_3std3sys9backtrace28___rust_begin_short_backtraceNCINvMs_NtNtNtNtCsbcXUjlNwSJo_13cubecl_common6device6handle7channel14custom_channelNtB1f_12DeviceClient3newNCNvMs2_B1h_NtB1h_12DeviceRunner5start0E0uEB1n_"
+    },
+    {
+      "self_percent": 1.29,
+      "process": "resource-sample",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtNtCsqZHn4AwUHd_7sysinfo4unix5linux7process14copy_from_file"
+    },
+    {
+      "self_percent": 1.19,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "security_inode_getattr"
+    },
+    {
+      "self_percent": 1.19,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__kmalloc_cache_noprof"
+    },
+    {
+      "self_percent": 1.17,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__d_lookup"
+    },
+    {
+      "self_percent": 1.11,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "getname_flags"
+    },
+    {
+      "self_percent": 1.1,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "security_inode_permission"
+    },
+    {
+      "self_percent": 1.04,
+      "process": "resource-sample",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rcu_read_lock"
+    },
+    {
+      "self_percent": 0.92,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtCsdfLQDdQNEiB_8zenbench11calibration15run_calibration"
+    },
+    {
+      "self_percent": 0.85,
+      "process": "DSD-0-0",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "kmem_cache_alloc_node_noprof"
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 6s | peak-RSS 0.31GiB | min-avail 13842MiB | peak-load 8.08"
+  ]
+}

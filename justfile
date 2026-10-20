@@ -1712,6 +1712,10 @@ bench-iqa-canonical-interval results output *options:
 bench-iqa-canonical-publish output +cohorts:
     python3 -B benchmarks/iqa_compete_2026-10-16/publish_canonical_comparison.py '{{output}}' {{cohorts}}
 
+# Caller supplies shared heavy admission; verifies retained raw profiles before export.
+bench-iqa-canonical-profiles-publish index output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_canonical_profiles.py '{{index}}' '{{output}}'
+
 bench-iqa-canonical-dssim-build source output:
     bash benchmarks/iqa_compete_2026-10-16/build_dssim_reference.sh '{{source}}' '{{output}}'
 
