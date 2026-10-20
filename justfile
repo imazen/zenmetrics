@@ -2264,6 +2264,10 @@ aic-canonical-fsim-vsi python manifest summary reference sha256:
 aic-canonical-campaign manifest *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_campaign.py {{manifest}} {{options}}
 
+# Read retained stage logs; this does not acquire resources or qualify scores.
+aic-canonical-progress scratch:
+    tail -n 6 {{scratch}}/*.campaign.log
+
 aic-canonical-provenance manifest runtime_versions *options:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_provenance.py {{manifest}} {{runtime_versions}} {{options}}
 
