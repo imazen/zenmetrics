@@ -1,0 +1,303 @@
+{
+  "scope": "Published EFA -> EA production reachability, baseline84 names plus two new HDR names; not a numerical/timing gate",
+  "rows": [
+    {
+      "metric": "ssim-pyiqa-f32-k4",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k5",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssim-pyiqa-f32-k6",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssim2",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-05.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-05.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-01.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-01.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k2",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k3",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k4",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k5",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimc-pyiqa-f32-k6",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-16.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ssimulacra1",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-08.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-08.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vif",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-18.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-18.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": true,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vifvec",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": true,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vmaf",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/v0_score.rs",
+        "crates/vmaf/src/vif.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vmaf-4k",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/v0_score.rs",
+        "crates/vmaf/src/vif.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vmaf-neg",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/v0_score.rs",
+        "crates/vmaf/src/vif.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vmaf-neg-studio601",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/v0_score.rs",
+        "crates/vmaf/src/vif.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vmaf-studio601",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/v0_score.rs",
+        "crates/vmaf/src/vif.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vmaf-v1",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "crates/vmaf/src/score.rs",
+        "crates/vmaf/src/metric.rs"
+      ],
+      "full_grid_source_cohort": "vmaf-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Full-call replacement grid separately queued; original grid source current but model lifetime caveat belongs to reference scope"
+    },
+    {
+      "metric": "vsi",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vsi-k2",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vsi-k3",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vsi-k4",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "vsi-nodownscale",
+      "classification": "no reached material production change in this diff",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/mod.rs"
+      ],
+      "full_grid_source_cohort": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-14.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "Unchanged reached production branch in this revision diff; no binary/time equality claim"
+    },
+    {
+      "metric": "ws-hv",
+      "classification": "materially changed",
+      "source_paths": [
+        "crates/zenmetrics-cli/src/metrics/ws_hv.rs"
+      ],
+      "full_grid_source_cohort": "flip-wshv-current-grid-plan.json",
+      "baseline_source_plan": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-01.plan.json",
+      "optional_yuv601_cli_preprocessing_changed": false,
+      "limits": "E6 relevant files/manifests equal EA; independent worker bytes/features retained"
+    }
+  ]
+}

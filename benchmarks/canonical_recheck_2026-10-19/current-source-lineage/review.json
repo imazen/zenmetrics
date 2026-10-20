@@ -1,0 +1,40 @@
+{
+  "scope": "Published EFA -> EA production reachability, baseline84 names plus two new HDR names; not a numerical/timing gate",
+  "material_count": 24,
+  "same_gate_helper_count": 1,
+  "unrevised_reached_count": 61,
+  "missing_full_grid": [
+    "psnrhvs-daala",
+    "hdrvdp",
+    "hdrvdp3"
+  ],
+  "hdr_cell": {
+    "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/candidate/helpers/first_boundary_hdrvdp_resident_cell.py",
+    "sha256": "35a252870cd9622372da426807115b0f065a444023463fbc0b94ff0e07403d77",
+    "source_lines": "227-240",
+    "root_verified_thread_allowlist": [
+      1,
+      8
+    ]
+  },
+  "original_review_manifest": {
+    "report.md": {
+      "bytes": 13995,
+      "sha256": "d4f2ece3d4d07b2e6247eacfd5f931a9828c3f39fb84e417dba9c82b522a6670"
+    },
+    "route-lineage.json": {
+      "bytes": 53278,
+      "sha256": "51590ec2fbb928cda86340600c47520da76f6ac582d7c52b8f35d59194b660fb"
+    },
+    "source-hashes.json": {
+      "bytes": 14730,
+      "sha256": "9a5ff7da85f39377a708efc84ed4ccedbe0af59b5f816ba3efbf480b2cc3fd71"
+    },
+    "cohort-evidence.json": {
+      "bytes": 9830,
+      "sha256": "54dab72f0a91580be3dd7df8afed2c461e0b4ef0e95547102124638d9e2be0fb"
+    }
+  },
+  "original_route_matrix_sha256": "51590ec2fbb928cda86340600c47520da76f6ac582d7c52b8f35d59194b660fb",
+  "qualification": "Historical source-reachability audit; missing-grid list records discovery, not current completed coverage. Daala24 and HDR48 successors are separate acquisitions. No score or speed acceptance."
+}

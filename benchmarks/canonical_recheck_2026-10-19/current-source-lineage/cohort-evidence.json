@@ -1,0 +1,358 @@
+{
+  "cohorts": {
+    "psnr-current-grid-plan.json": {
+      "sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
+      "source": "d6532dfb34a5874bda62a6af740cc288c871891f",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/psnr-current-build/target/release/iqa-compete",
+      "case_count": 192,
+      "routes": [
+        "psnr",
+        "psnr-cb",
+        "psnr-cr",
+        "psnr-y",
+        "psnr-y-libvmaf",
+        "psnr-y-studio601",
+        "psnr-y601",
+        "psnr-ycbcr611"
+      ],
+      "dimensions": [
+        [
+          64,
+          64
+        ],
+        [
+          255,
+          257
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          3840,
+          2160
+        ]
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    },
+    "flip-wshv-current-grid-plan.json": {
+      "sha256": "060d464fa5b1671644dfb3c96c1ea12ded7421543797024ebba88a0b4607244e",
+      "source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+      "case_count": 72,
+      "routes": [
+        "flip",
+        "flip-v17",
+        "ws-hv"
+      ],
+      "dimensions": [
+        [
+          64,
+          64
+        ],
+        [
+          255,
+          257
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          3840,
+          2160
+        ]
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    },
+    "vmaf-current-grid-plan.json": {
+      "sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
+      "source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+      "case_count": 168,
+      "routes": [
+        "cambi",
+        "vmaf",
+        "vmaf-4k",
+        "vmaf-neg",
+        "vmaf-neg-studio601",
+        "vmaf-studio601",
+        "vmaf-v1"
+      ],
+      "dimensions": [
+        [
+          64,
+          64
+        ],
+        [
+          255,
+          257
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          3840,
+          2160
+        ]
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    },
+    "dssim-author-cpu-grid-plan.json": {
+      "sha256": "3e57d8485a9828e47c85c61a83a21580e9da8ed14feccf54bfe0440f52e9d3bf",
+      "source": "5fa7be7d42b51af3dd27b42dd50159972132ef12",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/pr199-build/target/release/iqa-compete",
+      "case_count": 24,
+      "routes": [
+        "dssim"
+      ],
+      "dimensions": [
+        [
+          64,
+          64
+        ],
+        [
+          255,
+          257
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          3840,
+          2160
+        ]
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    },
+    "current40-scoped-comparative-plan-v5.json": {
+      "sha256": "21fc4b0c2c8851e486af01139539ce03860ca1606e1d1de59b544140f5de3cb6",
+      "source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+      "case_count": 80,
+      "routes": [
+        "brisque",
+        "cambi",
+        "cambi-aic2026",
+        "dssim",
+        "flip",
+        "flip-v17",
+        "hdrvdp",
+        "hdrvdp-aic2026",
+        "hdrvdp3",
+        "hdrvdp3-aic2026",
+        "ms-ssim-pyiqa-f32-k2",
+        "ms-ssim-pyiqa-f32-k3",
+        "ms-ssim-pyiqa-f32-k4",
+        "ms-ssim-pyiqa-f32-k5",
+        "ms-ssim-pyiqa-f32-k6",
+        "msssim",
+        "msssim-libvmaf",
+        "niqe",
+        "piqe",
+        "proposal-butteraugli",
+        "psnr",
+        "psnr-cb",
+        "psnr-cr",
+        "psnr-y",
+        "psnr-y-libvmaf",
+        "psnr-y-studio601",
+        "psnr-y601",
+        "psnr-ycbcr611",
+        "ssim-libvmaf",
+        "ssim2",
+        "ssimulacra1",
+        "vif",
+        "vifvec",
+        "vmaf",
+        "vmaf-4k",
+        "vmaf-neg",
+        "vmaf-neg-studio601",
+        "vmaf-studio601",
+        "vmaf-v1",
+        "ws-hv"
+      ],
+      "dimensions": [
+        [
+          255,
+          257
+        ],
+        [
+          512,
+          512
+        ],
+        [
+          1152,
+          1152
+        ]
+      ],
+      "budgets": [
+        1,
+        8
+      ]
+    },
+    "current40-hdr-comparative-run/plan.json": {
+      "sha256": "c000cd89ef40652764780a143aa13439af97ac79f38fc5180b2fcd8771567244",
+      "source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+      "case_count": 80,
+      "routes": [
+        "brisque",
+        "cambi",
+        "cambi-aic2026",
+        "dssim",
+        "flip",
+        "flip-v17",
+        "hdrvdp",
+        "hdrvdp-aic2026",
+        "hdrvdp3",
+        "hdrvdp3-aic2026",
+        "ms-ssim-pyiqa-f32-k2",
+        "ms-ssim-pyiqa-f32-k3",
+        "ms-ssim-pyiqa-f32-k4",
+        "ms-ssim-pyiqa-f32-k5",
+        "ms-ssim-pyiqa-f32-k6",
+        "msssim",
+        "msssim-libvmaf",
+        "niqe",
+        "piqe",
+        "proposal-butteraugli",
+        "psnr",
+        "psnr-cb",
+        "psnr-cr",
+        "psnr-y",
+        "psnr-y-libvmaf",
+        "psnr-y-studio601",
+        "psnr-y601",
+        "psnr-ycbcr611",
+        "ssim-libvmaf",
+        "ssim2",
+        "ssimulacra1",
+        "vif",
+        "vifvec",
+        "vmaf",
+        "vmaf-4k",
+        "vmaf-neg",
+        "vmaf-neg-studio601",
+        "vmaf-studio601",
+        "vmaf-v1",
+        "ws-hv"
+      ],
+      "dimensions": [
+        [
+          255,
+          257
+        ],
+        [
+          512,
+          512
+        ],
+        [
+          1152,
+          1152
+        ]
+      ],
+      "budgets": [
+        1,
+        8
+      ]
+    },
+    "full-classical-grid-v2/group-19.plan.json": {
+      "sha256": "d4ffd12fa06a67593248bea7a2474a45e32db377687b6c5cdcefbb4e7ba052a7",
+      "source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "binary": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/iqa-compete",
+      "case_count": 24,
+      "routes": [
+        "psnrhvs-daala"
+      ],
+      "dimensions": [
+        [
+          64,
+          64
+        ],
+        [
+          255,
+          257
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          3840,
+          2160
+        ]
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    },
+    "msssim-current-grid-plan.json": {
+      "status": "queued by root; plan absent at review",
+      "driver": "/home/lilith/tmp/local-canonical-20261019T2330/run-current-model-and-msssim-grids.py",
+      "driver_sha256": "6d6492b68fe23dad75e758260e65a32d4cab68c8d8cac8b27c4665de11c6b0e1"
+    },
+    "vmaf-fullcall-current-grid-plan.json": {
+      "sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "case_count": 144,
+      "routes": [
+        "vmaf",
+        "vmaf-4k",
+        "vmaf-neg",
+        "vmaf-neg-studio601",
+        "vmaf-studio601",
+        "vmaf-v1"
+      ],
+      "budgets": [
+        1,
+        28
+      ]
+    }
+  },
+  "feature_fingerprints": {
+    "build": [
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/.fingerprint/zenmetrics-cli-5301949a1a2eeb70/lib-zenmetrics_cli.json",
+        "sha256": "96075400216164c5a02e32a8bcea54824b0a819dceaa347ef264c50e26522235",
+        "features": "[\"avx512\", \"cpu-cvvdp\", \"cpu-fsim\", \"cpu-gmsd\", \"cpu-haarpsi\", \"cpu-hdrvdp\", \"cpu-iwssim\", \"cpu-iwssim-piq\", \"cpu-mad\", \"cpu-mdctpsnr\", \"cpu-metrics\", \"cpu-msssim\", \"cpu-psnrhvs\", \"cpu-vif\", \"cpu-vifvec\", \"cpu-vmaf\", \"cpu-vsi\", \"jpeg\", \"nr\", \"png\"]"
+      }
+    ],
+    "current40-classical-build": [
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/.fingerprint/zenmetrics-cli-fdea11dbe2bfb7f3/lib-zenmetrics_cli.json",
+        "sha256": "e5efdced9a0d8f6ca8d35a44ac1fc420f20934a0879f5c7825366e67c65791b4",
+        "features": "[\"avx512\", \"cpu-cvvdp\", \"cpu-fsim\", \"cpu-gmsd\", \"cpu-haarpsi\", \"cpu-hdrvdp\", \"cpu-iwssim\", \"cpu-iwssim-piq\", \"cpu-mad\", \"cpu-mdctpsnr\", \"cpu-metrics\", \"cpu-msssim\", \"cpu-psnrhvs\", \"cpu-vif\", \"cpu-vifvec\", \"cpu-vmaf\", \"cpu-vsi\", \"jpeg\", \"nr\", \"png\"]"
+      }
+    ],
+    "psnr-current-build": [
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/psnr-current-build/target/release/.fingerprint/zenmetrics-cli-d55781b42c16c332/lib-zenmetrics_cli.json",
+        "sha256": "a7a62b15097cc7ab55ed4ea44562246a96a2b1f021719d8898726e7dd19a493d",
+        "features": "[\"avx512\", \"cpu-cvvdp\", \"cpu-fsim\", \"cpu-gmsd\", \"cpu-haarpsi\", \"cpu-hdrvdp\", \"cpu-iwssim\", \"cpu-iwssim-piq\", \"cpu-mad\", \"cpu-mdctpsnr\", \"cpu-metrics\", \"cpu-msssim\", \"cpu-psnrhvs\", \"cpu-vif\", \"cpu-vifvec\", \"cpu-vmaf\", \"cpu-vsi\", \"jpeg\", \"png\"]"
+      }
+    ],
+    "current38-comparative-build": [
+      {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/.fingerprint/zenmetrics-cli-a405729f262eaf6e/lib-zenmetrics_cli.json",
+        "sha256": "6079c3eaa1d1df625126be0ebe8f8f088f08e17b31db799204faad80c1d3f3dd",
+        "features": "[\"avx512\", \"cpu-cvvdp\", \"cpu-fsim\", \"cpu-gmsd\", \"cpu-haarpsi\", \"cpu-hdrvdp\", \"cpu-iwssim\", \"cpu-iwssim-piq\", \"cpu-mad\", \"cpu-mdctpsnr\", \"cpu-metrics\", \"cpu-msssim\", \"cpu-psnrhvs\", \"cpu-vif\", \"cpu-vifvec\", \"cpu-vmaf\", \"cpu-vsi\", \"jpeg\", \"nn\", \"nn-ort\", \"nr\", \"png\"]"
+      }
+    ]
+  }
+}

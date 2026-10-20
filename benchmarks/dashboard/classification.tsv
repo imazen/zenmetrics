@@ -1633,3 +1633,9 @@ benchmarks/canonical_recheck_2026-10-19/ws-hv-current-512x512-t1-bb7819c0-fixed-
 benchmarks/canonical_recheck_2026-10-19/dssim-author-cuda-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/results-05.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/cohorts-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/routes-00.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/routes-01.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/routes-02.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/source-hashes.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/cohort-evidence.json	ignored	provenance
+benchmarks/canonical_recheck_2026-10-19/current-source-lineage/review.json	ignored	provenance

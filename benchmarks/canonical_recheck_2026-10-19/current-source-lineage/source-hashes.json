@@ -1,0 +1,419 @@
+{
+  "old_revision": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "new_revision": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "published_sources": {
+    "Cargo.lock": {
+      "EFA": {
+        "sha256": "821f26d4097c624239a2c17a05147831449ccb7e7eaec43401a0e92eed73e0e8",
+        "bytes": 199892
+      },
+      "EA": {
+        "sha256": "d66a1259983bb40d5678fb7bf9adc019ffdc53e49632586808de88ad75071a28",
+        "bytes": 199987
+      },
+      "EA_frozen_match": true
+    },
+    "Cargo.toml": {
+      "EFA": {
+        "sha256": "0d0a697efcaff600e06a5f7f0f28e177b0640f16402c9f1bdd1b94026e02b31f",
+        "bytes": 32836
+      },
+      "EA": {
+        "sha256": "bfb139ed93864f5994c84ca3a8d544e73a9e1082a9596801991a029644a21622",
+        "bytes": 32805
+      },
+      "EA_frozen_match": true
+    },
+    "benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml": {
+      "EFA": {
+        "sha256": "be8e7184e14cded6196aee5189f2f14d9b196a09b18593958266be4de5fee6bd",
+        "bytes": 8063
+      },
+      "EA": {
+        "sha256": "e7be66ae21ad65db6a5581d34d0872a1afca0115e997ead5ed05bff301857a34",
+        "bytes": 8391
+      },
+      "EA_frozen_match": true
+    },
+    "benchmarks/heaptrack/drivers/cpu_profile/src/benchmark_selection.rs": {
+      "EFA": {
+        "sha256": "ba5a780dd0bde50feb7585fee4d3fa8c47ec76efd9050f4cd02a6253a3575b9a",
+        "bytes": 3217
+      },
+      "EA": {
+        "sha256": "5d2bcd91baf79bff9888ef6dbc510e8ff03cea9231f08c9e5d6b84971058b418",
+        "bytes": 3235
+      },
+      "EA_frozen_match": true
+    },
+    "benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs": {
+      "EFA": {
+        "sha256": "2948d4cd37f8ca11d6dcac113513a858e3c30b8c0b01912539a96b78877ba585",
+        "bytes": 26774
+      },
+      "EA": {
+        "sha256": "2948d4cd37f8ca11d6dcac113513a858e3c30b8c0b01912539a96b78877ba585",
+        "bytes": 26774
+      },
+      "EA_frozen_match": true
+    },
+    "benchmarks/heaptrack/drivers/cpu_profile/src/iqa_compete_maps.rs": {
+      "EFA": {
+        "sha256": "e21a89a3b10a63002168d201bf61b6e3d298d46040e2596f5fae807d142e1437",
+        "bytes": 17040
+      },
+      "EA": {
+        "sha256": "e21a89a3b10a63002168d201bf61b6e3d298d46040e2596f5fae807d142e1437",
+        "bytes": 17040
+      },
+      "EA_frozen_match": true
+    },
+    "crates/gmsd/src/tests.rs": {
+      "EFA": {
+        "sha256": "5efaab2c47b325686e4283cd99edfae27ce1de39bd50fdcf6eedb24230e032a4",
+        "bytes": 19581
+      },
+      "EA": {
+        "sha256": "4d2834976f3a8138a98671dfcc2340c010c851c4937e37989c0f63caa8a08550",
+        "bytes": 21243
+      },
+      "EA_frozen_match": true
+    },
+    "crates/msssim/src/kernel.rs": {
+      "EFA": {
+        "sha256": "c4458c9cb9834ffd0f471e9ffde807d77ff1fe6573aa45ef173fa7e668c23b4d",
+        "bytes": 16629
+      },
+      "EA": {
+        "sha256": "51b4f3e0c766775eb3145a5f1c5df0e2763dd7da5c1181e07fbc1c945244cf87",
+        "bytes": 17233
+      },
+      "EA_frozen_match": true
+    },
+    "crates/msssim/src/lib.rs": {
+      "EFA": {
+        "sha256": "41a9229e18208f1222bd1c169bcc9f1583dc01e0bd1a3872e8f2d7ed923cbc42",
+        "bytes": 20397
+      },
+      "EA": {
+        "sha256": "41a9229e18208f1222bd1c169bcc9f1583dc01e0bd1a3872e8f2d7ed923cbc42",
+        "bytes": 20397
+      },
+      "EA_frozen_match": true
+    },
+    "crates/msssim/src/libvmaf.rs": {
+      "EFA": {
+        "sha256": "69927ba0e20e8cb73ee04b78c2a0118126fe313cf533624f7f8b8cdde66d97ea",
+        "bytes": 28210
+      },
+      "EA": {
+        "sha256": "02e2ddeb6a2f1bcf346d57eed5a7e0115af017edd460be237edb4073229aefca",
+        "bytes": 28848
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/lib.rs": {
+      "EFA": {
+        "sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+        "bytes": 43907
+      },
+      "EA": {
+        "sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+        "bytes": 43907
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/metric.rs": {
+      "EFA": {
+        "sha256": "7a0a214b291c347991faa3925e8db95bf2e77a81399379bd476320838e7611f7",
+        "bytes": 41239
+      },
+      "EA": {
+        "sha256": "7a0a214b291c347991faa3925e8db95bf2e77a81399379bd476320838e7611f7",
+        "bytes": 41239
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/score.rs": {
+      "EFA": {
+        "sha256": "a166e4bc5608e36c69feb84f6e9367d46f09e961dcacbb7ec870d2e50f2d0b8b",
+        "bytes": 16752
+      },
+      "EA": {
+        "sha256": "68dfd378094bd4c889899af01f6596f9e11bb098b2323437aea1ed38809fb8ea",
+        "bytes": 18827
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/v0.rs": {
+      "EFA": {
+        "sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+        "bytes": 5252
+      },
+      "EA": {
+        "sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+        "bytes": 5252
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/v0_score.rs": {
+      "EFA": {
+        "sha256": "89aa17e816791198fcaa4ee0dc5d53452231f187fdfe9ece6cf57daf746aae96",
+        "bytes": 8598
+      },
+      "EA": {
+        "sha256": "b3e5ec2da1fca297690dc262ddda4fa185d43cd334dd1f346f4770c7fb1f0bfe",
+        "bytes": 11145
+      },
+      "EA_frozen_match": true
+    },
+    "crates/vmaf/src/vif.rs": {
+      "EFA": {
+        "sha256": "9414bee5d914fbdc86cda0ea826f0ae5323e2ee9826cdba90bcf955114eb363a",
+        "bytes": 199425
+      },
+      "EA": {
+        "sha256": "a00f8895150202765e4c1b67649002dd86da07f8a882949c121e102196a6e578",
+        "bytes": 201618
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-api/src/cpu_dispatch.rs": {
+      "EFA": {
+        "sha256": "770168a169ce1305115d3c991cfce0929a971e2d638811e3e889a9b9e984a89c",
+        "bytes": 68695
+      },
+      "EA": {
+        "sha256": "4387a91945e4018d2283ac5f6356e53b4fb5ddce07b4b02f61fd29a05827bff0",
+        "bytes": 70984
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/Cargo.toml": {
+      "EFA": {
+        "sha256": "ab877856fd07314a711250e63ce99c8dbbb1dc9bfaa2b9b379e1bb3d9509cd19",
+        "bytes": 42751
+      },
+      "EA": {
+        "sha256": "09d2f73866413309f104ba4ac8cc29058262ed84c89c46a80ae47e5b00f5c753",
+        "bytes": 42995
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/main.rs": {
+      "EFA": {
+        "sha256": "b4a637cb1df0acd5634f86c7f8d9c88db3f92e6b9834da7cbe95b162af783d98",
+        "bytes": 183662
+      },
+      "EA": {
+        "sha256": "9e6d9edc9fd6c680d61de8816b0b5dd195514e0ec7d6514960f91729ef553b45",
+        "bytes": 183188
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/classical.rs": {
+      "EFA": {
+        "sha256": "7f7e497c2c5b91995f00dfedaef83e0e14e197865a7a754d7b23b32ff174d798",
+        "bytes": 46357
+      },
+      "EA": {
+        "sha256": "4c55f833a5b2d3ca89093d3409f13adfddd436aabbff6d8d2be54e1cb84658a1",
+        "bytes": 48031
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/classical/psnr_kernels.rs": {
+      "EFA": null,
+      "EA": {
+        "sha256": "79a2feb65db7547fbe8bcc799f1386ed023ec9281dd455e71be6243cabe76152",
+        "bytes": 33082
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/flip.rs": {
+      "EFA": {
+        "sha256": "b7b683fb4b7f86b7aa93c8089e4b2dd3be9e95728b7f0c9857b338450911dbb4",
+        "bytes": 12606
+      },
+      "EA": {
+        "sha256": "2afa94f53fb6d777b1b0cc08939d956044f82f69ce9d15f080b5df894ba4524c",
+        "bytes": 25003
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/hdrvdp_aic.rs": {
+      "EFA": {
+        "sha256": "f59e345f49e5ee6a4504595271562f84b6ff3c188809b8fd713e7cf59dab9763",
+        "bytes": 4754
+      },
+      "EA": {
+        "sha256": "6b790071435a1bcc943f7d3da17b2353f6de434d4a526abb3dfeee4560c31b94",
+        "bytes": 8243
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/mod.rs": {
+      "EFA": {
+        "sha256": "3234c8b95e1f8414dee027538366139fbb689de0aa18a2910f7d1dafc2b4c5a3",
+        "bytes": 187432
+      },
+      "EA": {
+        "sha256": "f962f1144f02ba5e4dd2bdba08d20a7dff138e64806990bef88b255a116b6098",
+        "bytes": 188681
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/ssim_pyiqa.rs": {
+      "EFA": {
+        "sha256": "c1b80ef489ed5b99e7d4097bd99227c7e8b16381aa3c287e13209f7aaf7bf221",
+        "bytes": 21240
+      },
+      "EA": {
+        "sha256": "c1b80ef489ed5b99e7d4097bd99227c7e8b16381aa3c287e13209f7aaf7bf221",
+        "bytes": 21240
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/ssimulacra1.rs": {
+      "EFA": {
+        "sha256": "e6fae5c02457086d29ed7ea926ae01ba58ea90939b700cfc7633fa066e248c5f",
+        "bytes": 19524
+      },
+      "EA": {
+        "sha256": "e6fae5c02457086d29ed7ea926ae01ba58ea90939b700cfc7633fa066e248c5f",
+        "bytes": 19524
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/vmaf.rs": {
+      "EFA": {
+        "sha256": "f41cff600854b4d6a62c859b3108387f4b4719c11b2e93169b6e708b853596db",
+        "bytes": 14587
+      },
+      "EA": {
+        "sha256": "7017fa2b3bd83b1df92a82f696fb9af2c3b434aafca30b9af72c4d9c1e1a7c57",
+        "bytes": 16243
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/metrics/ws_hv.rs": {
+      "EFA": {
+        "sha256": "0f1b17725595ecf15d2d4d1ce6a1d814ba62017c74cfd2cafe35807ed04a508a",
+        "bytes": 11914
+      },
+      "EA": {
+        "sha256": "e2828d22157bb7d91032d48a6ee588664eb57c71042fa0939cd95b9a13e99304",
+        "bytes": 14629
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-cli/src/output.rs": {
+      "EFA": {
+        "sha256": "f58b3c2b46a264acf872d4f12716abad985a674c346633fbcd3ad75103165798",
+        "bytes": 14709
+      },
+      "EA": {
+        "sha256": "b2ff1ca280329d8ba88c9ca714149135a90f1ef8a5870fc34addea9dd4aec31a",
+        "bytes": 15677
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-math/src/glibc.rs": {
+      "EFA": null,
+      "EA": {
+        "sha256": "633f13b1d09bcd044fadf96fed482e505a04e8ffdb20c20fa42675e3e73232ce",
+        "bytes": 17730
+      },
+      "EA_frozen_match": true
+    },
+    "crates/zenmetrics-math/src/lib.rs": {
+      "EFA": {
+        "sha256": "3520a3b916fc79965864a9973efd7a648aa3eb5cd076eb480e555b5db9aeda45",
+        "bytes": 39579
+      },
+      "EA": {
+        "sha256": "32a57da0a2528ce98c9fce47933ba2576572c32411348efc1946132f275213d7",
+        "bytes": 39854
+      },
+      "EA_frozen_match": true
+    }
+  },
+  "source_equivalence_checks": {
+    "D653:crates/zenmetrics-cli/src/metrics/classical.rs": {
+      "sha256": "d0fc0b248514ea1bf542e773afb3abc612a003e9aba876f3b7e6526c271169a6",
+      "equals_EA": false
+    },
+    "D653:crates/zenmetrics-cli/src/metrics/classical/psnr_kernels.rs": {
+      "sha256": "79a2feb65db7547fbe8bcc799f1386ed023ec9281dd455e71be6243cabe76152",
+      "equals_EA": true
+    },
+    "E6:crates/zenmetrics-cli/src/metrics/flip.rs": {
+      "sha256": "2afa94f53fb6d777b1b0cc08939d956044f82f69ce9d15f080b5df894ba4524c",
+      "equals_EA": true
+    },
+    "E6:crates/zenmetrics-cli/src/metrics/ws_hv.rs": {
+      "sha256": "e2828d22157bb7d91032d48a6ee588664eb57c71042fa0939cd95b9a13e99304",
+      "equals_EA": true
+    },
+    "E6:crates/zenmetrics-math/src/glibc.rs": {
+      "sha256": "633f13b1d09bcd044fadf96fed482e505a04e8ffdb20c20fa42675e3e73232ce",
+      "equals_EA": true
+    },
+    "E6:crates/zenmetrics-math/src/lib.rs": {
+      "sha256": "32a57da0a2528ce98c9fce47933ba2576572c32411348efc1946132f275213d7",
+      "equals_EA": true
+    },
+    "E6:crates/zenmetrics-cli/Cargo.toml": {
+      "sha256": "09d2f73866413309f104ba4ac8cc29058262ed84c89c46a80ae47e5b00f5c753",
+      "equals_EA": true
+    },
+    "E6:benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml": {
+      "sha256": "e7be66ae21ad65db6a5581d34d0872a1afca0115e997ead5ed05bff301857a34",
+      "equals_EA": true
+    },
+    "D653_classical_only_path_and_comment": true,
+    "DSSIM_PR199_native_source": {
+      "files": 14,
+      "same_file_map": true,
+      "sha256_by_path": {
+        "Cargo.toml": "07bcc39e7fc5aa94607bcc63f5530333d877207922eef745eeed60da6f3838cf",
+        "src/blur/equiv_tests.rs": "7045c167851ad51ff0166ba27d087fcd12a0d24124571d0631ff4ed3e55e198e",
+        "src/blur.rs": "16fe93a7b5621c84f153d07cb60dbb729348ba36f0d37faa0684a96cb9d41c06",
+        "src/c_api.rs": "5129aea856f53f391266b1e4dff681393d168e5e1fd52ab04af028ea243c0297",
+        "src/dssim.rs": "98cedb1701ecf55650e68c09bc7ad4cb70d63cc3e5e89e1d6f3dcc7907cb7da0",
+        "src/ffi.rs": "f79d709979784b0c2be1fa9ed9393c8675a3c73c4799044d220d1083d16ee58f",
+        "src/image.rs": "c35ee701d88fa270b9eb650e9dd53e5814d75f7b13b25be5173fc12b32c7f1b5",
+        "src/lib.rs": "54533d1c5a8087c70f7191efeebeee99e809c392bc3a244759e8a4486252101d",
+        "src/lieon.rs": "9c6bec16952ad6074314f5a825885235f93f45fdddeff5abb5ff6f29598265f1",
+        "src/linear.rs": "b776341993b535a1e3b98b2a9f2d4050bb2da40f9df3aedec0099a3c7ff1ee09",
+        "src/tolab/simd_neon.rs": "32ff06e17150caddfccba4e5948226dad78bafc26aaf532e86c8d8c6d7903607",
+        "src/tolab/simd_x86.rs": "54ed43f6f48db59114d745a606ba7699319ee1361f476dda12543e4b9d876661",
+        "src/tolab.rs": "bb64b3dde61225c4d76e0838179a49b1bbf69b9135121fb977f553cdc3a9042d",
+        "src/val.rs": "1fbd3115e02c6077794dd353a7001bc531d2539171aca91f2e32b3066ae910f1"
+      }
+    }
+  },
+  "baseline_model_overlay": {
+    "adapter_sha256": "3397c445d44e96c9991bcc85e212b1213ecef012a9ca9ce10c3c472496806485",
+    "scope": "benchmark-only owned snapshot; immutable model parsing cached; model cloning stays timed",
+    "files": [
+      {
+        "path": "crates/vmaf/src/lib.rs",
+        "original_sha256": "b86511532ef49bce3165527360cf97beb9c8460da4b73f31f5e275cc726acb7e",
+        "adapted_sha256": "109d0d689cc8cbdea1a833c2ecdafd49130a90345ec72dcce09c4945865754a6"
+      },
+      {
+        "path": "crates/vmaf/src/v0.rs",
+        "original_sha256": "6bdb25272824f1ee064a4e2b14d66933d28574b37f6298ec5abeb8b365566191",
+        "adapted_sha256": "db7df675b2318912cb05414c019c2456516a8ea7f4072ef231d1157a84db4a67"
+      },
+      {
+        "path": "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+        "original_sha256": "f41cff600854b4d6a62c859b3108387f4b4719c11b2e93169b6e708b853596db",
+        "adapted_sha256": "e48d0d7cbeb538417e2726fd7e07180c5ba1199340d33592627e366fc1d4a730",
+        "reason": "reuse exact existing ingress in the benchmark source module"
+      }
+    ],
+    "reference": false
+  }
+}
