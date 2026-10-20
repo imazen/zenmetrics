@@ -12,6 +12,11 @@
 //! f64 internal arithmetic throughout (`double_t` == `double` on
 //! FLT_EVAL_METHOD=0 targets; that includes x86_64 and aarch64).
 //!
+//! Measured on Zen 4 (7950X, 2^22 FLIP-domain inputs): scalar `f32::powf`
+//! 1.0x, the lane kernels 1.13x, a VPGATHERDD table-load variant 0.62x —
+//! AMD gathers are microcoded and lose to the scalar loads, so there is no
+//! gather path here; revisit on Intel where VPGATHERDD is cheap.
+//!
 //! Sources (fetched 2026-10-20, glibc-2.40 + ARM-software/optimized-routines
 //! master for the generated table):
 //!   sysdeps/ieee754/flt-32/e_powf.c        — algorithm
@@ -190,7 +195,7 @@ const K126: i64 = (126.0f64.to_bits() >> 47) as i64;
 /// The arithmetic is identical to [`log2_inline`]/[`exp2_inline`] — f64 ops
 /// only, no reassociation, so fast lanes are bit-identical to the scalar
 /// transcription (and therefore to glibc).
-#[archmage::attune(_*_t, +v4x(cfg(avx512)), define(f64x8, i64x8, i32x8, f32x8))]
+#[archmage::attune(_*_t, define(f64x8, i64x8, i32x8, f32x8))]
 fn powf_glibc_8x_t(
     token: Token,
     xs: &[f32; 8],
@@ -320,7 +325,7 @@ pub fn vpowf_glibc_into(xs: &[f32], out: &mut [f32], p: f32) {
         let mut need = [0i32; 8];
         archmage::attuned!(
             powf_glibc_8x_t(x8, &y8, o8, &mut need),
-            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+            [_v3, _neon, _wasm128, _scalar]
         );
         for j in 0..8 {
             if need[j] != 0 {
@@ -344,7 +349,7 @@ pub fn vpowf_glibc_pairs_into(xs: &[f32], ys: &[f32], out: &mut [f32]) {
         let mut need = [0i32; 8];
         archmage::attuned!(
             powf_glibc_8x_t(x8, y8, o8, &mut need),
-            [_v4x(cfg(avx512)), _v3, _neon, _wasm128, _scalar]
+            [_v3, _neon, _wasm128, _scalar]
         );
         for j in 0..8 {
             if need[j] != 0 {
@@ -354,6 +359,47 @@ pub fn vpowf_glibc_pairs_into(xs: &[f32], ys: &[f32], out: &mut [f32]) {
     }
     for ((o, &x), &y) in ot.iter_mut().zip(xt).zip(yt) {
         *o = powf_glibc(x, y);
+    }
+}
+
+#[cfg(test)]
+mod bench_probe {
+    use super::*;
+
+    /// Scalar powf vs batched glibc lanes on FLIP-domain inputs (time only;
+    /// correctness lives in the main tests).
+    #[test]
+    #[ignore]
+    fn powf_wall() {
+        let n = 1 << 22;
+        let xs: Vec<f32> = (0..n).map(|i| 0.05 + (i % 997) as f32 / 997.0).collect();
+        let mut out = vec![0.0f32; n];
+        let reps = 20;
+        let t = std::time::Instant::now();
+        for _ in 0..reps {
+            for (o, &x) in out.iter_mut().zip(&xs) {
+                *o = x.powf(0.7);
+            }
+        }
+        let scalar = t.elapsed();
+        let t = std::time::Instant::now();
+        for _ in 0..reps {
+            for (o, &x) in out.iter_mut().zip(&xs) {
+                *o = powf_glibc(x, 0.7);
+            }
+        }
+        let port = t.elapsed();
+        let t = std::time::Instant::now();
+        for _ in 0..reps {
+            vpowf_glibc_into(&xs, &mut out, 0.7);
+        }
+        let lanes = t.elapsed();
+        eprintln!("scalar {scalar:?} port {port:?} lanes {lanes:?}");
+        eprintln!(
+            "port {:.2}x lanes {:.2}x",
+            scalar.as_secs_f64() / port.as_secs_f64(),
+            scalar.as_secs_f64() / lanes.as_secs_f64()
+        );
     }
 }
 

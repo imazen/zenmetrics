@@ -575,3 +575,39 @@ fn gmsd_diffmap_matches_score() {
 fn generic_surface_conforms() {
     zenmetrics_abstractions::conformance::assert_conforms_rgb8(&mut Gmsd, 40, 30);
 }
+
+/// Diagnostic (2026-10-20): does sparse ±1-LSB pixel drift reproduce the
+/// AIC-4 published-vs-ours GMSD deltas? If the organizers' GMSD column ran
+/// on decoder-side pixels differing by ±1 from the shipped PNGs, a small
+/// perturbation should move the score by ~1e-4 — the observed delta class.
+#[test]
+#[ignore]
+fn lsb_drift_score_sensitivity() {
+    let (w, h) = (840usize, 944usize);
+    // Textured deterministic plane on the 0..255 scale.
+    let a: Vec<f32> = (0..w * h)
+        .map(|i| {
+            let x = (i % w) as f32;
+            let y = (i / w) as f32;
+            (x * 0.31 + y * 0.17).sin() * 90.0 + (x * 0.011).cos() * 40.0 + 128.0
+        })
+        .collect();
+    let mut b = a.clone();
+    // Sparse distortion (codec-like): ±1 on every 41st pixel, ±2 on every 641st.
+    for i in (0..w * h).step_by(41) {
+        b[i] += if i % 3 == 0 { 1.0 } else { -1.0 };
+    }
+    for i in (0..w * h).step_by(641) {
+        b[i] += 2.0;
+    }
+    let base = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&a, w, h).unwrap());
+    // Second plane: same texture, all pixels perturbed ±1 (dense drift).
+    let c: Vec<f32> = a
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| v + if i % 2 == 0 { 1.0 } else { -1.0 })
+        .collect();
+    let d_sparse = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&b, w, h).unwrap());
+    let d_dense = gmsd(GrayImage::packed(&a, w, h).unwrap(), GrayImage::packed(&c, w, h).unwrap());
+    eprintln!("identical: {:?}  sparse: {:?}  dense: {:?}", base, d_sparse, d_dense);
+}
