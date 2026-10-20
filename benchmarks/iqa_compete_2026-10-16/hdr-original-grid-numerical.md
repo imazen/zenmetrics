@@ -9,7 +9,10 @@ The fixed photo512/1–8 resident callable and all existing bundles remain uncha
 This source was prepared without executing tests or metric controls. Root must
 review the frozen source and admit its tests, setup audit and one small two-child
 control before the campaign. The synthetic suite mocks every executor/runtime
-capture; its96 simulated children are not metric observations.
+capture; its96 simulated children are not metric observations. The retained-row
+shape control requires `HDR_NUMERICAL_RETAINED_ROWS` pointing to the frozen four
+production stdout/config copies; missing fixtures fail rather than skip. Reading
+those old rows does not execute a scorer or add numerical grid coverage.
 
 ## Commands and admission
 
@@ -51,7 +54,11 @@ preserved. Runtime is Octave6.4/image2.12 with the frozen unchanged image2.20.1
 two-M-file resize overlay, not a full image-package upgrade.
 
 Native: existing warm configs declare five samples, but this exact worker
-requires ten warm zenbench rounds. Require a complete status-ok10-round row,
+requires ten warm zenbench rounds. The bound grid config must explicitly set
+`probe_only=false`; the row may omit that optional field or emit false. Every
+other config key must be emitted unchanged. Require mode/only-mode=score,
+timing-phase=warm and the unchanged production model adapter disabled; reject
+probe records or a true probe flag. Require a complete status-ok10-round row,
 retain all raw resource flags, and compare the finite initialization/warmup
 scalar recorded in that row. CPU timed return values are not individually
 observed; the row's self-match does not prove timed-call stability. This run

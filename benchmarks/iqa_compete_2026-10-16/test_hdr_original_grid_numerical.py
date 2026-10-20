@@ -17,7 +17,9 @@ v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
 
 def native_text(config, value=1.0):
     bits=struct.pack('>d',value).hex()
-    row=dict(config,status='ok',rayon_threads_observed=config['threads'],score=value,
+    emitted={k:val for k,val in config.items() if k!='probe_only'}
+    row=dict(emitted,status='ok',mode='score',model_preload_adapter=False,
+        rayon_threads_observed=config['threads'],score=value,
         score_bits=bits,self_warmup_score=value,ref_score=value,map_score_matches_scalar_bits=True,
         n=10,round_means_ns=[1]*10,zenbench_samples=[dict(gate_clean=True)]*10)
     return 'IQA_WARMUP '+json.dumps(dict(completed=True,score_bits=bits))+'\nIQA_ROW '+json.dumps(row)+'\n'
@@ -232,6 +234,8 @@ class Controls(unittest.TestCase):
         for mutate in [lambda r:r.update(score_bits=None),lambda r:r.update(score_bits='0'*16),
                        lambda r:r.update(n=5),lambda r:r.update(round_means_ns=[1]*5),
                        lambda r:r.update(status='partial'),lambda r:r.update(threads=28),
+                       lambda r:r.update(mode='score+map'),lambda r:r.update(timing_phase='cold'),
+                       lambda r:r.update(probe_only=True),lambda r:r.update(model_preload_adapter=True),
                        lambda r:r.update(zenbench_samples=[{'gate_clean':None}]*10),
                        lambda r:r.update(round_means_ns=[0]*10)]:
             examples.append(self.mutate_native(mutate))
@@ -317,6 +321,41 @@ class Controls(unittest.TestCase):
         with patch.object(v.subprocess,'Popen',return_value=SimpleNamespace(pid=123,wait=lambda:1)) as mocked:
             self.assertEqual(v.queue(self.queue_args()),2)
             self.assertEqual(mocked.call_count,1)
+
+    def test_probe_config_false_required_and_optional_false_row(self):
+        config=self.config();text=native_text(config)
+        self.assertNotIn('"probe_only"',text)
+        v.parse_native(text,config)
+        v.parse_native(self.mutate_native(lambda r:r.update(probe_only=False)),config)
+        for value in (None,True,0):
+            with self.subTest(value=value),self.assertRaises(v.Protocol):
+                v.parse_native(text,dict(config,probe_only=value))
+        with self.assertRaises(v.Protocol):v.parse_native(text+'IQA_PROBE {}\n',config)
+
+    def test_retained_production_row_shapes(self):
+        # Caller supplies frozen real logs. Missing fixtures fail, never skip.
+        directory=Path(os.environ['HDR_NUMERICAL_RETAINED_ROWS'])
+        records=v.load(directory/'manifest.json')['rows']
+        expected={
+            'hdrvdp-t1':'4bc384d8cb5468bd27f7fc195ea5afba6bf112903e3127b9be8232f4213c768a',
+            'hdrvdp-t8':'bf6204c716e6d3c78c59a8b343f32af55289a2f8c0c2531c0418752f8e0ab2ea',
+            'hdrvdp3-t1':'e7c27de777e8b3e105403cd42f77fbeb226e4cea86bbb9c2054ddb67976af195',
+            'hdrvdp3-t8':'082a19097c70732f62d7fc3b37db7d0cf7d85ee3d1b0eee6dcb5ae8b62ab1110'}
+        self.assertEqual({r['id'] for r in records},set(expected))
+        self.assertEqual(len(records),4)
+        for record in records:
+            with self.subTest(case=record['id']):
+                stdout=directory/record['stdout'];config_path=directory/record['config']
+                self.assertEqual(v.sha(stdout),expected[record['id']])
+                self.assertEqual(v.sha(config_path),record['config_sha256'])
+                config=v.load(config_path)
+                self.assertNotIn('probe_only',config)
+                text=stdout.read_text()
+                row=next(v.strict(s[8:]) for s in text.splitlines() if s.startswith('IQA_ROW '))
+                self.assertNotIn('probe_only',row)
+                self.assertEqual(set(config)-set(row),set())
+                result=v.parse_native(text,dict(config,probe_only=False))
+                self.assertEqual(result['score_bits'],row['score_bits'])
 
 
 if __name__=='__main__':unittest.main()

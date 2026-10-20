@@ -319,13 +319,22 @@ def parse_default(text, worker):
 
 def parse_native(text, config):
     try:
+        if config.get('probe_only') is not False:
+            raise Protocol('bound config must explicitly disable probe-only execution')
         rows=[strict(line[8:]) for line in text.splitlines() if line.startswith('IQA_ROW ')]
         warm=[strict(line[11:]) for line in text.splitlines() if line.startswith('IQA_WARMUP ')]
-        if len(rows)!=1 or len(warm)!=1 or any(line.startswith('IQA_PARTIAL ') for line in text.splitlines()):
+        if len(rows)!=1 or len(warm)!=1 or any(line.startswith(('IQA_PARTIAL ','IQA_PROBE ')) for line in text.splitlines()):
             raise Protocol('one complete native scalar row/warmup required')
         row=rows[0]
-        if any(type(row.get(k)) is not type(v) or row[k]!=v for k,v in config.items()):
+        # Production rows clone their actual execution config. Existing normal
+        # warm configs omit this optional field; exact grid configs include false.
+        # Neither shape permits probe execution. All other config keys must emit.
+        if any(type(row.get(k)) is not type(v) or row[k]!=v for k,v in config.items() if k!='probe_only'):
             raise Protocol('native config/identity differs')
+        if (row.get('probe_only',False) is not False or row.get('mode')!='score'
+                or row.get('only_mode')!='score' or row.get('timing_phase')!='warm'
+                or row.get('model_preload_adapter') is not False):
+            raise Protocol('unexpected native execution mode/adapter')
         observed=bits(row['score'])
         if (row['status']!='ok' or row['rayon_threads_observed']!=config['threads']
                 or row['score_bits']!=observed or bits(row['self_warmup_score'])!=observed
