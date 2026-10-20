@@ -237,12 +237,12 @@
       {
         "campaign": "hdrvdp-srgb",
         "manifest_cells": 96,
-        "saved_attempt_rows": 83,
-        "qualified_attempt_rows": 83,
+        "saved_attempt_rows": 89,
+        "qualified_attempt_rows": 89,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 83,
-          "pending": 13
+          "ok": 89,
+          "pending": 7
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -266,11 +266,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:15:01.711520+00:00",
-      "2026-10-20T14:15:02.621162+00:00"
+      "2026-10-20T14:20:01.682766+00:00",
+      "2026-10-20T14:20:02.559756+00:00"
     ],
-    "saved_attempt_rows": 5080,
-    "preferred_qualified_cells": 4488,
+    "saved_attempt_rows": 5086,
+    "preferred_qualified_cells": 4494,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -377,7 +377,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 15418,
+    "individual_measurement_rows": 15442,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "i265": {
@@ -536,12 +536,12 @@
       {
         "campaign": "remaining-remaining2",
         "manifest_cells": 731,
-        "saved_attempt_rows": 680,
-        "qualified_attempt_rows": 657,
+        "saved_attempt_rows": 694,
+        "qualified_attempt_rows": 671,
         "gate_flagged_attempt_rows": 7,
         "observed_cell_statuses": {
-          "ok": 664,
-          "pending": 67
+          "ok": 678,
+          "pending": 53
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -585,12 +585,12 @@
       {
         "campaign": "hdrvdp-srgb",
         "manifest_cells": 96,
-        "saved_attempt_rows": 82,
-        "qualified_attempt_rows": 80,
+        "saved_attempt_rows": 83,
+        "qualified_attempt_rows": 81,
         "gate_flagged_attempt_rows": 2,
         "observed_cell_statuses": {
-          "ok": 82,
-          "pending": 14
+          "ok": 83,
+          "pending": 13
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -600,12 +600,12 @@
       {
         "campaign": "opt-4f89155c",
         "manifest_cells": 480,
-        "saved_attempt_rows": 49,
-        "qualified_attempt_rows": 49,
+        "saved_attempt_rows": 65,
+        "qualified_attempt_rows": 65,
         "gate_flagged_attempt_rows": 0,
         "observed_cell_statuses": {
-          "ok": 49,
-          "pending": 431
+          "ok": 65,
+          "pending": 415
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -628,11 +628,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:15:01.496986+00:00",
-      "2026-10-20T14:15:02.309286+00:00"
+      "2026-10-20T14:20:01.421669+00:00",
+      "2026-10-20T14:20:01.962850+00:00"
     ],
-    "saved_attempt_rows": 5618,
-    "preferred_qualified_cells": 5311,
+    "saved_attempt_rows": 5649,
+    "preferred_qualified_cells": 5342,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -739,7 +739,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 17529,
+    "individual_measurement_rows": 17623,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   },
   "r7900x": {
@@ -878,8 +878,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T14:15:02.069655+00:00",
-      "2026-10-20T14:15:02.323399+00:00"
+      "2026-10-20T14:20:02.106302+00:00",
+      "2026-10-20T14:20:02.361969+00:00"
     ],
     "saved_attempt_rows": 5879,
     "preferred_qualified_cells": 5492,
