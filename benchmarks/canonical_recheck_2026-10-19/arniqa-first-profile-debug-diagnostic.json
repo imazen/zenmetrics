@@ -1,0 +1,48 @@
+{
+  "metric_children_acquired": 0,
+  "diagnostic_only": true,
+  "raw_result": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/arniqa-packed-debug-recovery-v1/result.json",
+    "sha256": "e3a154119d49f30cde0e9420c4a1dbd3ed7a7ebb489861a0535469495aae4c96"
+  },
+  "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+  "retained_packed_debug": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/iqa-compete.dwp",
+    "sha256": "152139b5439a5983e95239ae8bcd73b66b0f8e9345315fde5daf6c04347db17d"
+  },
+  "new_cache_companion": {
+    "path": "/home/lilith/.debug/.build-id/e0/e8396d804dd4fb05a348c6635cef4dd9014817/elf.dwp",
+    "sha256": "152139b5439a5983e95239ae8bcd73b66b0f8e9345315fde5daf6c04347db17d"
+  },
+  "controlled_source_location_before": "0x0000000000454853\n_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE15packed_b_layout\n/home/lilith/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rten-gemm-0.27.0/src/kernels/x86_64.rs:336\n",
+  "controlled_source_location_after": "0x0000000000454853\n_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE15packed_b_layout\n/home/lilith/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rten-gemm-0.27.0/src/kernels/x86_64.rs:336\n",
+  "controlled_location_changed": false,
+  "profiles": [
+    {
+      "threads": 1,
+      "raw_profile_sha256": "7b2fa8ece23ba063575088bb0fed455796b30ed9b5f83854fcb9dd605cbb954d",
+      "old_addr2line_warnings": 5,
+      "new_addr2line_warnings": 5,
+      "same_self_symbol_rows": true,
+      "new_report": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/arniqa-packed-debug-recovery-v1/profile-t1.stdout",
+        "sha256": "13f1176aba6f061f4a316fab3542f51f02f2f7067462f933a88e7237fdd8f246"
+      }
+    },
+    {
+      "threads": 8,
+      "raw_profile_sha256": "a87f1c447a1cba48fbeb0cd8b5553d1f8d267808cdd6fb21c8ed812440701a35",
+      "old_addr2line_warnings": 14,
+      "new_addr2line_warnings": 14,
+      "same_self_symbol_rows": true,
+      "new_report": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/arniqa-packed-debug-recovery-v1/profile-t8.stdout",
+        "sha256": "24d1300ac2dfde6da4ae7c4f0cb9f601c935a58a0219ba981a2832597ebe0abc"
+      }
+    }
+  ],
+  "resource_receipts": [
+    "run-heavy: done rc=0 21s | peak-RSS 0.09GiB | min-avail 14134MiB | peak-load 3.74"
+  ],
+  "qualification": "Adding the retained packed debug companion did not reduce the remaining addr2line warning counts. Original recordings/reports/ELF remain unchanged. Function-symbol samples remain available; source-line attribution remains partial. This postprocessing does not isolate the timed first call or explain the canonical timing gap."
+}

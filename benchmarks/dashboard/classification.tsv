@@ -1675,3 +1675,4 @@ benchmarks/aic2026_rescore_full_2026-10-20/metrics.pointer.md	ignored	Provenance
 benchmarks/aic2026_rescore_full_2026-10-20/plan_cropped.json	ignored	Provenance or external-artifact pointer; rescore plan (routes, per-image hashes), not a measurement table.
 benchmarks/aic2026_rescore_full_2026-10-20/provenance_cropped.json	ignored	Provenance or external-artifact pointer; rescore summary, not a measurement table.
 benchmarks/canonical_recheck_2026-10-19/classical-first-verification-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profile-debug-diagnostic.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

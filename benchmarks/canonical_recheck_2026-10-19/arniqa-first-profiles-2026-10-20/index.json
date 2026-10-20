@@ -59,5 +59,9 @@
       }
     ]
   },
-  "qualification": "Original native-probe reports retain symbol samples with zero reported lost samples and partial source-line attribution. Packed debug re-symbolization is tracked separately. Complete-probe scope includes priming and score controls; no isolated first-evaluation time, new metric timing or causal/runtime qualification."
+  "qualification": "Original native-probe reports retain symbol samples with zero reported lost samples and partial source-line attribution. Packed debug re-symbolization is tracked separately. Complete-probe scope includes priming and score controls; no isolated first-evaluation time, new metric timing or causal/runtime qualification.",
+  "packed_debug_diagnostic": {
+    "file": "../arniqa-first-profile-debug-diagnostic.json",
+    "sha256": "47c02eeecab426d079c9e5fef11e67ba016e2641c04b27b81c285286af7384c2"
+  }
 }
