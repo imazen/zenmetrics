@@ -10,7 +10,7 @@
 # heavy lock and resource wrapper. Writes NEW_ROOT/{source,snapshot,build-command.json,build.json}.
 set -euo pipefail
 root=${1:?NEW_ROOT}; rev=${2:?REV}
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"  # caller may supply jj elsewhere
 if [ -e "$root" ]; then echo "build_canonical_worker: $root exists; choose a new root" >&2; exit 2; fi
 mkdir -p "$root"; root=$(cd "$root" && pwd)
 export TMPDIR="$HOME/tmp" LOCK_SNAP_DIR="$root/snapshot" CARGO_TARGET_DIR="$root/snapshot/target"
