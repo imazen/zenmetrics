@@ -1,0 +1,215 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-retained-control-run-v2",
+  "plan_sha256": "2b2f412f5c697a381268c71562663500d0cc63cca4caf054e8eed57d80b1af05",
+  "cases": [
+    {
+      "metric": "flip",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.24361380084840745,
+      "max_abs_delta": 0.0,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "native_binary_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+      "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
+      "scope": {
+        "matched": true,
+        "boundary": "scorer_construct_first_eval",
+        "construction": "FLIP map evaluator construction inside both calls; no preconstructed scorer",
+        "parameter_io": "No external metric parameter files read by selected call",
+        "runtime": "Evaluator-first scope: Python imports/configuration outside clock; native first-use runtime dispatch inside evaluation. One-thread controls; no runtime-startup or process-cold equivalence claimed.",
+        "teardown": "Per-call temporaries released inside score; native captured scorer closure destruction after elapsed. No resident metric object in these routes.",
+        "evidence": [
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+            "line": 98
+          },
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/mod.rs",
+            "line": 5
+          },
+          {
+            "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_flip_cell.py",
+            "line": 16
+          },
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/mod.rs",
+            "line": 2890
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 61764261.0,
+              "score": 0.020449108687766948
+            },
+            "canonical": {
+              "ns": 262238130.0,
+              "score": 0.020449108687766948
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 65495310.0,
+              "score": 0.020449108687766948
+            },
+            "canonical": {
+              "ns": 260833519.0,
+              "score": 0.020449108687766948
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 64671315.0,
+              "score": 0.020449108687766948
+            },
+            "canonical": {
+              "ns": 265466549.0,
+              "score": 0.020449108687766948
+            }
+          }
+        }
+      ],
+      "summary_sha256": "6b5910549f7eab090164d3e7405c1cc5e7a89122b34a67facb0f6a0dc951a753",
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.07GiB | min-avail 14324MiB | peak-load 2.48",
+        "run-heavy: done rc=0 2s | peak-RSS 0.07GiB | min-avail 14458MiB | peak-load 2.31",
+        "run-heavy: done rc=0 2s | peak-RSS 0.07GiB | min-avail 14585MiB | peak-load 2.07"
+      ]
+    },
+    {
+      "metric": "psnr",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.004648431621531504,
+      "max_abs_delta": 0.0,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "native_source": "d6532dfb34a5874bda62a6af740cc288c871891f",
+      "native_binary_sha256": "86fa71459b7bc682c794ada0670d971ce0ecbe6b7c43f6ec6cbbc870a47851f5",
+      "canonical": "scikit-image 0.26 / declared RGB ingress",
+      "scope": {
+        "matched": true,
+        "boundary": "scorer_construct_first_eval",
+        "construction": "PSNR uses stateless scalar call on both sides; no scorer constructor",
+        "parameter_io": "No external metric parameter files read by selected call",
+        "runtime": "Evaluator-first scope: Python imports/configuration outside clock; native first-use runtime dispatch inside evaluation. One-thread controls; no runtime-startup or process-cold equivalence claimed.",
+        "teardown": "Per-call temporaries released inside score; native captured scorer closure destruction after elapsed. No resident metric object in these routes.",
+        "evidence": [
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/psnr-current-build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete.rs",
+            "line": 98
+          },
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/psnr-current-build/work/zenmetrics/benchmarks/heaptrack/drivers/cpu_profile/src/bin/iqa_compete_timing/mod.rs",
+            "line": 5
+          },
+          {
+            "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_classical_cell.py",
+            "line": 66
+          },
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/psnr-current-build/work/zenmetrics/crates/zenmetrics-cli/src/metrics/classical.rs",
+            "line": 52
+          }
+        ]
+      },
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 82301.0,
+              "score": 48.25860830672113
+            },
+            "canonical": {
+              "ns": 11636605.0,
+              "score": 48.25860830672113
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 42790.0,
+              "score": 48.25860830672113
+            },
+            "canonical": {
+              "ns": 35642848.0,
+              "score": 48.25860830672113
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "passed": null,
+          "delta": 0.0,
+          "arms": {
+            "native": {
+              "ns": 47260.0,
+              "score": 48.25860830672113
+            },
+            "canonical": {
+              "ns": 10166870.0,
+              "score": 48.25860830672113
+            }
+          }
+        }
+      ],
+      "summary_sha256": "849f52da90fa13f81d033d78b8f3d558768479d9f9f648074ac435645a3ce436",
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 3s | peak-RSS 0.31GiB | min-avail 14690MiB | peak-load 1.32",
+        "run-heavy: done rc=0 3s | peak-RSS 0.31GiB | min-avail 14789MiB | peak-load 1.37",
+        "run-heavy: done rc=0 3s | peak-RSS 0.31GiB | min-avail 14786MiB | peak-load 3.03"
+      ]
+    }
+  ],
+  "helper_sources": {
+    "compare_classical_first.py": "fc3533936d46acc60526c3c599f89509d3a9cc648f748002894e6f822bbc1b32",
+    "native_classical_first_cell.py": "8179095c068eef67c0344a8e12d5591d1a6f52486a038f5ee6dac9a0386dcf10"
+  },
+  "qualification": "Three alternating evaluator first calls after raw input loading; scorer construction included. No full startup, OS-cache-cold, warm-ratio or regression acceptance claim."
+}

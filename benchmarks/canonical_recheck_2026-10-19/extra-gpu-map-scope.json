@@ -1,0 +1,8 @@
+{
+  "status": "Canceled at owner request",
+  "scope": "Additional CUDA Butteraugli map-probe development; existing scalar comparisons continue",
+  "compile_invocations": 0,
+  "inference_executed": false,
+  "source_pushed": false,
+  "qualification": "No numerical or performance conclusion from the canceled draft"
+}

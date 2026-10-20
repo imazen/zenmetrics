@@ -504,7 +504,7 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.2576344608643147,
-    "observed_cases": 5,
+    "observed_cases": 6,
     "expected_cases": 28,
     "passed_cases": 0,
     "failed_cases": 0,
@@ -535,8 +535,8 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 0.14177867513865475,
-    "observed_cases": 4,
-    "expected_cases": 4,
+    "observed_cases": 6,
+    "expected_cases": 28,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -546,6 +546,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
       "0f053bca0de3fb093e73b8b3348755ea473f605096ec38ef410aca5b7dc0bf14",
       "543952f2c0903c45dd0691ef1dfd89846afd1d929ae045f7f2c2eaa0c6a5de95"
     ],
@@ -564,9 +565,9 @@
     "ratio_engine": null,
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
-    "worst_ratio": 0.7624703726985029,
-    "observed_cases": 6,
-    "expected_cases": 28,
+    "worst_ratio": 0.8587730759086715,
+    "observed_cases": 9,
+    "expected_cases": 52,
     "passed_cases": 0,
     "failed_cases": 0,
     "process_error_cases": 0,
@@ -576,6 +577,7 @@
       "efae6b8fed9e57346157d92dffc3cdb57c44560e"
     ],
     "plan_sha256": [
+      "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
       "350cdca786356d1b9d824692ea0bcb436bc521bc4beec8520066107fdc224707",
       "543952f2c0903c45dd0691ef1dfd89846afd1d929ae045f7f2c2eaa0c6a5de95",
       "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585"
@@ -669,36 +671,6 @@
     "plan_sha256": [
       "543952f2c0903c45dd0691ef1dfd89846afd1d929ae045f7f2c2eaa0c6a5de95",
       "59dbf6ad89208fdda6b69f41673798d9d3c8e49a86de9202494477bff286f4c7"
-    ],
-    "qualified": false
-  },
-  "psnrhvs": {
-    "canonical": "author psnrhvsm.m / signal 1.4.1",
-    "check": "1 process errors",
-    "ratio": 0.0001584867357398858,
-    "ratio_width": 64,
-    "ratio_height": 64,
-    "ratio_threads": 1,
-    "ratio_cases": 3,
-    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
-    "ratio_plan_sha256": "522c4a2dff9eb512553847b0e0bbfe7a7e6205b3aa5002187d753360d0008f61",
-    "ratio_engine": null,
-    "ratio_canonical_device": "cpu",
-    "ratio_blocks": 3,
-    "worst_ratio": 0.00016195127851261653,
-    "observed_cases": 6,
-    "expected_cases": 6,
-    "passed_cases": 5,
-    "failed_cases": 0,
-    "process_error_cases": 1,
-    "max_abs_delta": 1.4436844821830164e-06,
-    "rust_sources": [
-      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
-    ],
-    "plan_sha256": [
-      "522c4a2dff9eb512553847b0e0bbfe7a7e6205b3aa5002187d753360d0008f61",
-      "656f7a18224317530cf1c1fd117329f94dbb245607a5c71800873fb7c33ed49b",
-      "fb60975c2cfa9aad51ce41136f00ba45bf7274dd0f061c9b85a4aa4f22094b9d"
     ],
     "qualified": false
   }

@@ -79,7 +79,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ciede2000`](docs/MODEL_CARDS.md#ciede2000) | FR | scikit-image CIEDE200… | Δ 9.2e-15 | ≈0.6× |
 | [`ckdn`](docs/MODEL_CARDS.md#ckdn) | FR/NN | original CKDN / pinne… | 2/2 pass | ≈0.49× R |
 | [`cvvdp`](docs/MODEL_CARDS.md#cvvdp) | FR | pycvvdp 0.5.7 CPU / s… | 1/1 pass | ≈0.031× |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | CUDA pycvvdp 0.5.7 /… | 7/49 pass | ≈0.12× |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | FR | CUDA pycvvdp 0.5.7 /… | 9/49 pass | ≈0.12× |
 | [`cw-ssim`](docs/MODEL_CARDS.md#cw-ssim) | FR | author CW-SSIM / orig… | Δ 6.7e-16 | ≈0.062× |
 | [`cw-ssim-pyiqa`](docs/MODEL_CARDS.md#cw-ssim-pyiqa) | FR | PyIQA 0.1.16 / weight… | 26/26 pass | ≈0.11× |
 | [`deepdc`](docs/MODEL_CARDS.md#deepdc) | FR/NN | DeepDC-PyTorch 0.2 /… | 5/5 pass | ≈1.21× R ! |
@@ -87,7 +87,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | original DMM / pinned… | partial; 2/2 pass | ≈0.61× R |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | DreamSim 0.2.1 / ense… | 2/2 pass | ≈0.921× R |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core 3.5… | Δ 0 | ≈0.14× |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core 3.5… | Δ 0 | ≈0.21× |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.19× ! |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.19× ! |
@@ -189,7 +189,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.38× R |
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.78× O |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | original Cool-Chic WD… | 2/2 pass | ≈0.11× R |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 1.1e-16 | — |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 2.2e-16 | ≈1.1× ! |
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | self reference | — |
 | [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | disabled | — |
 
@@ -307,7 +307,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 / PyTorch CUDA | 0.000026702880859375 | not recorded | not recorded / not applicable |
+| [`cvvdp-gpu`](docs/MODEL_CARDS.md#cvvdp-gpu) | pycvvdp 0.5.7 / PyTorch CUDA | 0.0000400543212890625 | not recorded | not recorded / not applicable |
 
 </details>
 
@@ -841,7 +841,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | IVP-Lab original WS_HV notebook | 0.00000000000000011102230246251565 | not recorded | not recorded / not applicable |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | IVP-Lab original WS_HV notebook | 0.0000000000000002220446049250313 | not recorded | not recorded / not applicable |
 
 </details>
 

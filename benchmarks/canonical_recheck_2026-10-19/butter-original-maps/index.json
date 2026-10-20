@@ -1,0 +1,37 @@
+{
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/butter-original-current-maps-v2",
+  "completion_sha256": "7b5b0cd159d519d60a5aec8e1c84e5b8034a5f172c152b88645f72593595f2cd",
+  "cases": 24,
+  "scalar_max_abs_delta": 0,
+  "map_max_abs_delta": 0,
+  "all_maps_bit_identical": true,
+  "all_pixels_finite": true,
+  "requested_worker_budgets": [
+    1,
+    28
+  ],
+  "native_effective_threads": 1,
+  "canonical_effective_threads": 1,
+  "canonical_origin": "https://github.com/google/butteraugli",
+  "canonical_revision": "71b18b636b9c7d1ae0c1d3730b85b3c127eb4511",
+  "shards": [
+    {
+      "file": "pairA.json",
+      "cases": 8,
+      "sha256": "4ed8b43b46c50c0f1db741fb38e03d9fd04c9e20df7c072f33fd95a0cc8d5091"
+    },
+    {
+      "file": "pairB.json",
+      "cases": 8,
+      "sha256": "cfabc1460d587961cda840f229c1462f0054a1cd919487a449b785e2cc9abc19"
+    },
+    {
+      "file": "pairC.json",
+      "cases": 8,
+      "sha256": "386a4745b914534381caafaa620cb3d06cb7079dfc90ecb6f751616a92b8aa89"
+    }
+  ],
+  "build_receipt_sha256": "bda07050b71719e7ceb9b61ba18fd90e49567be359561d9f9038788839421033",
+  "wrapper": "run-heavy: done rc=0 63s | peak-RSS 1.43GiB | min-avail 12704MiB | peak-load 2.60",
+  "qualification": "Accuracy observations; no new scalar/map bound or speed ratio"
+}

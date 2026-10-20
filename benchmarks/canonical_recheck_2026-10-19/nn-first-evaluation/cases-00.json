@@ -307,6 +307,237 @@
         "c26b96fc1b823d5827011955d07cc4a6aa5574d44b87d3be949b8ada16b44ee2",
         "10ce5d860ca3f2eef18ab66363f701505137ca2e90c8e15cc77aeee7c98a0d11"
       ]
+    },
+    {
+      "metric": "lpips-vgg",
+      "case": "lpips-vgg-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "lpips 0.1.4",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.00019392499999999998,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 6.3964012003703274e-09,
+      "ratio": 1.0837072166007762,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2983309936,
+              "score": 0.026550166308879852
+            },
+            "native": {
+              "ns": 3233034507,
+              "score": 0.026550159912478652
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 1.0837072166007762
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 3172256880,
+              "score": 0.026550159912478652
+            },
+            "canonical": {
+              "ns": 2990093179,
+              "score": 0.026550166308879852
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 1.0609224161572526
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 3012438572,
+              "score": 0.026550166308879852
+            },
+            "native": {
+              "ns": 3283989927,
+              "score": 0.026550159912478652
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 1.0901433667474631
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 36s | peak-RSS 1.70GiB | min-avail 13631MiB | peak-load 3.76",
+        "run-heavy: done rc=0 34s | peak-RSS 1.70GiB | min-avail 13272MiB | peak-load 2.76",
+        "run-heavy: done rc=0 33s | peak-RSS 1.70GiB | min-avail 13696MiB | peak-load 2.06"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "93dd6ea30ca67dbcaeca868230ca53a206302b25d22ae74a7f8515c770f32eae",
+      "block_sha256": [
+        "78b80ec5544f32d5ed1b5a3bd9cddd1c2b8abdbbe20a72fae5a08f0ad1cfab57",
+        "5eacf38e1c25eb0a2bb1de3eefed4638f5bb80f1f29227883f62feaeff3a7bad",
+        "ca03348097813546eae3b9c431fba501f9ef31d2484c17ee57146b1015b385c0"
+      ]
+    },
+    {
+      "metric": "lpips-vgg",
+      "case": "lpips-vgg-first-pair-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "lpips 0.1.4",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.00019392499999999998,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 6.3964012003703274e-09,
+      "ratio": 0.8308038008537354,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 638775939,
+              "score": 0.026550166308879852
+            },
+            "native": {
+              "ns": 526801299,
+              "score": 0.026550159912478652
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 0.8247043553717824
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 538142274,
+              "score": 0.026550159912478652
+            },
+            "canonical": {
+              "ns": 643918999,
+              "score": 0.026550166308879852
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 0.8357297654452343
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 632477482,
+              "score": 0.026550166308879852
+            },
+            "native": {
+              "ns": 525464696,
+              "score": 0.026550159912478652
+            }
+          },
+          "delta": 6.3964012003703274e-09,
+          "passed": true,
+          "ratio": 0.8308038008537354
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 23s | peak-RSS 1.70GiB | min-avail 13471MiB | peak-load 4.72",
+        "run-heavy: done rc=0 28s | peak-RSS 1.70GiB | min-avail 13433MiB | peak-load 2.50",
+        "run-heavy: done rc=0 25s | peak-RSS 1.70GiB | min-avail 13531MiB | peak-load 2.75"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "bbd0da20e5b2e2756da8942f5c408da93668e94b1f68f34eb401fbb66f89c019",
+      "block_sha256": [
+        "58d23c495f0601291d8ffea73e120d3f5c293d16076eca2fc7a1a050f3813557",
+        "9c36200fd2d5e5e5ae8c3167c9d66af1eb56f034d2165ece33fd8989de84a2e9",
+        "4aebdbf51884f6120a39646a317d8dea59fdbdeb7b8108d2082c7c893c98fd85"
+      ]
+    },
+    {
+      "metric": "lpips-squeeze",
+      "case": "lpips-squeeze-first-pair-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "lpips 0.1.4",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 7.960100000000001e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 2.429932964911896e-09,
+      "ratio": 0.5382086240605003,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 251488060,
+              "score": 0.005438409745693207
+            },
+            "native": {
+              "ns": 143322394,
+              "score": 0.005438407315760242
+            }
+          },
+          "delta": 2.429932964911896e-09,
+          "passed": true,
+          "ratio": 0.5698974098412466
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 133962070,
+              "score": 0.005438407315760242
+            },
+            "canonical": {
+              "ns": 248903611,
+              "score": 0.005438409745693207
+            }
+          },
+          "delta": 2.429932964911896e-09,
+          "passed": true,
+          "ratio": 0.5382086240605003
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 260300942,
+              "score": 0.005438409745693207
+            },
+            "native": {
+              "ns": 131892469,
+              "score": 0.005438407315760242
+            }
+          },
+          "delta": 2.429932964911896e-09,
+          "passed": true,
+          "ratio": 0.5066922462385864
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 20s | peak-RSS 0.88GiB | min-avail 14337MiB | peak-load 1.48",
+        "run-heavy: done rc=0 19s | peak-RSS 0.88GiB | min-avail 14450MiB | peak-load 1.58",
+        "run-heavy: done rc=0 21s | peak-RSS 0.88GiB | min-avail 14393MiB | peak-load 3.53"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "9622a5a93a2a13349de5f4c6bba38547038a83c24a613d51c8ebafb17a7bd19b",
+      "block_sha256": [
+        "9b697f1ac1323541e7e1ea45b2fb84e25183d6b63d1975755db984a770951d68",
+        "352af26943ee906f47313db95cc180bb73e70969d03ef3621964c68af852dbbd",
+        "ec1020fad892963b1723a3fec01c7307684346a38f9b0f435741e90dabe9a502"
+      ]
     }
   ]
 }
