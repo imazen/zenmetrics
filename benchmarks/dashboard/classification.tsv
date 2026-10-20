@@ -1471,3 +1471,4 @@ benchmarks/canonical_recheck_2026-10-19/revised-flip-profiles.json	ignored	Nativ
 benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/cases-00.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/nn-first-evaluation/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/dssim-author-cpu-grid-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/aic2026_full_repro_2026-10-20/canonical_inputs_2026-10-20.meta	ignored	Canonical crop input byte inventory provenance and external-artifact bindings; not a measurement panel.

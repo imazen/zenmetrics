@@ -1,0 +1,27 @@
+AIC2026 cropped input byte inventory, 2026-10-20
+Captured source: 854405ef8e5b8f7834eca3ed3cbd82d3f1af1d59
+Published equivalent worker: cfa6238b7165 (worker bytes verified identical)
+Worker SHA256: 996f720f290f40995540e3f143207698f38a2b6aaa621e89ea460c9a8eb8e522
+Command, after configured shared admission:
+  run-heavy --mem 12G --jobs 12 -- just aic-canonical-input-hashes \
+    ~/tmp/aic-canon/pairs_cropped.tsv ~/tmp/aic-canon/input-bindings.json \
+    ~/tmp/aic-canon/input-bindings.receipt.json
+Started: 2026-10-20T13:38:06.681034+00:00
+Finished: 2026-10-20T13:39:53.329859+00:00
+Pairs: 9618
+Unique inputs: 9688
+Read chunk bytes: 1048576
+Concurrent read streams: 1
+Pairs SHA256: e2b47a20c1033bbb7d0cc8fe40a56ac5de68e1651a64948d7be2f60cffe26354
+External inventory: /mnt/v/output/zenmetrics/aic2026_reproduction/2026-10-20/input-bindings.canonical.json
+Inventory SHA256: f4d68aacd0ba11a4de437f5d8ba1a6462adaca87f922d1d70eb54e3a68377405
+External receipt: same directory, input-bindings.canonical.receipt.json
+Receipt SHA256: deabfb0c54f74f21e9f7cf9af80595c0ce73bbe42ba91e5d7873f2fa50372612
+External log: same directory, input-bindings.canonical.log
+Log SHA256: ff2b3a88d8a7d3a11733d91720a57ff15624ec91241e3feac344a95d8b44cec0
+run-heavy: done rc=0 107s | peak-RSS 0.05GiB | min-avail 14282MiB | peak-load 1.91
+
+These inventory files are retained on the capture host; resolve with hostname
+and ls at the paths above. The exported provenance carries the full input
+bindings and is copied with the requested CSV exports. This inventory records
+bytes; it does not qualify any metric scores or timings.
