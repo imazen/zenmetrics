@@ -2385,3 +2385,11 @@ bench-iqa-canonical-summary source inventory output:
 
 bench-iqa-canonical-summary-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_spotcheck_summary
+
+# Small four-case score-control batch; source/math and per-child checks stay frozen.
+bench-iqa-canonical-hdr-warm-controls cohort worker output +options:
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 8 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/run_hdr_reference_controls.py '{{cohort}}' '{{worker}}' '{{output}}' {{options}}
+
+# Four original-cell protocol calls after exact ABBA controls; no timing acceptance.
+bench-iqa-canonical-hdr-cell-controls manifest output:
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 8 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/run_hdr_cell_controls.py '{{manifest}}' '{{output}}'

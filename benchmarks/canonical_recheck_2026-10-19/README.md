@@ -582,3 +582,19 @@ original/resident metric-score identity, native parity, an official HDR-VDP-3
 bound or comparative timing qualification. Those remain separate pending work.
 The preflight wrapper reports rc=0, 901s, peak-RSS 0.12GiB, minimum available
 14632MiB and peak load 1.69; much of its elapsed time is outside metric scoring.
+
+## Headless HDR photo controls (2026-10-20)
+
+All four actual warm cell protocols and four default/resident ABBA controls
+pass at 512² and threads 1/8. [The receipt](hdrvdp-photo-controls.json) retains
+native resource flags and the source-bound observations. HDR-VDP-2 differs from
+the official original by 0.0007070822066168603, within its unchanged 0.005 bound.
+HDR-VDP-3 differs by 1.7763568394002505e-15; no official external acceptance bound
+is assigned. These are photo controls, not a full-grid claim or a paired ratio.
+
+An independent syscall trace identified X11 initialization outside the metric
+clock. The new controls use Octave’s `--no-window-system`; every old observation
+remains retained. The four-case score-control batch reports rc=0, 235s,
+peak-RSS 0.20GiB, minimum available 15026MiB and peak load 1.82. The actual cell
+protocol batch reports rc=0, 40s, peak-RSS 0.19GiB, minimum available 15331MiB
+and peak load 6.88. Both retain per-child process memory receipts.

@@ -1,0 +1,160 @@
+{
+  "cases": [
+    {
+      "metric": "hdrvdp",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "native_score": 74.84528560537552,
+      "original_score": 74.84599268758214,
+      "absolute_difference": 0.0007070822066168603,
+      "absolute_bound": 0.005,
+      "numerical_pass": true,
+      "original_default_resident_bits": "4052b624be837482",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_artifact": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-hdr-current40-photo512-t1-run/observations.json",
+        "sha256": "4ecb0404e4a6c1e93c3bd60d8efbbeedcc3a47a4df8b794c9a61d755de56b22e"
+      },
+      "original_audit": {
+        "case": "photo512-hdrvdp-photo512-t1-warm-current40-headless-warm",
+        "audit": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-batch-v1/admission/photo512-hdrvdp-photo512-t1-warm-current40-headless-warm/audit-result.json",
+        "sha256": "b63aa5aee2260bcbde7916de317d334d2afff617089863844e3b2a4228cc8042",
+        "passed": true
+      },
+      "native_resource_gates": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "metric": "hdrvdp",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "native_score": 74.84528560537552,
+      "original_score": 74.84599268758214,
+      "absolute_difference": 0.0007070822066168603,
+      "absolute_bound": 0.005,
+      "numerical_pass": true,
+      "original_default_resident_bits": "4052b624be837482",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_artifact": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-hdr-current40-photo512-t8-run/observations.json",
+        "sha256": "a6c4933af0f7da76f4b5b16ef0009827b7d42588a6cf17656b05945f1cfba96a"
+      },
+      "original_audit": {
+        "case": "photo512-hdrvdp-photo512-t8-warm-current40-headless-warm",
+        "audit": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-batch-v1/admission/photo512-hdrvdp-photo512-t8-warm-current40-headless-warm/audit-result.json",
+        "sha256": "68541a3b7b4b0007ea85c44902bfdb6748e3c85d314bbcea4f1b33913aea186c",
+        "passed": true
+      },
+      "native_resource_gates": [
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "metric": "hdrvdp3",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "native_score": 9.887709461780661,
+      "original_score": 9.887709461780663,
+      "absolute_difference": 1.7763568394002505e-15,
+      "absolute_bound": null,
+      "numerical_pass": null,
+      "original_default_resident_bits": "4023c681dac5653a",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_artifact": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-hdr-current40-photo512-t1-run/observations.json",
+        "sha256": "4ecb0404e4a6c1e93c3bd60d8efbbeedcc3a47a4df8b794c9a61d755de56b22e"
+      },
+      "original_audit": {
+        "case": "photo512-hdrvdp3-photo512-t1-warm-current40-headless-warm",
+        "audit": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-batch-v1/admission/photo512-hdrvdp3-photo512-t1-warm-current40-headless-warm/audit-result.json",
+        "sha256": "d9e1f27f58ac900ccb1bbc0b1e64c4de33c71939c1b61b0a60eeb3f54407e34e",
+        "passed": true
+      },
+      "native_resource_gates": [
+        true,
+        false,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "metric": "hdrvdp3",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "native_score": 9.887709461780661,
+      "original_score": 9.887709461780663,
+      "absolute_difference": 1.7763568394002505e-15,
+      "absolute_bound": null,
+      "numerical_pass": null,
+      "original_default_resident_bits": "4023c681dac5653a",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_artifact": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/native-hdr-current40-photo512-t8-run/observations.json",
+        "sha256": "a6c4933af0f7da76f4b5b16ef0009827b7d42588a6cf17656b05945f1cfba96a"
+      },
+      "original_audit": {
+        "case": "photo512-hdrvdp3-photo512-t8-warm-current40-headless-warm",
+        "audit": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-batch-v1/admission/photo512-hdrvdp3-photo512-t8-warm-current40-headless-warm/audit-result.json",
+        "sha256": "b9801ddaca98a27fd37f3eabfb8e937afbf69c2d39d4cdb65d243456cb96aa9e",
+        "passed": true
+      },
+      "native_resource_gates": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "batch": {
+    "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-batch-v1/result.json",
+    "sha256": "d50c96282c54ea4fe5d14d871676204456bfabf05a3091d31f171e4d741f7282"
+  },
+  "cohort_sha256": "7438f41d2a31c5f39cba5ff0566d35ab75a03e0f81993da4ec889097ebc2a95d",
+  "cell_protocol": {
+    "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-cell-protocol-headless-v1/result.json",
+    "sha256": "86cf8ef1ad4d28b6c13bf2d61bf62fe44a252da1fcce51ffe473043dde4eefa2"
+  },
+  "qualified_timing_cells": 0,
+  "regression_qualified": false,
+  "qualification": "One photo pair at one/eight threads. All four original/resident ABBA controls and all four actual cell protocol controls passed. Native resource flags remain explicit. HDR-VDP-3 has no assigned official external bound; its delta is an observation. No paired comparative ratio is inferred from these controls.",
+  "wrappers": [
+    "run-heavy: done rc=0 235s | peak-RSS 0.20GiB | min-avail 15026MiB | peak-load 1.82",
+    "run-heavy: done rc=0 40s | peak-RSS 0.19GiB | min-avail 15331MiB | peak-load 6.88"
+  ]
+}

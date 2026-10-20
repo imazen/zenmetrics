@@ -69,6 +69,8 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Add explicit comparative thread selection (`97ccee26`), the 40-route changed-only selector in measured local order (`d660bb58`), and source-bound per-name/per-cell canonical tables (`fd6b334f`).
+
 - Add explicit original-reference comparative commands and a compact per-metric README with measured Rust/canonical ratios (`69a0cb75`); preserve partial DMM canonical coverage and original model-card joins (`0d3807c4`).
 
 - FSIM exposes strided luma-only scoring with its existing automatic/fixed-factor policy, avoiding chroma computation when only luma is requested (PR 92, `c9f98a98`).
