@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -85,6 +86,23 @@ def capture(config, host, cycle, tools):
     return json.loads((output / 'capture-receipt.json').read_text())
 
 
+def recover_published(repo, revision):
+    """Record a manually repaired push only when its exact data is on master."""
+    if not re.fullmatch('[0-9a-f]{40}', revision):
+        raise ValueError('full verified commit hash required')
+    subprocess.run(['git', 'merge-base', '--is-ancestor', revision, 'origin/master'], cwd=repo, check=True)
+    folder = repo / DESTINATION
+    public_checks(folder)
+    for path in folder.iterdir():
+        if not path.is_file():
+            raise ValueError('unexpected directory in saved publication')
+        committed = subprocess.check_output(['git', 'show', revision + ':' + DESTINATION + '/' + path.name], cwd=repo)
+        if path.read_bytes() != committed:
+            raise ValueError('working data differs from verified publication: ' + path.name)
+    return dict(state='committed and remote verified', revision=revision, updated_utc=now(),
+                evidence_fingerprint=fingerprint(folder), recovery='exact committed data and remote ancestry verified')
+
+
 def publish(repo, projection, digest, cycle):
     lock = repo / '.workongoing'
     try:
@@ -134,12 +152,23 @@ def publish(repo, projection, digest, cycle):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config', type=Path)
+    parser.add_argument('--recover-published', metavar='FULL_COMMIT',
+                        help='Record an already repaired guarded push; verify ancestry and exact published bytes')
     a = parser.parse_args()
     config = json.loads(a.config.read_text())
     root = Path(config['scratch'])
     root.mkdir(parents=True, exist_ok=True)
     with (root / 'cycle.lock').open('a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if a.recover_published:
+            result = recover_published(Path(config['repo']), a.recover_published)
+            for name in ('last-published.json', 'status.json'):
+                target = root / name
+                temporary = target.with_suffix('.new')
+                temporary.write_text(json.dumps(result, indent=2) + '\n')
+                temporary.replace(target)
+            print(json.dumps(result))
+            return
         cycle = root / datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         (cycle / 'captures').mkdir(parents=True)
         repo = Path(config['repo'])

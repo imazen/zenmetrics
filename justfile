@@ -2154,6 +2154,11 @@ bench-iqa-publish-saved-check:
 iqa-results-sync config:
     python3 benchmarks/iqa_compete_2026-10-16/sync_saved_results.py '{{config}}'
 
+# After a repaired safe_push, verify ancestry and identical committed data before
+# updating only private sync bookkeeping. This never pushes or edits repository files.
+iqa-results-sync-recover config revision:
+    python3 benchmarks/iqa_compete_2026-10-16/sync_saved_results.py '{{config}}' --recover-published '{{revision}}'
+
 iqa-results-sync-check:
     TMPDIR="$HOME/tmp" python3 -m unittest discover -s benchmarks/iqa_compete_2026-10-16 -p test_result_sync.py
 

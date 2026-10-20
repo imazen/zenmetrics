@@ -29,6 +29,13 @@ The user service `iqa-results-sync.service` is driven by
 root contains `status.json`, `last-published.json`, immutable raw capture cycles
 and full push logs. A failed cycle preserves the previous remote export.
 
+After fixing a guard rejection and completing the normal guarded push, run
+`just iqa-results-sync-recover CONFIG FULL_COMMIT`. It verifies that commit is
+on remote master, checks the public projection, and requires every saved-data
+file to match the committed bytes before updating private sync bookkeeping.
+It neither pushes nor changes repository files. The cycle lock prevents a
+concurrent capture from changing bookkeeping during recovery.
+
 The coordinator runs on efficiency cores at low CPU/I/O priority, with a 2 GiB
 service memory limit. This is result capture/publication, not a scoring process;
 benchmark workers retain their own shared heavy locks and placement gates.

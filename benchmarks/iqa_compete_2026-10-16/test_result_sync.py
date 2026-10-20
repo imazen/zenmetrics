@@ -6,10 +6,40 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_saved_results import FILES, fingerprint, public_checks, publish
+from sync_saved_results import DESTINATION, FILES, fingerprint, public_checks, publish, recover_published
 
 
 class SyncControls(unittest.TestCase):
+    def test_recovery_requires_exact_published_bytes_and_remote_ancestry(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            folder = repo / DESTINATION
+            folder.mkdir(parents=True)
+            for host in ('mac', 'i265', 'r7900x'):
+                (folder / (host + '-observations.csv')).write_text(
+                    'protocol,only_mode,threads,width,height\ncanonical-cold3-warm10-100ms-scalar,score,8,512,512\n')
+            def freeze():
+                (folder / 'SHA256SUMS.json').write_text(json.dumps({f.name: hashlib.sha256(f.read_bytes()).hexdigest()
+                    for f in folder.glob('*.csv')}))
+            freeze()
+            committed = {p.name:p.read_bytes() for p in folder.iterdir()}
+            def show(argv, **kwargs):
+                return committed[argv[-1].rsplit('/', 1)[-1]]
+            revision = 'a' * 40
+            with patch('sync_saved_results.subprocess.run') as ancestry, patch('sync_saved_results.subprocess.check_output', side_effect=show):
+                result = recover_published(repo, revision)
+                self.assertEqual(result['revision'], revision)
+                ancestry.assert_called_once_with(['git', 'merge-base', '--is-ancestor', revision, 'origin/master'], cwd=repo, check=True)
+                target = folder / 'mac-observations.csv'
+                target.write_text(target.read_text().replace(',8,', ',1,'))
+                freeze()
+                with self.assertRaisesRegex(ValueError, 'working data differs'):
+                    recover_published(repo, revision)
+            with patch('sync_saved_results.subprocess.run', side_effect=subprocess.CalledProcessError(1, 'ancestry')):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    recover_published(repo, revision)
+
     def test_staged_capture_has_its_sealed_validation_dependencies(self):
         import shutil
         import subprocess
