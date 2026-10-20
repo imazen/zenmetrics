@@ -1,0 +1,117 @@
+{
+  "metric": "ssim2-gpu",
+  "case": "ssim2-gpu-grid-pairA-64x64-t1",
+  "width": 64,
+  "height": 64,
+  "threads": 1,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/run/ssim2-gpu-grid-pairA-64x64-t1",
+  "observations": [
+    {
+      "block": "block-00",
+      "sha256": "6ac79ee4249682a9d7483d37c76aeab9bc5b1f4ffd05ce54ad6ee0cb84c75cb8",
+      "scores": {
+        "canonical": 90.86388011956463,
+        "rust": 84.8498333349087
+      },
+      "delta": 6.014046784655932,
+      "passed": null,
+      "threads": 1
+    },
+    {
+      "block": "block-01",
+      "sha256": "28077fc7e36f2b7152c6d60d8d0b2e0b194ac8766c1d772d7c6cc4a8336b2d02",
+      "scores": {
+        "rust": 84.8498333349087,
+        "canonical": 90.86388011956463
+      },
+      "delta": 6.014046784655932,
+      "passed": null,
+      "threads": 1
+    },
+    {
+      "block": "block-02",
+      "sha256": "522c0c0c1319c6aa3050de9bed6a94654d5f018c53fb653d33b6eb0930b6709d",
+      "scores": {
+        "canonical": 90.86388011956463,
+        "rust": 84.8498333349087
+      },
+      "delta": 6.014046784655932,
+      "passed": null,
+      "threads": 1
+    },
+    {
+      "block": "block-00",
+      "threads": 28,
+      "sha256": "2271790afb43277e061507491b97f7473f3c1a13f75fe1e1aae2c4d3be9d1c88",
+      "scores": {
+        "canonical": 90.86388011956463,
+        "rust": 84.8498333349087
+      },
+      "delta": 6.014046784655932,
+      "passed": null
+    },
+    {
+      "block": "block-01",
+      "threads": 28,
+      "sha256": "5f4d6597b80f339d9d8074bbb8bb666ddbd7676b810b0d90467d824dddb5093e",
+      "scores": {
+        "rust": 84.8498333349087,
+        "canonical": 90.86388011956463
+      },
+      "delta": 6.014046784655932,
+      "passed": null
+    },
+    {
+      "block": "block-02",
+      "threads": 28,
+      "sha256": "eb4dcffed9863b8ceb8bf7ba0e61406d0248f0250711dbc17d891a2c08a5fc06",
+      "scores": {
+        "canonical": 90.86388011956463,
+        "rust": 84.8498333349087
+      },
+      "delta": 6.014046784655932,
+      "passed": null
+    }
+  ],
+  "wrapper_receipts": [
+    "run-heavy: done rc=0 3s | peak-RSS 0.33GiB | min-avail 12198MiB | peak-load 1.79",
+    "run-heavy: done rc=0 3s | peak-RSS 0.33GiB | min-avail 12235MiB | peak-load 1.52",
+    "run-heavy: done rc=0 4s | peak-RSS 0.33GiB | min-avail 12104MiB | peak-load 1.57",
+    "run-heavy: done rc=0 4s | peak-RSS 0.33GiB | min-avail 11804MiB | peak-load 2.22",
+    "run-heavy: done rc=0 3s | peak-RSS 0.33GiB | min-avail 12030MiB | peak-load 5.64",
+    "run-heavy: done rc=0 3s | peak-RSS 0.34GiB | min-avail 12059MiB | peak-load 2.94"
+  ],
+  "source_comparison": {
+    "native_source": "crates/ssim2-gpu/src/pipeline.rs",
+    "native_sha256": "c47391e886536db721198183e1a04b4cf751045297dc555ac9bf55fe7eca0d55",
+    "native_loop_lines": [
+      403,
+      415
+    ],
+    "native_pyramid": [
+      64,
+      32,
+      16,
+      8
+    ],
+    "primary_source": "/home/lilith/tmp/portcheck-primary-rgb-build-20261019T0948/src-ssim2-extract/src/ssimulacra2.cc",
+    "primary_sha256": "38d8f92634ef1f8975bd45e7106c5a2d1a99a02de1c2f3828443ad8e16560d5f",
+    "primary_loop_lines": [
+      449,
+      465
+    ],
+    "primary_pyramid": [
+      64,
+      32,
+      16,
+      8,
+      4
+    ],
+    "observation": "GPU checks the next level dimensions before allocation; primary checks previous level before downsampling. This proves different scale selection at64, not the full numerical attribution of the6.014score difference."
+  },
+  "absolute_bound": null,
+  "qualification": "Retained scalar finding, no assigned case bound or new GPU map work. Current native pyramid source unchanged from measured source. A separate ordinary CPU route control is queued; no fix or tolerance change.",
+  "companion_case": "ssim2-gpu-grid-pairA-64x64-t28"
+}

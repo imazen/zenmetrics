@@ -1535,3 +1535,4 @@ benchmarks/aic2026_full_repro_2026-10-20/canonical_reference_identity.meta	ignor
 benchmarks/canonical_recheck_2026-10-19/hdrvdp-photo-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/aic2026_full_repro_2026-10-20/canonical_comparison_bounds.tsv	ignored	Existing canonical comparison bounds and source identities; no measured scores or performance qualification.
 benchmarks/canonical_recheck_2026-10-19/local40-current40worker-command.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

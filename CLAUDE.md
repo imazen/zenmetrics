@@ -561,6 +561,17 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **SSIMULACRA2 GPU small-input scalar discrepancy (2026-10-20).** Three
+  retained 64×64 photo blocks each return GPU 84.8498333349087 versus primary
+  C++ v2.1 90.86388011956463, absolute delta 6.014046784655932. The same
+  observations occur at thread budget 28. Source inspection finds different
+  scale selection: the GPU allocates 64/32/16/8, while the primary checks its
+  previous size before downsampling and also evaluates 4. This structural
+  difference is verified; the complete numerical attribution is not. The GPU
+  pyramid source is unchanged from the measured worker. No case bound was
+  assigned, no tolerance changed and no metric fix landed. Source hashes, raw
+  scores and resource receipts: `benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json`.
+
 - **Linux durable recovery fixture selected a different cell (2026-10-20).**
   The pending-launch fixture selected the first filesystem directory but
   asserted against the first reported cell. Directory iteration order can

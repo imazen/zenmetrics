@@ -395,6 +395,13 @@ local ascending order. CI was not run or consulted, as directed.
 
 ## 2026-10-20: site-readable warm observation export
 
+New retained scalar finding: [SSIMULACRA2-GPU at 64²](../canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json)
+returns 84.8498333349087 against primary C++ 90.86388011956463, consistently
+across all six blocks at threads 1/28. The GPU and primary select four and five
+pyramid levels respectively on this input. Full numerical attribution remains
+open; this is a correctness observation, not an accepted parity result or a
+request for additional GPU maps. Metric code and bounds remain unchanged.
+
 The later [current40 comparative command receipt](../canonical_recheck_2026-10-19/local40-current40worker-command.json)
 supersedes the 38-route preparation scope above: all 40 changed routes now have
 bound reference plans, producing 80 cases at threads 1/8. Preparation passed in

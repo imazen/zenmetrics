@@ -609,6 +609,15 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
 
 ### `ssim2-gpu` — vs `ssimulacra2` 0.5
 
+- **Primary C++ small-input observation, 2026-10-20.** The retained 64² photo
+  control gives GPU 84.8498333349087 and primary SSIMULACRA2 v2.1
+  90.86388011956463 in all three blocks at both 1/28 thread budgets. Source
+  inspection finds four GPU scales (64/32/16/8) versus five in the primary
+  loop (also 4), because their size checks occur on different sides of the
+  downsample. This establishes a scale-selection difference; it does not yet
+  isolate the entire score delta to that difference. No new bound or accepted
+  parity result is assigned. See the [source and scalar receipt](benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-small-scalar-finding.json).
+
 - **DIVERGES** — the default portable path uses an **FIR** blur while
   the CPU reference uses the recursive **IIR** — per-image scores diverge
   by ~5e-5 in the final score; the two are treated as *distinct metrics*
