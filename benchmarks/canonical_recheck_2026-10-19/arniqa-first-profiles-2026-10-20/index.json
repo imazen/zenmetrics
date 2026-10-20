@@ -1,0 +1,63 @@
+{
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "sha256": "4ce406c0410ff4c31f2073ec89fdcf96bcb0635f2887207a1e9f44bc7cf03258",
+      "case": "arniqa-first-original-cid22-t1"
+    },
+    {
+      "file": "profile-01.json",
+      "sha256": "51b4627f9e222535911d8988d219da219c8486fd7c3dbd987e6e8358d7e4b38c",
+      "case": "arniqa-first-original-cid22-t8"
+    }
+  ],
+  "debug_review": {
+    "command": [
+      "readelf",
+      "-SW",
+      "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first"
+    ],
+    "binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+    "matching_perf_cache_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+    "stdout": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-arniqa-debug-review/sections.stdout",
+      "sha256": "489a12d6d0ed84a6762438bcf3fe7b8ea58c2828804279243117cd724a2178ba"
+    },
+    "stderr": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-arniqa-debug-review/sections.stderr",
+      "sha256": "2fd3ca99a730b73e80a245658106edca0b2a929615cf0fecb4c97b88d43e6ab3"
+    },
+    "unavailable_split_debug_reference_count": 138,
+    "debug_reference_shards": [
+      {
+        "file": "debug-reference-00.json",
+        "sha256": "62ca2606c426717441b379d9c2fc806bc032f3c39595e16aa99b8318a809e229"
+      },
+      {
+        "file": "debug-reference-01.json",
+        "sha256": "96ad6e7124a31d400faf960a7b42d110a56e830296ef286c4b2e14401a2a100c"
+      },
+      {
+        "file": "debug-reference-02.json",
+        "sha256": "1924bd5c5542f3407406ab87dcbe2d8e6822149119e79fbf386bd09ff7aa75e8"
+      },
+      {
+        "file": "debug-reference-03.json",
+        "sha256": "46741d33a0cea1a7c063b1a215a9944c6a0fa73e0e23c2d8358b8cddc15b0b3d"
+      },
+      {
+        "file": "debug-reference-04.json",
+        "sha256": "90270ce8f2472ba20873adec831db68d54f323db1614208b5d7afea87e15e478"
+      },
+      {
+        "file": "debug-reference-05.json",
+        "sha256": "842d64836b2b6eee274acb528eb8d6ccb0c09040791fff9fda217fe85e3c879a"
+      },
+      {
+        "file": "debug-reference-06.json",
+        "sha256": "3f5473d44034e2f0c83a15c14b593a57b73485492c49f1cbfbb9cec49fe63a27"
+      }
+    ]
+  },
+  "qualification": "Original native-probe reports retain symbol samples with zero reported lost samples and partial source-line attribution. Packed debug re-symbolization is tracked separately. Complete-probe scope includes priming and score controls; no isolated first-evaluation time, new metric timing or causal/runtime qualification."
+}

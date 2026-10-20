@@ -1,0 +1,82 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.04.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.07.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.15.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.14.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.13.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.12.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.11.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.10.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.09.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.08.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.07.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.06.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.04.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.03.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.02.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.00.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_shape_inference-4bf7036918d159a1.rten_shape_inference.a62bce9044338f2a-cgu.01.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.15.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.14.rcgu.dwo",
+    "exists": false
+  }
+]

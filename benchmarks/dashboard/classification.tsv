@@ -1646,3 +1646,13 @@ benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/dssim-gpu-g
 benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/ws-hv-current-512x512-t1-all60-new-analysis.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/retained-analysis-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-04.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-05.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/debug-reference-06.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-profiles-2026-10-20/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

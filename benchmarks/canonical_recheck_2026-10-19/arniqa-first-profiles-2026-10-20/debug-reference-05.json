@@ -1,0 +1,82 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.13.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.12.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.11.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.10.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.09.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.08.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.07.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.06.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.03.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.02.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.01.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_onnx-9fb92bd0e5af427e.rten_onnx.248a66bd7cc48eec-cgu.00.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_vecmath-f40e0e6217b5c81a.rten_vecmath.432f6cf8f51c8dbf-cgu.3.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.11.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.03.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.08.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.07.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/num_cpus-a58247a1bb312116.num_cpus.1c61d757e0be2cb3-cgu.02.rcgu.dwo",
+    "exists": false
+  }
+]

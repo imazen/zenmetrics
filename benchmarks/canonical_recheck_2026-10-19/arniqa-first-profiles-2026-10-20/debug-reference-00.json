@@ -1,0 +1,82 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/bytemuck-3ec1992699bcbc70.bytemuck.c8a13c58fa368411-cgu.0.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_utils-dd323dc826deb4f1.crossbeam_utils.539ca348871e4fd4-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.06.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.10.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.09.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.08.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.07.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.04.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.01.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.02.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/crossbeam_epoch-6ecb1ff76e9bb6cf.crossbeam_epoch.75641ca5b860152b-cgu.00.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.15.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.14.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.13.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.12.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.11.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.10.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.09.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rayon_core-3be2740412d73375.rayon_core.1fd288d7d3f4acf0-cgu.08.rcgu.dwo",
+    "exists": false
+  }
+]

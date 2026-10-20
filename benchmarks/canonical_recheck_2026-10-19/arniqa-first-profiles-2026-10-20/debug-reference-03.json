@@ -1,0 +1,82 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_tensor-671f0da376a59cf0.rten_tensor.6f5359a72cb7843d-cgu.00.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_simd-51d1bd79d6aa8843.rten_simd.6ed9af7a6801479e-cgu.4.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_simd-51d1bd79d6aa8843.rten_simd.6ed9af7a6801479e-cgu.6.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_simd-51d1bd79d6aa8843.rten_simd.6ed9af7a6801479e-cgu.5.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_simd-51d1bd79d6aa8843.rten_simd.6ed9af7a6801479e-cgu.3.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_simd-51d1bd79d6aa8843.rten_simd.6ed9af7a6801479e-cgu.0.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.15.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.14.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.13.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.12.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.11.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.01.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.05.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.00.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.10.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.09.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.08.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.02.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.06.rcgu.dwo",
+    "exists": false
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-target/release/deps/rten_gemm-f2aa29d4d365a428.rten_gemm.f0eb48d3d440d497-cgu.03.rcgu.dwo",
+    "exists": false
+  }
+]
