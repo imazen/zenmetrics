@@ -22,3 +22,15 @@ Diagnostic worker SHA256: feddb24dfe9bce972a52d717c3782b9aa7bbdc46f4a6ebc6a4d2b5
 Receipt SHA256: 02bad8ff160cd0cddd742543ef8b035cdc997f154c51e491578915dd0a8c783d
 Result SHA256: 25274f877f5babb611e917bb10b59b6c6df3dc3ae654529bc2ebf3a6dc73c815
 Script SHA256: 7882074754b896195335a06b6bf752834d9e98aaf498697c5cd20137b0729584
+
+Five-worst-row supplement, selected from the retained 4512-row partial panel
+External packet: /mnt/v/output/zenmetrics/aic2026_reproduction/2026-10-20/mad-comparison-worst5-v1/
+Manifest: ~/tmp/aic-canon/attempt-v8/manifest.json
+Manifest SHA256: b6f90f174f16f35a49939e604c5cf2f8b938f033b562ca3437fea00b878f3d3f
+Partial-panel SHA256: 1a1042e2d7fd5e6a3c845fcfeecdf1be464f84ff2a1108cf95afd3fc5465f46f
+Receipt SHA256: f38d485693d270498ce839ba1c4b209b3a2dda6acf842ca2811350e5bba90503
+Result SHA256: cc69ce6ba95f6e2ce87f909a7277eef063b4270c3f8326227857db84976f6596
+Script SHA256: d56cc0982c4a95b95ffa38f4b87fe0ea79eaf3c18d8cb15f04f850d4c4d500b9
+Command uses the same published probe under both admission locks, run-heavy --mem 12G --jobs 1, timeout --signal=TERM --kill-after=5s 180s.
+All five original scalars repeat production exactly. Comparison replay changes no production result. No MATLAB execution or numerical gate is assigned.
+run-heavy: done rc=0 13s | peak-RSS 0.77GiB | min-avail 14493MiB | peak-load 3.23

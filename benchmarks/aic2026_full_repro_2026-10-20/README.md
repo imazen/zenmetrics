@@ -206,3 +206,12 @@ exactly. Its scope recorded `run-heavy: done rc=0 116s | peak-RSS 0.67GiB |
 min-avail 9755MiB | peak-load 7.52`. This qualifies the scheduling control only;
 it does not assign a numerical gate or replace production rows. Native and
 other metric worker counts retain their existing settings.
+
+A separate supplement tests the five worst MAD rows in the retained
+4,512-row partial panel. All five raw author scalars repeat production
+exactly. Each has 16 complex reference-contrast cells, with no interior
+infinities. The same real-part comparison replay reduces their maximum
+absolute residual from 23.67050931176972 to 5.4671792248939255e-6.
+These controls explain a large tail in the opposite direction to the
+earlier infinite-HI example. The aggregate table retains both panels
+separately; neither qualifies unmeasured rows or native MATLAB execution.
