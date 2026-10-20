@@ -74,8 +74,8 @@ def check_set(d, s, out, reference):
             continue
         for r in rows:
             v = r[base]
-            want_j = '' if v in ('', 'nan', 'NaN') else repr(sitejnd(mk, float(v)))
-            if r[jc] != want_j:
+            want_j = '' if v in ('', 'nan', 'NaN') else sitejnd(mk, float(v))
+            if (r[jc] == '') != (want_j == '') or (r[jc] != '' and float(r[jc]) != want_j):
                 bad += 1
     if bad:
         finding(out, 'error', f'{d.name}/{s}: JND columns', f'{bad} JND_<col> values differ from the site mapping of our value')

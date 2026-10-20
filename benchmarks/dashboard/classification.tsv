@@ -1670,3 +1670,7 @@ benchmarks/canonical_recheck_2026-10-19/flip-v17-grid-pairA-3840x2160-t28-060d46
 benchmarks/canonical_recheck_2026-10-19/flip-v17-grid-pairA-64x64-t28-060d464f-fixed-add40-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/flip-grid-pairA-1024x1024-t28-060d464f-confirmation-run.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/aic2026_rescore_full_2026-10-20/compare_cropped.tsv	ignored	AIC2026 full-precision rescore column-agreement aggregates vs the combined reference; summarized in metrics.pointer.md, not a dashboard panel.
+benchmarks/aic2026_rescore_full_2026-10-20/metrics.pointer.md	ignored	Provenance or external-artifact pointer; read as metadata where linked, not a measurement table.
+benchmarks/aic2026_rescore_full_2026-10-20/plan_cropped.json	ignored	Provenance or external-artifact pointer; rescore plan (routes, per-image hashes), not a measurement table.
+benchmarks/aic2026_rescore_full_2026-10-20/provenance_cropped.json	ignored	Provenance or external-artifact pointer; rescore summary, not a measurement table.

@@ -1,0 +1,10 @@
+{
+  "complete": true,
+  "counts": {
+    "derived": 76944,
+    "scored": 500136
+  },
+  "hashes_verified": true,
+  "pairs": 9618,
+  "schema": "aic-rescore/1"
+}
