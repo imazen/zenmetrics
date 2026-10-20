@@ -205,3 +205,11 @@ observations; this subset does not turn the result into an accepted regression.
 
 Both PieAPP routes are excluded from the owner-directed local canonical recheck.
 AIMOS is excluded: proprietary, with no released implementation identified.
+
+`bench-iqa-canonical-warm-profile WORKER CONFIG NEW_DIRECTORY` uses Linux perf
+control FIFOs to enable sampling after the worker's existing completed-warmup
+record. Model construction and initialization are excluded; benchmark calibration
+and measured rounds remain included. It adds no metric timers or counters.
+Run under the same host locks, thread budget and resource wrapper as the compared
+case. The command retains perf's report, raw recording hashes, full logs and
+configuration identity. Its default sampling frequency is 199 Hz.

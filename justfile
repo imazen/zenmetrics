@@ -2166,3 +2166,6 @@ bench-iqa-canonical-author-plan manifest output:
 
 bench-iqa-canonical-queue manifest *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/compare_canonical_queue.py '{{manifest}}' {{options}}
+
+bench-iqa-canonical-warm-profile binary config output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/profile_canonical_warm.py '{{binary}}' '{{config}}' '{{output}}' {{options}}
