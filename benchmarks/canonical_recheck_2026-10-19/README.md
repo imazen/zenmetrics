@@ -561,3 +561,24 @@ The [classical boundary review](cold-boundary-review/index.json) classifies all 
 [All 24 original-Google map checks](butter-original-maps/index.json) match scalar scores and every finite map pixel bit for bit: four sizes, three contents and requested worker budgets 1/28. Both implementations use one effective worker. This uses original Google revision `71b18b6`, separately from libjxl Butteraugli. The accuracy wrapper reports 63s, peak-RSS 1.43 GiB, minimum available 12704 MiB and peak load 2.60. No map or scalar bound was assigned.
 
 [Additional CUDA map-probe development](extra-gpu-map-scope.json) was canceled at owner request before compilation or inference. That draft is unpushed; the existing scalar comparisons continue.
+
+## Revised base HDR reference controls (2026-10-20)
+
+The [current 40-route worker](current40-worker.json) includes master’s revised
+`hdrvdp`/`hdrvdp3` sRGB-display entry points and AVX-512 features, without benchmark
+code overlays. These two names still need paired canonical comparisons.
+
+The [retained reference controls](hdrvdp-reference-controls/controls.json) verify
+14/14 original raw fixtures and preserve both runtime variants. Official
+HDR-VDP-2 sRGB goldens at the unchanged 0.005 bound produce 20/24 failures with
+Octave 6.4/image 2.12, versus 0/24 with unchanged image 2.20.1 `imresize.m` and
+`private/interp_method.m` overlaid. The selected variant’s largest absolute
+difference is 2.842170943040401e-14. The full newer image package is not installed.
+All captured runtime/source/dependency snapshots agree before and after.
+
+Nine resident-parameter controls also pass: exact arrays, copy-on-write,
+sealed-cache and missing-key refusals. These checks do not establish
+original/resident metric-score identity, native parity, an official HDR-VDP-3
+bound or comparative timing qualification. Those remain separate pending work.
+The preflight wrapper reports rc=0, 901s, peak-RSS 0.12GiB, minimum available
+14632MiB and peak load 1.69; much of its elapsed time is outside metric scoring.

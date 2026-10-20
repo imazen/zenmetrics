@@ -364,3 +364,31 @@ and paired timing remain open. This is separate from the Metrix alternative.
 Missing: an assigned external map bound, attribution of the HaarPSI nonfinite differences, and CMS runtime tracing across the remaining input matrix. The [HaarPSI map grid](haarpsi-maps.md) preserves 24 RGB map comparisons. The 4K illustration pair has 41 Rust-NaN/primary-finite positions at each thread count, retained separately from matching NaNs. These findings do not alter scalar passes or qualify map parity.
 
 A separate [SSIMULACRA2 CMS call-stack observation](ssim2-cms-callers.md) attributes all 2,088 `cmsDoTransform` calls on the 64×64 photo control to initialization stacks containing `JxlCmsInit`. It preserves the earlier failed zero-transform hypothesis and the exact scalar result. It is untimed and does not establish runtime closure for the full matrix.
+
+## 2026-10-20: current worker and HDR runtime controls
+
+MISSING: the broad warm/first-call grids, default/resident HDR score controls,
+revised base HDR native/reference timings and fully qualified regression
+acceptance. This update does not turn earlier partial matrices into complete
+coverage. The full current [progress record](../canonical_recheck_2026-10-19/current-campaign-progress.json)
+remains separate from the representative README ratios.
+
+A [fresh classical worker](../canonical_recheck_2026-10-19/current40-worker.json)
+from `ea767ba1a4029963bc56a74fb824e64455e4599e` compiles every current changed
+route, including both revised base HDR names and NR routes. Its independent
+source verifier matches 1,887 tracked in-tree files; external dependency source
+is outside that verifier’s claim. Every changed name returned a finite score on
+the common 1152² photo scheduling workload. This is not canonical parity evidence.
+
+The [HDR reference control receipt](../canonical_recheck_2026-10-19/hdrvdp-reference-controls/controls.json)
+retains all old failures: installed Octave 6.4/image 2.12 fails 20/24 official
+HDR-VDP-2 sRGB goldens. With unchanged image 2.20.1 resize helpers, all 24 pass
+0.005 (largest difference 2.842170943040401e-14), on 14/14 byte-identical original
+raw fixtures. The nine resident-parameter preflights pass. No official HDR-VDP-3
+bound is inferred from these controls, and score/timing qualification remains pending.
+
+`just bench-iqa-canonical-compare MANIFEST NEW_RESULTS 1,8` now exposes explicit
+paired thread selection and manifest scheduling. Its retained 38-route manifest
+freezes 76 cases successfully; the two revised base HDR routes remain pending.
+Native changed-only selection already includes all 40 current routes in measured
+local ascending order. CI was not run or consulted, as directed.

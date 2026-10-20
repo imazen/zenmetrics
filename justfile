@@ -2374,3 +2374,7 @@ bench-iqa-canonical-butter-original-maps python +options:
 # Prepare a new schedule from completed canonical bundles without re-scoring them.
 aic-canonical-successor predecessor scratch output freeze lock1 lock2:
     python3 benchmarks/aic2026_full_repro_2026-10-20/canonical_successor.py {{quote(predecessor)}} {{quote(scratch)}} {{quote(output)}} {{quote(freeze)}} --locks {{quote(lock1)}} {{quote(lock2)}} --rows-per-worker 32
+
+# Retained original/resident HDR controls; no new numerical or timing qualification.
+bench-iqa-canonical-hdr-controls-publish golden preflight output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_hdr_reference_controls.py '{{golden}}' '{{preflight}}' '{{output}}'

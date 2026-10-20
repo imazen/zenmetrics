@@ -1498,3 +1498,5 @@ benchmarks/aic2026_full_repro_2026-10-20/mad_reference_runtime.tsv	ignored	MAD r
 benchmarks/aic2026_full_repro_2026-10-20/mad_reference_runtime.meta	ignored	Source and external-packet bindings for the MAD reference-runtime diagnostic; not a measurement panel.
 benchmarks/rebenchmark_since_f7668c7/order_current_local40_2026-10-20.tsv	ignored	Local native scheduling study with explicit shape/source/control receipts; separate from the main multi-host timing series.
 benchmarks/rebenchmark_since_f7668c7/local40-order-2026-10-20.json	ignored	Local native scheduling study with explicit shape/source/control receipts; separate from the main multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/current40-worker.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdrvdp-reference-controls/controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

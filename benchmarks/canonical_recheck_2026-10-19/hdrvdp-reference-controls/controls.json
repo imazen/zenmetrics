@@ -1,0 +1,125 @@
+{
+  "goldens": {
+    "raw": {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-golden-admitted-v1-results/result.json",
+      "sha256": "0e41ea29a433cbed91b60d53dcbb97f5b85fa1c672937aa228e49e7ad19ed7bd"
+    },
+    "original_raw_exact": 14,
+    "absolute_bound": 0.005,
+    "variants": {
+      "system212": {
+        "cases": 24,
+        "failures": 20,
+        "max_absolute_difference": 0.6111685431807885,
+        "stdout": {
+          "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-golden-admitted-v1-results/system212-stdout.log",
+          "sha256": "b81a7b152586c36b510299d0535761f6cd513f9b0d518ec429ff94446274b5ff"
+        },
+        "returncode": 1
+      },
+      "resize2201": {
+        "cases": 24,
+        "failures": 0,
+        "max_absolute_difference": 2.842170943040401e-14,
+        "stdout": {
+          "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-golden-admitted-v1-results/resize2201-stdout.log",
+          "sha256": "6e59bf275c4d609aa2a05e7c0eba2c87300de2615e413fc25258d443bcd31ddd"
+        },
+        "returncode": 0
+      }
+    },
+    "runtime_files": 1788,
+    "dependency_nodes": 181,
+    "runtime_snapshot": {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-golden-admitted-v1-results/runtime-before/snapshot.json",
+      "sha256": "1ab364009cd0236186fa4b94a5597676458364f7e7fbad136ce770c4b701c213"
+    },
+    "original_overall_passed": false,
+    "selected_reference_passed": true,
+    "qualification": "Original HDR-VDP-2 sRGB goldens only. Octave 6.4/image 2.12 with unchanged image 2.20.1 imresize.m and private/interp_method.m; the full newer package is not installed. No HDR-VDP-3 numerical bound or paired timing qualification follows from this control."
+  },
+  "resident_parameters": {
+    "raw": {
+      "path": "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-resident-preflight-resize2201-results-v1/result.json",
+      "sha256": "37402ba03e4cae89b51282e47cab760d0b107370da5015724b053ce3f1c79d83"
+    },
+    "controls": [
+      {
+        "id": "hdrvdp-arrays",
+        "returncode": 0,
+        "stdout_sha256": "75c4ed3bae29bb64c97488a8fa39d7666687a17843708bf4cbee4b89134435ae",
+        "stderr_sha256": "08b043c798ae95332b2f41e97646ba5b51dd4775fbd5a11ae7f39ef24961b1f7",
+        "control": "hdrvdp-arrays",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp-missing-0",
+        "returncode": 0,
+        "stdout_sha256": "024aadee5d13dc2e8ea66b0002950a57881a1c3f56283a88deb441a100895f2a",
+        "stderr_sha256": "265f586308d3104132fa2f602342dc285293ce369406e6935795fc10d266d0d6",
+        "control": "hdrvdp-missing-0",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp-missing-1",
+        "returncode": 0,
+        "stdout_sha256": "dda6905228df214f21c4a8162eaa2692615af8b16bf4d3e5ad17b8d3ba67c636",
+        "stderr_sha256": "e85a7eb2429a94fd51737f5b9f92c4f55de0f36d6e7c734ad6403050b7d8d7bc",
+        "control": "hdrvdp-missing-1",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp-missing-2",
+        "returncode": 0,
+        "stdout_sha256": "7c5136e4b47a2883ccd33ce5ce117db38fd083025c48bc0ebf0ac820e2ef1646",
+        "stderr_sha256": "c63780c7535376f25d0cb692355af5fa272ff937ead7c2d10d597279df437ea8",
+        "control": "hdrvdp-missing-2",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp3-arrays",
+        "returncode": 0,
+        "stdout_sha256": "0503e84e56a22888b238121d06d9adf1412ba68710fe560b4cba93545b544c85",
+        "stderr_sha256": "417d57cd685a87fe5f8bf30784ef608dd43a50ce0061a34a0460e945307cba4a",
+        "control": "hdrvdp3-arrays",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp3-missing-0",
+        "returncode": 0,
+        "stdout_sha256": "bbf0073ccfd5d23d3f8f99c7aa7910f61c961d24546422f433dd1ebe17184e8f",
+        "stderr_sha256": "a54ea1d9de3cebadcae1ef15df517fb191047b6587e4ab61fc6d39882c143cbf",
+        "control": "hdrvdp3-missing-0",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp3-missing-1",
+        "returncode": 0,
+        "stdout_sha256": "769b6b7071780923dc2ff354b8c35e5e4f09e3398bca71d7d6c0acee37c270d3",
+        "stderr_sha256": "8698d5086bfc49cfeaaf3fbf1d0fec5eee06fd7fc3d36b43ba96b09bb8353397",
+        "control": "hdrvdp3-missing-1",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp3-missing-2",
+        "returncode": 0,
+        "stdout_sha256": "eca0baabf2450e9476abad0cadae8e9a285a811ba8f50593c1042abb56f8caf0",
+        "stderr_sha256": "4e056f1744837debeef23f059276cecbe76a1b458da97bc6728f250fbe044b2f",
+        "control": "hdrvdp3-missing-2",
+        "passed": true
+      },
+      {
+        "id": "hdrvdp3-missing-3",
+        "returncode": 0,
+        "stdout_sha256": "bec7bda6a6ae384251d27b60d899c71776b0e6717bb1108fd7a6edcc7b345df5",
+        "stderr_sha256": "754702c1f4c7cd698465206414f95168f799ac6212c0eb152256103c2f528bee",
+        "control": "hdrvdp3-missing-3",
+        "passed": true
+      }
+    ],
+    "source_plan_sha256": "6d4837aed2ea2ca949e6dc2e8e46362bfc7f9e2433baaeccb03a016bdecd5505",
+    "matched_scope": false,
+    "qualified_timing_cells": 0,
+    "qualification": "Parameter-array identity, copy-on-write, sealed cache and missing-key controls. Default/resident metric score controls and native comparisons remain separate."
+  }
+}

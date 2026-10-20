@@ -1,0 +1,80 @@
+{
+  "source_revision": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "verification_scope": "All tracked crate files, CPU-profile package files, manifests, lock and pins match the published source; no benchmark overlays",
+  "binary_sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005",
+  "inventory_sha256": "18256a0183bbc8cd1ffd77b4cdffc22df1e02fc1869624759a33f18c9a872c2d",
+  "features": {
+    "hdrvdp": {
+      "lib-hdrvdp.json": "[\"avx512\", \"parallel\"]"
+    },
+    "zenmetrics-cli": {
+      "lib-zenmetrics_cli.json": "[\"avx512\", \"cpu-cvvdp\", \"cpu-fsim\", \"cpu-gmsd\", \"cpu-haarpsi\", \"cpu-hdrvdp\", \"cpu-iwssim\", \"cpu-iwssim-piq\", \"cpu-mad\", \"cpu-mdctpsnr\", \"cpu-metrics\", \"cpu-msssim\", \"cpu-psnrhvs\", \"cpu-vif\", \"cpu-vifvec\", \"cpu-vmaf\", \"cpu-vsi\", \"jpeg\", \"nr\", \"png\"]"
+    },
+    "brisque": {
+      "lib-brisque.json": "[\"avx512\", \"std\"]"
+    },
+    "niqe": {
+      "lib-niqe.json": "[\"avx512\", \"std\"]"
+    },
+    "piqe": {
+      "lib-piqe.json": "[\"avx512\", \"std\"]"
+    }
+  },
+  "changed_names": [
+    "brisque",
+    "niqe",
+    "piqe",
+    "dssim",
+    "ssim2",
+    "ssimulacra1",
+    "vif",
+    "vifvec",
+    "msssim",
+    "ssim-libvmaf",
+    "msssim-libvmaf",
+    "ms-ssim-pyiqa-f32-k2",
+    "ms-ssim-pyiqa-f32-k3",
+    "ms-ssim-pyiqa-f32-k4",
+    "ms-ssim-pyiqa-f32-k5",
+    "ms-ssim-pyiqa-f32-k6",
+    "vmaf",
+    "vmaf-neg",
+    "vmaf-4k",
+    "vmaf-v1",
+    "vmaf-studio601",
+    "vmaf-neg-studio601",
+    "cambi",
+    "psnr",
+    "psnr-cb",
+    "psnr-cr",
+    "psnr-y",
+    "psnr-y-libvmaf",
+    "psnr-y-studio601",
+    "psnr-y601",
+    "psnr-ycbcr611",
+    "flip",
+    "flip-v17",
+    "ws-hv",
+    "proposal-butteraugli",
+    "cambi-aic2026",
+    "hdrvdp-aic2026",
+    "hdrvdp3-aic2026",
+    "hdrvdp",
+    "hdrvdp3"
+  ],
+  "build_receipt_sha256": "778f3d2b81ca5e903bceeafff3cc98d4c310e5ac955bacec223edd4c2742e277",
+  "build_wrapper": "run-heavy: done rc=0 113s | peak-RSS 0.88GiB | min-avail 13215MiB | peak-load 5.02",
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build",
+  "full_receipt_sha256": "d31275b70be26b72ddb15e8d6736f8f1fcf44c860bc4698876d284d042772b2c",
+  "source_verification": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/reproducible-source-verification.json",
+    "sha256": "a8966d5b8a2932affe4ae03c638c19df77f32a682aae48b05f4e70e90d9f9de9",
+    "tracked_files": 1887,
+    "qualification": "All tracked in-tree crate inputs, CPU-profile package files, manifests, lock and sibling pins match the named revision. This does not independently audit external dependency source or establish numerical/performance qualification."
+  },
+  "metrics": 40,
+  "benchmark_overlays": [],
+  "native_cpu_flags": "unset",
+  "lto": "thin",
+  "comparison_status": "All forty names returned finite scores in the common native scheduling workload. Revised base HDR reference comparisons remain pending; no whole-grid qualification follows from the build or scheduling control."
+}
