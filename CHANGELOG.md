@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Pin DSSIM to the exact PR 199 source `22e9ab0` for rebenchmarking, excluding
+  the later opt-in caching commit (`28742d06`). Historical benchmark cohorts
+  retain their original dependency identities.
+
 - Integrate VIF RGB precision (`e818a787`), VIFvec accumulation order (`40c546c2`),
   SSIMULACRA1 SIMD (`5914beed`), and MS-SSIM dispatch gating (`0603960f`) for the
   owner-directed rebenchmark. The source-audited minimal set is 23 existing CPU
