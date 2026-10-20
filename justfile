@@ -1663,6 +1663,16 @@ bench-iqa-canonical-publish output +cohorts:
 bench-iqa-canonical-dssim-build source output:
     bash benchmarks/iqa_compete_2026-10-16/build_dssim_reference.sh '{{source}}' '{{output}}'
 
+bench-iqa-canonical-ssim1-build source output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/prepare_ssimulacra1_reference.py '{{source}}' '{{output}}'
+
+bench-iqa-canonical-gpu-build source target:
+    CARGO_TARGET_DIR='{{target}}' CARGO_PROFILE_RELEASE_LTO=thin CUDARC_CUDA_VERSION=12000 RUSTFLAGS='--cfg iqa_compete_ingress --cfg iqa_compete_cached' cargo build --locked --release --manifest-path '{{source}}/Cargo.toml' -p cpu-profile --features compete,metrics-parallel,study-gpu-cuda --bin iqa-compete
+
+bench-iqa-canonical-profile binary config output:
+    perf record -F 999 --call-graph dwarf -o '{{output}}.data' -- '{{binary}}' '{{config}}'
+    perf report --stdio --no-children -i '{{output}}.data' > '{{output}}.txt'
+
 # Link an explicitly supplied original libvmaf archive; no replacement kernel.
 bench-iqa-canonical-vmaf-build source library output:
     c++ -O3 -Wall -Wextra -ffp-contract=off -std=c++17 -I '{{source}}/libvmaf/include' benchmarks/iqa_compete_2026-10-16/libvmaf_rgb_compare.cpp '{{library}}' -pthread -lm -o '{{output}}'
