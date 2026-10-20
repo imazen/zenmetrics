@@ -130,8 +130,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T02:15:01.784025+00:00",
-      "2026-10-20T02:15:02.043531+00:00"
+      "2026-10-20T02:20:01.739040+00:00",
+      "2026-10-20T02:20:01.981316+00:00"
     ],
     "saved_attempt_rows": 2919,
     "preferred_qualified_cells": 2757,
@@ -346,8 +346,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T02:15:01.431496+00:00",
-      "2026-10-20T02:15:01.552366+00:00"
+      "2026-10-20T02:20:01.423736+00:00",
+      "2026-10-20T02:20:01.542197+00:00"
     ],
     "saved_attempt_rows": 3864,
     "preferred_qualified_cells": 3663,
@@ -476,12 +476,12 @@
       {
         "campaign": "gate-retry58",
         "manifest_cells": 58,
-        "saved_attempt_rows": 31,
-        "qualified_attempt_rows": 26,
-        "gate_flagged_attempt_rows": 5,
+        "saved_attempt_rows": 54,
+        "qualified_attempt_rows": 44,
+        "gate_flagged_attempt_rows": 10,
         "observed_cell_statuses": {
-          "ok": 31,
-          "pending": 27
+          "ok": 54,
+          "pending": 4
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -490,11 +490,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T02:15:02.421006+00:00",
-      "2026-10-20T02:15:02.522153+00:00"
+      "2026-10-20T02:20:02.385929+00:00",
+      "2026-10-20T02:20:02.490342+00:00"
     ],
-    "saved_attempt_rows": 4783,
-    "preferred_qualified_cells": 4432,
+    "saved_attempt_rows": 4806,
+    "preferred_qualified_cells": 4450,
     "exact_metric_names": [
       "brisque",
       "butteraugli",
@@ -594,7 +594,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 14698,
+    "individual_measurement_rows": 14928,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   }
 }
