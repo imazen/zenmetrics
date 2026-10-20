@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Add resumable, hash-bound AIC score regeneration with explicit HDR routes, per-column retry and full-precision CSV projections (`04a264bd`); retain the 61-pair native qualification and CSV reconciliation report.
+
 - Preserve full precision in CLI score, compare, folder and batch exports and the AIC VMAF feature helper (`f8ae4743`); reconcile supplied AIC CSVs with July without rounding or hiding changed cells (`da2ac8ca`).
 
 - Add hash-bound original-reference comparisons and the changed-route comparative
