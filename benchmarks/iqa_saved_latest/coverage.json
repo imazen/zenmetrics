@@ -173,8 +173,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:20:01.758674+00:00",
-      "2026-10-20T03:20:02.059913+00:00"
+      "2026-10-20T03:25:01.770852+00:00",
+      "2026-10-20T03:25:02.075122+00:00"
     ],
     "saved_attempt_rows": 3023,
     "preferred_qualified_cells": 2857,
@@ -414,8 +414,8 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:20:01.437304+00:00",
-      "2026-10-20T03:20:01.568379+00:00"
+      "2026-10-20T03:25:01.427390+00:00",
+      "2026-10-20T03:25:01.556109+00:00"
     ],
     "saved_attempt_rows": 3892,
     "preferred_qualified_cells": 3689,
@@ -593,12 +593,12 @@
       {
         "campaign": "private-nn-production",
         "manifest_cells": 308,
-        "saved_attempt_rows": 111,
-        "qualified_attempt_rows": 107,
-        "gate_flagged_attempt_rows": 4,
+        "saved_attempt_rows": 127,
+        "qualified_attempt_rows": 122,
+        "gate_flagged_attempt_rows": 5,
         "observed_cell_statuses": {
-          "ok": 111,
-          "pending": 197
+          "ok": 127,
+          "pending": 181
         },
         "excluded_attempts": {},
         "rejected_overlays": 0,
@@ -607,11 +607,11 @@
       }
     ],
     "capture_window_utc": [
-      "2026-10-20T03:20:02.271095+00:00",
-      "2026-10-20T03:20:02.408562+00:00"
+      "2026-10-20T03:25:02.147065+00:00",
+      "2026-10-20T03:25:02.285406+00:00"
     ],
-    "saved_attempt_rows": 4950,
-    "preferred_qualified_cells": 4588,
+    "saved_attempt_rows": 4966,
+    "preferred_qualified_cells": 4603,
     "exact_metric_names": [
       "ahiq-pyiqa",
       "brisque",
@@ -718,7 +718,7 @@
       "zensim"
     ],
     "qualification_note": "Campaign pending/status counts overlap retained parents and successors; never sum them. Preferred rows count each exact binary/input/protocol/config series once. No zero imputation.",
-    "individual_measurement_rows": 15423,
+    "individual_measurement_rows": 15475,
     "round_note": "Warm points are per-round per-call means; iterations are not separate measured points. Missing round arrays remain absent, including private warm aggregates."
   }
 }
