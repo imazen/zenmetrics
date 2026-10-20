@@ -1,0 +1,144 @@
+run-heavy: mem-cap=16G (cgroup, hard) jobs=20/24 avail=29847MiB :: env RAYON_NUM_THREADS=8 OMP_NUM_THREADS=8 taskset -c 0-7 target/release/new-metrics-wall 1024 benchmarks/cpu_metrics_1t8t_2026-10-20-i270/mt8_photo_1024.tsv
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=95.1GiB/s mem_lat=7.6ns
+[zenbench] timer resolution: 8ns, loop overhead: 0.09ns/iter, TSC: 3.685 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e03c6a097b49d2-223e5f-e9c9a5e0fc535e29.json.gz
+
+═══════════════════════════════════════════════════════════════
+  zenbench  18e03c6a097b49d2-223e5f-e9c9a5e0fc535e29
+  git: c32a28eb5eb185b7a7dec5f4dcb6f4cdd0add91a
+═══════════════════════════════════════════════════════════════
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[0,1,2,3,4,5,6,7] cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+
+  new_metrics_wall_1024  30 rounds × 1 calls
+                                    mean ±mad µs  95% CI vs base           
+  ├─ psnr__lat                    189.0 ±21.4µs  [175.9–201.1]µs          
+  ├─ psnr-y__lat                 1294.7 ±20.1µs  [+576.3%–+594.2%]        
+  ├─ psnr-y601__lat              1290.5 ±30.7µs  [+565.4%–+580.3%]        
+  ├─ psnr-y-studio601__lat       1183.0 ±12.9µs  [+519.8%–+533.6%]        
+  ├─ psnr-y-libvmaf__lat         1730.5 ±31.6µs  [+805.0%–+826.4%]        
+  ├─ ssim__lat                  6901.0 ±344.6µs  [+3479.5%–+3625.0%]      
+  ├─ ssim2__lat               30778.8 ±1794.1µs  [+15851.6%–+16537.5%]    
+  ├─ butteraugli__lat         59449.3 ±1001.2µs  [+31079.0%–+31665.4%]    
+  ├─ dssim__lat                 5775.0 ±263.9µs  [+2750.7%–+2876.2%]      
+  ├─ zensim__lat               10887.7 ±828.9µs  [+5341.3%–+5676.7%]      
+  ├─ cvvdp__lat               38491.5 ±2521.7µs  [+19687.4%–+20448.6%]    
+  ├─ iwssim__lat              24949.0 ±1939.6µs  [+12763.0%–+13456.1%]    
+  ├─ iwssim-piq__lat          23583.5 ±1063.2µs  [+12169.6%–+12596.2%]    
+  ├─ nlpd__lat                11071.3 ±2231.8µs  [+5412.3%–+6107.2%]      
+  ├─ nlpd-iqa__lat              4868.5 ±721.9µs  [+2318.7%–+2635.3%]      
+  ├─ ms-gmsdc__lat              3682.4 ±419.8µs  [+1793.5%–+1950.0%]      
+  ├─ gmsd__lat                   696.6 ±238.9µs  [+217.0%–+316.4%]         [1]
+  ├─ mdsi__lat                  1591.7 ±371.0µs  [+700.8%–+858.9%]         [2]
+  ├─ ms-gmsd__lat               4017.3 ±542.8µs  [+1859.9%–+2084.7%]      
+  ├─ psnrhvs__lat               2160.2 ±408.4µs  [+961.2%–+1126.6%]       
+  ├─ psnrhvs-y__lat             1276.1 ±260.8µs  [+506.4%–+623.0%]         [3]
+  ├─ psnrhvs-daala__lat        17710.4 ±121.9µs  [+9119.5%–+9160.0%]      
+  ├─ haarpsi__lat              4652.8 ±1253.0µs  [+2121.9%–+2601.5%]       [4]
+  ├─ haarpsi-y__lat             2528.9 ±568.5µs  [+1090.2%–+1315.5%]       [5]
+  ├─ fsim__lat                 6227.2 ±1292.2µs  [+2983.9%–+3428.5%]      
+  ├─ fsim-y__lat                4532.4 ±896.3µs  [+2132.2%–+2474.0%]       [6]
+  ├─ vsi__lat                  11472.6 ±632.4µs  [+5715.4%–+5997.9%]      
+  ├─ msssim__lat                9518.4 ±237.4µs  [+4729.5%–+4820.2%]      
+  ├─ msssim-libvmaf__lat       30880.0 ±369.3µs  [+15730.5%–+15882.9%]    
+  ├─ ssim-libvmaf__lat          6381.5 ±183.3µs  [+3062.3%–+3119.8%]      
+  ├─ vif__lat                 22716.9 ±1056.2µs  [+11525.1%–+12035.3%]    
+  ├─ vifvec__lat              31746.2 ±2313.1µs  [+16065.3%–+17358.7%]    
+  ├─ mad__lat                193173.7 ±5034.1µs  [+101248.0%–+103021.8%]  
+  ├─ mdctpsnr__lat           208488.8 ±2408.4µs  [+108377.2%–+109601.0%]  
+  ├─ vmaf__lat                 28081.5 ±272.1µs  [+14742.6%–+14842.0%]    
+  ├─ vmaf-neg__lat             27885.4 ±227.7µs  [+14606.6%–+14704.7%]    
+  ├─ vmaf-4k__lat              27947.4 ±313.9µs  [+14729.0%–+14823.1%]    
+  ╰─ vmaf-v1__lat              22567.2 ±155.7µs  [+11977.4%–+12026.8%]    
+
+  psnr__lat              █ 188.97µs
+  gmsd__lat              █ 696.56µs
+  psnr-y-studio601__lat  █ 1.18ms
+  psnrhvs-y__lat         █ 1.28ms
+  psnr-y601__lat         █ 1.29ms
+  psnr-y__lat            █ 1.29ms
+  mdsi__lat              █ 1.59ms
+  psnr-y-libvmaf__lat    █ 1.73ms
+  psnrhvs__lat           █ 2.16ms
+  haarpsi-y__lat         █ 2.53ms
+  ms-gmsdc__lat          █ 3.68ms
+  ms-gmsd__lat           █ 4.02ms
+  fsim-y__lat            █ 4.53ms
+  haarpsi__lat           █ 4.65ms
+  nlpd-iqa__lat          █ 4.87ms
+  dssim__lat             █ 5.78ms
+  fsim__lat              █ 6.23ms
+  ssim-libvmaf__lat      █ 6.38ms
+  ssim__lat              █ 6.90ms
+  msssim__lat            ██ 9.52ms
+  zensim__lat            ██ 10.89ms
+  nlpd__lat              ██ 11.07ms
+  vsi__lat               ██ 11.47ms
+  psnrhvs-daala__lat     ████ 17.71ms
+  vmaf-v1__lat           █████ 22.57ms
+  vif__lat               █████ 22.72ms
+  iwssim-piq__lat        █████ 23.58ms
+  iwssim__lat            █████ 24.95ms
+  vmaf-neg__lat          ██████ 27.89ms
+  vmaf-4k__lat           ██████ 27.95ms
+  vmaf__lat              ██████ 28.08ms
+  ssim2__lat             ███████ 30.78ms
+  msssim-libvmaf__lat    ███████ 30.88ms
+  vifvec__lat            ███████ 31.75ms
+  cvvdp__lat             ████████ 38.49ms
+  butteraugli__lat       █████████████ 59.45ms
+  mad__lat               ██████████████████████████████████████████ 193.17ms
+  mdctpsnr__lat          █████████████████████████████████████████████ 208.49ms
+  [1] CV=37%
+  [2] CV=30%
+  [3] CV=27%
+  [4] CV=27%
+  [5] CV=27%
+  [6] CV=20%
+[zenbench] evidence → .zenbench/data/runs/18e03c71a04f2a1d-223e5f-fa403e4fac81b821.json
+
+  total: 32.5s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+sentinel 1024/psnr: 31.87536274198264
+sentinel 1024/psnr-y: 34.59622794311839
+sentinel 1024/psnr-y601: 34.725997726030194
+sentinel 1024/psnr-y-studio601: 35.94163777105037
+sentinel 1024/psnr-y-libvmaf: 35.90567582858822
+sentinel 1024/ssim: 0.938354715114034
+sentinel 1024/ssim2: 51.06956348431442
+sentinel 1024/butteraugli: 11.94013500213623
+sentinel 1024/dssim: 0.004013071224084008
+sentinel 1024/zensim: 44.4167459356094
+sentinel 1024/cvvdp: 9.464425086975098
+sentinel 1024/iwssim: 0.9931403081623312
+sentinel 1024/iwssim-piq: 0.9932556746310205
+sentinel 1024/nlpd: 2.394971943723971
+sentinel 1024/nlpd-iqa: 0.09798879079478053
+sentinel 1024/ms-gmsdc: 0.03229295298164323
+sentinel 1024/gmsd: 0.02870674988124706
+sentinel 1024/mdsi: 0.205979480164512
+sentinel 1024/ms-gmsd: 0.0335123719480685
+sentinel 1024/psnrhvs: 27.976531041918747
+sentinel 1024/psnrhvs-y: 32.13702083516844
+sentinel 1024/psnrhvs-daala: 38.43614117655237
+sentinel 1024/haarpsi: 0.9055214205272615
+sentinel 1024/haarpsi-y: 0.8928337726089675
+sentinel 1024/fsim: 0.9970832749303953
+sentinel 1024/fsim-y: 0.9970832749303953
+sentinel 1024/vsi: 0.9984454191986418
+sentinel 1024/msssim: 0.995489349897922
+sentinel 1024/msssim-libvmaf: 0.9958671607061101
+sentinel 1024/ssim-libvmaf: 0.998246967792511
+sentinel 1024/vif: 0.6608518704104249
+sentinel 1024/vifvec: 0.6175632083942326
+sentinel 1024/mad: 17.57679833322809
+sentinel 1024/mdctpsnr: 32.809532165527344
+sentinel 1024/vmaf: 89.42498241800983
+sentinel 1024/vmaf-neg: 87.03593319736036
+sentinel 1024/vmaf-4k: 94.15110139604997
+sentinel 1024/vmaf-v1: 85.683683071908
+wrote wall rows for size 1024 to benchmarks/cpu_metrics_1t8t_2026-10-20-i270/mt8_photo_1024.tsv
+run-heavy: done rc=0 35s | peak-RSS 0.56GiB | min-avail 29035MiB | peak-load 3.12
