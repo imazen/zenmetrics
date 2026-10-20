@@ -1,4 +1,80 @@
 {
+  "octave-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/octave-run",
+    "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
+    "cases": 102,
+    "expected_cases": 102,
+    "artifacts": [
+      {
+        "file": "octave-run-dssim.tsv",
+        "sha256": "3b6ca073e646ede15bba87d9c58efb338cf2098f2f0bab062e5c0b6ae12e184a"
+      },
+      {
+        "file": "octave-run-fsim.tsv",
+        "sha256": "8bcae3ed4626bed4024f621aa1e2f54adf4d067874092c2dd1d156b22c2a0111"
+      },
+      {
+        "file": "octave-run-fsim-k2.tsv",
+        "sha256": "6a86c33c3d744a31b7baeb83b25cd89c8bd895590beec3c0bc45bc8fe759fac2"
+      },
+      {
+        "file": "octave-run-fsim-k3.tsv",
+        "sha256": "f97f1eb58b0cd4b86d139e6a6553990194d6e1ddc03bea7ef414efd214a9d58a"
+      },
+      {
+        "file": "octave-run-fsim-k4.tsv",
+        "sha256": "81d720b17c8fc6575c71851207c94d4e6fa5f32dfab207dc8ff1490ca4e2d9c0"
+      },
+      {
+        "file": "octave-run-fsim-nodownscale.tsv",
+        "sha256": "c09e4db548b19c263aab974f9e7b4dbad6c1596e497b4e49862de622bb690331"
+      },
+      {
+        "file": "octave-run-haarpsi.tsv",
+        "sha256": "274912d146c2fc9a8eb3a14046409f6a901f0264defcd2ecfc2de0a0b596d41e"
+      },
+      {
+        "file": "octave-run-haarpsi-y.tsv",
+        "sha256": "562f5aa1ee733298ab30d761cef64cb5f6c5645fe2d87ef7a261335a059b69f3"
+      },
+      {
+        "file": "octave-run-mdsi.tsv",
+        "sha256": "74584605bda8041fa70fb0719b5a6127c8265c0c6f165498ca5bfbaae5fb3c0c"
+      },
+      {
+        "file": "octave-run-msssim.tsv",
+        "sha256": "864616204bf5926eb90037052b7ebb164dc28ba7f45ef19e0aae89e3385690ec"
+      },
+      {
+        "file": "octave-run-vif.tsv",
+        "sha256": "7a475af87b4ba3a434d8372bfa3a6dbc95aff990cb19d22a4520ac6eb3e9f9b2"
+      },
+      {
+        "file": "octave-run-vifvec.tsv",
+        "sha256": "dd93bcf104370d2c09726005c3c3779339ecddc2318cf09b5584f83a905cac2d"
+      },
+      {
+        "file": "octave-run-vsi.tsv",
+        "sha256": "38d7c1fd284b8356b43f388ab8bdd4cfd557be24f7db92953852470aafb8538c"
+      },
+      {
+        "file": "octave-run-vsi-k2.tsv",
+        "sha256": "15681f7291e35189a6695d4bb8f22601ee27f201ebd1ba9914320ca31e1039a8"
+      },
+      {
+        "file": "octave-run-vsi-k3.tsv",
+        "sha256": "a0e4c541c8ffcef0c8dfd8214159fe3052c538d9d6a9adb15710d6bce3dc1982"
+      },
+      {
+        "file": "octave-run-vsi-k4.tsv",
+        "sha256": "fe8b23bfe7c7f8b13afe56983418d56cc49ef8477f56f5f4164e94e07178fa81"
+      },
+      {
+        "file": "octave-run-vsi-nodownscale.tsv",
+        "sha256": "7f03664e82fae26dde8184aebf23ca5491d9e00db17d2719a5c7343fd2e9e73b"
+      }
+    ]
+  },
   "original-afine-1100-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/original-afine-1100-run",
     "plan_sha256": "492758fb417d4ae01eb5ae3b44995be48be68ff3e1f307b8ce8a3c14f1c1a180",
@@ -254,12 +330,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 11,
+    "cases": 13,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "009ba5ef6509e621a138b01309a6ed736cbe66f9b3510ca7f5afdf2125227018"
+        "sha256": "817731cd6361009f81024f06d7b04eb20685f9152bbd941f52b5fb077b7f52b2"
       }
     ]
   },
@@ -372,14 +448,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
-    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
-    "cases": 24,
-    "expected_cases": 24,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 17,
+    "expected_cases": 120,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
+        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
       }
     ]
   },
@@ -488,6 +564,18 @@
       {
         "file": "vmaf-run.tsv",
         "sha256": "16af13c4a350d114fd93397e05ab5b5da8fde345f2c3b4c1ffb2259546a12a01"
+      }
+    ]
+  },
+  "ws-hv-current-512x512-t1-bb7819c0-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/ws-hv-current-512x512-t1-bb7819c0/confirmation-run",
+    "plan_sha256": "cf20392c2ef22386fd533d7fee649b8fdf2b2f4e7474c1b4c25435bf6e25f9fb",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ws-hv-current-512x512-t1-bb7819c0-confirmation-run.tsv",
+        "sha256": "9d98edc02e03f7c2f8d5879e797dda4209b607e8f17c16b0fef40bf208bc0ea6"
       }
     ]
   }

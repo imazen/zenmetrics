@@ -1,0 +1,12 @@
+{
+  "routes": [
+    "hdrvdp",
+    "hdrvdp3"
+  ],
+  "metric_path_commit": "4f89155cd8ef766c285fcfbfed9d40def047a836",
+  "build_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+  "build_directory": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build",
+  "old_worker_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "comparison_status": "Native worker queued; official sRGB-display adapters under independent review; no acquired revised-route ratio yet",
+  "qualification": "New base-route source; preserve separate AIC2026 200-nit convention and every older result"
+}

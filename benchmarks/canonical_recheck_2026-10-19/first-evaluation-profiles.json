@@ -1,0 +1,91 @@
+{
+  "profiles": [
+    {
+      "receipt": {
+        "metric": "dists",
+        "case": "dists-first-pair-cid22-t1",
+        "threads": 1,
+        "plan_sha256": "2dd2f0fb7f961ea1f326abdabdc6781532b2d8a23058a4328cb45322f3e9d627",
+        "worker_sha256": "90f4e56910d2c01ca2544883e6a3a362504eec9bec38343a2e835ab5b5b0a99c",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-dists-profile/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "-e",
+          "cycles:P",
+          "--call-graph",
+          "dwarf,8192",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-dists-profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+          "original",
+          "dists",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1"
+        ],
+        "profile_sha256": "7a428d1daf8a1c586db850922b45706b3fbcc8f7cfcff5424dd65a46a89cc54b",
+        "report_sha256": "f11e2b5189d8a699bd586467a666349e38a51b97068bf875f9b57a28d3326bea",
+        "scope": "Complete native probe process, including immutable-model priming, first evaluation and second score-stability control; sampled shares do not isolate the timed first evaluation"
+      },
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 41s | peak-RSS 0.44GiB | min-avail 12410MiB | peak-load 5.50"
+      ]
+    },
+    {
+      "receipt": {
+        "metric": "lpips-vgg",
+        "case": "lpips-vgg-first-pair-cid22-t1",
+        "threads": 1,
+        "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+        "worker_sha256": "90f4e56910d2c01ca2544883e6a3a362504eec9bec38343a2e835ab5b5b0a99c",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-profile/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "perf",
+          "record",
+          "-F",
+          "199",
+          "-e",
+          "cycles:P",
+          "--call-graph",
+          "dwarf,8192",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-vgg-profile/perf.data",
+          "--",
+          "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+          "original",
+          "lpips-vgg",
+          "512",
+          "512",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+          "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+          "1"
+        ],
+        "profile_sha256": "ca5ec117bdce9183714349159cb78279e134e92023c0bc3f68217562f3d40d45",
+        "report_sha256": "4a7d4cd2ed3bb20d9ace478f9c39b36cf614005c7b8e79ccc6dce609f260a476",
+        "scope": "Complete native probe process, including immutable-model priming, first evaluation and second score-stability control; sampled shares do not isolate the timed first evaluation"
+      },
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 27s | peak-RSS 0.43GiB | min-avail 14685MiB | peak-load 1.89"
+      ]
+    }
+  ],
+  "qualification": "Complete probe CPU profiles including priming and score-stability controls; do not isolate the timed first evaluation"
+}

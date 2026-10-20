@@ -10,14 +10,14 @@
     "evidence": "docs/IQA_CANONICAL_COMMANDS.md"
   },
   "hdrvdp": {
-    "check": "typed input",
-    "reason": "Absolute-luminance input is required; the frozen RGB8 comparison campaign cannot substitute calibrated luminance.",
-    "evidence": "benchmarks/iqa_input_contracts_2026-10-20/README.md"
+    "check": "recheck queued",
+    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Separate original-reference comparisons are queued.",
+    "evidence": "benchmarks/canonical_recheck_2026-10-19/hdrvdp-srgb-successor.json"
   },
   "hdrvdp3": {
-    "check": "typed input",
-    "reason": "Absolute luminance and viewing conditions are required; this frozen RGB8 comparison campaign does not supply them.",
-    "evidence": "benchmarks/iqa_input_contracts_2026-10-20/README.md"
+    "check": "recheck queued",
+    "reason": "Master 4f89155 adds the official sRGB-display path for this base name. The older frozen worker predates that change; its typed-input disposition is not evidence for the revised source. Separate original-reference comparisons are queued.",
+    "evidence": "benchmarks/canonical_recheck_2026-10-19/hdrvdp-srgb-successor.json"
   },
   "zensim": {
     "check": "self reference",

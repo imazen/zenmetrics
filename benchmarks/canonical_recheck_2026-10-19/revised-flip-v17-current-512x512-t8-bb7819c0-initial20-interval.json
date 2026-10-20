@@ -1,0 +1,52 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "flip-v17-current-512x512-t8",
+      "blocks": 20,
+      "ratio": 1.2730222945358212,
+      "lower_95": 1.2425671821344941,
+      "upper_95": 1.295544695560007,
+      "relative_halfwidth": 0.02392347135792449,
+      "precision_within_three_percent": true,
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "plan_sha256": "5b12d146c0f44f3867a6db5be517373a3097ea0aaba476404272dc13f655e072",
+      "summary_sha256": "dcea9ac2bb06543f54f71204c6e977834f3022998f0ffda0775b0a8f2ebd223d",
+      "stage_summary_sha256": [
+        "dcea9ac2bb06543f54f71204c6e977834f3022998f0ffda0775b0a8f2ebd223d"
+      ],
+      "block_sha256": [
+        "b9d261b7a48ad8cf0e2da1e6b8e1f2aba90957ac9deb03dc7dd7ef5036cc9978",
+        "8944c47ff407cdfde7f5d73b5449ceed79150ea447c861301cc322ba8928b713",
+        "577594ace1722b300e569e849d2d7ac38279a20ea0fae879045aee19fbaeaed6",
+        "67c02980670f9ae864520182fc941fae54bf5890ae177970e89445f0b5dc1b32",
+        "9317194432c0056a1ba0a6da5c0c1a194124fe54ada6bac9861e032941980df7",
+        "f5d18f891bf27ee7657b130d1329f338e5437e0aff8a2a81fb61fd23a3ecdc0d",
+        "11cb369e36c4333ee175729247bd09c462a3c719df4b0fac246d8770653c07ea",
+        "d370bfd4ea19b2f968b68a637055060a2764aa04642c2a7631a7dd354dcc3a10",
+        "0715e5beaf08cf93a65813ad9397feb0d305f74f1620f06c1a28ecf74fdfa419",
+        "531f369c8a7e3dd9f786fc07231f4c1920ff652038a3bbfcb9bad9f9e90cd1d5",
+        "227bb018ca374be5d816a6ef4590186d44f9294b8eac0255ca1d647bd9157edc",
+        "a30baf29aa97bc536efdf59b472d6ea5a571d04e4a71235e76631aee2808c0ac",
+        "a4f8d4244a75d2b0e5fd0928e71240af79e9a25034d77017e23854a2c9d70d3f",
+        "36876212ed61e01be0e29b62fdef92c33433170296cf2727ff9c54489934d11d",
+        "3a61de178de754913a5547fcbbbd4ffecf97fa8478eb27f1712f76d3d360f9e7",
+        "695523d5f70bcabe432175fcaef027eb1a754e99209b5ed882e1e983a72ea461",
+        "75ef59b214d8fe8fcb9f4135fa942dfd7d42c5b965dec10f86989f7acc0d99af",
+        "a1e58c0b4dcfa23119a52abd9495435d1fa60b7e94b14875e909d15a834e266a",
+        "df4fc33771e4d7304dec8ccc658fecb7c0c8ed4a053e15f9bf289ca5b8479a88",
+        "6468fae7806d28c4c3ba01a95d2dcf9dfb8b43d01876193a8d0bc59905a632ba"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 52,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 7,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ]
+}

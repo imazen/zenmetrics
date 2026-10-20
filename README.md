@@ -87,7 +87,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | original DMM / pinned… | partial; 2/2 pass | ≈0.61× R |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | DreamSim 0.2.1 / ense… | 2/2 pass | ≈0.921× R |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core 3.5… | Δ 0 | ≈0.21× |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core 3.5… | Δ 0 | ≈0.46× |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | dssim-core | unchecked | — |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.19× ! |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.19× ! |
@@ -100,9 +100,9 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`gmsd`](docs/MODEL_CARDS.md#gmsd) | FR | Clunie libgmsd de646c… | 2/2 pass | ≈0.091× |
 | [`haarpsi`](docs/MODEL_CARDS.md#haarpsi) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.12× |
 | [`haarpsi-y`](docs/MODEL_CARDS.md#haarpsi-y) | FR | original HaarPSI / Oc… | 6/6 pass | ≈0.13× |
-| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.… | typed input | — |
+| [`hdrvdp`](docs/MODEL_CARDS.md#hdrvdp) | FR | official HDR-VDP 2.2.… | recheck queued | — |
 | [`hdrvdp-aic2026`](docs/MODEL_CARDS.md#hdrvdp-aic2026) | FR | official HDR-VDP 2.2.… | Δ 0.092 | ≈0.12× |
-| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | typed input | — |
+| [`hdrvdp3`](docs/MODEL_CARDS.md#hdrvdp3) | FR | official HDR-VDP 3.0.… | recheck queued | — |
 | [`hdrvdp3-aic2026`](docs/MODEL_CARDS.md#hdrvdp3-aic2026) | FR | official HDR-VDP 3.0.… | Δ 0.00029 | ≈0.18× |
 | [`hyperiqa`](docs/MODEL_CARDS.md#hyperiqa) | NR/NN | original HyperIQA / f… | 3/3 pass | ≈0.74× R ! |
 | [`iwssim`](docs/MODEL_CARDS.md#iwssim) | FR | Python-IW-SSIM f9de37… | 3 process errors | ≈0.084× |
@@ -148,7 +148,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf 3.2.0 / origi… | 2/2 pass | ≈0.67× |
 | [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00029× |
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | scikit-image SSIM / d… | Δ 6.7e-16 | ≈0.15× |
-| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 2.4e-07 | ≈0.36× |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 2e-06 | ≈0.36× |
 | [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.013× |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 4/6 pass | ≈0.014× |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.025× |
@@ -189,7 +189,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`wadiqam-nr-tid`](docs/MODEL_CARDS.md#wadiqam-nr-tid) | NR/NN | original deepIQA / Ch… | 2/2 pass | ≈0.38× R |
 | [`wadiqam-pyiqa`](docs/MODEL_CARDS.md#wadiqam-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.78× O |
 | [`wd`](docs/MODEL_CARDS.md#wd) | FR/NN | original Cool-Chic WD… | 2/2 pass | ≈0.11× R |
-| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 2.2e-16 | ≈1.1× ! |
+| [`ws-hv`](docs/MODEL_CARDS.md#ws-hv) | FR | IVP-Lab original WS_H… | Δ 2.2e-16 | ≈1.11× ! |
 | [`zensim`](docs/MODEL_CARDS.md#zensim) | FR | unrecorded | self reference | — |
 | [`zensim-gpu`](docs/MODEL_CARDS.md#zensim-gpu) | FR | unrecorded | disabled | — |
 
@@ -696,7 +696,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | Exact metric / command NAME | Canonical identity | Max absolute delta | Median absolute delta | Reference code / weights |
 | --- | --- | ---: | ---: | --- |
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | scikit-image SSIM / declared mirror full map | 0.0000000000000006661338147750939 | not recorded | not recorded / not applicable |
-| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0000002384185791015625 | not recorded | not recorded / not applicable |
+| [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0000019669532775878906 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa`](docs/MODEL_CARDS.md#ssim-pyiqa) | PyIQA 0.1.16 / named convention | 0.0000020900847584881532 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ssim-pyiqa-f32) | PyIQA 0.1.16 / named convention | 0.00000011643768749181049 | not recorded | not recorded / not applicable |
 | [`ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ssim-pyiqa-f32-k2) | PyIQA 0.1.16 / named convention | 0.000000055390560693702184 | not recorded | not recorded / not applicable |

@@ -1,25 +1,37 @@
 {
-  "arniqa-original-cid22-t8-7a07601a-confirmation-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/confirmation-run",
-    "plan_sha256": "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc",
+  "arniqa-original-cid22-t1-7a07601a-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/confirmation-run",
+    "plan_sha256": "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
-        "file": "arniqa-original-cid22-t8-7a07601a-confirmation-run.tsv",
-        "sha256": "dad94f140c3d9edd0c12c9b80c09e3727979c8392209109e36e4f9e0eb63c902"
+        "file": "arniqa-original-cid22-t1-7a07601a-confirmation-run.tsv",
+        "sha256": "148f1d31434d6fdd1df45046b8911a410c3a6fc9d0e32fd90caf1337aa0c261f"
+      }
+    ]
+  },
+  "arniqa-original-cid22-t8-7a07601a-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/fixed-add40-run",
+    "plan_sha256": "0fa9bc43c310b35839a9c722103dfdf588227b7571e959c3c5cffbc5e4206bb0",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "arniqa-original-cid22-t8-7a07601a-fixed-add40-run.tsv",
+        "sha256": "e63b4363835ba761cad07ba883aee5fe2c846bd27c92d7ab7cb45307d26463c2"
       }
     ]
   },
   "butter-original-budget-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/butter-original-budget-grid-run",
     "plan_sha256": "e24d59f9728f6ed4d64b158e82446f1e1eb3662f52afed852a2de142e2d29b0f",
-    "cases": 2,
+    "cases": 4,
     "expected_cases": 24,
     "artifacts": [
       {
         "file": "butter-original-budget-grid-run.tsv",
-        "sha256": "715f543b8153b1e8e7e4a90944c31410e6731fcd4fbe9db4f1024897139f000a"
+        "sha256": "21544fd13d298f467ca6d233832c9851b0f1a80290327a0af8475ec6c742e550"
       }
     ]
   },
@@ -48,14 +60,14 @@
     ]
   },
   "confirmation-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/confirmation-run",
-    "plan_sha256": "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/confirmation-run",
+    "plan_sha256": "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
         "file": "confirmation-run.tsv",
-        "sha256": "148f1d31434d6fdd1df45046b8911a410c3a6fc9d0e32fd90caf1337aa0c261f"
+        "sha256": "dad94f140c3d9edd0c12c9b80c09e3727979c8392209109e36e4f9e0eb63c902"
       }
     ]
   },
@@ -167,18 +179,6 @@
       }
     ]
   },
-  "deepdc-pair-cid22-t8-f525415f-fixed-add40-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/fixed-add40-run",
-    "plan_sha256": "8d4e791ef629889fc571454ce8fb4f0b7f64848fe809dd21b10be0d699248149",
-    "cases": 1,
-    "expected_cases": 1,
-    "artifacts": [
-      {
-        "file": "deepdc-pair-cid22-t8-f525415f-fixed-add40-run.tsv",
-        "sha256": "b854319f297e01c12dbdbae6cf0f7401367b148a84c54f0ceee132b23928de21"
-      }
-    ]
-  },
   "dists-pair-cid22-t1-f525415f-confirmation-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/dists-pair-cid22-t1-f525415f/confirmation-run",
     "plan_sha256": "5da72cbebf80059562829c95a5ff9b246d24549b4dcd6dc285034874a61ca103",
@@ -194,12 +194,12 @@
   "dssim-author-cpu-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/dssim-author-cpu-grid-run",
     "plan_sha256": "3e57d8485a9828e47c85c61a83a21580e9da8ed14feccf54bfe0440f52e9d3bf",
-    "cases": 8,
+    "cases": 10,
     "expected_cases": 24,
     "artifacts": [
       {
         "file": "dssim-author-cpu-grid-run.tsv",
-        "sha256": "116a42562ff53462ad738996f942d5cdd008fe6916468adca4cf1efa91f64636"
+        "sha256": "f7b6b56233003d0743e4663a3d97b949bed9ff41525e3df7731f6f67d47b8cb5"
       }
     ]
   },
@@ -252,14 +252,14 @@
     ]
   },
   "fixed-add40-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/fixed-add40-run",
-    "plan_sha256": "0fa9bc43c310b35839a9c722103dfdf588227b7571e959c3c5cffbc5e4206bb0",
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/fixed-add40-run",
+    "plan_sha256": "8d4e791ef629889fc571454ce8fb4f0b7f64848fe809dd21b10be0d699248149",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
         "file": "fixed-add40-run.tsv",
-        "sha256": "e63b4363835ba761cad07ba883aee5fe2c846bd27c92d7ab7cb45307d26463c2"
+        "sha256": "b854319f297e01c12dbdbae6cf0f7401367b148a84c54f0ceee132b23928de21"
       }
     ]
   },
@@ -323,6 +323,18 @@
       }
     ]
   },
+  "flip-v17-current-512x512-t8-bb7819c0-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/confirmation-run",
+    "plan_sha256": "5b12d146c0f44f3867a6db5be517373a3097ea0aaba476404272dc13f655e072",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "flip-v17-current-512x512-t8-bb7819c0-confirmation-run.tsv",
+        "sha256": "f62fa47743745b1f7ea69fbef02aa353d786dded49a790b09d9e8bc31b8e2f74"
+      }
+    ]
+  },
   "flip-v17-eight-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-v17-eight-run",
     "plan_sha256": "379e156f07553026316e3f705751f3176932048119eb008ee2ebb0de5ae59b2e",
@@ -338,12 +350,12 @@
   "flip-wshv-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-run",
     "plan_sha256": "060d464fa5b1671644dfb3c96c1ea12ded7421543797024ebba88a0b4607244e",
-    "cases": 8,
+    "cases": 10,
     "expected_cases": 72,
     "artifacts": [
       {
         "file": "flip-wshv-current-grid-run.tsv",
-        "sha256": "275416e55d591ac285a294c6ad492ba38f35ac075499c0c34b0cec8d834c9e93"
+        "sha256": "f8060d06a0c362b67859017a1f68596468650efb7aa8a2ef2753018c99f3f333"
       }
     ]
   },
@@ -359,27 +371,27 @@
       }
     ]
   },
-  "full-gpu-grid-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+  "full-cw-pyiqa-grid-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
-        "file": "full-gpu-grid-run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "file": "full-cw-pyiqa-grid-run.tsv",
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },
   "full-gpu-grid-v2-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/run",
     "plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
-    "cases": 18,
+    "cases": 20,
     "expected_cases": 106,
     "artifacts": [
       {
         "file": "full-gpu-grid-v2-run.tsv",
-        "sha256": "9c45e441299b1c43eccb5edc6b90985c0a05016c076f8a7bfae259b7aeccd6cb"
+        "sha256": "bfce7957f842d261e2537357805ca2581f273c80207c21ca1ba697df65d9bc9b"
       }
     ]
   },
@@ -410,12 +422,12 @@
   "group-00-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00-run",
     "plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
-    "cases": 40,
+    "cases": 42,
     "expected_cases": 264,
     "artifacts": [
       {
         "file": "group-00-run.tsv",
-        "sha256": "48bbaedc666078bfe0178c685c923bd30d33a763f02ddbaeaf72b28dc5448db0"
+        "sha256": "94455336b2304eccefdf43ba6b208dc069d371551a37178a7cb4460523b19528"
       }
     ]
   },
@@ -572,82 +584,6 @@
       {
         "file": "niqe-resident-run.tsv",
         "sha256": "fe142519f79d463d460167f33b2827f9619c645f5a2ad95fb38d84570b7eb527"
-      }
-    ]
-  },
-  "octave-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/octave-run",
-    "plan_sha256": "473569817a72fe4c0777960fc9b59abe8760fc9ab8d1bb4e7ee382eb7c997153",
-    "cases": 102,
-    "expected_cases": 102,
-    "artifacts": [
-      {
-        "file": "octave-run-dssim.tsv",
-        "sha256": "3b6ca073e646ede15bba87d9c58efb338cf2098f2f0bab062e5c0b6ae12e184a"
-      },
-      {
-        "file": "octave-run-fsim.tsv",
-        "sha256": "8bcae3ed4626bed4024f621aa1e2f54adf4d067874092c2dd1d156b22c2a0111"
-      },
-      {
-        "file": "octave-run-fsim-k2.tsv",
-        "sha256": "6a86c33c3d744a31b7baeb83b25cd89c8bd895590beec3c0bc45bc8fe759fac2"
-      },
-      {
-        "file": "octave-run-fsim-k3.tsv",
-        "sha256": "f97f1eb58b0cd4b86d139e6a6553990194d6e1ddc03bea7ef414efd214a9d58a"
-      },
-      {
-        "file": "octave-run-fsim-k4.tsv",
-        "sha256": "81d720b17c8fc6575c71851207c94d4e6fa5f32dfab207dc8ff1490ca4e2d9c0"
-      },
-      {
-        "file": "octave-run-fsim-nodownscale.tsv",
-        "sha256": "c09e4db548b19c263aab974f9e7b4dbad6c1596e497b4e49862de622bb690331"
-      },
-      {
-        "file": "octave-run-haarpsi.tsv",
-        "sha256": "274912d146c2fc9a8eb3a14046409f6a901f0264defcd2ecfc2de0a0b596d41e"
-      },
-      {
-        "file": "octave-run-haarpsi-y.tsv",
-        "sha256": "562f5aa1ee733298ab30d761cef64cb5f6c5645fe2d87ef7a261335a059b69f3"
-      },
-      {
-        "file": "octave-run-mdsi.tsv",
-        "sha256": "74584605bda8041fa70fb0719b5a6127c8265c0c6f165498ca5bfbaae5fb3c0c"
-      },
-      {
-        "file": "octave-run-msssim.tsv",
-        "sha256": "864616204bf5926eb90037052b7ebb164dc28ba7f45ef19e0aae89e3385690ec"
-      },
-      {
-        "file": "octave-run-vif.tsv",
-        "sha256": "7a475af87b4ba3a434d8372bfa3a6dbc95aff990cb19d22a4520ac6eb3e9f9b2"
-      },
-      {
-        "file": "octave-run-vifvec.tsv",
-        "sha256": "dd93bcf104370d2c09726005c3c3779339ecddc2318cf09b5584f83a905cac2d"
-      },
-      {
-        "file": "octave-run-vsi.tsv",
-        "sha256": "38d7c1fd284b8356b43f388ab8bdd4cfd557be24f7db92953852470aafb8538c"
-      },
-      {
-        "file": "octave-run-vsi-k2.tsv",
-        "sha256": "15681f7291e35189a6695d4bb8f22601ee27f201ebd1ba9914320ca31e1039a8"
-      },
-      {
-        "file": "octave-run-vsi-k3.tsv",
-        "sha256": "a0e4c541c8ffcef0c8dfd8214159fe3052c538d9d6a9adb15710d6bce3dc1982"
-      },
-      {
-        "file": "octave-run-vsi-k4.tsv",
-        "sha256": "fe8b23bfe7c7f8b13afe56983418d56cc49ef8477f56f5f4164e94e07178fa81"
-      },
-      {
-        "file": "octave-run-vsi-nodownscale.tsv",
-        "sha256": "7f03664e82fae26dde8184aebf23ca5491d9e00db17d2719a5c7343fd2e9e73b"
       }
     ]
   }
