@@ -30,12 +30,15 @@
   const sizeName = n => { const s = SIZE[n]; return s ? `${s.w}×${s.h}` + (n === 'aic-small' ? ' · AIC crop' : '') : n; };
   const thName = t => t === 'both' ? '1 and 8' : t === '8' || t === 8 ? '8 threads' : '1 thread';
   const tq = n => T975[Math.min(n - 2, 19)] || 1.96;
-  const meta = m => M[m] || { fam: 'classic', csv: 'nocol', csv_why: '', ref_m: 'none', ref_why: '', diffs: [], csv_ev: [], july: [], canon: [], july_cols: [], site_cols: [], est: {} };
+  const meta = m => M[m] || { src: [], fam: 'classic', csv: 'nocol', csv_why: '', ref_m: 'none', ref_why: '', diffs: [], csv_ev: [], july: [], canon: [], july_cols: [], site_cols: [], est: {} };
   // Two independent questions: does our score reproduce the published AIC2026 CSV column, and the reference implementation?
   const CAT = { exact: ['= exact', 'mark-ok'], near: ['≈ near-exact', 'mark-near'], miss: ['✗ cannot reproduce', 'mark-dev'],
     none: ['not compared', 'mark-un'], nocol: ['no CSV column', 'mark-un'], own: ['own design', null] };
   const CAT_ORDER = ['exact', 'near', 'miss', 'none', 'nocol', 'own'];
   const catSpan = c => h('span', CAT[c][1], CAT[c][0]);
+  // Rust source of an implementation on GitHub, pinned to the commit the page was built from.
+  const srcLink = l => { const a = h('a', 'src', l.label); a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.title = l.url.replace('https://github.com/', ''); return a; };
+  const implLink = mm => mm.src.find(l => l.label !== 'CLI dispatch') || mm.src[0];
   const isMatch = c => c === 'exact' || c === 'near';
   // Where the two answers part: the reference reproduced but not the CSV, or the CSV reproduced without (or against) the reference.
   const split = mm => isMatch(mm.ref_m) && mm.csv === 'miss' ? 'ref' : isMatch(mm.csv) && !isMatch(mm.ref_m) ? 'csv' : '';
@@ -213,6 +216,7 @@
       if (why) d.append(document.createTextNode(' — ' + (why.length > 120 ? why.slice(0, 119) + '…' : why)));
       tip.append(d);
     }
+    if (mm.src.length) tip.append(h('div', 'note', 'Rust source: ' + mm.src.filter(l => l.label !== 'CLI dispatch').map(l => l.label).join(', ') + ' (links in the details)'));
     if (!isMatch(mm.csv) || !isMatch(mm.ref_m)) {
       const lines = diffLines(mm);
       for (const l of lines.slice(0, 4)) tip.append(h('div', 'note', '· ' + l));
@@ -250,6 +254,8 @@
     d.append(close, title);
     const dl = h('dl');
     const row = (k, v) => { dl.append(h('dt', null, k), h('dd', null, v ?? '–')); };
+    if (mm.src.length) { const dd = h('dd', 'src-links'); mm.src.forEach(l => dd.append(srcLink(l))); dl.append(h('dt', null, 'Rust source'), dd); }
+    else row('Rust source', mm.origin === 'public' ? 'not resolved from the CLI dispatch' : 'not public');
     row('Reference implementation', mm.ref || 'not recorded');
     row('Reference parity (ledger)', mm.parity === 'Not documented' ? 'none recorded' : mm.parity);
     row('AIC2026 column', mm.col);
@@ -919,7 +925,9 @@
     const grid = h('div', 'miss-grid');
     for (const m of misses) {
       const c = h('div', 'card miss');
-      const t = h('div', 'miss-head'); t.append(h('b', null, m.column + ' '), h('code', null, m.cli));
+      const t = h('div', 'miss-head'), l = implLink(meta(m.cli)) || (D.src_extra[m.cli] || [])[0], code = h('code', null, m.cli);
+      if (l) { const a = srcLink({ ...l, label: '' }); a.append(code); a.title = `${m.cli}: ${l.label} on GitHub`; t.append(h('b', null, m.column + ' '), a); }
+      else t.append(h('b', null, m.column + ' '), code);
       c.append(t, h('div', 'miss-num', `median ${m.median_dJND} JND (max ${m.max_dJND}) · raw median ${m.median_d} · Spearman ${m.spearman}`));
       const dl = h('dl');
       for (const [k, v] of m.cells) if (k !== 'Ours' && v) dl.append(h('dt', null, k), h('dd', null, v));

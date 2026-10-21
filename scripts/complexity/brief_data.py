@@ -508,6 +508,139 @@ def canonical_perf():
 GH = 'https://github.com/imazen/zenmetrics'
 
 
+# Metrics the CLI scores through the umbrella API, which delegates to a crate outside this repository:
+# umbrella kind -> (crate, GitHub repo, crate directory in that repo). The revision comes from Cargo.lock
+# (git sources) or ci/sibling-pins.tsv (path patches), so a link shows the code the build compiled.
+UMBRELLA = {'Ssim2': ('fast-ssim2', 'imazen/fast-ssim2', 'fast-ssim2'), 'Butter': ('butteraugli', 'imazen/butteraugli', 'butteraugli'),
+            'Zensim': ('zensim', 'imazen/zensim', 'zensim'), 'Dssim': ('dssim-core', 'lilith/dssim', 'dssim-core')}
+EXTERNAL_IDENTS = {'fast_ssim2': 'Ssim2', 'butteraugli': 'Butter', 'zensim': 'Zensim', 'dssim_core': 'Dssim'}
+
+
+def external_rev(crate, repo):
+    lock = (ROOT / 'Cargo.lock').read_text()
+    m = re.search(rf'name = "{re.escape(crate)}"\nversion = "[^"]+"\nsource = "git\+https://github.com/{re.escape(repo)}[^#"]*#([0-9a-f]{{40}})"', lock)
+    if m:
+        return m[1]
+    for line in (ROOT / 'ci/sibling-pins.tsv').read_text().splitlines():
+        f = line.split('\t')
+        if len(f) >= 4 and not line.startswith('#') and f[1].rstrip('/').removesuffix('.git').endswith(repo):
+            return f[3]
+    return None
+
+
+def source_links():
+    """Per CLI metric name, links to the Rust code that scores it, pinned to the revision being built: the CLI's
+    run_metric dispatch arm, then what that arm calls (a classical kernel arm, a neural/pyiqa-port model module,
+    a metric crate in this workspace, a CLI metric module and the crate it wraps, or an external crate)."""
+    rev = subprocess.run(['jj', '-R', str(ROOT), 'log', '--no-graph', '-r', 'heads(::@ & ::master@origin)', '-T', 'commit_id'],
+                         capture_output=True, text=True).stdout.strip() or git_rev(ROOT, 'HEAD')
+    if not rev:
+        return {}
+    blob = lambda path, line=None: f'{GH}/blob/{rev}/{path}' + (f'#L{line}' if line else '')
+    mdir = 'crates/zenmetrics-cli/src/metrics'
+    lines = (ROOT / mdir / 'mod.rs').read_text().splitlines()
+    names = {}
+    for l in lines:
+        m = re.match(r'\s*MetricKind::(\w+) => "([a-z0-9.-]+)",?$', l)
+        if m:
+            names.setdefault(m[1], m[2])
+    start = next(i for i, l in enumerate(lines) if l.startswith('pub fn run_metric('))
+    end = next(i for i in range(start + 1, len(lines)) if lines[i] == '}')
+    arms, cur = [], None  # (first pattern line, attribute+pattern+body text)
+    for i in range(start, end):
+        l = lines[i]
+        opens = l.startswith(' ' * 8 + '#[') or l.startswith(' ' * 8 + '// ') or (
+            l.startswith(' ' * 8 + 'MetricKind::') and not (cur and cur[2].rstrip().endswith(')]')))
+        if opens:
+            cur = [None, i, '']
+            arms.append(cur)
+        if cur is not None:
+            cur[2] += l + '\n'
+            if cur[0] is None and 'MetricKind::' in l and '=>' not in cur[2].split('MetricKind::', 1)[0]:
+                cur[0] = i + 1
+    fns = {}
+    for i, l in enumerate(lines):
+        m = re.match(r'(?:pub(?:\(crate\))? )?fn (\w+)\(', l)
+        if m:
+            j = next((k for k in range(i + 1, len(lines)) if lines[k] == '}'), len(lines) - 1)
+            fns[m[1]] = '\n'.join(lines[i:j + 1])
+    cli_mods = {f.stem for f in (ROOT / mdir).glob('*.rs')} - {'mod'}
+    crates = {d.name.replace('-', '_'): d.name for d in (ROOT / 'crates').iterdir()
+              if (d / 'src/lib.rs').exists() and not d.name.startswith(('zenfleet', 'zenmetrics', 'burn', 'zenhdr', 'margarine'))}
+
+    def module(src_dir, name):
+        stems = sorted((f.stem for f in (ROOT / src_dir).glob('*.rs')), key=len, reverse=True)
+        flat = name.replace('-', '')
+        hit = next((s for s in stems if flat.startswith(s.replace('_', ''))), None) or next(
+            (s for s in stems if len(s) > 2 and s.replace('_', '') in flat), None)
+        return hit and f'{src_dir}/{hit}.rs'
+
+    def crate_link(c):
+        return dict(label=f'crate {crates[c]}', url=blob(f'crates/{crates[c]}/src/lib.rs'))
+
+    def external(kind):
+        crate, repo, sub = UMBRELLA[kind]
+        r = external_rev(crate, repo)
+        return [dict(label=f'crate {crate}', url=f'https://github.com/{repo}/blob/{r}/{sub}/src/lib.rs')] if r else []
+
+    def related(name, links):
+        # a shared arm or module serves several metrics: keep the links named after this one
+        keyed = [l for l in links if l['label'].startswith(('CLI module', 'crate '))]
+        flat = name.replace('-', '').replace('_', '')
+        mine = [l for l in keyed if (k := l['label'].split(' ')[-1].replace('-', '').replace('_', '')) and (k in flat or flat in k)]
+        return [l for l in links if l not in keyed or not mine or l in mine]
+
+    out = {}
+    for line, _, text in [a for a in arms if a[0]]:
+        pattern, _, body = text.partition('=>')
+        if 'disabled_msg' in body or 'not(feature' in pattern:
+            continue
+        for variant in re.findall(r'(?<![\w:])MetricKind::(\w+)', pattern):
+            name = names.get(variant)
+            if not name or name in out:
+                continue
+            links = [dict(label='CLI dispatch', url=blob(f'{mdir}/mod.rs', line))]
+            if m := re.search(r'classical::Kind::(\w+)', body):
+                cl = (ROOT / mdir / 'classical.rs').read_text().splitlines()
+                n = next((i + 1 for i, l in enumerate(cl) if re.match(rf'\s*Kind::{m[1]}\b.*=>', l)), None)
+                links.append(dict(label='classical kernel', url=blob(f'{mdir}/classical.rs', n)))
+            elif 'nn::score' in body and (f := module('crates/zenmetrics-nn/src', name)):
+                links.append(dict(label='model', url=blob(f)))
+            elif 'pyiqa_ports::score' in body and (f := module('crates/zenmetrics-pyiqa-ports/src', name)):
+                links.append(dict(label='model', url=blob(f)))
+            else:
+                text2 = body + ''.join(fns.get(c, '') for c in re.findall(r'\b(\w+)\(', body) if c in fns)
+                for k in dict.fromkeys(re.findall(r'zenmetrics_api::MetricKind::(\w+)', text2)):
+                    links += external(k) if k in UMBRELLA else [crate_link(k.lower())] if k.lower() in crates else []
+                seen = []
+                for ident in re.findall(r'\b([a-z][a-z0-9_]*)::', text2):
+                    if ident in seen:
+                        continue
+                    seen.append(ident)
+                    if ident in cli_mods:
+                        links.append(dict(label=f'CLI module {ident}', url=blob(f'{mdir}/{ident}.rs')))
+                        inner = (ROOT / mdir / f'{ident}.rs').read_text()
+                        for c in dict.fromkeys(re.findall(r'\b([a-z][a-z0-9_]*)::', inner)):
+                            links += [crate_link(c)] if c in crates else external(EXTERNAL_IDENTS[c]) if c in EXTERNAL_IDENTS else []
+                    elif ident in crates:
+                        links.append(crate_link(ident))
+            # a GPU variant runs its own crate; otherwise a crate named for the metric (cvvdp, hdrvdp3 -> hdrvdp)
+            flat = name.replace('-', '_')
+            if flat.endswith('_gpu') and flat in crates:
+                links = [l for l in links if l['label'] == 'CLI dispatch' or l['url'].startswith(GH)] + [crate_link(flat)]
+            elif not any(l['label'].startswith('crate ') for l in links):
+                own = max((c for c in crates if flat.startswith(c) and not c.endswith('_gpu')), key=len, default=None)
+                if own:
+                    links.append(crate_link(own))
+            seen_urls = set()
+            out[name] = related(name, [l for l in links if not (l['url'] in seen_urls or seen_urls.add(l['url']))])
+    # rescore routes outside run_metric (scripts/complexity/aic_rescore.py)
+    ex = 'crates/zenmetrics-cli/examples/aic_vmaf_features.rs'
+    if (ROOT / ex).exists():
+        out['@vmaf-features'] = [dict(label='example aic_vmaf_features', url=blob(ex))] + out.get('vmaf', [])[1:]
+    return out
+
+
 def doc_routes():
     """Published column -> our CLI names, from the tables in docs/AIC2026_REPRODUCTION_STATUS.md (first two cells)."""
     out = {}
@@ -795,14 +928,17 @@ def main():
     perf = canonical_perf()
     repro = reproduction({m['metric'] for m in metrics} | {r[1] for r in (perf or {}).get('rows', [])})
     csv_ev = csv_evidence(metrics, repro.get('routes') or {})
+    src = source_links()
     for m in metrics:
         m['csv_evidence'] = csv_ev.get(m['metric']) or []
+        m['source_links'] = src.get(m['metric']) or []
     doc = dict(schema=1, host=HOST, shape=f'{W}x{H}', seed=SEED,
                sources=dict(public=public_rev(), private=priv and git_rev(priv, 'origin/main'),
                             dvifmish=git_rev(Path.home() / 'work/dvifmish', 'origin/main'),
                             extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement],
                             spotcheck=spot_src),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
+               source_extra={k: v for k, v in src.items() if k.startswith('@')},
                tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=perf, repro=repro,
                checks=coherence(metrics, perf, repro, aic, json.loads(a.sync_status.read_text()) if a.sync_status else None))
     a.out.parent.mkdir(parents=True, exist_ok=True)

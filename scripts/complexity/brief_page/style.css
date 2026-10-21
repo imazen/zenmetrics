@@ -167,3 +167,5 @@ tbody tr:hover{background:var(--hover);cursor:pointer}
 .print .page.flow{height:auto}
 .print .page.flow .scroll,.print .page.flow .stage{overflow:visible;display:block;height:auto}
 .print .page .view{height:100%}
+
+.src-links{display:flex;flex-wrap:wrap;gap:4px 12px}a.src{color:var(--accent);text-decoration:none}a.src:hover{text-decoration:underline}

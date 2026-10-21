@@ -144,6 +144,7 @@ def metric_meta(d):
             'ref': c.get('reference') if c.get('reference') not in (None, 'no evidence') else None,
             'family': c.get('family'), 'parity': c.get('parity'), 'aic': m.get('aic_match'), 'spot': m.get('spotcheck'),
             'diffs': m.get('diffs') or [], 'csv_ev': m.get('csv_evidence') or [], 'evidence': c.get('evidence'),
+            'src': m.get('source_links') or [],
             'est': {k: v for k, v in (m.get('estimate') or {}).items() if v},
             'c1': m.get('cpu_1t'), 'c8': m.get('cpu_8t')}
     for name in sorted({r[1] for r in (d.get('perf') or {}).get('rows', [])} - set(meta)):
@@ -154,7 +155,7 @@ def metric_meta(d):
             origin = 'dvifmish' if name.startswith('dvifmish-') else 'public'
             meta[name] = {'fam': family('classic-fr', origin), 'kind': 'classic-fr', 'origin': origin, 'col': None, 'ref': None,
                           'family': None, 'parity': None, 'aic': None, 'spot': None,
-                          'diffs': [], 'csv_ev': [], 'evidence': None, 'est': {}, 'c1': None, 'c8': None}
+                          'diffs': [], 'csv_ev': [], 'evidence': None, 'src': [], 'est': {}, 'c1': None, 'c8': None}
     repro = d.get('repro') or {}
     cols_of = {}
     for col, ms in (repro.get('routes') or {}).items():
@@ -245,6 +246,8 @@ def undocumented(meta):
             out.append(dict(level='warn', check='CSV mismatch without a diff list', detail=f"{m}: {mm['csv']} against the published column, but no comparison is recorded"))
         if mm['ref_m'] in ('near', 'miss') and not (mm['diffs'] or mm['canon']):
             out.append(dict(level='warn', check='reference mismatch without a diff list', detail=f"{m}: {mm['ref_m']} against the reference, but no measured difference is recorded"))
+        if mm['origin'] == 'public' and not mm['src']:
+            out.append(dict(level='info', check='no Rust source link', detail=f"{m}: no run_metric arm in crates/zenmetrics-cli/src/metrics/mod.rs resolves to it"))
     return out
 
 
@@ -260,6 +263,7 @@ def build(data_path, out):
         'fit_host': d.get('host'), 'fit_shape': d.get('shape'),
         'aic': aic_categories((ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()),
         'dvifm': d.get('dvifmish_versions') or [], 'sources': d['sources'], 'notes': d.get('notes') or [],
+        'src_extra': d.get('source_extra') or {},
         'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': (d.get('checks') or []) + undocumented(meta)}
     out.mkdir(parents=True, exist_ok=True)
     write_csvs(d, meta, out)
