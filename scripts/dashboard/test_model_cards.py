@@ -24,6 +24,7 @@ class ModelCards(unittest.TestCase):
 
     def test_cold_misses_separate_score_gates_from_process_errors(self):
         from model_cards import cold_numerical_misses
+        (Path.home()/'tmp').mkdir(parents=True, exist_ok=True)  # a fresh CI runner has no ~/tmp
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
             root=Path(directory);shard=root/'cold.json';index=root/'index.json'
             cases=[dict(case='finite',metric='example',native_source='rev',
@@ -43,6 +44,7 @@ class ModelCards(unittest.TestCase):
 
     def test_cold_batches_reject_duplicate_cases_and_changed_indexes(self):
         from model_cards import cold_batch_numerical_misses
+        (Path.home()/'tmp').mkdir(parents=True, exist_ok=True)  # a fresh CI runner has no ~/tmp
         with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
             root=Path(directory);shard=root/'cases.json';index=root/'index.json'
             case=dict(case='same',metric='example',native_source='rev',
