@@ -1808,3 +1808,4 @@ benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v1/ca
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v1/cases-014.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v1/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/cold-panel-publications.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/profile-storage-pointer-2026-10-21.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

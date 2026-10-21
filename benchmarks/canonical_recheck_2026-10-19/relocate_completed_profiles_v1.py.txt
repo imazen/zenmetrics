@@ -1,0 +1,73 @@
+import datetime
+import errno
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import socket
+import time
+
+R = Path(__file__).parent
+plan_path = R/'profile-storage-relocation-v1.plan.json'
+plan = json.loads(plan_path.read_text())
+destination = Path(plan['destination'])
+destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+def sha(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        while chunk := stream.read(1024*1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+assert shutil.disk_usage(destination).free > sum(row['bytes'] for row in plan['files'])+2*1024**3
+records = []
+for row in plan['files']:
+    source = Path(row['path'])
+    assert source.is_file() and not source.is_symlink()
+    assert source.stat().st_size == row['bytes'] and sha(source) == row['sha256']
+    target = destination/(row['sha256']+source.suffix)
+    if not target.exists():
+        partial = target.with_name(target.name+'.part-v1')
+        with source.open('rb') as incoming, partial.open('xb', buffering=0) as outgoing:
+            while chunk := incoming.read(1024*1024):
+                position = outgoing.tell()
+                for attempt in range(5):
+                    try:
+                        remaining = memoryview(chunk)
+                        while remaining:
+                            count = outgoing.write(remaining)
+                            assert count and count > 0
+                            remaining = remaining[count:]
+                        break
+                    except OSError as error:
+                        if error.errno != errno.ENOMEM or attempt == 4:
+                            raise
+                        outgoing.seek(position)
+                        outgoing.truncate(position)
+                        time.sleep(.1*(attempt+1))
+            os.fsync(outgoing.fileno())
+        assert partial.stat().st_size == row['bytes'] and sha(partial) == row['sha256']
+        assert not target.exists()
+        partial.rename(target)
+    assert target.stat().st_size == row['bytes'] and sha(target) == row['sha256']
+    assert sha(source) == row['sha256']
+    link = source.with_name(source.name+'.relocation-link-v1')
+    assert not link.exists() and not link.is_symlink()
+    link.symlink_to(target)
+    # The complete verified artifact exists before this atomic path replacement.
+    # Receipts and consumers retain their original paths and identical bytes.
+    os.replace(link, source)
+    assert source.resolve() == target and sha(source) == row['sha256']
+    record = dict(**row, destination=str(target), original_path_preserved=True)
+    records.append(record)
+    with (R/'profile-storage-relocation-v1.progress.jsonl').open('a') as stream:
+        stream.write(json.dumps(record)+'\n')
+    print(json.dumps(dict(relocated=len(records), bytes=row['bytes'], path=str(source))), flush=True)
+with (R/'profile-storage-relocation-v1.result.json').open('x') as stream:
+    json.dump(dict(observed_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   host=socket.gethostname(), plan_sha256=sha(plan_path), records=records,
+                   qualification='Only completed, receipt-bound artifacts relocated. Source and destination hashes checked before atomic original-path symlinks. All bytes and every original consumer path retained; no scorer calls or altered observation.'),
+              stream, indent=2)
+print(json.dumps(dict(relocated=len(records), total_bytes=sum(row['bytes'] for row in records))), flush=True)

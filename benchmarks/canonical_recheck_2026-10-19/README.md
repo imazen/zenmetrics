@@ -907,3 +907,7 @@ The exporter caps each new batch at 150 cases to keep generated indexes and
 shards below 30 KB. Any further acquired cases remain explicitly outside this
 publication cut. Initial ratios remain descriptive and separate from fixed-stage
 intervals, warm measurements and numerical controls.
+
+### Retained profile storage (2026-10-21)
+
+The [storage pointer](profile-storage-pointer-2026-10-21.json) binds 34 completed profile artifacts, totaling 330,248,802 bytes, moved to the persistent data volume after disk preflight refused a new diagnostic. Every original consumer path remains available through a link, with its hash revalidated. All raw bytes, prior receipts and numerical observations are retained. The relocation wrapper recorded 6 s, 0.02 GiB peak RSS, minimum available 14,164 MiB and peak load 2.34. These are storage-operation resources.

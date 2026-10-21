@@ -240,11 +240,12 @@ def readme_variant_tables(items, comparisons):
         'unlicensed reference sources and pretrained backbones. A permissive reference-code license '
         'does not grant permission for separately licensed weights. “Not recorded” means unresolved, not unrestricted.', '',
         '**Deltas are absolute raw-score differences**, written as decimals (for example `0.00003`). '
-        'Maxima below come only from the named [local canonical comparison cohorts]'
+        'Maxima below come only from the named warm [local canonical comparison cohorts]'
         '(benchmarks/canonical_recheck_2026-10-19/README.md), with their exact Rust revision, '
         'input dimensions and thread configurations. They are not global error bounds or AIC '
         'published-column agreement. A median is shown only when retained as a median of paired '
         'score differences; it is never inferred from a maximum or a pass threshold. '
+        'Cold numerical misses are listed separately in the compact table and comparison ledger. '
         'Missing local deltas do not erase older parity evidence in the cards.', '']
     groups = {}
     for card in items:
@@ -340,7 +341,7 @@ def readme_section(items):
            'A dash means no comparable measurement. “Prior” means older recorded evidence; '
            '“gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. '
            'Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. '
-           '! flags any observed case above 1.08; '
+           '! flags any observed warm case above 1.08; '
            'R/O identifies RTEN/ORT CPU for neural ratios. '
            'Cold numerical misses are shown separately from the retained warm evidence; '
            'See the ledger for confirmation status.',

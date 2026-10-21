@@ -550,7 +550,7 @@ iqa-bundle-check binaries runner case output:
 benchmark-native-check runner worker reader output:
     python3 -B scripts/jobsys/check_benchmark_exec.py {{runner}} {{output}} scripts/jobsys/benchmark_exec.py {{worker}} {{reader}}
 
-# Install locked dashboard dependencies without dependency lifecycle scripts.
+# Regenerate or verify the shared metric cards and README tables.
 model-cards-refresh python:
     '{{python}}' -B scripts/dashboard/model_cards.py
 
@@ -558,6 +558,7 @@ model-cards-check python:
     '{{python}}' -B -m unittest discover -s scripts/dashboard -p test_model_cards.py
     '{{python}}' -B scripts/dashboard/model_cards.py --check
 
+# Install locked dashboard dependencies without dependency lifecycle scripts.
 dashboard-web-check npm_bin="npm":
     cd crates/zenfleet-dash/web && "{{npm_bin}}" ci --ignore-scripts --no-audit --no-fund --allow-remote=all
     cd crates/zenfleet-dash/web && "{{npm_bin}}" run build
