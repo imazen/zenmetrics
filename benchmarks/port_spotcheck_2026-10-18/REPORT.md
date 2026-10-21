@@ -495,3 +495,31 @@ is 1.459 [1.369, 1.556], missing the precision target. The fixed additional
 40-block stage retains the full initial stage; numerical acceptance remains
 unassigned. Its final acquisition wrapper recorded 2 s / 0.22 GiB peak RSS /
 minimum available 14,294 MiB / peak load 1.41.
+
+### Backend and NIQE numerical follow-up (2026-10-21)
+
+The [oneDNN controls](../canonical_recheck_2026-10-19/brisque-backend-controls-2026-10-21.json) narrow
+BRISQUE's 64² photo miss. With oneDNN's effective ISA limited to AVX2, the
+unchanged PIQ source returns 75.65032958984375, versus Rust 75.64959716796875
+(difference 0.000732421875). The retained default original is 75.73614501953125.
+ATen-only AVX2 and the separate MKL AVX2 request do not change that default
+score; the latter request does not prove MKL's effective ISA. Disabling oneDNN
+gives 75.47998046875. These counterfactual diagnostics do not replace the
+default canonical failure or its 0.015138428 bound. The wrapper recorded 7 s,
+0.33 GiB peak RSS, minimum available 13,998 MiB and peak load 2.28.
+
+The [native stage controls](../canonical_recheck_2026-10-19/brisque-native-original-stages.json)
+reproduce both retained native scalars exactly. Actual native and original
+grayscale planes are bit-identical on both photos. The default original differs
+in 20 of 36 statistical features at 64² and 26 of 36 at 255×257. The oneDNN
+AVX2 control changes two 64² quantized shape parameters into exact agreement
+with Rust. This narrows numerical attribution to statistical feature computation;
+it does not clear the default-backend failure. The native diagnostic wrapper
+recorded 1 s, 0.22 GiB peak RSS, minimum available 14,262 MiB and peak load 1.87.
+
+The [NIQE odd-photo finding](../canonical_recheck_2026-10-19/niqe-odd-numerical-finding.json) retains
+three failing blocks at both 1 and 28 workers: Rust 18.807175290717275 versus
+BasicSR 18.799147370663427, difference 0.008027920053848447 above the unchanged
+0.000602329 bound. This is separate from the documented 64² size refusal.
+Root cause and a code correction remain unverified. Earlier golden checks and
+all original observations remain retained.

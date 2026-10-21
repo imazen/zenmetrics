@@ -1,0 +1,10 @@
+import json,os,pathlib,subprocess
+P=pathlib.Path;Q=P(__file__).parent;results=[]
+for mode,settings in [('onednn-avx2',dict(ATEN_CPU_CAPABILITY='avx2',ONEDNN_MAX_CPU_ISA='AVX2',DNNL_MAX_CPU_ISA='AVX2',ONEDNN_VERBOSE='dispatch',DNNL_VERBOSE='2')),('mkl-avx2-request',dict(ATEN_CPU_CAPABILITY='avx2',MKL_ENABLE_INSTRUCTIONS='AVX2',MKL_VERBOSE='1')),('mkldnn-disabled',{})]:
+ env=dict(os.environ,TMPDIR=str(Q),CUDA_VISIBLE_DEVICES='',OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1',BRISQUE_REVIEW_MODE=mode)
+ for key in ['ATEN_CPU_CAPABILITY','ONEDNN_MAX_CPU_ISA','DNNL_MAX_CPU_ISA','ONEDNN_VERBOSE','DNNL_VERBOSE','MKL_ENABLE_INSTRUCTIONS','MKL_VERBOSE']:env.pop(key,None)
+ env.update(settings);command=['/home/lilith/tmp/portcheck/python/bin/python','-B',str(Q/'capture_math_backend_features_v1.py')]
+ with (Q/('math-backend-'+mode+'-v1.log')).open('x') as f:rc=subprocess.run(command,env=env,stdout=f,stderr=subprocess.STDOUT).returncode
+ results.append(dict(mode=mode,returncode=rc,command=command,settings=settings));print(json.dumps(results[-1]),flush=True)
+with (Q/'math-backend-exits-v1.json').open('x') as f:json.dump(results,f,indent=2)
+raise SystemExit(any(r['returncode'] for r in results))

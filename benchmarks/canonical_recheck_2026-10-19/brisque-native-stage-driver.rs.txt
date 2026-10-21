@@ -1,0 +1,48 @@
+#![forbid(unsafe_code)]
+extern crate alloc;
+#[path = "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/lib.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod port;
+#[path = "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/kernels.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod kernels;
+fn fma(a: f32, b: f32, c: f32) -> f32 { a.mul_add(b, c) }
+#[inline(always)]
+fn sqrt32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrtf(x)
+    }
+}
+
+#[inline(always)]
+fn rint32(x: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        x.round_ties_even()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::rintf(x)
+    }
+}
+
+fn main() {
+    let args: Vec<_> = std::env::args().collect();
+    let w: usize = args[2].parse().unwrap();
+    let h: usize = args[3].parse().unwrap();
+    let rgb = std::fs::read(&args[1]).unwrap();
+    assert_eq!(rgb.len(), w * h * 3);
+    let y = kernels::luma_plane(&rgb, w, h, w * 3);
+    let mut bytes = Vec::with_capacity(y.len() * 4);
+    for value in &y { bytes.extend_from_slice(&value.to_le_bytes()); }
+    std::fs::write(&args[4], bytes).unwrap();
+    let (f, scaled, _, _, score) = port::pipeline_debug(&y, w, h);
+    println!("SCORE {:.17} {:08x}", score, score.to_bits());
+    for (i, value) in f.iter().enumerate() { println!("FEATURE {} {:08x} {:.17}", i, value.to_bits(), value); }
+    for (i, value) in scaled.iter().enumerate() { println!("SCALED {} {:08x} {:.17}", i, value.to_bits(), value); }
+}

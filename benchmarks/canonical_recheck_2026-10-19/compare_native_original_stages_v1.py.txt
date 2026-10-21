@@ -1,0 +1,21 @@
+import hashlib,json,pathlib,struct
+P=pathlib.Path;Q=P(__file__).parent;nroot=Q/'native-review-v1';oroot=Q/'original-features-v1'
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+def words(p):
+ data=P(p).read_bytes();assert len(data)%4==0;return list(struct.unpack('<'+'I'*(len(data)//4),data))
+def value(bits):return struct.unpack('<f',struct.pack('<I',bits))[0]
+n=json.loads((nroot/'result.json').read_text());o=json.loads((oroot/'result.json').read_text());rows=[]
+for native in n['cases']:
+ original=next(r for r in o['rows'] if r['case']==native['case']);output=nroot/(native['case']+'.stdout');assert sha(output)==native['stdout_sha256']
+ nativebits=[]
+ for line in output.read_text().splitlines():
+  if line.startswith('FEATURE '):
+   _,i,bits,_=line.split();assert int(i)==len(nativebits);nativebits.append(int(bits,16))
+ originalbits=[b for stage in original['stages'] for b in stage['feature_bits']];assert len(nativebits)==len(originalbits)==36
+ luma=native['luma'];other=original['stages'][0]['luma'];assert sha(luma)==native['luma_sha256'];assert sha(other)==original['stages'][0]['luma_sha256']
+ a,b=words(luma),words(other);assert len(a)==len(b)
+ features=[dict(index=i,native_bits=f'{x:08x}',canonical_bits=f'{y:08x}',native=value(x),canonical=value(y),difference=abs(value(x)-value(y))) for i,(x,y) in enumerate(zip(nativebits,originalbits)) if x!=y]
+ rows.append(dict(case=native['case'],native_score=native['score'],canonical_score=original['original_score'],delta=abs(native['score']-original['original_score']),actual_native_vs_original_luma_changed_words=sum(x!=y for x,y in zip(a,b)),luma_words=len(a),feature_differences=features,native_source_files=n['source_files'],canonical_source=o['piq_source']))
+out=Q/'native-original-stage-comparison-v1.json'
+with out.open('x') as f:json.dump(dict(rows=rows,native_result_sha256=sha(nroot/'result.json'),original_result_sha256=sha(oroot/'result.json'),analysis_sha256=sha(__file__),qualification='Diagnostic comparison of actual native luma and existing review pipeline features against unchanged original PIQ NSS outputs. Each scalar must first reproduce its retained native/original value. Feature differences narrow numerical attribution; no altered algorithm, gate, timing claim or approved exception.'),f,indent=2,allow_nan=False)
+for row in rows:print(json.dumps(dict(case=row['case'],delta=row['delta'],luma_changed=row['actual_native_vs_original_luma_changed_words'],changed_features=len(row['feature_differences']))))

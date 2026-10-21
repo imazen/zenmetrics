@@ -1,0 +1,31 @@
+import hashlib,importlib,json,os,pathlib,sys
+P=pathlib.Path;Q=P(__file__).parent;root=Q/'original-features-v1';root.mkdir();sys.path.insert(0,'/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra')
+import numpy as np,torch,piq
+torch.set_num_threads(1);torch.set_num_interop_threads(1);torch.set_grad_enabled(False)
+planpath=P('/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/plan.json');plan=json.loads(planpath.read_text());module=importlib.import_module('piq.brisque');source=P(module.__file__).resolve()
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+assert sha(source)==plan['bindings'][str(source)]
+original=module._natural_scene_statistics;capture=[]
+def observed(luma,*args,**kwargs):
+ data=luma.detach().cpu().contiguous().numpy().astype('<f4');output=root/('luma-'+str(len(capture))+'.f32');data.tofile(output)
+ result=original(luma,*args,**kwargs);capture.append(dict(shape=list(data.shape),luma=str(output),luma_sha256=sha(output),feature_bits=result.detach().cpu().contiguous().numpy().astype('<f4').view('<u4').flatten().tolist()))
+ return result
+module._natural_scene_statistics=observed;rows=[]
+for c in plan['cases']:
+ if c['id'] not in ['brisque-grid-pairA-64x64-t1','brisque-grid-pairA-255x257-t1']:continue
+ command=c['canonical']['command'];weights=P(command[command.index('--weights')+1]);loaded=torch.load(weights,map_location='cpu',weights_only=True);module.load_url=lambda *a,**kw:tuple(v.clone() for v in loaded)
+ rgb=np.fromfile(c['distorted'],dtype=np.uint8).reshape(c['height'],c['width'],3);x=torch.from_numpy(rgb.copy()).permute(2,0,1).unsqueeze(0).contiguous().float();start=len(capture)
+ score=float(piq.brisque(x,data_range=255.,reduction='none').item());prior=json.loads((planpath.parent/c['id']/'summary.json').read_text())['blocks'][0]['arms']['canonical']['score'];assert score==prior and len(capture)==start+2
+ direct=torch.round(module.rgb2yiq(x)[:, :1]).detach().cpu().contiguous().numpy().astype('<f4')
+ observed_luma=np.fromfile(capture[start]['luma'],dtype='<f4').reshape(direct.shape)
+ channels=rgb.astype(np.float32);m01=channels[:,:,0]*np.float32(.299)+channels[:,:,1]*np.float32(.587)
+ # For u8 B and f32 coefficients/m01, this positive exact multiply-add fits
+ # f64; its single cast gives the documented scalar f32 FMA before rint.
+ native_formula=np.rint((channels[:,:,2].astype(np.float64)*np.float64(np.float32(.114))+m01.astype(np.float64)).astype(np.float32)).astype('<f4').reshape(direct.shape)
+ formula_file=root/(c['id']+'.documented-native-formula.f32');native_formula.tofile(formula_file)
+ counts=dict(normalization_changes_vs_direct=int(np.count_nonzero(observed_luma.view('<u4')!=direct.view('<u4'))),native_formula_vs_direct=int(np.count_nonzero(native_formula.view('<u4')!=direct.view('<u4'))),native_formula_vs_scored_luma=int(np.count_nonzero(native_formula.view('<u4')!=observed_luma.view('<u4'))))
+ rows.append(dict(case=c['id'],original_score=score,stages=capture[start:],input_sha256=sha(c['distorted']),weights_sha256=sha(weights),ingress_diagnostic=counts,documented_native_formula=dict(path=str(formula_file),sha256=sha(formula_file),qualification='Python reproduction of the documented scalar ingress formula, not yet a Rust-plane measurement.')))
+
+assert sha(source)==plan['bindings'][str(source)]
+with (root/'result.json').open('x') as f:json.dump(dict(rows=rows,torch=torch.__version__,piq=piq.__version__,piq_source=dict(path=str(source),sha256=sha(source)),controller_sha256=sha(__file__),plan_sha256=sha(planpath),qualification='Original PIQ stage observations only. Read-only output capture wraps the original NSS function without changing its computation. Both scalar results must reproduce retained canonical values. No timing ratio or changed numerical bound.'),f,indent=2)
+print(json.dumps(dict(original_scalar_controls=len(rows))),flush=True)

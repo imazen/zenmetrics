@@ -1,0 +1,55 @@
+{
+  "cases": [
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "score": 75.64959716796875,
+      "stdout_sha256": "e0e02b559772922e7168e475e3b745668fe8227351ebc3aca977f9065123239d",
+      "luma_sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+      "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/brisque-grid-pairA-64x64-t1.luma.f32",
+      "command": [
+        "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/native-review",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-distorted.rgb",
+        "64",
+        "64",
+        "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/brisque-grid-pairA-64x64-t1.luma.f32"
+      ]
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "score": 89.11541748046875,
+      "stdout_sha256": "a4161273e9c14e221b3a49bbedddaf2d895cd9af63b3ededb0c35b8d1367e9b7",
+      "luma_sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+      "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/brisque-grid-pairA-255x257-t1.luma.f32",
+      "command": [
+        "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/native-review",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "255",
+        "257",
+        "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/brisque-grid-pairA-255x257-t1.luma.f32"
+      ]
+    }
+  ],
+  "source_files": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.bin": "7141dacd9cb879ecf230df820b4203a9a146fa9c500cbbc27c19351cfe3cde93",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/summation.rs": "0f9cc131cc122eaf0ad8a1577520ccbdc93d9e7e878fa359853a2b4cbdf05984",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/lib.rs": "2d11b727f472de035d8f36ff8b5ca080b90615f1eb4381ab8e3922e4cb0e6c3b",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.sha256": "0276f0ec4059128689b0219196b3446b4896ca862799841fe9c34737ca5256ae",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.rs": "27739ecf1536fd35c3c64f2d69537f48ad3f0098d0298a9d85b1b2f0738661af",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/kernels.rs": "07d9a7c81b6f725edaa674152534826fd71935db727f8f5979a22ebb1efb2e85"
+  },
+  "binary_sha256": "25e08b652271d8220432804af60dbcec40c17ced844eec4a8f5a50c9f4489f7b",
+  "driver_sha256": "156f211926c88e38f5c53d9662c171041475167add57dcd2cd2507c0aa957984",
+  "manifest_sha256": "f9281c6e54208bddffc99a7d6e59d5e32c35485ca4061c8d718219a9e4d5669d",
+  "lock_sha256": "b1368c106a886d3da2ffcd3843e5effe328a9453428844d10825f198e12a2cc5",
+  "commands": [
+    [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--manifest-path",
+      "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/project/Cargo.toml"
+    ]
+  ],
+  "qualification": "Existing private BRISQUE numerical pipeline, compiled through the established review-example inclusion pattern. Raw RGB ingress matches that example. Both scalar outputs must exactly reproduce retained native scores before feature differences are interpreted. No timing, public API or production source modification."
+}

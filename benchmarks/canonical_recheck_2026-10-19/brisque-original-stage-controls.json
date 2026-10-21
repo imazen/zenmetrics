@@ -1,0 +1,169 @@
+{
+  "rows": [
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "original_score": 75.73614501953125,
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            64,
+            64
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/luma-0.f32",
+          "luma_sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+          "feature_bits": [
+            1059179201,
+            1028655922,
+            1050891256,
+            1024764451,
+            987634449,
+            1015722875,
+            1050723484,
+            1025146721,
+            986315294,
+            1016116787,
+            1051059028,
+            1024602631,
+            984004430,
+            1014238507,
+            1050656375,
+            1025489143,
+            979729372,
+            1015281952
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/luma-1.f32",
+          "luma_sha256": "66cc778b646b4473ff9ecacc5315cfcba8598664be943e091401a98dd86be792",
+          "feature_bits": [
+            1062819856,
+            1034851462,
+            1052568977,
+            1034440271,
+            957728933,
+            1024948690,
+            1052703195,
+            1034475707,
+            961542312,
+            1025088560,
+            1053005185,
+            1033742376,
+            961662537,
+            1023631070,
+            1052870967,
+            1034145772,
+            965077484,
+            1024570089
+          ]
+        }
+      ],
+      "input_sha256": "2b5079a0f6573a58d9072c73626f511023347ac07e95544c09f2e49c12de8837",
+      "weights_sha256": "e5b048ef5325bae6c57965cf077fadfa5834fcefb02e13611b4ea2d36cf3c52c",
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      },
+      "documented_native_formula": {
+        "path": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/brisque-grid-pairA-64x64-t1.documented-native-formula.f32",
+        "sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+        "qualification": "Python reproduction of the documented scalar ingress formula, not yet a Rust-plane measurement."
+      }
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "original_score": 89.107421875,
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            257,
+            255
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/luma-2.f32",
+          "luma_sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+          "feature_bits": [
+            1061108581,
+            1025415628,
+            1050153058,
+            1017327835,
+            991155309,
+            1008844885,
+            1050522157,
+            1009777403,
+            996195796,
+            1005614513,
+            1050455048,
+            1002590578,
+            998598313,
+            1003207946,
+            1050186613,
+            1011696716,
+            993604674,
+            1005621951
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            128,
+            127
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/luma-3.f32",
+          "luma_sha256": "bff125b27db8800a4fe75c10e59e18749c0c7e171229c8deb0f209e85acb58a5",
+          "feature_bits": [
+            1061175690,
+            1029258219,
+            1048978654,
+            1027653904,
+            976103826,
+            1020990899,
+            1049683296,
+            1015681507,
+            1003472378,
+            1015082984,
+            1049414861,
+            1007376269,
+            1007858878,
+            1013291489,
+            1049481970,
+            1018350063,
+            1001241633,
+            1016180196
+          ]
+        }
+      ],
+      "input_sha256": "bfcf894f916d2fbbcae17e9068146eeac58d20b974fc3527052f2559ea132c1d",
+      "weights_sha256": "e5b048ef5325bae6c57965cf077fadfa5834fcefb02e13611b4ea2d36cf3c52c",
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      },
+      "documented_native_formula": {
+        "path": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-v1/brisque-grid-pairA-255x257-t1.documented-native-formula.f32",
+        "sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+        "qualification": "Python reproduction of the documented scalar ingress formula, not yet a Rust-plane measurement."
+      }
+    }
+  ],
+  "torch": "2.14.1+cpu",
+  "piq": "0.8.0",
+  "piq_source": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+    "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+  },
+  "controller_sha256": "ce8e99e2b1030c8d897d9b68bd55a8640ce6ca7c8b8bd2c55786fe99f4ca39df",
+  "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+  "qualification": "Original PIQ stage observations only. Read-only output capture wraps the original NSS function without changing its computation. Both scalar results must reproduce retained canonical values. No timing ratio or changed numerical bound."
+}

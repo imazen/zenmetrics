@@ -1,0 +1,420 @@
+{
+  "rows": [
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "native_score": 75.64959716796875,
+      "canonical_score": 75.73614501953125,
+      "delta": 0.0865478515625,
+      "actual_native_vs_original_luma_changed_words": 0,
+      "luma_words": 4096,
+      "feature_differences": [
+        {
+          "index": 1,
+          "native_bits": "3d50212e",
+          "canonical_bits": "3d500b32",
+          "native": 0.050812892615795135,
+          "canonical": 0.05079192668199539,
+          "difference": 2.0965933799743652e-05
+        },
+        {
+          "index": 3,
+          "native_bits": "3d1499ce",
+          "canonical_bits": "3d14aa23",
+          "native": 0.03627949208021164,
+          "canonical": 0.03629506751894951,
+          "difference": 1.5575438737869263e-05
+        },
+        {
+          "index": 4,
+          "native_bits": "3ade5f3f",
+          "canonical_bits": "3ade1b11",
+          "native": 0.0016965641407296062,
+          "canonical": 0.0016945322277024388,
+          "difference": 2.0319130271673203e-06
+        },
+        {
+          "index": 5,
+          "native_bits": "3c8aac1d",
+          "canonical_bits": "3c8ab37b",
+          "native": 0.016927773132920265,
+          "canonical": 0.016931286081671715,
+          "difference": 3.512948751449585e-06
+        },
+        {
+          "index": 6,
+          "native_bits": "3ea147ae",
+          "canonical_bits": "3ea0c49c",
+          "native": 0.3149999976158142,
+          "canonical": 0.3140000104904175,
+          "difference": 0.0009999871253967285
+        },
+        {
+          "index": 7,
+          "native_bits": "3d1ad7c8",
+          "canonical_bits": "3d1a7f61",
+          "native": 0.037803441286087036,
+          "canonical": 0.037719134241342545,
+          "difference": 8.430704474449158e-05
+        },
+        {
+          "index": 8,
+          "native_bits": "3aca2d3e",
+          "canonical_bits": "3ac9fa1e",
+          "native": 0.0015424860175698996,
+          "canonical": 0.0015409623738378286,
+          "difference": 1.5236437320709229e-06
+        },
+        {
+          "index": 9,
+          "native_bits": "3c90ac2a",
+          "canonical_bits": "3c90b633",
+          "native": 0.017660219222307205,
+          "canonical": 0.01766500435769558,
+          "difference": 4.785135388374329e-06
+        },
+        {
+          "index": 11,
+          "native_bits": "3d1217ef",
+          "canonical_bits": "3d123207",
+          "native": 0.035667356103658676,
+          "canonical": 0.0356922410428524,
+          "difference": 2.4884939193725586e-05
+        },
+        {
+          "index": 12,
+          "native_bits": "3aa72569",
+          "canonical_bits": "3aa6b74e",
+          "native": 0.0012752237962558866,
+          "canonical": 0.0012719423975795507,
+          "difference": 3.2813986763358116e-06
+        },
+        {
+          "index": 13,
+          "native_bits": "3c73fe93",
+          "canonical_bits": "3c740d2b",
+          "native": 0.014892238192260265,
+          "canonical": 0.014895717613399029,
+          "difference": 3.4794211387634277e-06
+        },
+        {
+          "index": 14,
+          "native_bits": "3ea04189",
+          "canonical_bits": "3e9fbe77",
+          "native": 0.31299999356269836,
+          "canonical": 0.31200000643730164,
+          "difference": 0.0009999871253967285
+        },
+        {
+          "index": 15,
+          "native_bits": "3d201428",
+          "canonical_bits": "3d1fb8f7",
+          "native": 0.039081722497940063,
+          "canonical": 0.03899475559592247,
+          "difference": 8.696690201759338e-05
+        },
+        {
+          "index": 16,
+          "native_bits": "3a65d497",
+          "canonical_bits": "3a657bdc",
+          "native": 0.0008767335093580186,
+          "canonical": 0.0008754113223403692,
+          "difference": 1.3221870176494122e-06
+        },
+        {
+          "index": 17,
+          "native_bits": "3c83ee5c",
+          "canonical_bits": "3c83f920",
+          "native": 0.016104869544506073,
+          "canonical": 0.016110002994537354,
+          "difference": 5.133450031280518e-06
+        },
+        {
+          "index": 19,
+          "native_bits": "3dae9484",
+          "canonical_bits": "3dae9486",
+          "native": 0.08524420857429504,
+          "canonical": 0.08524422347545624,
+          "difference": 1.4901161193847656e-08
+        },
+        {
+          "index": 26,
+          "native_bits": "394ff8a6",
+          "canonical_bits": "394ff8a8",
+          "native": 0.00019833687110804021,
+          "canonical": 0.00019833690021187067,
+          "difference": 2.9103830456733704e-11
+        },
+        {
+          "index": 30,
+          "native_bits": "3951ce4a",
+          "canonical_bits": "3951ce49",
+          "native": 0.0002000864187721163,
+          "canonical": 0.00020008640422020108,
+          "difference": 1.4551915228366852e-11
+        },
+        {
+          "index": 33,
+          "native_bits": "3da3cfeb",
+          "canonical_bits": "3da3cfec",
+          "native": 0.07998641580343246,
+          "canonical": 0.07998642325401306,
+          "difference": 7.450580596923828e-09
+        },
+        {
+          "index": 35,
+          "native_bits": "3d11b2e7",
+          "canonical_bits": "3d11b2e9",
+          "native": 0.03557100519537926,
+          "canonical": 0.035571012645959854,
+          "difference": 7.450580596923828e-09
+        }
+      ],
+      "native_source_files": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.bin": "7141dacd9cb879ecf230df820b4203a9a146fa9c500cbbc27c19351cfe3cde93",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/summation.rs": "0f9cc131cc122eaf0ad8a1577520ccbdc93d9e7e878fa359853a2b4cbdf05984",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/lib.rs": "2d11b727f472de035d8f36ff8b5ca080b90615f1eb4381ab8e3922e4cb0e6c3b",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.sha256": "0276f0ec4059128689b0219196b3446b4896ca862799841fe9c34737ca5256ae",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.rs": "27739ecf1536fd35c3c64f2d69537f48ad3f0098d0298a9d85b1b2f0738661af",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/kernels.rs": "07d9a7c81b6f725edaa674152534826fd71935db727f8f5979a22ebb1efb2e85"
+      },
+      "canonical_source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      }
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "native_score": 89.11541748046875,
+      "canonical_score": 89.107421875,
+      "delta": 0.00799560546875,
+      "actual_native_vs_original_luma_changed_words": 0,
+      "luma_words": 65535,
+      "feature_differences": [
+        {
+          "index": 1,
+          "native_bits": "3d1e9b27",
+          "canonical_bits": "3d1e99cc",
+          "native": 0.03872218355536461,
+          "canonical": 0.03872089087963104,
+          "difference": 1.2926757335662842e-06
+        },
+        {
+          "index": 3,
+          "native_bits": "3ca334ed",
+          "canonical_bits": "3ca330db",
+          "native": 0.01992269791662693,
+          "canonical": 0.01992075704038143,
+          "difference": 1.9408762454986572e-06
+        },
+        {
+          "index": 4,
+          "native_bits": "3b13bd21",
+          "canonical_bits": "3b13d46d",
+          "native": 0.0022543149534612894,
+          "canonical": 0.002255703555420041,
+          "difference": 1.3886019587516785e-06
+        },
+        {
+          "index": 5,
+          "native_bits": "3c21b85c",
+          "canonical_bits": "3c21c055",
+          "native": 0.009870614856481552,
+          "canonical": 0.009872515685856342,
+          "difference": 1.9008293747901917e-06
+        },
+        {
+          "index": 7,
+          "native_bits": "3c300b9a",
+          "canonical_bits": "3c2ffafb",
+          "native": 0.010744953528046608,
+          "canonical": 0.010740990750491619,
+          "difference": 3.962777554988861e-06
+        },
+        {
+          "index": 8,
+          "native_bits": "3b60a0d1",
+          "canonical_bits": "3b60bdd4",
+          "native": 0.003427554154768586,
+          "canonical": 0.0034292833879590034,
+          "difference": 1.7292331904172897e-06
+        },
+        {
+          "index": 9,
+          "native_bits": "3bf06ed7",
+          "canonical_bits": "3bf075b1",
+          "native": 0.007337431889027357,
+          "canonical": 0.007338248658925295,
+          "difference": 8.167698979377747e-07
+        },
+        {
+          "index": 11,
+          "native_bits": "3bc2569f",
+          "canonical_bits": "3bc25172",
+          "native": 0.005930736195296049,
+          "canonical": 0.005930119194090366,
+          "difference": 6.170012056827545e-07
+        },
+        {
+          "index": 12,
+          "native_bits": "3b855ffc",
+          "canonical_bits": "3b8566a9",
+          "native": 0.004070280119776726,
+          "canonical": 0.004071075934916735,
+          "difference": 7.958151400089264e-07
+        },
+        {
+          "index": 13,
+          "native_bits": "3bcbb6dc",
+          "canonical_bits": "3bcbbd0a",
+          "native": 0.00621686689555645,
+          "canonical": 0.006217603571712971,
+          "difference": 7.366761565208435e-07
+        },
+        {
+          "index": 15,
+          "native_bits": "3c4d4815",
+          "canonical_bits": "3c4d444c",
+          "native": 0.01252939272671938,
+          "canonical": 0.012528490275144577,
+          "difference": 9.024515748023987e-07
+        },
+        {
+          "index": 16,
+          "native_bits": "3b39247e",
+          "canonical_bits": "3b393442",
+          "native": 0.0028250510804355145,
+          "canonical": 0.0028259907849133015,
+          "difference": 9.397044777870178e-07
+        },
+        {
+          "index": 17,
+          "native_bits": "3bf08968",
+          "canonical_bits": "3bf092bf",
+          "native": 0.007340598851442337,
+          "canonical": 0.00734171224758029,
+          "difference": 1.1133961379528046e-06
+        },
+        {
+          "index": 19,
+          "native_bits": "3d593afb",
+          "canonical_bits": "3d593beb",
+          "native": 0.053034763783216476,
+          "canonical": 0.05303565785288811,
+          "difference": 8.940696716308594e-07
+        },
+        {
+          "index": 21,
+          "native_bits": "3d40a2fa",
+          "canonical_bits": "3d40c110",
+          "native": 0.04703042656183243,
+          "canonical": 0.04705911874771118,
+          "difference": 2.8692185878753662e-05
+        },
+        {
+          "index": 22,
+          "native_bits": "3a2df129",
+          "canonical_bits": "3a2e2992",
+          "native": 0.0006635361933149397,
+          "canonical": 0.0006643767701461911,
+          "difference": 8.405768312513828e-07
+        },
+        {
+          "index": 23,
+          "native_bits": "3cdad0e9",
+          "canonical_bits": "3cdb15b3",
+          "native": 0.02671094425022602,
+          "canonical": 0.026743745431303978,
+          "difference": 3.280118107795715e-05
+        },
+        {
+          "index": 25,
+          "native_bits": "3c8a3ad8",
+          "canonical_bits": "3c8a11e3",
+          "native": 0.016873762011528015,
+          "canonical": 0.01685423217713833,
+          "difference": 1.9529834389686584e-05
+        },
+        {
+          "index": 26,
+          "native_bits": "3bcf4a41",
+          "canonical_bits": "3bcfc5fa",
+          "native": 0.006325990427285433,
+          "canonical": 0.006340739317238331,
+          "difference": 1.4748889952898026e-05
+        },
+        {
+          "index": 27,
+          "native_bits": "3c80db17",
+          "canonical_bits": "3c80efe8",
+          "native": 0.015729470178484917,
+          "canonical": 0.01573939621448517,
+          "difference": 9.92603600025177e-06
+        },
+        {
+          "index": 29,
+          "native_bits": "3c0be2ab",
+          "canonical_bits": "3c0b578d",
+          "native": 0.008537928573787212,
+          "canonical": 0.008504760451614857,
+          "difference": 3.316812217235565e-05
+        },
+        {
+          "index": 30,
+          "native_bits": "3c125430",
+          "canonical_bits": "3c12b4be",
+          "native": 0.008931204676628113,
+          "canonical": 0.008954225108027458,
+          "difference": 2.3020431399345398e-05
+        },
+        {
+          "index": 31,
+          "native_bits": "3c657d00",
+          "canonical_bits": "3c6599e1",
+          "native": 0.014006853103637695,
+          "canonical": 0.014013738371431828,
+          "difference": 6.885267794132233e-06
+        },
+        {
+          "index": 33,
+          "native_bits": "3cb31250",
+          "canonical_bits": "3cb2c9ef",
+          "native": 0.021859318017959595,
+          "canonical": 0.021824805065989494,
+          "difference": 3.45129519701004e-05
+        },
+        {
+          "index": 34,
+          "native_bits": "3bad3f27",
+          "canonical_bits": "3badbc21",
+          "native": 0.005287069361656904,
+          "canonical": 0.005301967728883028,
+          "difference": 1.489836722612381e-05
+        },
+        {
+          "index": 35,
+          "native_bits": "3c91aa2c",
+          "canonical_bits": "3c91ade4",
+          "native": 0.017781339585781097,
+          "canonical": 0.017783112823963165,
+          "difference": 1.773238182067871e-06
+        }
+      ],
+      "native_source_files": {
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.bin": "7141dacd9cb879ecf230df820b4203a9a146fa9c500cbbc27c19351cfe3cde93",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/summation.rs": "0f9cc131cc122eaf0ad8a1577520ccbdc93d9e7e878fa359853a2b4cbdf05984",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/lib.rs": "2d11b727f472de035d8f36ff8b5ca080b90615f1eb4381ab8e3922e4cb0e6c3b",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.sha256": "0276f0ec4059128689b0219196b3446b4896ca862799841fe9c34737ca5256ae",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/params.rs": "27739ecf1536fd35c3c64f2d69537f48ad3f0098d0298a9d85b1b2f0738661af",
+        "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/brisque/src/kernels.rs": "07d9a7c81b6f725edaa674152534826fd71935db727f8f5979a22ebb1efb2e85"
+      },
+      "canonical_source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      }
+    }
+  ],
+  "native_result_sha256": "f5147d271c8ec9683a5f5382a320b1a7cc160d0d42bd148df7813ecc33da18d1",
+  "original_result_sha256": "b46c3b2122607ee00b7f2d5bfee152bf96e8de8a2a6842dfd1e1901dd23140c9",
+  "analysis_sha256": "f6b8ffdb0f0a75fcdf12960df9246cb062fd9393f4945fb5df7ddeeacdd22922",
+  "qualification": "Diagnostic comparison of actual native luma and existing review pipeline features against unchanged original PIQ NSS outputs. Each scalar must first reproduce its retained native/original value. Feature differences narrow numerical attribution; no altered algorithm, gate, timing claim or approved exception."
+}

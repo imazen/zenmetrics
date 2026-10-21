@@ -1,0 +1,554 @@
+{
+  "rows": [
+    {
+      "mode": "mkl-avx2-request",
+      "case": "brisque-grid-pairA-64x64-t1",
+      "score": 75.73614501953125,
+      "retained_canonical_score": 75.73614501953125,
+      "difference_from_retained_canonical": 0.0,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": "avx2",
+        "ONEDNN_MAX_CPU_ISA": null,
+        "DNNL_MAX_CPU_ISA": null,
+        "MKL_ENABLE_INSTRUCTIONS": "AVX2"
+      },
+      "mkldnn_enabled": true,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            64,
+            64
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkl-avx2-request/luma-0.f32",
+          "luma_sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+          "feature_bits": [
+            1059179201,
+            1028655922,
+            1050891256,
+            1024764451,
+            987634449,
+            1015722875,
+            1050723484,
+            1025146721,
+            986315294,
+            1016116787,
+            1051059028,
+            1024602631,
+            984004430,
+            1014238507,
+            1050656375,
+            1025489143,
+            979729372,
+            1015281952
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkl-avx2-request/luma-1.f32",
+          "luma_sha256": "66cc778b646b4473ff9ecacc5315cfcba8598664be943e091401a98dd86be792",
+          "feature_bits": [
+            1062819856,
+            1034851462,
+            1052568977,
+            1034440271,
+            957728933,
+            1024948690,
+            1052703195,
+            1034475707,
+            961542312,
+            1025088560,
+            1053005185,
+            1033742376,
+            961662537,
+            1023631070,
+            1052870967,
+            1034145772,
+            965077484,
+            1024570089
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    },
+    {
+      "mode": "mkl-avx2-request",
+      "case": "brisque-grid-pairA-255x257-t1",
+      "score": 89.107421875,
+      "retained_canonical_score": 89.107421875,
+      "difference_from_retained_canonical": 0.0,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": "avx2",
+        "ONEDNN_MAX_CPU_ISA": null,
+        "DNNL_MAX_CPU_ISA": null,
+        "MKL_ENABLE_INSTRUCTIONS": "AVX2"
+      },
+      "mkldnn_enabled": true,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            257,
+            255
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkl-avx2-request/luma-2.f32",
+          "luma_sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+          "feature_bits": [
+            1061108581,
+            1025415628,
+            1050153058,
+            1017327835,
+            991155309,
+            1008844885,
+            1050522157,
+            1009777403,
+            996195796,
+            1005614513,
+            1050455048,
+            1002590578,
+            998598313,
+            1003207946,
+            1050186613,
+            1011696716,
+            993604674,
+            1005621951
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            128,
+            127
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkl-avx2-request/luma-3.f32",
+          "luma_sha256": "bff125b27db8800a4fe75c10e59e18749c0c7e171229c8deb0f209e85acb58a5",
+          "feature_bits": [
+            1061175690,
+            1029258219,
+            1048978654,
+            1027653904,
+            976103826,
+            1020990899,
+            1049683296,
+            1015681507,
+            1003472378,
+            1015082984,
+            1049414861,
+            1007376269,
+            1007858878,
+            1013291489,
+            1049481970,
+            1018350063,
+            1001241633,
+            1016180196
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    },
+    {
+      "mode": "mkldnn-disabled",
+      "case": "brisque-grid-pairA-64x64-t1",
+      "score": 75.47998046875,
+      "retained_canonical_score": 75.73614501953125,
+      "difference_from_retained_canonical": 0.25616455078125,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": null,
+        "ONEDNN_MAX_CPU_ISA": null,
+        "DNNL_MAX_CPU_ISA": null,
+        "MKL_ENABLE_INSTRUCTIONS": null
+      },
+      "mkldnn_enabled": false,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            64,
+            64
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkldnn-disabled/luma-0.f32",
+          "luma_sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+          "feature_bits": [
+            1059179201,
+            1028664648,
+            1050891256,
+            1024942833,
+            989082792,
+            1016236845,
+            1050757038,
+            1025453419,
+            987323672,
+            1016703719,
+            1051092582,
+            1024919136,
+            984821325,
+            1015155057,
+            1050689929,
+            1025826638,
+            981093033,
+            1015861456
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkldnn-disabled/luma-1.f32",
+          "luma_sha256": "66cc778b646b4473ff9ecacc5315cfcba8598664be943e091401a98dd86be792",
+          "feature_bits": [
+            1062819856,
+            1034851512,
+            1052568977,
+            1034445889,
+            957770506,
+            1024960788,
+            1052703195,
+            1034480810,
+            961613817,
+            1025101010,
+            1053005185,
+            1033757178,
+            961648535,
+            1023653109,
+            1052870967,
+            1034152606,
+            965104540,
+            1024583714
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    },
+    {
+      "mode": "mkldnn-disabled",
+      "case": "brisque-grid-pairA-255x257-t1",
+      "score": 88.93194580078125,
+      "retained_canonical_score": 89.107421875,
+      "difference_from_retained_canonical": 0.17547607421875,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": null,
+        "ONEDNN_MAX_CPU_ISA": null,
+        "DNNL_MAX_CPU_ISA": null,
+        "MKL_ENABLE_INSTRUCTIONS": null
+      },
+      "mkldnn_enabled": false,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            257,
+            255
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkldnn-disabled/luma-2.f32",
+          "luma_sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+          "feature_bits": [
+            1061108581,
+            1025419127,
+            1050153058,
+            1017706686,
+            991666188,
+            1009510824,
+            1050555711,
+            1010485197,
+            996831746,
+            1006654028,
+            1050455048,
+            1003643569,
+            999030840,
+            1004174252,
+            1050220167,
+            1012585206,
+            994135529,
+            1006726690
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            128,
+            127
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkldnn-disabled/luma-3.f32",
+          "luma_sha256": "bff125b27db8800a4fe75c10e59e18749c0c7e171229c8deb0f209e85acb58a5",
+          "feature_bits": [
+            1061175690,
+            1029258201,
+            1048978654,
+            1027658490,
+            976097547,
+            1020998435,
+            1049683296,
+            1015690260,
+            1003467027,
+            1015086849,
+            1049414861,
+            1007372680,
+            1007861985,
+            1013293003,
+            1049481970,
+            1018353028,
+            1001243293,
+            1016183149
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    },
+    {
+      "mode": "onednn-avx2",
+      "case": "brisque-grid-pairA-64x64-t1",
+      "score": 75.65032958984375,
+      "retained_canonical_score": 75.73614501953125,
+      "difference_from_retained_canonical": 0.0858154296875,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": "avx2",
+        "ONEDNN_MAX_CPU_ISA": "AVX2",
+        "DNNL_MAX_CPU_ISA": "AVX2",
+        "MKL_ENABLE_INSTRUCTIONS": null
+      },
+      "mkldnn_enabled": true,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            64,
+            64
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/onednn-avx2/luma-0.f32",
+          "luma_sha256": "6c546f72b92b94b2400342e728594f87d1521df3d059c3d7ab57c39d1b90b0f0",
+          "feature_bits": [
+            1059179201,
+            1028661550,
+            1050891256,
+            1024760269,
+            987651903,
+            1015720989,
+            1050757038,
+            1025169352,
+            986328382,
+            1016114218,
+            1051059028,
+            1024595952,
+            984032617,
+            1014234773,
+            1050689929,
+            1025512488,
+            979752089,
+            1015279196
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            32,
+            32
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/onednn-avx2/luma-1.f32",
+          "luma_sha256": "66cc778b646b4473ff9ecacc5315cfcba8598664be943e091401a98dd86be792",
+          "feature_bits": [
+            1062819856,
+            1034851462,
+            1052568977,
+            1034440271,
+            957728933,
+            1024948690,
+            1052703195,
+            1034475707,
+            961542312,
+            1025088560,
+            1053005185,
+            1033742376,
+            961662537,
+            1023631070,
+            1052870967,
+            1034145772,
+            965077484,
+            1024570089
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    },
+    {
+      "mode": "onednn-avx2",
+      "case": "brisque-grid-pairA-255x257-t1",
+      "score": 89.1041259765625,
+      "retained_canonical_score": 89.107421875,
+      "difference_from_retained_canonical": 0.0032958984375,
+      "requested_environment": {
+        "ATEN_CPU_CAPABILITY": "avx2",
+        "ONEDNN_MAX_CPU_ISA": "AVX2",
+        "DNNL_MAX_CPU_ISA": "AVX2",
+        "MKL_ENABLE_INSTRUCTIONS": null
+      },
+      "mkldnn_enabled": true,
+      "torch": "2.14.1+cpu",
+      "piq": "0.8.0",
+      "source": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra/piq/brisque.py",
+        "sha256": "30afb1a69463aab73a04be77e85fde757a732acb00d2773b9293ad5d6b93b956"
+      },
+      "stages": [
+        {
+          "shape": [
+            1,
+            1,
+            257,
+            255
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/onednn-avx2/luma-2.f32",
+          "luma_sha256": "43207578f9c61c2834b72f80c85a5f2c61877ca47debe931e7d1eb772aae48f8",
+          "feature_bits": [
+            1061108581,
+            1025415977,
+            1050153058,
+            1017328876,
+            991149343,
+            1008842842,
+            1050522157,
+            1009781661,
+            996188369,
+            1005612762,
+            1050455048,
+            1002591909,
+            998596604,
+            1003206366,
+            1050186613,
+            1011697685,
+            993600638,
+            1005619560
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            128,
+            127
+          ],
+          "luma": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/onednn-avx2/luma-3.f32",
+          "luma_sha256": "bff125b27db8800a4fe75c10e59e18749c0c7e171229c8deb0f209e85acb58a5",
+          "feature_bits": [
+            1061175690,
+            1029258219,
+            1048978654,
+            1027653904,
+            976103826,
+            1020990899,
+            1049683296,
+            1015681507,
+            1003472378,
+            1015082984,
+            1049414861,
+            1007376269,
+            1007858878,
+            1013291489,
+            1049481970,
+            1018350063,
+            1001241633,
+            1016180196
+          ]
+        }
+      ],
+      "ingress_diagnostic": {
+        "normalization_changes_vs_direct": 0,
+        "native_formula_vs_direct": 0,
+        "native_formula_vs_scored_luma": 0
+      }
+    }
+  ],
+  "raw": [
+    {
+      "result": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkl-avx2-request/result.json",
+      "sha256": "70f85290923364c4ee130c80f8622071cac404ab362a17d9f849afebbe97e3c2",
+      "verbose_log": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/math-backend-mkl-avx2-request-v1.log",
+      "verbose_sha256": "cbadfd9ab35d7d682cb2a62367a13944a5f6bcc1a59492e708c02cb1368ec192"
+    },
+    {
+      "result": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/mkldnn-disabled/result.json",
+      "sha256": "1838702eea5e49629adf591870c3d2f2fbfe60b47268bcc206489ff44a25e75d",
+      "verbose_log": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/math-backend-mkldnn-disabled-v1.log",
+      "verbose_sha256": "aa3cd3ab74dfcef0abff02f7b0da7f98797913dbfa3b5112558b0ddca54df73c"
+    },
+    {
+      "result": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/original-features-math-v1/onednn-avx2/result.json",
+      "sha256": "617f72b6bcaf15beab723f8304bc1adacddb12615f79e443eaf3d1cbe24a16f7",
+      "verbose_log": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/math-backend-onednn-avx2-v1.log",
+      "verbose_sha256": "ae9d8dc7c7f09ad872ed043fac7bc7e70d5001d03a68c2ccb53fbdeecad9bfef"
+    }
+  ],
+  "resource_receipt": "run-heavy: done rc=0 7s | peak-RSS 0.33GiB | min-avail 13998MiB | peak-load 2.28",
+  "oneDNN_effective_ISA_evidence": "onednn_verbose,v1,info,cpu,isa:Intel AVX2",
+  "source_docs": [
+    "https://uxlfoundation.github.io/oneDNN/v3.3/dev_guide_cpu_dispatcher_control.html",
+    "https://uxlfoundation.github.io/oneDNN/dev_guide_verbose.html",
+    "https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-2/instruction-set-specific-dispatch-on-intel-archs.html"
+  ],
+  "qualification": "Counterfactual reference backend diagnostics only. oneDNN AVX2 is evidenced by its retained verbose header. The MKL request is not proof of effective ISA. Original default scores, failure and numerical bounds remain unchanged; no timing comparison or approved exception."
+}

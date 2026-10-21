@@ -1771,3 +1771,8 @@ benchmarks/canonical_recheck_2026-10-19/brisque-runtime-controls-2026-10-21.json
 benchmarks/canonical_recheck_2026-10-19/gmsd-photo64-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/gmsd-photo64-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/flip17-photo-odd-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/brisque-backend-controls-2026-10-21.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/brisque-native-original-stages.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/brisque-native-review-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/brisque-original-stage-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/niqe-odd-numerical-finding.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

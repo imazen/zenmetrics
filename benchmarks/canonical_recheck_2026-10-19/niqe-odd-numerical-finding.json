@@ -1,0 +1,53 @@
+{
+  "rows": [
+    {
+      "case": "niqe-grid-pairA-255x257-t1",
+      "threads": 1,
+      "blocks": [
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        },
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        },
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        }
+      ],
+      "absolute_difference": 0.008027920053848447,
+      "absolute_bound": 0.000602329,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "raw_summary": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-255x257-t1/summary.json",
+      "raw_summary_sha256": "2e28959f06c6337479a35aa8f976cf75a56d13415a6b98e64fe7b8cfa5d33c3a",
+      "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317"
+    },
+    {
+      "case": "niqe-grid-pairA-255x257-t28",
+      "threads": 28,
+      "blocks": [
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        },
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        },
+        {
+          "native": 18.807175290717275,
+          "canonical": 18.799147370663427
+        }
+      ],
+      "absolute_difference": 0.008027920053848447,
+      "absolute_bound": 0.000602329,
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "raw_summary": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-255x257-t28/summary.json",
+      "raw_summary_sha256": "e9c042e57e665903125aad95879d8f9abf0a3243c30592012531152db54f1284",
+      "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317"
+    }
+  ],
+  "qualification": "All three first-call blocks at both worker settings exceed the existing bound on the 255x257 photo. This is a numerical finding separate from documented small-image refusals. No changed metric code, bound, accepted ratio, root cause or exception."
+}

@@ -1,0 +1,20 @@
+[package]
+name="brisque-numerical-review"
+version="0.0.0"
+edition="2024"
+publish=false
+[workspace]
+[features]
+default=["std","avx512"]
+std=["zenmetrics-abstractions/std"]
+avx512=["archmage/avx512","magetypes/avx512"]
+[dependencies]
+archmage = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["macros", "avx512"] }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "da0ed5deca40ac60df32dcf4f6e7602658b2f959", version = "0.9.31-beta.1", features = ["avx512"] }
+zenmetrics-abstractions = { path = "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/zenmetrics-abstractions", default-features = false }
+libm = {version="=0.2.16", default-features=false}
+[profile.release]
+debug=1
+lto=false
+codegen-units=1
+incremental=false
