@@ -895,3 +895,15 @@ Resource receipts: native diagnostic build/control 11 s, peak RSS 0.42 GiB,
 minimum available 13,658 MiB, peak load 1.26; original feature control 2 s,
 0.27 GiB, 13,840 MiB, 1.22; cross-rescore under one second, 0.04 GiB,
 14,108 MiB, 1.18. These are diagnostic-process resources, not metric timings.
+
+### Additional acquired cold cases (2026-10-21)
+
+The [immutable batch manifest](cold-panel-publications.json) now retains 249
+initial cold cases, including [this batch of 57 additions](acquired-cold-additions-2026-10-21-v1/index.json).
+Every previously published record was revalidated against its retained values and remains
+in its original shard. New cases are exported once; the README checks combine
+the batches and refuse duplicate observations or changed index/shard hashes.
+The exporter caps each new batch at 150 cases to keep generated indexes and
+shards below 30 KB. Any further acquired cases remain explicitly outside this
+publication cut. Initial ratios remain descriptive and separate from fixed-stage
+intervals, warm measurements and numerical controls.

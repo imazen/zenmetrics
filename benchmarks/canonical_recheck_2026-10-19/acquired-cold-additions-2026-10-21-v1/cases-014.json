@@ -1,0 +1,268 @@
+{
+  "cases": [
+    {
+      "case": "butteraugli-gpu-grid-pairA-255x257-t28",
+      "metric": "butteraugli-gpu",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "libjxl 0.12.0 original comparator / reviewed constructor-first adapter / original CPU reference versus explicit CUDA native first call",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 48.16196078675984,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0017354488372802734,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1322031067.0,
+              "score": 2.6971678733825684,
+              "max_rss_kib": 287692,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "b2228d1d65894e47a8065be4671d99247cac50cda785fc7a18d170af4db288d9"
+              }
+            },
+            "canonical": {
+              "ns": 27900147.0,
+              "score": 2.695432424545288,
+              "max_rss_kib": 22184,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "2343b1e685030e3ddb75a11914ee9f3a1eca72920bb10c1280c3fc00a000b44e"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0017354488372802734,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1321250506.0,
+              "score": 2.6971678733825684,
+              "max_rss_kib": 288852,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "954fdbb354c9df3b712ed6a35bea81b87b30abdf6298f2a39637a7db8b5b415b"
+              }
+            },
+            "canonical": {
+              "ns": 27190995.0,
+              "score": 2.695432424545288,
+              "max_rss_kib": 22216,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "6908eaa428c6d25ad95e695d23bce8b21aa4cefda82dc374876b1cc73cef811a"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0017354488372802734,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1312608969.0,
+              "score": 2.6971678733825684,
+              "max_rss_kib": 288680,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "c4e657c76d329641736ce72f53d7207dd939ce0818f61a4ea164c0317166c07f"
+              }
+            },
+            "canonical": {
+              "ns": 27254060.0,
+              "score": 2.695432424545288,
+              "max_rss_kib": 21968,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "5305d4706c0268740d94b5d5262e77e858d05475eabb24658173981383965b5d"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/summary.json",
+        "sha256": "9605e61c22232e8fd6880176ea95b9d7119c0c25f6f04380388706cb25c84dd6"
+      },
+      "plan_sha256": "41850d593ac7ccf8797c0dc8eb3c41ef8fb92bbd552f64a1d6ecc317694b9f96",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-00-wrapper.log",
+          "sha256": "7f36b52f143b630be16498551ee8109d2faecc607bf4e73efe446f0c415bdc6d",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 0.27GiB | min-avail 14283MiB | peak-load 1.99"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-01-wrapper.log",
+          "sha256": "6525e0f2258be730cae869a8596e50aa08a0a54c3098a922533b0512019d77dc",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 0.28GiB | min-avail 13936MiB | peak-load 2.20"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-255x257-t28/block-02-wrapper.log",
+          "sha256": "b3c65d7d0bb06d04e1f7bbff53c169ecd3f829096441142fecde57f627c3e896",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 0.28GiB | min-avail 13929MiB | peak-load 2.35"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "butteraugli-gpu-grid-pairA-1024x1024-t1",
+      "metric": "butteraugli-gpu",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "libjxl 0.12.0 original comparator / reviewed constructor-first adapter / original CPU reference versus explicit CUDA native first call",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 4.738691334737644,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0007197856903076172,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1575968604.0,
+              "score": 3.2842230796813965,
+              "max_rss_kib": 669936,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "da5cd8578b787bf4e570f2ce2966f741e7c01f63f023d7aa9f1482534bff7cd6"
+              }
+            },
+            "canonical": {
+              "ns": 327259247.0,
+              "score": 3.283503293991089,
+              "max_rss_kib": 265268,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "7587f869cbbc193cdfb20841f883b732a4e94f118b055949bf32123dea6b6de6"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0007197856903076172,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1675173409.0,
+              "score": 3.2842230796813965,
+              "max_rss_kib": 670704,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "6240787df6bf32a3b4ec142809bf5cda1f0738f967b1c9e8523fe79e5160be0e"
+              }
+            },
+            "canonical": {
+              "ns": 353509712.0,
+              "score": 3.283503293991089,
+              "max_rss_kib": 265260,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "bf8e9be5428dc9ca8122cf2da3c479a3f2e4b7720bf7912098ebb0619b61f5f9"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0007197856903076172,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1517976114.0,
+              "score": 3.2842230796813965,
+              "max_rss_kib": 673744,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "be61151aa548b0c73a42118b1b0c5716b617d1501bf82da748b2ac5dc558a976"
+              }
+            },
+            "canonical": {
+              "ns": 348693597.0,
+              "score": 3.283503293991089,
+              "max_rss_kib": 265272,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "6b197284b672a21e733185a0d24373e9fb0db17d0a8238e62eacf98babc506f9"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "1aaac8e238c74422e4c19fe917d5415a71cb88d63b5fd3fd00a3773fb8fa843e"
+      },
+      "plan_sha256": "41850d593ac7ccf8797c0dc8eb3c41ef8fb92bbd552f64a1d6ecc317694b9f96",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "7d7a47da90779c1d3ca8d7dc6987c76cba1237959514316f90bb56f15b1e273a",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 0.64GiB | min-avail 13222MiB | peak-load 1.25"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "f69f20910a482f1b45cda7ef9db471898f85870e5e8b7c52d297f861b3dfbcf5",
+          "receipts": [
+            "run-heavy: done rc=0 10s | peak-RSS 0.64GiB | min-avail 13652MiB | peak-load 1.06"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2/butteraugli-gpu-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "b40b1278bf9bba8fc625e93543a1f27587c171d7f5d98c16ba1468f128c6a826",
+          "receipts": [
+            "run-heavy: done rc=0 10s | peak-RSS 0.64GiB | min-avail 13728MiB | peak-load 1.37"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

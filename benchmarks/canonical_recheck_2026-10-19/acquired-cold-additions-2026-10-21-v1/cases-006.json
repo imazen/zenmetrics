@@ -1,0 +1,487 @@
+{
+  "cases": [
+    {
+      "case": "dssim-grid-pairA-3840x2160-t28",
+      "metric": "dssim",
+      "width": 3840,
+      "height": 2160,
+      "threads": 28,
+      "canonical": "author dssim-core3.5.1 / source-bound full-call C API",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.20611756556043195,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 73238403.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 531256,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-00/native/native-memory.txt",
+                "sha256": "cd764d6a77276c0bebbd6e6fd958f8da5361cc229ebb6d391a2642c83501137f"
+              }
+            },
+            "canonical": {
+              "ns": 376556441.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 1398304,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "b66c19f0a48d5ad3ecf6c290993dfc1b318073eed9e1c061e923b6a6b2ed7070"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 95067665.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 524988,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-01/native/native-memory.txt",
+                "sha256": "1fe112149bce346abbd7bc6d20d26aca9ac16ee2756fc433275fc5ab9fc9b9ee"
+              }
+            },
+            "canonical": {
+              "ns": 415700981.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 1388796,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "56588048c46e37465a834ab012a137717c9c0f5ee44b4a0be94faa6aa79f43ae"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 88541106.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 558180,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-02/native/native-memory.txt",
+                "sha256": "a38ebbd8169c2b849462d689439723dd5f77a442ab8752cbdc9e15b1bc22daa5"
+              }
+            },
+            "canonical": {
+              "ns": 429566038.0,
+              "score": 0.0028874735358801473,
+              "max_rss_kib": 1424644,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "1ff206d52cc76db98ceb1a65ea902b73da954ab4a3b55bceac6298ffd7bf10ec"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/summary.json",
+        "sha256": "cac6d0b4a3ae1d70e202cfbe0ba48d4ce55dc6b4655575dd7e5182cd54db7212"
+      },
+      "plan_sha256": "0cc73c98feb16661e38a72f7e8dd2821a69ec3a7297dc571801d394ccef5f6ce",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-00-wrapper.log",
+          "sha256": "973b4ceb5ee5793b24b7bcc7706bf3d69b752f423fdbdfb9ddd5217ae2c321e3",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.33GiB | min-avail 14324MiB | peak-load 2.12"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-01-wrapper.log",
+          "sha256": "44a9a74392a4efa996b8229fea19d0af745baff10aff2ee9b46c78a2805beb7e",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.32GiB | min-avail 14223MiB | peak-load 1.08"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairA-3840x2160-t28/block-02-wrapper.log",
+          "sha256": "a7659dd877fc589e826e8cfdbf666fae06f64ab471866eef797eff0d33859bde",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.36GiB | min-avail 14175MiB | peak-load 2.52"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "dssim-grid-pairB-64x64-t1",
+      "metric": "dssim",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "canonical": "author dssim-core3.5.1 / source-bound full-call C API",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.7209648697591593,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 706752.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18464,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-00/native/native-memory.txt",
+                "sha256": "1ce545289019c9f51830214aac275a50b4126dce28041d23e0a8b5ea466c5066"
+              }
+            },
+            "canonical": {
+              "ns": 870235.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 4060,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "b2c62c6e9c8e2aef383a5b7d974570d8221cac694ad4f9c236e764542268e18a"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 576631.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18248,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-01/native/native-memory.txt",
+                "sha256": "75a74cecc6ab4afaf762b983226827a0482327cf11e70a5d9e5c378f2c083e14"
+              }
+            },
+            "canonical": {
+              "ns": 863505.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 3700,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "cd8b324966544cbdfe39a7c9375ac186784be2fbac321bb46ee817bcf4ac9ff2"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 574100.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18556,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-02/native/native-memory.txt",
+                "sha256": "61f5df100862d6ff9c5e413d553d153789f0a265e32aed9fdafb5be822686b4c"
+              }
+            },
+            "canonical": {
+              "ns": 796294.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 3808,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "3ed0392ccb8520bb89f994c7a3a5ce730261130e4f904caf5b558fe9abe63f96"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/summary.json",
+        "sha256": "0dbcd1afa902db1bd2fedf2eb6f4e06345206f169d0c25d44e02a69d9dda07db"
+      },
+      "plan_sha256": "0cc73c98feb16661e38a72f7e8dd2821a69ec3a7297dc571801d394ccef5f6ce",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-00-wrapper.log",
+          "sha256": "36f62f9fe7c62c881095a694f4f6e0c87588edd59c131aa2c91c7c585a4cc601",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.08GiB | min-avail 14390MiB | peak-load 3.00"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-01-wrapper.log",
+          "sha256": "d6ccffd8c16011f5da0fcf0405454f0373ed2c2b54263ce1c780461b34697dfa",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 0.08GiB | min-avail 14317MiB | peak-load 1.76"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t1/block-02-wrapper.log",
+          "sha256": "1bd1dd3f69d3889a68383b4614c36c34415e2886e79e13d823b875192bd97e02",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.08GiB | min-avail 14211MiB | peak-load 1.88"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "dssim-grid-pairB-64x64-t28",
+      "metric": "dssim",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "canonical": "author dssim-core3.5.1 / source-bound full-call C API",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.6085444744981314,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 3763536.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18448,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-00/native/native-memory.txt",
+                "sha256": "75773e69dfba05f7e0edaeb90960a8c937f88ff013e7a03ab7c5cb21ec00162b"
+              }
+            },
+            "canonical": {
+              "ns": 6184488.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 3436,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "8c0a45ad5ede795f8f8d499e08a98fa83a2b951f572c26baadccdf4b66074e67"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 4701031.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18244,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-01/native/native-memory.txt",
+                "sha256": "7e67f33e2c9861abf8e5db3faad2201bf847e7902bbc0d2ac9321c5aa9531377"
+              }
+            },
+            "canonical": {
+              "ns": 4717272.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 3428,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "fda4ae2622abb2780719d9ade650beeac63416df3e0d7fc57084bdb334d7abdd"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 3860377.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 18492,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-02/native/native-memory.txt",
+                "sha256": "cb23b17278ae5e2bb82365c4e852760370fd463c1fd6f2faa3838903878abd06"
+              }
+            },
+            "canonical": {
+              "ns": 6739266.0,
+              "score": 0.006504323510208243,
+              "max_rss_kib": 3500,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "2d05143b3c00c9915710ce0a87a67382e79d996c320b944f64d37f48c7ce3246"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/summary.json",
+        "sha256": "edb48f84355e26cb8bdd2962a6ce9d87a9d995d5038a9dc752913860ca2a65c3"
+      },
+      "plan_sha256": "0cc73c98feb16661e38a72f7e8dd2821a69ec3a7297dc571801d394ccef5f6ce",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-00-wrapper.log",
+          "sha256": "4058cad2c4eafe01a8b05b08493c15f85f4f1a141e58b0c040b93b9abe6ef0af",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 0.08GiB | min-avail 14129MiB | peak-load 1.10"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-01-wrapper.log",
+          "sha256": "c1e0c0e43ef7a9299fcdf0af12723a479b8e8ea8d7b7102c1a0671a735facd12",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 0.08GiB | min-avail 14200MiB | peak-load 1.26"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim/dssim-grid-pairB-64x64-t28/block-02-wrapper.log",
+          "sha256": "c14cb6ee6ac0374f3b99d08dea487f2f7e3c189aa4bf2d810bd518e54d5b9aaf",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.08GiB | min-avail 14302MiB | peak-load 1.30"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "vmaf-v1-grid-pairA-64x64-t28",
+      "metric": "vmaf-v1",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / complete embedded-model lifetime",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": null,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "canonical": "canonical exit 1; see retained stderr",
+            "native": "native exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "native": "native exit 1; see retained stderr",
+            "canonical": "canonical exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "canonical": "canonical exit 1; see retained stderr",
+            "native": "native exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/vmaf/vmaf-v1-grid-pairA-64x64-t28/summary.json",
+        "sha256": "fdb820db7f20037f25ce3a022ff855abbc1c86384ad387e5ee5f1fd714dd91a9"
+      },
+      "plan_sha256": "49ff0650714a1cf548d06e11df69fd79f3d82f89fbf4331f1cdf73d157f237ee",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/vmaf/vmaf-v1-grid-pairA-64x64-t28/block-00-wrapper.log",
+          "sha256": "4f0b9718d6d89e2a8f51963ec165f7da5c2c7d89e67c71b0e450c91cad1562f0",
+          "receipts": [
+            "run-heavy: done rc=1 7s | peak-RSS 0.08GiB | min-avail 14541MiB | peak-load 2.14"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/vmaf/vmaf-v1-grid-pairA-64x64-t28/block-01-wrapper.log",
+          "sha256": "578232befa22e989610d34a42f9d30be9afe908168e07206c64db0c35ea582f2",
+          "receipts": [
+            "run-heavy: done rc=1 7s | peak-RSS 0.08GiB | min-avail 14445MiB | peak-load 1.20"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/vmaf/vmaf-v1-grid-pairA-64x64-t28/block-02-wrapper.log",
+          "sha256": "e25f768eeed85d918352916412f7478cff1a10a8a24dbee525b34a1f444d8fc2",
+          "receipts": [
+            "run-heavy: done rc=1 7s | peak-RSS 0.08GiB | min-avail 14424MiB | peak-load 2.26"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

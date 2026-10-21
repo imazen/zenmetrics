@@ -275,12 +275,13 @@ def readme_variant_tables(items, comparisons):
     return '\n'.join(lines)
 
 
-def cold_numerical_misses(path):
+def cold_numerical_misses(path, seen=None):
     """Count source-bound cold cases that exceed an assigned numerical gate."""
     import hashlib
     import math
     index=json.loads(path.read_text())
-    misses={};seen=set()
+    misses={}
+    if seen is None:seen=set()
     for shard in index['shards']:
         source=path.parent/shard['file']
         if source.resolve().parent!=path.parent.resolve():
@@ -308,11 +309,27 @@ def cold_numerical_misses(path):
     return misses
 
 
+def cold_batch_numerical_misses(path):
+    """Combine immutable cold batches without counting an observation twice."""
+    import hashlib
+    batches=json.loads(path.read_text())['batches']
+    totals={};seen=set()
+    for batch in batches:
+        source=path.parent/batch['file']
+        if not source.resolve().is_relative_to(path.parent.resolve()):
+            raise ValueError('cold batch must remain inside its ledger')
+        if hashlib.sha256(source.read_bytes()).hexdigest()!=batch['sha256']:
+            raise ValueError('cold batch index hash mismatch')
+        for metric,count in cold_numerical_misses(source,seen).items():
+            totals[metric]=totals.get(metric,0)+count
+    return totals
+
+
 def readme_section(items):
     comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
     comparisons=comparison_results(comparison_path)
     statuses=json.loads(comparison_path.with_name('unmeasured.json').read_text())
-    cold_misses=cold_numerical_misses(comparison_path.parent/'acquired-cold-panels-2026-10-21/index.json')
+    cold_misses=cold_batch_numerical_misses(comparison_path.parent/'cold-panel-publications.json')
     lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
            '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
            'Code and model terms, paper citations and full reference identities remain in the linked cards.',

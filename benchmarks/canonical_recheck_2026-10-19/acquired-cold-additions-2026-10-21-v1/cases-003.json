@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "case": "niqe-grid-pairA-1024x1024-t1",
+      "metric": "niqe",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "BasicSR 1.4.2 / resident parameters / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.17668554455235447,
+      "absolute_bound": 0.000602329,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 128493417.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 48916,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "6030aa779e1d629e542982fa41c82438561ceb6085bf1d4e85787b594b43c21e"
+              }
+            },
+            "canonical": {
+              "ns": 727243518.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 360196,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "e05e55d753460f212b7ad255d87440a2ee038022498bbe73923e3ec7c882de47"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 128400070.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 48924,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "c026cbc22542283420f68796b6861195092d6eb275a170a4fe2f93f44b8238a0"
+              }
+            },
+            "canonical": {
+              "ns": 692744782.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 360352,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "865d3d7bd06cd644f3f7adb5045d479ce36b61e2636915b0b8bf6bdb534b1281"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 124153889.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 48912,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "0cdc977662595a7f8d0e8d198744ba54c34ae17a4543daaee10ded3a79958514"
+              }
+            },
+            "canonical": {
+              "ns": 742769654.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 360640,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "7282e7bc7ad36f7dfa4c9dc868e6205991fc6823210cb455bc2ca05fb8b75780"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "c68067bc8e3763f791a4c59f31a9d4811c2cd84f844821d599b4d9b0230107ba"
+      },
+      "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "0974fe602da95ee84267ddbbc0e97308b7c10b1173a1fb93bc539dc3391652e3",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.34GiB | min-avail 14169MiB | peak-load 2.00"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "85c15dcfddf64450c7803622a81384983d01e3a861c04a007e8b63e0dfac367b",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.34GiB | min-avail 14039MiB | peak-load 1.17"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "e503ae7968528b4056889200341045dddd3718b83b18025489f6fe8a87963424",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.34GiB | min-avail 14240MiB | peak-load 2.21"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "niqe-grid-pairA-1024x1024-t28",
+      "metric": "niqe",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "BasicSR 1.4.2 / resident parameters / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.15792736564972995,
+      "absolute_bound": 0.000602329,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 130977290.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 49124,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "b39a9aa3d969670b290d5d08d36e3b07e73c49a89ed78fefb2bd696c4d01122a"
+              }
+            },
+            "canonical": {
+              "ns": 722359664.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 361036,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "2b31fb9bf0094844b86bb40eb319ab5a70b719f29aa83472a025d28a17ad0a4d"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 125327282.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 48912,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "8b95227d3d5b8cdea875fe3ab734d77ea6240262d943fae3ff138a2321e8b04a"
+              }
+            },
+            "canonical": {
+              "ns": 793575461.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 361168,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "030d1514fb539884415bf111ce3d8e8df449d0ca109907c6b64eb209b8be007f"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 9.733375795573096e-05,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 127673885.0,
+              "score": 4.30654430871286,
+              "max_rss_kib": 48908,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "38c2d9197c5bb0475c52e8d5b829dc92d6bd7db4d98e54de52825042e6598816"
+              }
+            },
+            "canonical": {
+              "ns": 834569452.0,
+              "score": 4.306641642470816,
+              "max_rss_kib": 360828,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "4e27cd6f1e559e15ac0ef2da5cbcfc4a36b2b954f33a84e240241a88146e7412"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "8da0d0d6a495787c49b058d5b04711318effcf20abd229e989d4ddea5718c8de"
+      },
+      "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "7b600951ec3b37a79a6534101aea9db54efcea482c43e310d9644fc22499fea7",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.34GiB | min-avail 14190MiB | peak-load 2.27"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "f07c46c53854d9747ced27d816aa76618ba48fecc9f6d39239db1119a107d93f",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.34GiB | min-avail 13766MiB | peak-load 1.43"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/niqe-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "554efcdf289b750b00e7a0a3075ac715eba0d92b51e8855f4d8eec3f1674d73a",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.34GiB | min-avail 13972MiB | peak-load 1.20"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "nlpd-grid-pairA-1024x1024-t1",
+      "metric": "nlpd",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "NLPD_Pytorch / original RGB6 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.06845272817119451,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 33356364.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58312,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "5e6a4229952581928aab0490aa0d3e7e6fba23482bd0ff04b87094bb9dd6dfc1"
+              }
+            },
+            "canonical": {
+              "ns": 487290498.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 586592,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "8f4589939cc1dd97ac766ec9e1a5ee5b782a78afa1d6f89bd9c9f5c6c66bc278"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 33484226.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58524,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "835a897e6bf4b0670c9c31fadd46509f30aa8e50e2f49d7332ad4384193c1ac8"
+              }
+            },
+            "canonical": {
+              "ns": 568499394.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 570864,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "4056fe96552ec4f1363cd3d0796ce728ccf0513d9fe4b9a63b3efac45f8acc0f"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 34739099.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58516,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "5d5e3393e2b12253fc4e0b9e306fcdb2ac06949b457acda782316a92949fbb2e"
+              }
+            },
+            "canonical": {
+              "ns": 488687978.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 540804,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "cf26db3e3e2042414ef13915f60b190405991597f82c7b472076802b0c0ef8fa"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "260053e55a8ba0ef912d7a9160d0bc08e729a9446898d90ec3c5be9f3a2461c3"
+      },
+      "plan_sha256": "d8a062fde594d377cefac91474ed634cdd7ea6fdb1005b1bd841bcfcc8fb5b3e",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "00f1b969662cfac7231970e750fb67f0df42772ec9bfb13b147865754cc665bd",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.56GiB | min-avail 13752MiB | peak-load 2.09"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "f1986be9208e6fbf3db16d0875217c59de6b9f849f3ea06591577b448ff2464b",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.54GiB | min-avail 13843MiB | peak-load 1.27"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "0a699ddb06e462a76f42f65bb6d47b8e3f33e87c40d823ddeb727cb66cf27add",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.52GiB | min-avail 13961MiB | peak-load 2.32"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "nlpd-grid-pairA-1024x1024-t28",
+      "metric": "nlpd",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "NLPD_Pytorch / original RGB6 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.20829199324167824,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 48683023.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58364,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "f362a2b0892ce1d951611320ad72c5623ac3a9f87da397316038095579207359"
+              }
+            },
+            "canonical": {
+              "ns": 233724889.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 542156,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "7ad279de49345d0375bc29eb41e40f8c80b30c77913faf5e36288b2a2fa09d63"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 48037191.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58524,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "0f259e2c610cd91529b6f0a40f7d9d998511a69811811e97582992c9cd428204"
+              }
+            },
+            "canonical": {
+              "ns": 253129088.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 550712,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "1e144839c9ca50e41e72cda331cebec277bc64169f23b68c8f15b406a9f842cd"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.844434880719618e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 48044308.0,
+              "score": 1.5328333346041207,
+              "max_rss_kib": 58588,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "eeb677f25eea71bc90319b49fcabd82124ba7cdd15455e9380ed8f6ac8408478"
+              }
+            },
+            "canonical": {
+              "ns": 228598049.0,
+              "score": 1.5328391790390015,
+              "max_rss_kib": 538460,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "093d8a815b6e063177ac74099892f4944138b5f90828d7d67596fc64dad50c41"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "67bdfdac7705114d2863cd92ade5d1b6d1ec568de70abce951b88b6f8c012dd1"
+      },
+      "plan_sha256": "d8a062fde594d377cefac91474ed634cdd7ea6fdb1005b1bd841bcfcc8fb5b3e",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "03622b1c6353118a6da89e5b67194238f9be166fa3d07598f857782486005e60",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.52GiB | min-avail 14034MiB | peak-load 2.38"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "3f2c9562e1b2c88c3dbb3bd0ee8993f3c117f50b2337a5699e78318cf97b1bba",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.53GiB | min-avail 13426MiB | peak-load 1.56"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd/nlpd-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "61f3b87221daa1e7c07cbfb53f8d43b728431907cb4a8a783b58fb7e82bde2eb",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.51GiB | min-avail 13766MiB | peak-load 1.14"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

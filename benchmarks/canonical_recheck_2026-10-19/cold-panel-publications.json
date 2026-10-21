@@ -1,0 +1,13 @@
+{
+  "batches": [
+    {
+      "file": "acquired-cold-panels-2026-10-21/index.json",
+      "sha256": "079036a1e72ba7f6ebf350834168f0e3b231781978425d58175f942a5f1edbb6"
+    },
+    {
+      "file": "acquired-cold-additions-2026-10-21-v1/index.json",
+      "sha256": "c37818da01e456f4c7c7fdbbc21e9f3695f25fbdebb6519e710f7047d3673fd1"
+    }
+  ],
+  "qualification": "Immutable acquired cold batches; union every retained case once. Initial cohorts, fixed-stage confirmations, warm timings and numerical controls remain separate."
+}

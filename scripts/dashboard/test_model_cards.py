@@ -15,7 +15,7 @@ class ModelCards(unittest.TestCase):
     def test_cold_numerical_miss_overrides_prior_pass_in_compact_check(self):
         with patch('model_cards.comparison_results',return_value={'brisque':dict(
                 canonical='PIQ 0.8.0',check='170/170 pass',ratio=.12)}), \
-             patch('model_cards.cold_numerical_misses',return_value={'brisque':2}):
+             patch('model_cards.cold_batch_numerical_misses',return_value={'brisque':2}):
             text=readme_section([self.by_name['brisque']])
         compact=next(line for line in text.splitlines() if '| NR | PIQ' in line)
         self.assertIn('2 cold misses',compact)
@@ -40,6 +40,27 @@ class ModelCards(unittest.TestCase):
             shard.write_text('{}')
             with self.assertRaisesRegex(ValueError,'hash mismatch'):
                 cold_numerical_misses(index)
+
+    def test_cold_batches_reject_duplicate_cases_and_changed_indexes(self):
+        from model_cards import cold_batch_numerical_misses
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as directory:
+            root=Path(directory);shard=root/'cases.json';index=root/'index.json'
+            case=dict(case='same',metric='example',native_source='rev',
+                      absolute_bound=.01,relative_bound=0,blocks=[
+                          dict(delta=.02,arms={'canonical':{'score':1}})])
+            shard.write_text(json.dumps(dict(cases=[case])))
+            index.write_text(json.dumps(dict(shards=[dict(file=shard.name,cases=1,
+                sha256=hashlib.sha256(shard.read_bytes()).hexdigest())])))
+            batch=dict(file=index.name,sha256=hashlib.sha256(index.read_bytes()).hexdigest())
+            manifest=root/'batches.json';manifest.write_text(json.dumps(dict(batches=[batch])))
+            self.assertEqual(cold_batch_numerical_misses(manifest),{'example':1})
+            manifest.write_text(json.dumps(dict(batches=[batch,batch])))
+            with self.assertRaisesRegex(ValueError,'duplicate cold case'):
+                cold_batch_numerical_misses(manifest)
+            manifest.write_text(json.dumps(dict(batches=[batch])))
+            index.write_text('{}')
+            with self.assertRaisesRegex(ValueError,'index hash mismatch'):
+                cold_batch_numerical_misses(manifest)
 
     def test_comparative_shards_reject_changed_evidence(self):
         (Path.home()/'tmp').mkdir(parents=True, exist_ok=True)
