@@ -1034,3 +1034,7 @@ Six further initial fixed20 intervals are retained, with all original observatio
 - [gmsd-grid-pairB-64x64-t28](gmsd-screen64-t28-first-confirmation20.json): 16.6931143, 95% [15.2322789, 18.2260591], precision target False.
 - [cvvdp-gpu-cuda-reference-pair-cid22-t28](cvvdp-cuda-reference-t28-first-confirmation20.json): 1.56341366, 95% [1.51940318, 1.65986757], precision target False.
 - [butteraugli-gpu-grid-pairA-255x257-t1](butter-photo-odd-t1-first-confirmation20.json): 55.1597957, 95% [54.1103653, 55.809449], precision target True.
+
+### Acquired cold cases after controller recovery (2026-10-21)
+
+The [next immutable batch](acquired-cold-additions-2026-10-21-v4/index.json) adds 47 observations and brings the published cut to 423/2092 candidates. All previous published summaries, original completed blocks, arm maximum RSS values and resource-log mappings are revalidated. Recovered block directories supply their own actual memory receipts; interrupted attempt logs remain separately identified and preserved. No missing time/RSS value is inferred. Numerical gates and source/input bindings are unchanged. These partial acquired panels remain separate from warm ratios, fixed-stage intervals and runtime-qualified acceptance.

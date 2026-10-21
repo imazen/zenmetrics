@@ -1,0 +1,26 @@
+"""Check recovery mapping against every previously published cold block."""
+import hashlib
+import json
+from pathlib import Path
+import sys
+sys.path.insert(0,str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from resume_canonical_campaign import _completed
+from resume_classical_first_campaign import normalize
+public=Path('benchmarks/canonical_recheck_2026-10-19');cases=blocks=0;digest=hashlib.sha256()
+manifest=public/'cold-panel-publications.json'
+for batch in json.loads(manifest.read_text())['batches']:
+    index=public/batch['file'];assert sha(index)==batch['sha256']
+    for shard in json.loads(index.read_text())['shards']:
+        path=index.parent/shard['file'];assert sha(path)==shard['sha256']
+        for row in json.loads(path.read_text())['cases']:
+            summary=Path(row['raw_summary']['path']);assert sha(summary)==row['raw_summary']['sha256'];value=json.loads(summary.read_text());complete=[]
+            for number,block in enumerate(value['blocks']):
+                raw=_completed(summary.parent,number);assert raw is not None and normalize(json.loads(raw.read_text()))==block,(summary,number)
+                complete.append(raw);blocks+=1;digest.update(json.dumps(dict(path=str(raw),sha256=sha(raw)),sort_keys=True).encode())
+            expected={entry['path'] for entry in row['resource_receipts']};actual={str(Path(str(raw.parent)+'-wrapper.log')) for raw in complete};assert actual==expected,(summary,actual,expected)
+            cases+=1
+value=dict(cases=cases,blocks=blocks,source_sha256=sha(__file__),prior_manifest_sha256=sha(manifest),raw_block_inventory_sha256=digest.hexdigest(),qualification='Every previous raw summary and completed block revalidated; recovery selection preserves original wrapper-log mapping.')
+output=Path(__file__).parent/'previous-cold-recovery-compatibility-v1.json'
+with output.open('x') as stream:json.dump(value,stream,indent=2);stream.write('\n')
+print(json.dumps(value),flush=True)

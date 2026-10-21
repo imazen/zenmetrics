@@ -1,0 +1,8 @@
+{
+  "cases": 376,
+  "blocks": 1128,
+  "source_sha256": "6c6a43bfb334485ac1631fd60ef67d45cb107ede81fa50c609d24dbfcd846856",
+  "prior_manifest_sha256": "cab3c3d25453704ebef8ad3e1d2e0ea322306a502d84d539273a40d5b41692fb",
+  "raw_block_inventory_sha256": "3974a7ae326e7bd6ddafa0a5ff9b91e10a62fb393709584eac844d3a305b8c8c",
+  "qualification": "Every previous raw summary and completed block revalidated; recovery selection preserves original wrapper-log mapping."
+}

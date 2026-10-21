@@ -1,0 +1,429 @@
+{
+  "cases": [
+    {
+      "case": "flip-grid-pairC-1024x1024-t1",
+      "metric": "flip",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.2655529490108762,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 283065570.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 167396,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "e810c898a0459f0a195f8c6e32546560457a0dc3683528cd87e810bc67c82d23"
+              }
+            },
+            "canonical": {
+              "ns": 1060535151.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 197596,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "34184fe86c3598e7fd92726247008c7679c1cde91f28eee949e779e46e21099f"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 281478909.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 167412,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "8075829dab7dfa023c501c2a6bdae362393eb402dc2187f3c95780533bcae401"
+              }
+            },
+            "canonical": {
+              "ns": 1074885154.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 197868,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "a5567f25373450ba14532da6d85926567e80e361cf785b0dfa876c733395b563"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 303586166.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 167420,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-02-recovery-1/native/native-memory.txt",
+                "sha256": "5748649351449286adf63479605b8036407af8083f4a554867420cc2e77e0b70"
+              }
+            },
+            "canonical": {
+              "ns": 1143222725.0,
+              "score": 0.06922592246204018,
+              "max_rss_kib": 197436,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-02-recovery-1/canonical/canonical-memory.txt",
+                "sha256": "702cd223c0e057af3b1777065f85df30917c730c55ec1cbfde5867d3b34a28d4"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/summary.json",
+        "sha256": "a2d4b9b66d54111804c3e13973033baa88b5be13f0c6689001966d54d3e4918f"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "aac875555a23995d9bc74ed687f84cb931a4c92e52bc5ceca136dfbe294c83de",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.19GiB | min-avail 13795MiB | peak-load 1.77"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "b3ffc4196c4ea34d4e4067cab4e646d69de6407fe0e3e5eddc33cb3f61175ff5",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.19GiB | min-avail 13752MiB | peak-load 1.96"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-02-recovery-1-wrapper.log",
+          "sha256": "d189a0a870fbdf69ad37d01c6b2cbbbcbeeb5a54acd412433ac10e53883848cf",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.19GiB | min-avail 12791MiB | peak-load 4.60"
+          ]
+        }
+      ],
+      "regression_qualified": false,
+      "recovery_evidence": {
+        "completed_blocks": [
+          {
+            "number": 0,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-00/result.json",
+            "sha256": "f60a4bc238087f79fbd494e67ca70f75cfff5be7449a65d46497d7f8e5779136"
+          },
+          {
+            "number": 1,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-01/result.json",
+            "sha256": "6b56c1c165c47deb9b7d4e9c01cadd6a22b88099c19887170740782e018d28eb"
+          },
+          {
+            "number": 2,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-02-recovery-1/result.json",
+            "sha256": "82df3337d3de10d3dae7042671d6ade4802cc3942a84633574f5ccce811233ea"
+          }
+        ],
+        "interrupted_attempt_logs": [
+          {
+            "wrapper_log": {
+              "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairC-1024x1024-t1/block-02-wrapper.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "resource_receipts": []
+          }
+        ],
+        "qualification": "Completed original blocks and all interrupted attempt output retained. Only the selected completed result per original block number supplies scalar/time/RSS observations; interrupted logs are separate evidence."
+      }
+    },
+    {
+      "case": "brisque-grid-pairB-255x257-t28",
+      "metric": "brisque",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "PIQ 0.8.0 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.18282068624060974,
+      "absolute_bound": 0.015138428,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.00128173828125,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 6474379.0,
+              "score": 29.19696044921875,
+              "max_rss_kib": 17752,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "59829c0aa19bb9d1876bdf3ee24a034d3699c78fc49061acd568a45c7c821068"
+              }
+            },
+            "canonical": {
+              "ns": 32780025.0,
+              "score": 29.1956787109375,
+              "max_rss_kib": 340876,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "f80b8ed48fa00b4a09eff8fd026bb2476218fee32832bab83601ba32de9b4499"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.00128173828125,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 6304969.0,
+              "score": 29.19696044921875,
+              "max_rss_kib": 17696,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "636b2f346cb7217dce667294698851219a027ed5e0850c24dafd7217a3504919"
+              }
+            },
+            "canonical": {
+              "ns": 34487175.0,
+              "score": 29.1956787109375,
+              "max_rss_kib": 341816,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "65121fb3b5050450a2cb0c02a2070bd65a0d0122c22d845932e4e5b09452abc8"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.00128173828125,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 6422472.0,
+              "score": 29.19696044921875,
+              "max_rss_kib": 17492,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "71a8dbba6790f79c4459fe52bec0b546bf09b6e457e29b4b62557ee6e37c1776"
+              }
+            },
+            "canonical": {
+              "ns": 39809062.0,
+              "score": 29.1956787109375,
+              "max_rss_kib": 340896,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "bdcdd4024dec50ba26bd627606592912164fef222f7ed5c2049d2a91bd323c73"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/summary.json",
+        "sha256": "4b1a259fc61375b8ab36fb6639ae40144d024932cbebed66be13628556d6ed2d"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-00-wrapper.log",
+          "sha256": "b49ca1a83cd740a00921a52892f02288930efadde5466231129ddef0b96afdd9",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.33GiB | min-avail 13983MiB | peak-load 2.66"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-01-wrapper.log",
+          "sha256": "c61c2e8dac7e3ac9d4a74369f5dfca41d16fefa7a2b0e633a8f2d500aa57ec18",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.33GiB | min-avail 13780MiB | peak-load 2.74"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-255x257-t28/block-02-wrapper.log",
+          "sha256": "8f2cb1f8051d7cf06d3a6e72cbab6c92cc87d081a6d3558c23d4f22936286e0f",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.33GiB | min-avail 13711MiB | peak-load 3.43"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "brisque-grid-pairB-1024x1024-t1",
+      "metric": "brisque",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "PIQ 0.8.0 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.10945526794626145,
+      "absolute_bound": 0.015138428,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.00347900390625,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 42557825.0,
+              "score": 24.84002685546875,
+              "max_rss_kib": 27552,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "7ffc8c2808d0817632a664efde08bdebb3a10f79b6910987da9419d208df52c4"
+              }
+            },
+            "canonical": {
+              "ns": 440962596.0,
+              "score": 24.8365478515625,
+              "max_rss_kib": 481068,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "8134cbcffcb2d64bcecf7d2d5a21b6ac9f8aa6af167ef1f425532678204556f6"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.00347900390625,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 46869896.0,
+              "score": 24.84002685546875,
+              "max_rss_kib": 27656,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "f4b6e681cb384fed78fa174213f56409be3b1e9685621842219bc311d65c1354"
+              }
+            },
+            "canonical": {
+              "ns": 428210509.0,
+              "score": 24.8365478515625,
+              "max_rss_kib": 473404,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "58db01b293510e3c4b9e3a98bfce7a9f53348b04e006dca0f2c14cd5fa2845df"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.00347900390625,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 45999063.0,
+              "score": 24.84002685546875,
+              "max_rss_kib": 27748,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "6d540f7cb25a303296806c9cc02829fb70679a5b7d06c2fae8c8a3d186370829"
+              }
+            },
+            "canonical": {
+              "ns": 384231691.0,
+              "score": 24.8365478515625,
+              "max_rss_kib": 513956,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "72bf5efc8066669e42c8b9bd066ee236bbbdb06b7ccc3001b199d356bf1f92d7"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/summary.json",
+        "sha256": "1bbd7062b089b513b1ab571a95001c41f4de1e2a55e39cadfad70ca562ff28ea"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "4d0c59cf505740a59b2fa215f92c10f73bd1dce1203ea3497ffdc566ddaef0a7",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.46GiB | min-avail 13397MiB | peak-load 2.45"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "75e702f3d9b3c7c4c424f5b96696b044f0b46264714fc42654a14e3f1e74c850",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.45GiB | min-avail 13296MiB | peak-load 2.42"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "91086b4cdfb9ee4c9240f6e12ab87697b7bdad5b334b8312dd6cffd1a12599ff",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.49GiB | min-avail 13307MiB | peak-load 5.61"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

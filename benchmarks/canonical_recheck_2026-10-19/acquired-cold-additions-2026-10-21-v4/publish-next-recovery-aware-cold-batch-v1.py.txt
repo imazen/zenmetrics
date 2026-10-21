@@ -1,0 +1,26 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+R=Path(__file__).parent;PUBLIC=Path('benchmarks/canonical_recheck_2026-10-19')
+def run(*command):subprocess.run(command,check=True)
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','data: retain acquired cold cases with recovery provenance')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+' codex-root-canonical publishing recovery-aware cold observations\n')
+run(sys.executable,'-B',str(R/'validate_previous_cold_recovery_v1.py'))
+run(sys.executable,'-B',str(R/'publish-acquired-cold-additions-v6.py'))
+folder=PUBLIC/'acquired-cold-additions-2026-10-21-v4';index=json.loads((folder/'index.json').read_text());total=index['previously_published_cases']+index['published_additions']
+for source in [Path(__file__),R/'validate_previous_cold_recovery_v1.py']:
+    target=folder/(source.name+'.txt');assert not target.exists();shutil.copyfile(source,target)
+receipt=R/'previous-cold-recovery-compatibility-v1.json';shutil.copyfile(receipt,folder/receipt.name)
+from_path=str(Path('benchmarks/iqa_compete_2026-10-16').resolve());sys.path.insert(0,from_path)
+from reference_publication import register_outputs
+register_outputs([(folder/receipt.name,'provenance')])
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write(f'\n### Acquired cold cases after controller recovery (2026-10-21)\n\nThe [next immutable batch]({relative}acquired-cold-additions-2026-10-21-v4/index.json) adds {index["published_additions"]} observations and brings the published cut to {total}/2092 candidates. All previous published summaries, original completed blocks, arm maximum RSS values and resource-log mappings are revalidated. Recovered block directories supply their own actual memory receipts; interrupted attempt logs remain separately identified and preserved. No missing time/RSS value is inferred. Numerical gates and source/input bindings are unchanged. These partial acquired panels remain separate from warm ratios, fixed-stage intervals and runtime-qualified acceptance.\n')
+python=str(Path.home()/'tmp/portcheck/python/bin/python');run('just','model-cards-refresh',python);run('just','model-cards-check',python);run('just','bench-iqa-canonical-recovery-check');run('just','bench-iqa-canonical-classical-first-recovery-check');run('just','bench-iqa-canonical-check')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('RECOVERY_AWARE_COLD_BATCH_VERIFIED',flush=True)
