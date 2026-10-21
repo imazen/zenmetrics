@@ -2529,3 +2529,10 @@ bench-iqa-canonical-classical-first-resume plan output helper helper-sha256:
 
 bench-iqa-canonical-classical-first-recovery-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_resume_classical_first_campaign
+
+# The original publisher stays frozen; recovered block paths remain explicit.
+bench-iqa-canonical-nn-first-publish-recovered output receipt +cohorts:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_nn_first_evaluation_recovered.py '{{output}}' '{{receipt}}' {{cohorts}}
+
+bench-iqa-canonical-nn-first-recovery-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_nn_first_recovery_publication test_nn_first_publication

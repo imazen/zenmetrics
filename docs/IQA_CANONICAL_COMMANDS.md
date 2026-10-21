@@ -434,3 +434,11 @@ and summary schema remain in force. Completed failures and interrupted output
 are retained. This command refuses fixed 20/40-block confirmation stages and
 stops at source/admission failures. Test it with
 `just bench-iqa-canonical-classical-first-recovery-check`.
+
+`just bench-iqa-canonical-nn-first-publish-recovered OUTPUT BUILD_RECEIPT ROOT...`
+projects resident-model first evaluations after block recovery. It shares the
+original numerical observation validator and keeps the old publisher frozen.
+Recovered paths supply their own wrapper receipts; interrupted logs stay
+separate. Existing rows retain their numerical/scoping fields. The output records
+both publisher and dependency hashes. Verify with
+`just bench-iqa-canonical-nn-first-recovery-check`.
