@@ -2,12 +2,12 @@
   "group-00-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00-run",
     "plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
-    "cases": 80,
+    "cases": 81,
     "expected_cases": 264,
     "artifacts": [
       {
         "file": "group-00-run-cambi.tsv",
-        "sha256": "4c3c3d4141987ee97b6bd2024ffc2bb60e8619a2421e5927666a57f05ba39ee2"
+        "sha256": "51ae15e996fa96affbff0a822bc5e34c1e44eb723fb3661796647396c26f116d"
       },
       {
         "file": "group-00-run-cambi-aic2026.tsv",
@@ -562,12 +562,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 52,
+    "cases": 53,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "5eb88150b531725199d83915f208edf8991e049461899c4c6d89a05c92f3260a"
+        "sha256": "9737d058083162e8644fdea198b1352e50cd3010a35aaf4334f69d0fa31e2002"
       }
     ]
   },

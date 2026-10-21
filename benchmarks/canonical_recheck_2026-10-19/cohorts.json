@@ -6,17 +6,17 @@
     {
       "file": "cohorts-00.json",
       "cohorts": 52,
-      "sha256": "8af89834c0e0dc40335a96f159d11a329e41b7c72dd8e790c7e9eb7847338d6b"
+      "sha256": "4248f4ef81129fe442be9f6c20c13c3dd1157f37ca3935211f8c70bf7b5836f3"
     },
     {
       "file": "cohorts-01.json",
       "cohorts": 46,
-      "sha256": "edc588b3966a1b6b5bf80d35abea760e37752ae082f5c35bca1f68222c30c54b"
+      "sha256": "a2d341579396c939175fcde549ed9973cec0fe060559a7e45d99f4c88c2b54b9"
     },
     {
       "file": "cohorts-02.json",
       "cohorts": 19,
-      "sha256": "0f5229cf967a77f32f8f0f68e98728930d9bc472e044be3113f126b72f351aa5"
+      "sha256": "04362ef5046ee517fa362eea815cbbe39312ee438e4b2103e3749cc6f21c614c"
     }
   ]
 }
