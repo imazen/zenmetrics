@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "case": "brisque-grid-pairA-3840x2160-t1",
+      "metric": "brisque",
+      "width": 3840,
+      "height": 2160,
+      "threads": 1,
+      "canonical": "PIQ 0.8.0 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.08329107968695962,
+      "absolute_bound": 0.015138428,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0135498046875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 353397892.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183656,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-00/native/native-memory.txt",
+                "sha256": "6f8c85b6ba706fbc6b2bba05efbe647fd29cd80441faa6f2c7132c50933abe1e"
+              }
+            },
+            "canonical": {
+              "ns": 4219148707.0,
+              "score": 32.07354736328125,
+              "max_rss_kib": 1232748,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "52d794cbec58b2765c3c23d43af7665601eb05aa029fbf3aa5c632d70e1cb3f6"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0135498046875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 360100822.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183520,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-01/native/native-memory.txt",
+                "sha256": "224043cc3744e1bb7959f627f18d9609ed3af3316fbfefa590d674a14b903651"
+              }
+            },
+            "canonical": {
+              "ns": 4323402018.0,
+              "score": 32.07354736328125,
+              "max_rss_kib": 1233180,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "7c67c7fe37a8d424adbadffc9255fe41f5994952a9db9d50524590eab76b1280"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0135498046875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 364352903.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183412,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-02/native/native-memory.txt",
+                "sha256": "5844e70ab7a2702a607542cc45892c48ed832946c385e36a355a4e19cba0ea18"
+              }
+            },
+            "canonical": {
+              "ns": 4698844875.0,
+              "score": 32.07354736328125,
+              "max_rss_kib": 1233604,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "455fee31451cce791b2e78de948be2da5388272f008aa704e5dd31cc0a41362b"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/summary.json",
+        "sha256": "803b3a2f79b1bed4d633f4ba2f04123994d273a5bd54cea4f252d789a04c8d88"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-00-wrapper.log",
+          "sha256": "41df06ed9bd63e9f11753daded2e276ed3f5efbce699a7506a5aadd188154488",
+          "receipts": [
+            "run-heavy: done rc=0 13s | peak-RSS 1.18GiB | min-avail 13437MiB | peak-load 1.35"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-01-wrapper.log",
+          "sha256": "9650583038b0083db2a69e376943a096b6e6e11181d2a17de067d2ff7e8bcfff",
+          "receipts": [
+            "run-heavy: done rc=0 13s | peak-RSS 1.18GiB | min-avail 13194MiB | peak-load 1.21"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t1/block-02-wrapper.log",
+          "sha256": "3021a112b742ff5fc0cf4f3c5aaccc3a7b68d82da4ab135e8f39be172368805b",
+          "receipts": [
+            "run-heavy: done rc=0 14s | peak-RSS 1.18GiB | min-avail 13204MiB | peak-load 1.61"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "brisque-grid-pairA-3840x2160-t28",
+      "metric": "brisque",
+      "width": 3840,
+      "height": 2160,
+      "threads": 28,
+      "canonical": "PIQ 0.8.0 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.3244974195947199,
+      "absolute_bound": 0.015138428,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0150146484375,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 363496743.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183612,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-00/native/native-memory.txt",
+                "sha256": "0e84186017f75f3dc98551082c28cee21f5847d8626aeb0bcc6133be57d80411"
+              }
+            },
+            "canonical": {
+              "ns": 1118202083.0,
+              "score": 32.07208251953125,
+              "max_rss_kib": 1221608,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "4f77f189e438a492dc21bc7fd030c2515ffb1f56805e52eaf3e398538995c2e3"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0150146484375,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 346482486.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183676,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-01/native/native-memory.txt",
+                "sha256": "d0aa7fdb3784b215c8e2499a8babf850695cc63eb8712fac244eac29ecf80b21"
+              }
+            },
+            "canonical": {
+              "ns": 1230420826.0,
+              "score": 32.07208251953125,
+              "max_rss_kib": 1258248,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "459db982bfa8bafffcd8854039b42562c6f6b2f46f68448f6f4dc2f71fed2940"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0150146484375,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 412129114.0,
+              "score": 32.08709716796875,
+              "max_rss_kib": 183664,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-02/native/native-memory.txt",
+                "sha256": "036f8514b279ba6bcb928f9c011840a7b03c5160261d4f5edbc6eb13ba05e101"
+              }
+            },
+            "canonical": {
+              "ns": 1270053594.0,
+              "score": 32.07208251953125,
+              "max_rss_kib": 1274220,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "a95f2bc1d76e715f3048f7eb026f84929bb3a83dee7005f3fbd6655a584e6f49"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/summary.json",
+        "sha256": "af16d696513dd6600e0336c265140b98066677641affefbf8bada11811bd062a"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-00-wrapper.log",
+          "sha256": "66d9ca4b0f615857e83259c9eb5d3d3db924378a0b48379dfd8c66cc52554c6f",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.17GiB | min-avail 13244MiB | peak-load 2.68"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-01-wrapper.log",
+          "sha256": "a064acb0ed17765966c9781c48b1904ce9ab2ac2ae489f2347fcd52cc6e65f35",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.20GiB | min-avail 12990MiB | peak-load 6.16"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-3840x2160-t28/block-02-wrapper.log",
+          "sha256": "9e508a2021ad255839743cdc5c413d50da2018a804ae193935aa4c9fb37254e4",
+          "receipts": [
+            "run-heavy: done rc=0 8s | peak-RSS 1.22GiB | min-avail 12728MiB | peak-load 2.81"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "brisque-grid-pairB-64x64-t1",
+      "metric": "brisque",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "canonical": "PIQ 0.8.0 / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.0405986252739733,
+      "absolute_bound": 0.015138428,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0028076171875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 563509.0,
+              "score": 37.12078857421875,
+              "max_rss_kib": 17752,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-00/native/native-memory.txt",
+                "sha256": "d21d554eb443c81a663f1677c8edf1e2e8c23145f7bfb9dc58a3c09195b3141b"
+              }
+            },
+            "canonical": {
+              "ns": 13880002.0,
+              "score": 37.12359619140625,
+              "max_rss_kib": 333820,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "338b48344db60b8bf56efd5d34d8bdc1407578c7e348c1aea37255d50968ca30"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0028076171875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 553729.0,
+              "score": 37.12078857421875,
+              "max_rss_kib": 17704,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-01/native/native-memory.txt",
+                "sha256": "481f924a98c6652142c2d4bceb6f3ea0b0fea691af44e235ce74c6b15443cdc9"
+              }
+            },
+            "canonical": {
+              "ns": 14251487.0,
+              "score": 37.12359619140625,
+              "max_rss_kib": 333548,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "237fd4bb1c831aa0ec62aa67f1e94c527229cd66e73817103a199aa97c704d4f"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0028076171875,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 606170.0,
+              "score": 37.12078857421875,
+              "max_rss_kib": 17936,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-02/native/native-memory.txt",
+                "sha256": "b19fa2e899c990a5b3788507767bc0c8b824de93167c988c2bf33a5b770db828"
+              }
+            },
+            "canonical": {
+              "ns": 14829622.0,
+              "score": 37.12359619140625,
+              "max_rss_kib": 333844,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "8d88c213ede53e0c79858bb8f8fa60efb49217d7d44153bef95ddde3d664745f"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/summary.json",
+        "sha256": "390010000ceb57c0202edb76e975daddb7b0458cee8c04a4d275f6e6f8a4bada"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-00-wrapper.log",
+          "sha256": "fffbd505966845e94995fc3e1f1f090a512eb1f8ce67938011521c10583516ab",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.32GiB | min-avail 13327MiB | peak-load 2.73"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-01-wrapper.log",
+          "sha256": "2ec79437461f2675d2b8394bee4ad62e57e7c761f0ee55c58419cf7f57068e8e",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.32GiB | min-avail 13683MiB | peak-load 2.64"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairB-64x64-t1/block-02-wrapper.log",
+          "sha256": "e6699d36c4c960000ce6e8ccf36487364a32ff33b9796d74ab0d36e61852f888",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.32GiB | min-avail 13652MiB | peak-load 2.64"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "butteraugli-grid-pairA-3840x2160-t1",
+      "metric": "butteraugli",
+      "width": 3840,
+      "height": 2160,
+      "threads": 1,
+      "canonical": "libjxl 0.12.0 original comparator / reviewed constructor-first adapter",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.5206993360551319,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 7.3909759521484375e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1579882515.0,
+              "score": 3.451453924179077,
+              "max_rss_kib": 1245540,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-00/native/native-memory.txt",
+                "sha256": "4c625adc1aa940c3d196a5bfac0128f362d4bf15800e2f3e425de0ba47704f9e"
+              }
+            },
+            "canonical": {
+              "ns": 2993111351.0,
+              "score": 3.451446533203125,
+              "max_rss_kib": 2007000,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "dbcce64b5c337e405fd970adf508200717e13c8afaa06ded8b5675e9e95f057c"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 7.3909759521484375e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1531943208.0,
+              "score": 3.451453924179077,
+              "max_rss_kib": 1245440,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-01/native/native-memory.txt",
+                "sha256": "152e65661d63ac36083eda36bc81968b9e36e22f68481de639d53f56f4cd13e4"
+              }
+            },
+            "canonical": {
+              "ns": 2958061329.0,
+              "score": 3.451446533203125,
+              "max_rss_kib": 2007400,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "068ed5d7059a577bcddf770fe08c5699302179438541ec9341840b44d71290b4"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 7.3909759521484375e-06,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1564210149.0,
+              "score": 3.451453924179077,
+              "max_rss_kib": 1245764,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-02/native/native-memory.txt",
+                "sha256": "1ebbb473e664c89ed13134cbba3ea5706fc76ae6c0066a2ce432cc3ff967b522"
+              }
+            },
+            "canonical": {
+              "ns": 3004056354.0,
+              "score": 3.451446533203125,
+              "max_rss_kib": 2007440,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "010ce2a193686c7528032aa3fb1e811295d6000b1287e5537a81a65a05a825f8"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/summary.json",
+        "sha256": "56213b66a6db85cc3b1d9eccd2a3919a1d3098d1359af1a5864c04fb9f6af34c"
+      },
+      "plan_sha256": "8f56c8a6a82c2d1793e026a8c0ecbc254d4c2e91067d7893766ece433f97fe59",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-00-wrapper.log",
+          "sha256": "e2c2d39f0b05b10dabbe6ce50d2725e1049542490a7a0e2550e20e356bc4e5de",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 1.91GiB | min-avail 12216MiB | peak-load 1.50"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-01-wrapper.log",
+          "sha256": "af1842587324bd473f907384818c8435397e905036737b3b67b4ce54f67e161d",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 1.91GiB | min-avail 12192MiB | peak-load 1.49"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli/butteraugli-grid-pairA-3840x2160-t1/block-02-wrapper.log",
+          "sha256": "897ac340baae31ba3cbea7295bdc1e8a316523f3c9c7037f4ea2034985e62589",
+          "receipts": [
+            "run-heavy: done rc=0 9s | peak-RSS 1.91GiB | min-avail 12174MiB | peak-load 1.52"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

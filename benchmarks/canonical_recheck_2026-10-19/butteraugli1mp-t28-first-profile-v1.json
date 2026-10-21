@@ -1,0 +1,56 @@
+{
+  "receipt": {
+    "case": "butteraugli-gpu-grid-pairA-1024x1024-t28",
+    "plan_sha256": "03009c3367ba309a0ca2253894a2e6fca361c22f1bf710242fb5958a58a9741f",
+    "source_sha256": "9d359ec753b17dab299bf7a7eec951e7db5f181db4bbc97a06862bbbd1c9dce7",
+    "native_profile_processes": 2,
+    "profiles": [
+      {
+        "tool": "perf",
+        "tool_path": "/home/lilith/bin/perf",
+        "tool_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+        "config_sha256": "6eeb3eecbfc49dea0a869d3a32bfc6d6759bf8d00f26eb74d9800bfa9ad14447",
+        "score_bits": "400a4616c0000000",
+        "native_observation_sha256": "625607538344aa224945d685a93b24cf0a3792a378e865751c71498bac33a73d",
+        "files": {
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/perf/perf.data": "743b64571599bfa26a8ba968fbee57ed5d5b166dd1796d4e7480a4cb000e537a",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/perf/report.txt": "c30ce7edb7fe73131bab0ada1974c96ef48a0c0151e39d5830c2d4b2a7433554"
+        },
+        "scope": "Complete fresh native CUDA worker only; instrumented duration is not comparative timing. CPU samples and whole-process CUDA API/kernel traces do not isolate the internal cold clock or qualify a causal share of the measured gap."
+      },
+      {
+        "tool": "nsys",
+        "tool_path": "/usr/local/cuda-13.2/bin/nsys",
+        "tool_sha256": "c24d7cf6dfbbe7cf6cd979d276e6efc164729bac8dbdf21973d6e2e1bcc055ed",
+        "config_sha256": "6eeb3eecbfc49dea0a869d3a32bfc6d6759bf8d00f26eb74d9800bfa9ad14447",
+        "score_bits": "400a4616c0000000",
+        "native_observation_sha256": "ee828a674bf23638794666d7f63b6f9aab7e9309ab8c1ba8c320fcc18c05700f",
+        "files": {
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/nsys/trace.nsys-rep": "a0240b02a9cfe677c90f0024dfcd67e478f00827ec2b30f32d77707729265d2a",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/nsys/stats-stdout.log": "b69279e9842635d11f59927e84e441e7e83e10522ad6872ac66543711b3d12bf",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/nsys/trace.sqlite": "51d2aa42dd25d2e9fda10d54db718739d4522e7e6821b6fc3ff090fbea0b0a09"
+        },
+        "scope": "Complete fresh native CUDA worker only; instrumented duration is not comparative timing. CPU samples and whole-process CUDA API/kernel traces do not isolate the internal cold clock or qualify a causal share of the measured gap."
+      }
+    ],
+    "qualification": "Profiling diagnostics only; existing constructor/first-call contract and all numerical gates retained. No canonical timing or accepted regression claim."
+  },
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1/receipt.json",
+    "sha256": "5908afc2fac9932c6d0b38ae247151fc4cd00b22b78474f2b8c13363c362f894"
+  },
+  "trace_counts": {
+    "CUPTI_ACTIVITY_KIND_KERNEL": 74,
+    "CUPTI_ACTIVITY_KIND_RUNTIME": 552
+  },
+  "resource_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/butteraugli1mp-t28-first-profile-v1.log",
+    "sha256": "b37bb6ee33e3bb33ad4df96a9d4fd37398561d2bff9b3772d28ec57c30f90357",
+    "receipt": "run-heavy: done rc=0 14s | peak-RSS 0.64GiB | min-avail 12645MiB | peak-load 0.65"
+  },
+  "historical_source": {
+    "file": "gpu-first-profile-source.py.txt",
+    "sha256": "9d359ec753b17dab299bf7a7eec951e7db5f181db4bbc97a06862bbbd1c9dce7"
+  },
+  "scope": "Complete fresh native CUDA processes; CPU stacks plus CUDA API/kernel traces. No isolated first-clock, comparative timing or causal fraction."
+}

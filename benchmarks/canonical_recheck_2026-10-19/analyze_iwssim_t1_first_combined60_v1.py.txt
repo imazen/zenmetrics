@@ -1,0 +1,5 @@
+import pathlib,subprocess,time
+P=pathlib.Path;R=P(__file__).parent;initial=R/'iwssim-t1-first-flag-v1/fixed20-run';additional=R/'iwssim-t1-first-add40-v1/fixed40-run';case='iwssim-gpu-cuda-reference-pair-cid22-t1'
+while not (additional/case/'summary.json').exists():time.sleep(30)
+command=['flock',str(P.home()/'tmp/lilith-heavy.lock'),'flock',str(P.home()/'tmp/lilith-wsl-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(P.home()/'tmp'),'just','bench-iqa-canonical-classical-first-interval',str(initial),str(R/'iwssim-t1-first-combined60-v1.json'),'--additional',str(additional),'--case',case]
+raise SystemExit(subprocess.run(command).returncode)

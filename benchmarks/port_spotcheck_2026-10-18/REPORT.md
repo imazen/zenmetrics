@@ -623,3 +623,11 @@ vmaf-4k: 6/26 declared cohorts are acquired; 6 pass that existing score assertio
 
 vmaf-v1: 6/26 declared cohorts are acquired; 4 pass that existing score assertion; 2 cohorts retain process/input findings without a scalar pass.
 
+
+### Next immutable cold publication cut (2026-10-21)
+
+The [additional batch](../canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v2/index.json) retains 67 new acquired cases, bringing the published total to 316/2092 candidates. Every older record and all immutable plan/input/source bindings are revalidated. This is a partial acquisition cut, not full coverage or regression acceptance.
+
+The [SSIMULACRA1 screen odd/t1 capture](../canonical_recheck_2026-10-19/cpu-first-profiles-screen-odd-2026-10-21/index.json) and [Butteraugli CUDA photo1MP/t28 capture](../canonical_recheck_2026-10-19/butteraugli1mp-t28-first-profile-v1.json) supply profiling evidence for the two newly observed cold flags. Fixed 20-block confirmations retain their original clocks and bounds; these full-process profiles do not qualify a timing exception.
+
+The [IW-SSIM CUDA-reference/t1 initial20 interval](../canonical_recheck_2026-10-19/iwssim-cuda-reference-t1-first-confirmation20.json) is 1.485914 [1.360269, 1.560884], missing the unchanged precision target. Its fixed additional40 stage is queued; every initial block remains retained. Runtime/causal qualification and accepted exceptions remain unassigned.

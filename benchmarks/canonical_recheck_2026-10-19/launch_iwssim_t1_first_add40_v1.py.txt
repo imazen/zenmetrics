@@ -1,0 +1,14 @@
+import copy,hashlib,importlib.util,json,pathlib,subprocess,sys
+P=pathlib.Path;R=P(__file__).parent;root=R/'iwssim-t1-first-flag-v1/fixed20-run';parent=root/'plan.json';interval=P.home()/'tmp/handoff/classical-first-gmsd-flags-20261020/all-fixed20-intervals-v1/iwssim-gpu-cuda-reference-pair-cid22-t1.json'
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+row=json.loads(interval.read_text())['rows'][0];assert row['precision_within_three_percent'] is False and row['blocks']==20
+plan=json.loads(parent.read_text());case=plan['cases'][0];assert case['id']==row['case'];controller=next(P(p) for p in plan['bindings'] if P(p).name=='compare_gpu_first_verified.py');sys.path.insert(0,str(controller.parent));spec=importlib.util.spec_from_file_location('retained_iwssim_first',controller);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+plan=copy.deepcopy(plan);plan['preceding_plan_sha256']=sha(parent);plan['confirmation_stage']='Fixed additional forty after initial20 missed the unchanged precision target; retain every original and additional block'
+for p in [parent,interval,root/case['id']/'summary.json']:plan['bindings'][str(p)]=sha(p)
+folder=R/'iwssim-t1-first-add40-v1';folder.mkdir();path=folder/'fixed40.plan.json'
+with path.open('x') as f:json.dump(plan,f,indent=2)
+# Full source/input verification runs in each admitted block.
+command=['/usr/bin/python3','-B',str(controller),str(path),str(folder/'fixed40-run'),'--blocks','40'];print(json.dumps(dict(command=command,plan_sha256=sha(path))),flush=True)
+with (folder/'controller.log').open('x') as f:rc=subprocess.run(command,stdout=f,stderr=subprocess.STDOUT).returncode
+with (folder/'exit.json').open('x') as f:json.dump(dict(returncode=rc,command=command),f,indent=2)
+raise SystemExit(rc)

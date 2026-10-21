@@ -1,0 +1,111 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+H = Path.home()/'tmp/handoff'
+F = H/'classical-first-gmsd-flags-20261020'
+K = H/'classical-gpu-first-boundary-20261020'
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+def latest(folder):
+    return json.loads(max(folder.glob('*.json'), key=lambda path:path.stat().st_mtime).read_text())
+
+if len(sys.argv) == 1:
+    while True:
+        previous = (R/'publish-vmaf-studio-controls-after-profiles-v1.log').read_text()
+        count = len(latest(F/'flag-snapshots-v3')['completed_summaries'])
+        count += len(latest(K/'full-five-first-flag-snapshots-v3')['completed_summaries'])+4
+        if ('VMAF_STUDIO_CURRENT_CONTROLS_VERIFIED' in previous and 'run-heavy: done rc=0 ' in previous
+                and count >= 299
+                and (F/'ssim1-screen-odd-t1-first-profile-v1/receipt.json').exists()
+                and (K/'butteraugli1mp-t28-first-profile-v1/receipt.json').exists()):
+            break
+        if 'run-heavy: done rc=' in previous and 'run-heavy: done rc=0 ' not in previous:
+            raise SystemExit('Prior publication failed; preserve new cold observations')
+        time.sleep(20)
+    command = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'), 'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '1', '--',
+               'env', 'TMPDIR='+str(Path.home()/'tmp'), sys.executable, '-B', __file__, '--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+sys.path.insert(0, str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from publish_classical_first_profiles import publish
+from reference_publication import register_outputs
+from classical_first_intervals import analyze
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+def load(path):
+    return json.loads(path.read_text())
+
+assert not subprocess.check_output(['jj', 'diff', '--name-only'], text=True).strip()
+run('jj', 'new', 'master@origin', '-m', 'data: extend immutable cold batches and completed flag profiles')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing additional acquired cold cases\n')
+request = R/'cold-profile-publication-ready-v7.json'
+with request.open('x') as stream:
+    json.dump(dict(profiles=[dict(output=str(F/'ssim1-screen-odd-t1-first-profile-v1'),
+              resource_logs=dict(capture=str(F/'ssim1-screen-odd-t1-first-profile-v1.log')))]), stream, indent=2)
+publish(request, PUBLIC/'cpu-first-profiles-screen-odd-2026-10-21')
+root = K/'butteraugli1mp-t28-first-profile-v1'
+receipt = load(root/'receipt.json')
+assert receipt['source_sha256'] == sha(K/'profile_gpu_first_v1.py') == sha(PUBLIC/'gpu-first-profile-source.py.txt')
+for profile in receipt['profiles']:
+    for path, expected in profile['files'].items():
+        assert sha(path) == expected
+counts = load(root/'nsys/cuda-trace-counts.json')
+assert counts['CUPTI_ACTIVITY_KIND_KERNEL'] > 0 and counts['CUPTI_ACTIVITY_KIND_RUNTIME'] > 0
+log = K/'butteraugli1mp-t28-first-profile-v1.log'
+resources = [line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+assert len(resources) == 1 and 'rc=0 ' in resources[0]
+path = PUBLIC/'butteraugli1mp-t28-first-profile-v1.json'
+data = (json.dumps(dict(receipt=receipt, raw_receipt=dict(path=str(root/'receipt.json'), sha256=sha(root/'receipt.json')),
+        trace_counts=counts, resource_receipt=dict(path=str(log), sha256=sha(log), receipt=resources[0]),
+        historical_source=dict(file='gpu-first-profile-source.py.txt', sha256=receipt['source_sha256']),
+        scope='Complete fresh native CUDA processes; CPU stacks plus CUDA API/kernel traces. No isolated first-clock, comparative timing or causal fraction.'), indent=2, allow_nan=False)+'\n').encode()
+assert len(data) <= 30000
+with path.open('xb') as stream:
+    stream.write(data)
+register_outputs([(path, 'provenance')])
+interval_source = F/'all-fixed20-intervals-v1/iwssim-gpu-cuda-reference-pair-cid22-t1.json'
+interval = load(interval_source)
+initial_root = K/'iwssim-t1-first-flag-v1/fixed20-run'
+assert interval == analyze(initial_root, [], ['iwssim-gpu-cuda-reference-pair-cid22-t1'])
+interval_target = PUBLIC/'iwssim-cuda-reference-t1-first-confirmation20.json'
+interval_log = initial_root/'iwssim-gpu-cuda-reference-pair-cid22-t1/block-19-wrapper.log'
+interval_resources = [line for line in interval_log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+assert len(interval_resources) == 1 and 'rc=0 ' in interval_resources[0]
+interval['publication_resource_receipt'] = dict(path=str(interval_log), sha256=sha(interval_log), receipt=interval_resources[0])
+interval_data = (json.dumps(interval, indent=2, allow_nan=False)+'\n').encode()
+assert len(interval_data) <= 30000
+with interval_target.open('xb') as stream:
+    stream.write(interval_data)
+register_outputs([(interval_target, 'provenance')])
+run(sys.executable, '-B', str(R/'publish-acquired-cold-additions-v4.py'))
+index = load(PUBLIC/'acquired-cold-additions-2026-10-21-v2/index.json')
+total = index['previously_published_cases']+index['published_additions']
+for source in [Path(__file__), F/'launch_next_ssim1_screen_odd_t1_v1.py', K/'launch_next_butter1mp_t28_first_flag_v1.py', F/'analyze_fixed20_when_ready_v9.py', K/'launch_iwssim_t1_first_add40_v1.py', K/'analyze_iwssim_t1_first_combined60_v1.py']:
+    target = PUBLIC/(source.name+'.txt')
+    assert not target.exists()
+    shutil.copyfile(source, target)
+for path, relative in [(PUBLIC/'README.md', ''), (Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'), '../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write(f'\n### Next immutable cold publication cut (2026-10-21)\n\nThe [additional batch]({relative}acquired-cold-additions-2026-10-21-v2/index.json) retains {index["published_additions"]} new acquired cases, bringing the published total to {total}/2092 candidates. Every older record and all immutable plan/input/source bindings are revalidated. This is a partial acquisition cut, not full coverage or regression acceptance.\n\n')
+        stream.write(f'The [SSIMULACRA1 screen odd/t1 capture]({relative}cpu-first-profiles-screen-odd-2026-10-21/index.json) and [Butteraugli CUDA photo1MP/t28 capture]({relative}butteraugli1mp-t28-first-profile-v1.json) supply profiling evidence for the two newly observed cold flags. Fixed 20-block confirmations retain their original clocks and bounds; these full-process profiles do not qualify a timing exception.\n')
+    with path.open('a') as stream:
+        stream.write(f'\nThe [IW-SSIM CUDA-reference/t1 initial20 interval]({relative}iwssim-cuda-reference-t1-first-confirmation20.json) is 1.485914 [1.360269, 1.560884], missing the unchanged precision target. Its fixed additional40 stage is queued; every initial block remains retained. Runtime/causal qualification and accepted exceptions remain unassigned.\n')
+python = str(Path.home()/'tmp/portcheck/python/bin/python')
+run('just', 'model-cards-refresh', python)
+run('just', 'model-cards-check', python)
+run('just', 'bench-iqa-canonical-check')
+run('jj', 'describe', '-m', 'data: extend immutable cold batches and completed flag profiles')
+run(sys.executable, '-B', str(R/'push-owned-stack.py'), '@')
+print('NEXT_COLD_BATCH_PROFILES_VERIFIED', flush=True)
