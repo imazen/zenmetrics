@@ -1685,6 +1685,11 @@ bench-iqa-canonical-first-profile plan case output:
 bench-iqa-canonical-classical-first-flags output regressions *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/capture_classical_first_flags.py '{{output}}' --regressions '{{regressions}}' {{options}}
 
+# Caller supplies heavy admission; inert aggregate/case metadata controls.
+bench-iqa-canonical-classical-first-flags-check:
+    python3 -B benchmarks/iqa_compete_2026-10-16/test_classical_first_flags.py -v
+    python3 -O -B benchmarks/iqa_compete_2026-10-16/test_classical_first_flags.py -v
+
 # Caller supplies heavy admission for the fixed-stage bootstrap analysis.
 bench-iqa-canonical-classical-first-interval results output *options:
     python3 -B benchmarks/iqa_compete_2026-10-16/classical_first_intervals.py '{{results}}' '{{output}}' {{options}}

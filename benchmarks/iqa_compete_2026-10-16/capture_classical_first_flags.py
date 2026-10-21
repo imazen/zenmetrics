@@ -21,6 +21,27 @@ def capture(roots, regressions):
                 row = json.loads(path.read_text())
             except json.JSONDecodeError:
                 continue
+            if isinstance(row, list):
+                aggregate_plan = path.parent / "plan.json"
+                if not aggregate_plan.is_file():
+                    raise ValueError("aggregate summary has no sibling plan: " + str(path))
+                declared = json.loads(aggregate_plan.read_text())
+                identities = [c["id"] for c in declared["cases"]]
+                acquired = [r.get("case") for r in row if isinstance(r, dict)]
+                if (declared.get("phase") != PHASE or len(acquired) != len(row)
+                        or len(identities) != len(set(identities))
+                        or len(acquired) != len(set(acquired))
+                        or set(acquired) != set(identities)):
+                    raise ValueError("aggregate summary differs from declared cases: " + str(path))
+                for record in row:
+                    retained = path.parent / record["case"] / "summary.json"
+                    if (record.get("phase") != PHASE
+                            or json.loads(retained.read_text()) != record):
+                        raise ValueError("aggregate differs from retained case summary: " + str(path))
+                # Count and flag the separately retained case files exactly once.
+                continue
+            if not isinstance(row, dict):
+                raise ValueError("unexpected summary type: " + str(path))
             if row.get("phase") != PHASE:
                 raise ValueError("unexpected summary phase: " + str(path))
             plan_path = path.parent.parent / "plan.json"

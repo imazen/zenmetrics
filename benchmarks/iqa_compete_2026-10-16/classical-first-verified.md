@@ -92,3 +92,9 @@ completed worker, records a possible interrupted final worker separately and
 keeps requested/completed counts distinct. It executes no scorer and never
 promotes an incomplete capture to benchmark evidence. This partial diagnostic
 has its own receipt schema and remains separate from complete-profile exports.
+
+Completed campaign aggregates are checked against the declared case set and
+each retained case summary. Capture counts each case once and rejects altered
+aggregate records. Run `just bench-iqa-canonical-classical-first-flags-check`
+under shared heavy admission for the inert metadata controls in normal and
+optimized Python. These controls execute no scorers or threshold changes.
