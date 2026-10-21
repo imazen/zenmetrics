@@ -1,0 +1,21 @@
+import datetime,json,pathlib,sys
+r=pathlib.Path.home()/'tmp/local-canonical-20261019T2330';sys.path.insert(0,'benchmarks/iqa_compete_2026-10-16')
+from confirm_scored_first_evaluation import analyze
+from compare_canonical import sha
+roots=[r/'nn-first-arniqa-t8-confirmation20',r/'nn-first-arniqa-t8-confirmation40'];case_id='arniqa-first-original-cid22-t8'
+plans=[json.loads((p/'plan.json').read_text()) for p in roots];cases=[next(c for c in plan['cases'] if c['id']==case_id) for plan in plans];assert cases[0]==cases[1] and plans[0]['phase']==plans[1]['phase'];assert plans[1]['preceding_plan_sha256']==sha(roots[0]/'plan.json')
+paths=[];stages=[]
+for root,expected,plan in zip(roots,[20,40],plans):
+ files=sorted(root.glob('block-*/result.json'));assert len(files)==expected
+ old=json.loads((root/'interval.json').read_text());assert old['blocks']==expected and old['plan_sha256']==sha(root/'plan.json')
+ current=analyze([json.loads(p.read_text()) for p in files],cases[0])
+ for key,value in current.items():assert old[key]==value,(key,old[key],value)
+ stages.append(dict(root=str(root),blocks=expected,plan_sha256=sha(root/'plan.json'),interval_sha256=sha(root/'interval.json'),controller_sha256=old['controller_sha256']))
+ paths.extend(files)
+assert len(paths)==len(set(p.resolve() for p in paths))==60
+result=dict(case=case_id,metric='arniqa',blocks=60,stages=stages,phase=plans[0]['phase'],**analyze([json.loads(p.read_text()) for p in paths],cases[0]),numerical_gate_passed=True,borderline=None,regression_qualified=False,block_sha256=[sha(p) for p in paths],validator_sha256=sha('benchmarks/iqa_compete_2026-10-16/confirm_scored_first_evaluation.py'),interval_method_sha256=sha('benchmarks/iqa_compete_2026-10-16/canonical_intervals.py'),source_helper_sha256=sha(__file__),qualification='All20+40fixed observations retained and revalidated against unchanged numerical bounds. Descriptive first evaluation after resident construction; no warm, full startup, cache-cold or canonical-runtime-cleanliness acceptance.')
+result['borderline']=result['lower_95']<=1.08<=result['upper_95']
+result['wrapper_receipts']=[line for root in roots for p in sorted(root.glob('block-*.log')) for line in p.read_text().splitlines() if line.startswith('run-heavy: done ')]
+out=r/'nn-first-arniqa-t8-combined60-interval.json'
+with out.open('x') as f:json.dump(result,f,indent=2);f.write('\n')
+print(json.dumps({k:v for k,v in result.items() if k not in ['block_sha256','wrapper_receipts']}),flush=True)

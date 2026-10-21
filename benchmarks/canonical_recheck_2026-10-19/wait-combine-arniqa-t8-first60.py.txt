@@ -1,0 +1,5 @@
+import pathlib,subprocess,time
+r=pathlib.Path(__file__).parent
+while not (r/'nn-first-arniqa-t8-confirmation40/interval.json').exists():time.sleep(20)
+command=['flock',str(pathlib.Path.home()/'tmp/lilith-heavy.lock'),'flock',str(pathlib.Path.home()/'tmp/lilith-wsl-heavy.lock'),str(pathlib.Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(pathlib.Path.home()/'tmp'),'/usr/bin/python3','-B',str(r/'combine-arniqa-t8-first60.py')]
+raise SystemExit(subprocess.run(command).returncode)

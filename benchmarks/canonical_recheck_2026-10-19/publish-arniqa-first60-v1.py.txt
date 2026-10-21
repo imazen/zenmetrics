@@ -1,0 +1,45 @@
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+R=Path(__file__).parent;PUBLIC=Path('benchmarks/canonical_recheck_2026-10-19');B=Path('benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B.resolve()))
+from compare_canonical import sha
+from confirm_scored_first_evaluation import analyze
+from reference_publication import register_outputs
+
+def run(*command):subprocess.run(command,check=True)
+raw=R/'nn-first-arniqa-t8-combined60-interval.json';value=json.loads(raw.read_text());roots=[R/'nn-first-arniqa-t8-confirmation20',R/'nn-first-arniqa-t8-confirmation40'];plans=[json.loads((root/'plan.json').read_text()) for root in roots];case_id='arniqa-first-original-cid22-t8';cases=[next(case for case in plan['cases'] if case['id']==case_id) for plan in plans];assert cases[0]==cases[1] and plans[1]['preceding_plan_sha256']==sha(roots[0]/'plan.json')
+paths=[]
+for root,count in zip(roots,[20,40]):
+    files=sorted(root.glob('block-*/result.json'));assert len(files)==count;paths.extend(files)
+assert value['blocks']==len(paths)==60 and len(set(path.resolve() for path in paths))==60
+assert value['block_sha256']==[sha(path) for path in paths]
+for key,expected in analyze([json.loads(path.read_text()) for path in paths],cases[0]).items():assert value[key]==expected
+assert value['precision_within_three_percent'] is True and value['regression_qualified'] is False
+memory={};inventory=[]
+for role in ['native','canonical']:
+    observations=[]
+    for path in paths:
+        source=path.parent/(role+'-memory.txt');found=re.findall(r'Maximum resident set size \(kbytes\):\s*(\d+)',source.read_text());assert len(found)==1
+        record=dict(path=str(source),sha256=sha(source),max_rss_kib=int(found[0]));observations.append(record);inventory.append(record)
+    maximum=max(observations,key=lambda row:row['max_rss_kib']);memory[role]=dict(observed_processes=len(observations),maximum=maximum)
+value['arm_memory_summary']=dict(roles=memory,all_memory_receipts_inventory_sha256=hashlib.sha256(json.dumps(inventory,sort_keys=True).encode()).hexdigest(),scope='GNU time maximum RSS of each complete arm process, including setup and model loading outside the first-evaluation clock; all 120 original receipts retained.')
+value['raw_combined_interval']=dict(path=str(raw),sha256=sha(raw));value['publication_helper_sha256']=sha(__file__)
+last=roots[1]/'block-39.log';receipts=[line for line in last.read_text().splitlines() if line.startswith('run-heavy: done ')];assert len(receipts)==1 and 'rc=0 ' in receipts[0]
+value['last_acquisition_wrapper']=dict(path=str(last),sha256=sha(last),receipt=receipts[0])
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','data: retain ARNIQA first-evaluation fixed60 finding')
+target=PUBLIC/'arniqa-t8-first-combined60-2026-10-21.json';data=(json.dumps(value,indent=2,allow_nan=False)+'\n').encode();assert len(data)<=30000
+with target.open('xb') as stream:stream.write(data)
+register_outputs([(target,'interval')])
+for source in [Path(__file__),R/'combine-arniqa-t8-first60.py',R/'wait-combine-arniqa-t8-first60.py']:
+    target=PUBLIC/(source.name+'.txt');assert not target.exists();shutil.copyfile(source,target)
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write(f'\n### ARNIQA resident-first fixed60 finding (2026-10-21)\n\nThe [retained initial20 plus additional40]({relative}arniqa-t8-first-combined60-2026-10-21.json) at 8 threads give Rust/canonical {value["ratio"]:.9g}, 95% [{value["lower_95"]:.9g}, {value["upper_95"]:.9g}]. All 60 original observations and unchanged numerical gates revalidate; the interval meets the existing precision target and stays above 1.08. Whole-arm GNU maximum RSS across those 60 processes per role is {memory["native"]["maximum"]["max_rss_kib"]:,} KiB native and {memory["canonical"]["maximum"]["max_rss_kib"]:,} KiB canonical. These memory observations include setup outside the timing clock. This remains descriptive first evaluation after resident-model construction, separate from warm ratios, full startup and runtime-qualified acceptance. No later sampling stage is declared.\n')
+run('just','bench-iqa-canonical-nn-first-recovery-check');run('just','bench-iqa-canonical-check')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('ARNIQA_FIRST60_VERIFIED',flush=True)
