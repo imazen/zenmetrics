@@ -1,10 +1,15 @@
 {
-  "updated_utc": "2026-10-20T15:35:08.076253+00:00",
-  "evidence_fingerprint": "21ea59ecbf8a59294263f3b647f4029e38c01db62ed9160134de96716b001af9",
+  "updated_utc": "2026-10-21T03:51:40.380548+00:00",
+  "evidence_fingerprint": "ca30c253463528f373fdab085a0d20d41bb17a3fb5497d108be7a1a2f9068151",
   "capture_windows": {
-    "mac": "2026-10-20T15:35:02.676188+00:00",
-    "i265": "2026-10-20T15:35:01.825273+00:00",
-    "r7900x": "2026-10-20T15:35:02.441047+00:00"
+    "mac": "2026-10-20T22:20:02.531087+00:00",
+    "i265": "2026-10-21T03:51:34.923140+00:00",
+    "r7900x": "2026-10-21T03:51:35.574665+00:00"
   },
-  "qualification": "Use preferred=True qualified rows; gaps remain explicit; no implementation/protocol pooling"
+  "qualification": "Use preferred=True qualified rows; gaps remain explicit; no implementation/protocol pooling",
+  "retired_hosts": {
+    "mac": {
+      "since": "2026-10-20"
+    }
+  }
 }
