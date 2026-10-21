@@ -802,3 +802,32 @@ withheld. Separate existing-wheel/CPU-dispatch diagnostics are pending; the
 cause is not assigned and no oracle environment exception is accepted.
 [Historical runtime/control harness sources](supported-hdr-runtime-sources-2026-10-20/index.json)
 retain each exact setup and wrapper snapshot; frozen assets remain outside git.
+
+### BRISQUE runtime controls completed (2026-10-21)
+
+[Eight original-only controls](brisque-runtime-controls-2026-10-21.json) use both installed torch 2.14.1 wheels
+(+cpu and +cu130 running on CPU), with default AVX-512 and effective ATen AVX2.
+Every configuration gives the same 64² score 75.73614501953125 and 255×257 score
+89.107421875. Those tested wheel/dispatch choices do not explain the 64² native
+difference. The computed R_GGD and R_AGGD grids differ from the frozen native
+tables by one ULP in 329 and 327 entries respectively; this is not established
+as the cause. The numerical failure and unchanged 0.015138428 bound remain
+retained. No timing ratio or exception is accepted.
+
+The CPU-wheel wrapper recorded 7 s / 0.33 GiB peak RSS / minimum available 14,227 MiB
+/ peak load 2.79. The CUDA-wheel-on-CPU wrapper recorded 8 s / 0.80 GiB / 14,055 MiB
+/ 2.52. Per-process GNU time receipts and exact source snapshots are retained.
+
+The GMSD 64² photo first-call [one-thread initial20 interval](gmsd-photo64-t1-first-confirmation20.json)
+is 1.207 [1.174, 1.228]; its precision target is met. The [28-thread interval](gmsd-photo64-t28-first-confirmation20.json)
+is 16.737 [16.130, 17.618] and misses the precision target. A fixed additional
+40-block stage is queued; every original block remains retained. Numerical
+checks pass, while runtime cleanliness and regression acceptance remain
+unqualified. Final acquisition wrappers both recorded 1 s / 0.02 GiB peak RSS /
+peak load 1.52; minimum available was 14,435 MiB at one thread and 14,426 MiB at28.
+
+The FLIP v1.7 255×257/t28 [first-call initial20 interval](flip17-photo-odd-t28-first-confirmation20.json)
+is 1.459 [1.369, 1.556], missing the precision target. The fixed additional
+40-block stage retains the full initial stage; numerical acceptance remains
+unassigned. Its final acquisition wrapper recorded 2 s / 0.22 GiB peak RSS /
+minimum available 14,294 MiB / peak load 1.41.

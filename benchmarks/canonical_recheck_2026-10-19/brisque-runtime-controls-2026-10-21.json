@@ -1,0 +1,275 @@
+{
+  "rows": [
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "requested_dispatch": "default",
+      "effective_dispatch": "AVX512",
+      "torch": "2.14.1+cpu",
+      "score": 75.73614501953125,
+      "retained_native_score": 75.64959716796875,
+      "native_difference": 0.0865478515625,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 334236,
+      "memory_sha256": "e21af22b61a8fd3a2faeed8966d5254ba9cd4c58cdbb2571a20680f1af218262",
+      "stdout_sha256": "a13f96721c71988e88ef69896ae223ab91678c7269f6d9a29619a3a0db56d7e4"
+    },
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "requested_dispatch": "avx2",
+      "effective_dispatch": "AVX2",
+      "torch": "2.14.1+cpu",
+      "score": 75.73614501953125,
+      "retained_native_score": 75.64959716796875,
+      "native_difference": 0.0865478515625,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 334760,
+      "memory_sha256": "99c387222fcfaa3d092bdb059dc5395f1ca89a04a374d90bc6ba26f3ca838599",
+      "stdout_sha256": "01dfd98deb20ea28189dcf4ee766a24749ed550914a35d2cb69bc9777a989001"
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "requested_dispatch": "default",
+      "effective_dispatch": "AVX512",
+      "torch": "2.14.1+cpu",
+      "score": 89.107421875,
+      "retained_native_score": 89.11541748046875,
+      "native_difference": 0.00799560546875,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 346376,
+      "memory_sha256": "13e33ac2a546d74c8441cbe1dda43f4d452d043dd8c81bccf0517accc2091195",
+      "stdout_sha256": "defac11f0a733f90fe4ab9ef868707b2cccae82be985820f3bceb103d36d9a00"
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "requested_dispatch": "avx2",
+      "effective_dispatch": "AVX2",
+      "torch": "2.14.1+cpu",
+      "score": 89.107421875,
+      "retained_native_score": 89.11541748046875,
+      "native_difference": 0.00799560546875,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 344308,
+      "memory_sha256": "866381b10ad58a24e6ab684b62b7b7bdd9b85366bc58be2442f1ce720c70d49b",
+      "stdout_sha256": "01ab794f844e35e215ee1b6f518a63dab7440d9dc154956f555e41f3c612a1f9"
+    },
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "requested_dispatch": "default",
+      "effective_dispatch": "AVX512",
+      "torch": "2.14.1+cu130",
+      "score": 75.73614501953125,
+      "retained_native_score": 75.64959716796875,
+      "native_difference": 0.0865478515625,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 835548,
+      "memory_sha256": "e10919d26d4ecb501fcd523202a573748ebb6d5f91b6b25cfcb16b1fc1fa7a3c",
+      "stdout_sha256": "c90ce0c82d202ab711eb988cc0c9d239347dcc3d8eb837b4ec23c8825e9e5a23"
+    },
+    {
+      "case": "brisque-grid-pairA-64x64-t1",
+      "requested_dispatch": "avx2",
+      "effective_dispatch": "AVX2",
+      "torch": "2.14.1+cu130",
+      "score": 75.73614501953125,
+      "retained_native_score": 75.64959716796875,
+      "native_difference": 0.0865478515625,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 835684,
+      "memory_sha256": "575bd95af5d6640cb398ebf131b4c73ef20b5b695bc2fe1d969d5da5e409f5a2",
+      "stdout_sha256": "a1263b6b3fbc63ee3386ae0d50bace0aebe485907f0dfbf13899d9c32f57af93"
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "requested_dispatch": "default",
+      "effective_dispatch": "AVX512",
+      "torch": "2.14.1+cu130",
+      "score": 89.107421875,
+      "retained_native_score": 89.11541748046875,
+      "native_difference": 0.00799560546875,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 835912,
+      "memory_sha256": "4edf2ec7fa930e79bbbbdb66d1abad4ac665130ec9df5713f65afe8000f18f27",
+      "stdout_sha256": "2c06e0dcb83ffdb108a648f30eed088fab26502d54a05ff1aa0a4bdce86dc9ba"
+    },
+    {
+      "case": "brisque-grid-pairA-255x257-t1",
+      "requested_dispatch": "avx2",
+      "effective_dispatch": "AVX2",
+      "torch": "2.14.1+cu130",
+      "score": 89.107421875,
+      "retained_native_score": 89.11541748046875,
+      "native_difference": 0.00799560546875,
+      "default_difference": 0.0,
+      "absolute_bound": 0.015138428,
+      "tables": {
+        "R_GGD": {
+          "entries": 9801,
+          "different_bits": 329,
+          "max_ulp": 1,
+          "observed_sha256": "63d8be45d5219d566e6548ec217de6b8cc47507f887213296e352c37244c69df",
+          "frozen_sha256": "820f52aba39814c826f919e874951e17222787b20673659a0669fc45fd75cce3"
+        },
+        "R_AGGD": {
+          "entries": 9801,
+          "different_bits": 327,
+          "max_ulp": 1,
+          "observed_sha256": "90af2d45339c35320a1303aa3205b9428b82246b07481370b21073fc348ea0ed",
+          "frozen_sha256": "39e6222bb690d8455c5528b98d553626eeef7a107d109f898893fd65d75ebd4f"
+        }
+      },
+      "original_process_max_rss_kib": 836644,
+      "memory_sha256": "2e1aac2bc2f977e248286f7c4d2a2e825f45923c4d74995796dc52dad576fceb",
+      "stdout_sha256": "66f4b35b08afb58338877d6ffc643c75e15f5c610df214050c1919cb87ffc6c4"
+    }
+  ],
+  "torch_build_configs": {
+    "2.14.1+cpu": "PyTorch built with:\n  - GCC 13.3\n  - C++ Version: 202002\n  - Intel(R) oneAPI Math Kernel Library Version 2024.2-Product Build 20240605 for Intel(R) 64 architecture applications\n  - Intel(R) MKL-DNN v3.12.0 (Git Hash 80afa71049cd69a3df32adcccb623b12cd7baa22)\n  - OpenMP 201511 (a.k.a. OpenMP 4.5)\n  - LAPACK is enabled (usually provided by MKL)\n  - NNPACK is enabled\n  - CPU capability usage: AVX2\n  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, COMMIT_SHA=5c4886908584029761b579af026dcfb627c84070, CUDA_FLAGS= -DLIBCUDACXX_ENABLE_SIMPLIFIED_COMPLEX_OPERATIONS -Xfatbin -compress-all  -Wno-deprecated-gpu-targets --expt-extended-lambda -DCUB_WRAPPED_NAMESPACE=at_cuda_detail -DDISABLE_CUSPARSE_DEPRECATED -DCUDA_HAS_FP16=1 -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -DC10_NODEPRECATED, CXX_COMPILER=/opt/rh/gcc-toolset-13/root/usr/bin/c++, CXX_FLAGS= -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DUSE_FBGEMM -DUSE_PYTORCH_QNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -DC10_NODEPRECATED -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=range-loop-construct -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-unknown-pragmas -Wno-unused-parameter -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wsuggest-override -Wno-psabi -Wno-error=old-style-cast -faligned-new -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Wno-dangling-reference -Wno-error=dangling-reference -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, TORCH_VERSION=2.14.1, USE_CUDA=0, USE_CUDNN=OFF, USE_CUSPARSELT=OFF, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_GLOO=ON, USE_HIPSPARSELT=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=OFF, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, USE_ROCM_KERNEL_ASSERT=OFF, USE_XCCL=OFF, USE_XPU=OFF, \n",
+    "2.14.1+cu130": "PyTorch built with:\n  - GCC 13.3\n  - C++ Version: 202002\n  - Intel(R) oneAPI Math Kernel Library Version 2024.2-Product Build 20240605 for Intel(R) 64 architecture applications\n  - Intel(R) MKL-DNN v3.12.0 (Git Hash 80afa71049cd69a3df32adcccb623b12cd7baa22)\n  - OpenMP 201511 (a.k.a. OpenMP 4.5)\n  - LAPACK is enabled (usually provided by MKL)\n  - NNPACK is enabled\n  - CPU capability usage: AVX2\n  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, COMMIT_SHA=5c4886908584029761b579af026dcfb627c84070, CUDA_FLAGS= -DLIBCUDACXX_ENABLE_SIMPLIFIED_COMPLEX_OPERATIONS -Xfatbin -compress-all -DONNX_NAMESPACE=onnx_torch -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_86,code=sm_86 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 -Xcudafe --diag_suppress=cc_clobber_ignored,--diag_suppress=field_without_dll_interface,--diag_suppress=base_class_has_different_dll_interface,--diag_suppress=dll_interface_conflict_none_assumed,--diag_suppress=dll_interface_conflict_dllexport_assumed,--diag_suppress=bad_friend_decl --expt-relaxed-constexpr --expt-extended-lambda -Xfatbin -compress-all --threads 2 -compress-mode=size -Wno-deprecated-gpu-targets --expt-extended-lambda -DCUB_WRAPPED_NAMESPACE=at_cuda_detail -DDISABLE_CUSPARSE_DEPRECATED -DCUDA_HAS_FP16=1 -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -DC10_NODEPRECATED, CUDA_VERSION=13.0, CUDNN_VERSION=9.24.0, CXX_COMPILER=/opt/rh/gcc-toolset-13/root/usr/bin/c++, CXX_FLAGS= -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DHAS_CUPTI -DUSE_FBGEMM -DUSE_MSLK -DUSE_PYTORCH_QNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -DC10_NODEPRECATED -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=range-loop-construct -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-unknown-pragmas -Wno-unused-parameter -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wsuggest-override -Wno-psabi -Wno-error=old-style-cast -faligned-new -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Wno-dangling-reference -Wno-error=dangling-reference -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, TORCH_VERSION=2.14.1, USE_CUDA=1, USE_CUDNN=ON, USE_CUSPARSELT=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_GLOO=ON, USE_HIPSPARSELT=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=ON, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, USE_ROCM_KERNEL_ASSERT=OFF, USE_XCCL=OFF, USE_XPU=OFF, \n"
+  },
+  "captures": [
+    {
+      "result": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/runtime-control-v3/result.json",
+      "sha256": "e8610fac2884a9bc82195fc7b4c1de184a049c0f6ac93d0bc592659d94497df3",
+      "resource_receipt": "run-heavy: done rc=0 7s | peak-RSS 0.33GiB | min-avail 14227MiB | peak-load 2.79",
+      "resource_log_sha256": "3c481a661bd8cd13acd3e91122d3de4ad732009cc70102d87c5036a95a0b4101"
+    },
+    {
+      "result": "/home/lilith/tmp/handoff/brisque-canonical-finding-20261021/runtime-control-cuda-wheel-v4/result.json",
+      "sha256": "02fea312bbf31980b48583aec4d6ae41f7bdf92f2f8cf6a20a31b04553c7718d",
+      "resource_receipt": "run-heavy: done rc=0 8s | peak-RSS 0.80GiB | min-avail 14055MiB | peak-load 2.52",
+      "resource_log_sha256": "80c7d766b26ca6dd5b0fcaa078eb62236914b993c59495e1553f983b21b4bdf4"
+    }
+  ],
+  "sources": [
+    {
+      "file": "probe_runtime_control_v3.py.txt",
+      "sha256": "92c6f4047e9098b1facd8e490349b09fc9aa5ea5479aa6935604031652096be0"
+    },
+    {
+      "file": "probe_runtime_control_cuda_wheel_v4.py.txt",
+      "sha256": "4f655d4266a0b52baf3ebcab0000ce5ac69311b713018dc5a2b4bdabade2b312"
+    }
+  ],
+  "canonical_source_url": "https://github.com/photosynthesis-team/piq",
+  "finding": "Both installed PyTorch wheels and both effective ATen dispatch settings reproduce identical scalar values. Those tested choices do not explain the 64-square miss. 329 R_GGD and 327 R_AGGD entries differ from the native frozen tables by one ULP in every tested configuration; this is not established as the cause. All original failures and the 0.015138428 bound remain retained.",
+  "qualification": "Original-only runtime and table diagnostics; no native rerun, changed model, numerical waiver, timing ratio, or root cause is claimed."
+}

@@ -1,0 +1,41 @@
+import argparse,hashlib,json,os,pathlib,re,runpy,subprocess,sys
+P=pathlib.Path;B=P('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B))
+from compare_canonical import sha
+from compare_classical_first_verified import verify
+from haarpsi_primary import execute
+ap=argparse.ArgumentParser();ap.add_argument('plan',type=P);ap.add_argument('output',type=P);ap.add_argument('--child',action='store_true');ap.add_argument('--case');ap.add_argument('--capability');a=ap.parse_args()
+if a.child:
+ plan=json.loads(a.plan.read_text());c=next(c for c in plan['cases'] if c['id']==a.case)
+ command=[v.format_map(dict(c,samples=1,output=str(a.output))) for v in c['canonical']['command']]
+ sys.argv=command[1:];runpy.run_path(command[1],run_name='__main__')
+ import torch,numpy as np,piq
+ gamma=torch.arange(.2,10.001,.001,dtype=torch.float32)
+ vectors=dict(R_GGD=(torch.lgamma(1./gamma)+torch.lgamma(3./gamma)-2*torch.lgamma(2./gamma)).exp(),R_AGGD=torch.exp(2*torch.lgamma(2./gamma)-torch.lgamma(1./gamma)-torch.lgamma(3./gamma)))
+ frozen=P('/home/lilith/work/zen/zenmetrics/crates/brisque/src/params.bin');data=frozen.read_bytes();tables={}
+ for name,offset in [('R_GGD',114556),('R_AGGD',153760)]:
+  actual=vectors[name].numpy().astype('<f4');expected=np.frombuffer(data,dtype='<f4',count=9801,offset=offset)
+  ua=actual.view('<u4').astype(np.int64);ue=expected.view('<u4').astype(np.int64)
+  tables[name]=dict(entries=9801,different_bits=int(np.count_nonzero(ua!=ue)),max_ulp=int(np.max(np.abs(ua-ue))),observed_sha256=hashlib.sha256(actual.tobytes()).hexdigest(),frozen_sha256=hashlib.sha256(expected.tobytes()).hexdigest())
+ metadata=dict(torch=torch.__version__,piq=piq.__version__,capability=torch.backends.cpu.get_cpu_capability(),override=os.environ.get('ATEN_CPU_CAPABILITY'),torch_config=torch.__config__.show(),piq_source=str(P(piq.__file__).resolve()),tables=tables,frozen_params_sha256=sha(frozen))
+ print('BRISQUE_RUNTIME '+json.dumps(metadata),flush=True)
+ raise SystemExit(0)
+plan,routes=verify(a.plan,sha(a.plan));a.output.mkdir();rows=[]
+source=sha(__file__);selected=[c for c in plan['cases'] if c['threads']==1 and c['id'] in ['brisque-grid-pairA-64x64-t1','brisque-grid-pairA-255x257-t1']]
+if len(selected)!=2:raise ValueError('two retained photo geometries expected')
+for c in selected:
+ for capability in ['default','avx2']:
+  root=a.output/(c['id']+'-'+capability);root.mkdir();env=dict(os.environ,TMPDIR=str(root),OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1',RAYON_NUM_THREADS='1')
+  env.pop('ATEN_CPU_CAPABILITY',None)
+  if capability!='default':env['ATEN_CPU_CAPABILITY']=capability
+  command=[c['canonical']['command'][0],'-B',str(P(__file__).resolve()),str(a.plan),str(root),'--child','--case',c['id'],'--capability',capability]
+  rc,wrapped=execute(command,env,root,'original-control',300)
+  if rc:raise RuntimeError('original diagnostic failed; preserve outputs')
+  text=(root/'original-control-stdout.log').read_text();meta=[json.loads(line.split(' ',1)[1]) for line in text.splitlines() if line.startswith('BRISQUE_RUNTIME ')];scores=[float(line.split()[2]) for line in text.splitlines() if line.startswith('COLD ') or line.startswith('SAMPLE ')]
+  if len(meta)!=1 or len(scores)!=2 or scores[0]!=scores[1]:raise ValueError('retained original observations differ')
+  if capability=='avx2' and meta[0]['capability']!='AVX2':raise ValueError('requested AVX2 override not effective')
+  baseline=json.loads((a.plan.parent/c['id']/'summary.json').read_text());prior=baseline['blocks'][0]['arms']['canonical']['score'];native=baseline['blocks'][0]['arms']['native']['score']
+  if capability=='default' and scores[0]!=prior:raise ValueError('default diagnostic no longer reproduces original score')
+  rows.append(dict(case=c['id'],mode=capability,metadata=meta[0],original_score=scores[0],retained_default_score=prior,retained_native_score=native,default_difference=abs(scores[0]-prior),native_difference=abs(scores[0]-native),absolute_bound=c['absolute_bound'],stdout_sha256=sha(root/'original-control-stdout.log'),memory_file=str(root/'original-control-memory.txt'),command=wrapped))
+verify(a.plan,sha(a.plan))
+with (a.output/'result.json').open('x') as f:json.dump(dict(rows=rows,plan_sha256=sha(a.plan),controller_sha256=source,native_metric_calls=0,qualification='Original-only runtime/ISA diagnostic. The scored adapter and images are unchanged; the AVX2 process changes only the requested ATen dispatch capability. Table probes follow the unchanged scored adapter. This diagnostic provides no comparative timing qualification. Original default failures and every existing numerical bound remain retained.'),f,indent=2,allow_nan=False)
+print(json.dumps(dict(original_processes=len(rows),native_metric_calls=0)),flush=True)

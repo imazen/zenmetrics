@@ -2227,3 +2227,18 @@ has an observed absolute difference of 0.0865478515625, exceeding the unchanged
 0.015138428 bound against PIQ0.8.0/torch2.14.1+cpu, repeating at both worker
 settings. Timing ratios remain withheld and the bound is unchanged. Original-only
 wheel/dispatch controls are pending; no root cause or exception is accepted.
+
+### BRISQUE runtime controls completed (2026-10-21)
+
+[Eight original-only controls](benchmarks/canonical_recheck_2026-10-19/brisque-runtime-controls-2026-10-21.json) use both installed torch 2.14.1 wheels
+(+cpu and +cu130 running on CPU), with default AVX-512 and effective ATen AVX2.
+Every configuration gives the same 64² score 75.73614501953125 and 255×257 score
+89.107421875. Those tested wheel/dispatch choices do not explain the 64² native
+difference. The computed R_GGD and R_AGGD grids differ from the frozen native
+tables by one ULP in 329 and 327 entries respectively; this is not established
+as the cause. The numerical failure and unchanged 0.015138428 bound remain
+retained. No timing ratio or exception is accepted.
+
+The CPU-wheel wrapper recorded 7 s / 0.33 GiB peak RSS / minimum available 14,227 MiB
+/ peak load 2.79. The CUDA-wheel-on-CPU wrapper recorded 8 s / 0.80 GiB / 14,055 MiB
+/ 2.52. Per-process GNU time receipts and exact source snapshots are retained.
