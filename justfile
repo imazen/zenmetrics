@@ -2476,3 +2476,11 @@ bench-iqa-canonical-vmaf-plan-check:
     mkdir -p "$HOME/tmp"
     flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_vmaf_fullcall_plan
     flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -O -B -m unittest test_vmaf_fullcall_plan
+
+# Caller supplies heavy admission; retain cold-process captures separately from warm evidence.
+bench-iqa-canonical-classical-first-profiles-publish index output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/publish_classical_first_profiles.py '{{index}}' '{{output}}'
+
+# Caller supplies heavy admission; retain size-capped recordings without executing workers.
+bench-iqa-canonical-classical-first-profile-adopt-capped plan case capture output:
+    python3 -B benchmarks/iqa_compete_2026-10-16/adopt_capped_classical_profile.py '{{plan}}' '{{case}}' '{{capture}}' '{{output}}'

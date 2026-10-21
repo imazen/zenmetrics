@@ -76,3 +76,19 @@ before processing the existing data. It runs no additional scorer. Original
 files remain intact. Per-task recordings may lack a CPU field; the helper does
 not infer CPU placement from them. Recordings are capped at 32 MiB, with a
 1500 MiB free-disk guard before each invocation.
+
+`just bench-iqa-canonical-classical-first-profiles-publish INDEX NEW_DIRECTORY`
+exports completed fresh-worker recordings, including adopted captures. It checks
+plan/artifact hashes and revalidates every retained worker scalar before writing
+bounded JSON projections. The index gives each capture/adoption resource log its
+own role; an earlier failed postprocessor remains visible after successful
+adoption. This exporter keeps whole-process cycle samples separate from warm
+profiles and comparative timing evidence. It does not isolate the internal cold
+clock, identify worker-thread spans or qualify a regression.
+
+`just bench-iqa-canonical-classical-first-profile-adopt-capped PLAN CASE CAPTURE NEW_DIRECTORY`
+retains a recording stopped by perf's explicit size cap. It revalidates every
+completed worker, records a possible interrupted final worker separately and
+keeps requested/completed counts distinct. It executes no scorer and never
+promotes an incomplete capture to benchmark evidence. This partial diagnostic
+has its own receipt schema and remains separate from complete-profile exports.
