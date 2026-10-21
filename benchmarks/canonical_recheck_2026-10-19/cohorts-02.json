@@ -24,14 +24,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },
@@ -158,12 +158,12 @@
   "vmaf-fullcall-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run",
     "plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
-    "cases": 22,
+    "cases": 23,
     "expected_cases": 144,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current-grid-run.tsv",
-        "sha256": "e07f9a990f1d77525063880f53448461330e0c8d77066a05278a217f0563983a"
+        "sha256": "85a0d5554b7bf85946edeae09cbecc9528750588d2e1e27fed3e7d773f1b2bf9"
       }
     ]
   },

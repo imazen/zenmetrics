@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-10-21T04:35:16.663788+00:00",
+  "observed_at_utc": "2026-10-21T06:05:31.321657+00:00",
   "queues": {
     "/home/lilith/tmp/handoff/canonical-confirmation-queue-audit-20261020/requests-v1/queue.json": {
       "expected": 3,
@@ -8,7 +8,7 @@
     },
     "dssim-fullcall-current-grid-queue.json": {
       "expected": 24,
-      "completed": 17,
+      "completed": 19,
       "queue_sha256": "7efda06c196538eaaa9a789576f5019c120e05b8d167f0ccf77820cc978509c1"
     },
     "daala-current-representative-queue.json": {
@@ -28,17 +28,17 @@
     },
     "vmaf-fullcall-current-grid-queue.json": {
       "expected": 144,
-      "completed": 22,
+      "completed": 23,
       "queue_sha256": "6be4d4cb8ed9fdc6c418dba48a2348226dc10b1864e39b2584cfd29b9680b3d9"
     },
     "msssim-current-grid-queue.json": {
       "expected": 72,
-      "completed": 22,
+      "completed": 23,
       "queue_sha256": "2c51e0eed3c547f67bd56d3ee9bfffd96c6bf6652c86a3cdc40683f411eea3bd"
     },
     "daala-current-grid-queue.json": {
       "expected": 24,
-      "completed": 21,
+      "completed": 23,
       "queue_sha256": "1328664cbb1e4698dd5fa6f740011df419a98715a8092e57b30a21f83890f3f6"
     },
     "full-classical-grid-v2/queue.json": {

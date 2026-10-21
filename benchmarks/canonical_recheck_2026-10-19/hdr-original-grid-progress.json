@@ -1,7 +1,7 @@
 {
   "expected_cases": 48,
   "expected_metric_children": 96,
-  "acquired_case_records": 44,
+  "acquired_case_records": 48,
   "cases": [
     {
       "case": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
@@ -241,6 +241,30 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-255x257-t28-warm-current40/result.json",
         "sha256": "3b5787e5f074fc1922abec51b8eeda7fd02e2ba87c046fab2d5074314de7c614"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.015380630288248653,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-3840x2160-t1-warm-current40/result.json",
+        "sha256": "92ae0d29831088772515103e06423b62ff67ec8362a1e5aa0ef7245f52a18bbf"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.015380630288248653,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-3840x2160-t28-warm-current40/result.json",
+        "sha256": "a2c1df8bffb7ff57310f9b63f4fdf5b43d571428db0e794359fe1909f914fbcc"
       }
     },
     {
@@ -505,6 +529,30 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-255x257-t28-warm-current40/result.json",
         "sha256": "e65f621a8cbd611a88557eeb36aad79a5a3abd22d3ac8b47764147abf09a31b3"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": false,
+      "absolute_difference": null,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-3840x2160-t1-warm-current40/result.json",
+        "sha256": "9a644f577051886a9824d32187a0060662212185984f9f683b1847f02767bfd4"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 2.6645352591003757e-14,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-3840x2160-t28-warm-current40/result.json",
+        "sha256": "e5d9dce01770b14852ca8f7b0f3489dd1d8a19596ea1f9045663f8b26d372c22"
       }
     },
     {

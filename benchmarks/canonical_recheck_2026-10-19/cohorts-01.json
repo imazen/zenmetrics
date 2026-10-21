@@ -186,12 +186,12 @@
   "msssim-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/msssim-current-grid-run",
     "plan_sha256": "7b0ca6a027def87caf33b7e80ba35698bd48ae013767b557bd52b2bf5d805323",
-    "cases": 22,
+    "cases": 23,
     "expected_cases": 72,
     "artifacts": [
       {
         "file": "msssim-current-grid-run.tsv",
-        "sha256": "9222ee21137288edeffcb6d37e442f9abe58d249f0429274d94515ddc0ee93b0"
+        "sha256": "679e61d4306d21eb0de8d086819614fe6708cb1b4406a36f97dfb2864409ab62"
       }
     ]
   },
