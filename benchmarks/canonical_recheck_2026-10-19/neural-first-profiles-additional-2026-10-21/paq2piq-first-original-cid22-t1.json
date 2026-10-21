@@ -1,0 +1,145 @@
+{
+  "case": "paq2piq-first-original-cid22-t1",
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/paq2piq-first-original-cid22-t1-profile",
+  "receipt": {
+    "metric": "paq2piq",
+    "case": "paq2piq-first-original-cid22-t1",
+    "threads": 1,
+    "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+    "worker_sha256": "90f4e56910d2c01ca2544883e6a3a362504eec9bec38343a2e835ab5b5b0a99c",
+    "command": [
+      "/usr/bin/time",
+      "-v",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/paq2piq-first-original-cid22-t1-profile/native-memory.txt",
+      "timeout",
+      "--kill-after=20s",
+      "1100s",
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/paq2piq-first-original-cid22-t1-profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+      "original",
+      "paq2piq",
+      "512",
+      "512",
+      "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "1"
+    ],
+    "profile_sha256": "dd9097c7ed3a8e6cef8ce57e6d33c21b22d9cad1f18531a73a0b95e557c585d8",
+    "report_sha256": "49304f9e528136601f678130489b9a8002704be28778f41ebb4691982e8e41e1",
+    "scope": "Complete native probe process, including immutable-model priming, first evaluation and second score-stability control; sampled shares do not isolate the timed first evaluation"
+  },
+  "receipt_sha256": "0d72bc0c6819c2e6cf11a9cba144e36de20da52fe54fd19b1c67692c8e22bbb8",
+  "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+  "native_max_process_rss_kbytes": 83244,
+  "top_self_symbols": [
+    {
+      "self_percent": 55.09,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 27.73,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB8_12Avx512KernelINtBa_6KernelfffE11pack_im2col18pack_im2col_avx512Kj2_Kj20_EBc_"
+    },
+    {
+      "self_percent": 3.22,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNCNCINvCskGpd0tPlPXn_9rten_gemm9gemm_implfffEs0_0s_0Cs1ADsnHiCC33_4rten.llvm.13775224539974928326"
+    },
+    {
+      "self_percent": 3.07,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs1ADsnHiCC33_4rten3ops4norm15normalize_slice.llvm.13775224539974928326"
+    },
+    {
+      "self_percent": 2.11,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs_NtNtNtCsevLNFiNqfJP_4core3ops8function5implsRNCINvNtNtCs1ADsnHiCC33_4rten3ops7pooling9pool_implfNCNvBS_8max_pool0NCB1E_s_0Es_0INtB6_5FnMutTTINtNtCs9yAaV38r1Mf_11rten_tensor6tensor10TensorBaseINtNtB2p_7storage11ViewMutDataINtNtNtBa_3mem12maybe_uninit11MaybeUninitfEEINtNtB2p_6layout8NdLayoutKj3_EEIB2l_INtB3c_8ViewDatafEB4l_EEEE8call_mutBW_"
+    },
+    {
+      "self_percent": 1.61,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvYINtNtNtCs1D7iEf8vUdy_5rayon4iter9enumerate17EnumerateProducerINtNtCsbWExVdcOhMn_13rten_parallel8par_iter7ParIterINtNtCs9yAaV38r1Mf_11rten_tensor9iterators8LanesMutfEEENtNtB8_8plumbing8Producer9fold_withINtNtB8_8for_each15ForEachConsumerNCINvNtNtCs1ADsnHiCC33_4rten3ops4norm22normalize_each_channelNCNvB3W_10batch_norm0E0EEB40_"
+    },
+    {
+      "self_percent": 1.55,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvXs_NtNtCs1D7iEf8vUdy_5rayon4iter8for_eachINtB5_15ForEachConsumerNCINvNtNtCs1ADsnHiCC33_4rten3ops7pooling11global_poolfE0EINtNtB7_8plumbing6FolderTINtNtCs9yAaV38r1Mf_11rten_tensor9iterators4LanefEQINtNtNtCsevLNFiNqfJP_4core3mem12maybe_uninit11MaybeUninitfEEE12consume_iterINtNtNtNtB3j_4iter8adapters3zip3ZipINtB2r_5LanesfEINtNtNtB3j_5slice4iter7IterMutB3c_EEEB1d_"
+    },
+    {
+      "self_percent": 1.0,
+      "process": "rten-0",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__next_zones_zonelist"
+    },
+    {
+      "self_percent": 0.93,
+      "process": "resident-nn-fir",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "_copy_to_iter"
+    },
+    {
+      "self_percent": 0.54,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_6416pack_b_block_avxKj20_EB6_"
+    },
+    {
+      "self_percent": 0.53,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs_NtNtCs1ADsnHiCC33_4rten3ops18binary_elementwiseNCINvB4_12add_in_placefE0INtB4_15BinaryMutKernelffE10apply_fastB8_"
+    },
+    {
+      "self_percent": 0.53,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs_NtNtNtCsevLNFiNqfJP_4core3ops8function5implsRNCINvNtNtCs1ADsnHiCC33_4rten3ops4norm22normalize_each_channelNCNvBS_10batch_norm0E0INtB6_5FnMutTTjINtNtCs9yAaV38r1Mf_11rten_tensor9iterators7LaneMutfEEEE8call_mutBW_"
+    }
+  ],
+  "lost_samples_header": "# Total Lost Samples: 0",
+  "warnings": [
+    "addr2line /home/lilith/.debug/.build-id/e0/e8396d804dd4fb05a348c6635cef4dd9014817/elf: could not read first record"
+  ],
+  "resource_receipt": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/paq2piq-first-original-cid22-t1-profile.log",
+    "sha256": "368e8342b423466850f2829d9bb2a1d3d25ea83d13052bf1b26680545dd605a9",
+    "receipt": "run-heavy: done rc=0 20s | peak-RSS 0.08GiB | min-avail 14278MiB | peak-load 1.07"
+  },
+  "shared_debug_audit": {
+    "file": "../arniqa-first-profiles-2026-10-20/index.json",
+    "sha256": "95c7e72dddfa315309bd18f36ab74ad2691747940f5bbe1fc012a7e868be9f56"
+  },
+  "scope": "Complete native probe includes immutable-model priming, first evaluation and score-stability controls. Partial source-line attribution. No isolated first-clock share, comparative timing or causal attribution."
+}

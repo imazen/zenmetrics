@@ -1,0 +1,121 @@
+{
+  "case": "fsim-grid-pairB-64x64-t28",
+  "metric": "fsim",
+  "width": 64,
+  "height": 64,
+  "threads": 28,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim-screen64-t28-first-profile-v1",
+  "receipt": {
+    "case": "fsim-grid-pairB-64x64-t28",
+    "plan_sha256": "24638f2d499ea1926aa98ecf47e1d1cb8b4d5e1138f0547791d3f782b4828bca",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim-screen64-t28-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim-screen64-t28-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim-screen64-t28-first-profile-v1/perf.data",
+    "perf_data_sha256": "5964764c1ab3c9dbeb36469d4dbe1ef37b235a2552229dd6dd98a5ceda98eb73",
+    "config_sha256": "a4ef512d55940ac56360cdeaf04df7817f88d99f9bd8fd5c53d79c260eb013f4",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "f634098aab7ca2d10aafdc099dd166cadd9fa2779b330053c5f043cf02f95add"
+    },
+    "score_bits": [
+      "3fee43bfd889fb1f"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "1c2d5ee284083d8cb3c3b6521e2e84366044bb77909b2eebaadaa98fe2446cf5",
+  "request_sha256": "936322d60012bdd8c109e34b18c2455c7039d15f7c66800b3c59ebc2b05cbc59",
+  "report_sha256": "d86875191ec5397501676ed75f4ad3e7b95c38ae85489575c29d5d76c98dcdb1",
+  "script_sha256": "f0e2ce366158a82d949bd525f32c482cb88ffdbcd656d403f5923d2bc161be89",
+  "top_self_symbols": [
+    {
+      "self_percent": 12.33,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtCsa4RVMa8CRQJ_15crossbeam_epoch7default11with_handleNCNvB2_3pin0NtNtB4_5guard5GuardECs2JoaK3j7lLw_10rayon_core"
+    },
+    {
+      "self_percent": 6.15,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvMs5_NtCsa4RVMa8CRQJ_15crossbeam_epoch8internalNtB5_6Global11try_advance.llvm.2053859810789543049"
+    },
+    {
+      "self_percent": 6.0,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "update_curr"
+    },
+    {
+      "self_percent": 4.85,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "pick_task_fair"
+    },
+    {
+      "self_percent": 4.0,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "update_se"
+    },
+    {
+      "self_percent": 3.94,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "native_sched_clock"
+    },
+    {
+      "self_percent": 3.76,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "entry_SYSRETQ_unsafe_stack"
+    },
+    {
+      "self_percent": 3.68,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__schedule"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "original",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim-screen64-t28-first-profile-v1.log",
+      "sha256": "71fbf9d376f4a676578c23a18ce4a98ad02935b81c910834f377545da580e5a4",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 13927MiB | peak-load 1.70"
+      ]
+    }
+  ],
+  "source_note": null
+}

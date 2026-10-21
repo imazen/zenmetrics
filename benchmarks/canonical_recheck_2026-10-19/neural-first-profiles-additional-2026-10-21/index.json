@@ -1,0 +1,25 @@
+{
+  "profiles": [
+    {
+      "file": "paq2piq-first-original-cid22-t1.json",
+      "sha256": "54b3e2ccacc39d82558af2e92a86cc947d644adf87ef49e32c56ba9642ce686a",
+      "case": "paq2piq-first-original-cid22-t1"
+    },
+    {
+      "file": "paq2piq-first-original-cid22-t8.json",
+      "sha256": "80dde88b5cdf7b90a41bb6f474cb195d1cdad986eececa6939fa1d3c1deb219a",
+      "case": "paq2piq-first-original-cid22-t8"
+    },
+    {
+      "file": "maniqa-first-original-cid22-t8.json",
+      "sha256": "8a2f0bf59e204e671846c49125bc1e99bef5321100368e9656a3b1ee623f7f2f",
+      "case": "maniqa-first-original-cid22-t8"
+    },
+    {
+      "file": "hyperiqa-first-original-cid22-t8.json",
+      "sha256": "554d71e7c6dd200bd6207d9e4704b22f47f7ac3fd45c917cff548c15e90c288c",
+      "case": "hyperiqa-first-original-cid22-t8"
+    }
+  ],
+  "qualification": "Four distinct completed captures. Symbol samples and their exact lost-sample headers retained. Shared ELF debug audit applies to the same binary; unavailable split debug references limit source-line attribution."
+}

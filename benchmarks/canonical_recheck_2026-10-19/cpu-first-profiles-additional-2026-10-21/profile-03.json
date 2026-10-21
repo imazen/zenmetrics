@@ -1,0 +1,108 @@
+{
+  "case": "flip-v17-grid-pairC-255x257-t28",
+  "metric": "flip-v17",
+  "width": 255,
+  "height": 257,
+  "threads": 28,
+  "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "native_invocation_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1",
+  "receipt": {
+    "case": "flip-v17-grid-pairC-255x257-t28",
+    "plan_sha256": "86d2e69331aa35d18eee9b06dc1a2637008ec2196d8d32fa3d6dfcc734875618",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1/perf.data",
+    "perf_data_sha256": "110ce696d03af26419e4eeeb6656096ba240de6ad91e0a1fe81efe862c081fec",
+    "config_sha256": "f19fe2a4317b18e48c930d4e0876f421c96b9a7ed9afe4cfe7126375b2d66b08",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "f4c4f596e49dbd5867529b8280e8a5b8f91b71ab454654d24562b2d997eea8e8"
+    },
+    "score_bits": [
+      "3fb13a1680000000"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "4b465f881f21dce8d7b43cea083e6ca9ce71f69fa08f494b767950e5820fcad0",
+  "request_sha256": "1d48e95d0cc0177646597aa51f880bca85cb4d3100ae6f042f7a7b50491787da",
+  "report_sha256": "608212a139bcc5963c299d772017de12243da278a1d6d49a5d7b30466356798c",
+  "script_sha256": "204e3c2afd3f9f42abff766b396a8c84b3c582087a0aa4fc522c464244d2d2e8",
+  "top_self_symbols": [
+    {
+      "self_percent": 50.17,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "get_vma_policy"
+    },
+    {
+      "self_percent": 49.43,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "copy_mc_enhanced_fast_string"
+    },
+    {
+      "self_percent": 0.21,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 0.18,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "perf_event_exec"
+    },
+    {
+      "self_percent": 0.0,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "x86_pmu_enable"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "original",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1.log",
+      "sha256": "b070eceb09aaec7b4ad5e1dd70ba5368371d27b154918fe5cb27d93ad38ef834",
+      "receipts": [
+        "run-heavy: done rc=1 0s | peak-RSS 0.03GiB | min-avail 14195MiB | peak-load 1.49"
+      ]
+    },
+    {
+      "role": "preflight-only-resume",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flip17-aic-odd-t28-first-profile-v1-resume-v2.log",
+      "sha256": "d13faccfd723828845fcfcf26213667e01b14215baf2262c37c201a311693691",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.03GiB | min-avail 13673MiB | peak-load 3.69"
+      ]
+    }
+  ],
+  "source_note": null
+}

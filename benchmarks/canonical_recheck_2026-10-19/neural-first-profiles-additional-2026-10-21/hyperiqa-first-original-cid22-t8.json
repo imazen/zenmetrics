@@ -1,0 +1,145 @@
+{
+  "case": "hyperiqa-first-original-cid22-t8",
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/hyperiqa-first-original-cid22-t8-profile",
+  "receipt": {
+    "metric": "hyperiqa",
+    "case": "hyperiqa-first-original-cid22-t8",
+    "threads": 8,
+    "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+    "worker_sha256": "90f4e56910d2c01ca2544883e6a3a362504eec9bec38343a2e835ab5b5b0a99c",
+    "command": [
+      "/usr/bin/time",
+      "-v",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/hyperiqa-first-original-cid22-t8-profile/native-memory.txt",
+      "timeout",
+      "--kill-after=20s",
+      "1100s",
+      "perf",
+      "record",
+      "-F",
+      "199",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/hyperiqa-first-original-cid22-t8-profile/perf.data",
+      "--",
+      "/home/lilith/tmp/local-canonical-20261019T2330/resident-nn-first-build-v2/resident-nn-first",
+      "original",
+      "hyperiqa",
+      "512",
+      "512",
+      "/home/lilith/tmp/portcheck/inputs/pairA/cid22-reference.rgb",
+      "/home/lilith/tmp/portcheck/inputs/pairA/cid22-distorted.rgb",
+      "8"
+    ],
+    "profile_sha256": "453c7d3178c198bf76b1f2207aa1257087226be937dc72dd0591d7fba5f853f2",
+    "report_sha256": "9e01fab3047e6eb8ab13e8c158ecb0b06a61dc205c66e1fdeb89fbfc9486f502",
+    "scope": "Complete native probe process, including immutable-model priming, first evaluation and second score-stability control; sampled shares do not isolate the timed first evaluation"
+  },
+  "receipt_sha256": "9946e453bf3adbf943620367dddea2e57cc79c8b2ab18c2fe6f6f73feb92a93c",
+  "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+  "native_max_process_rss_kbytes": 406380,
+  "top_self_symbols": [
+    {
+      "self_percent": 6.18,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 6.11,
+      "process": "rten-4",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 5.82,
+      "process": "rten-2",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 5.52,
+      "process": "rten-6",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 5.46,
+      "process": "rten-1",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 5.36,
+      "process": "rten-3",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 5.09,
+      "process": "rten-7",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 4.9,
+      "process": "rten-5",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB5_12Avx512KernelINtB7_6KernelfffE6kernel"
+    },
+    {
+      "self_percent": 1.81,
+      "process": "rten-1",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB8_12Avx512KernelINtBa_6KernelfffE11pack_im2col18pack_im2col_avx512Kj2_Kj20_EBc_"
+    },
+    {
+      "self_percent": 1.7,
+      "process": "rten-6",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB8_12Avx512KernelINtBa_6KernelfffE11pack_im2col18pack_im2col_avx512Kj2_Kj20_EBc_"
+    },
+    {
+      "self_percent": 1.66,
+      "process": "rten-0",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB8_12Avx512KernelINtBa_6KernelfffE11pack_im2col18pack_im2col_avx512Kj2_Kj20_EBc_"
+    },
+    {
+      "self_percent": 1.54,
+      "process": "rten-4",
+      "object": "resident-nn-first",
+      "domain": ".",
+      "symbol": "_RINvNvXs1_NtNtCskGpd0tPlPXn_9rten_gemm7kernels6x86_64NtB8_12Avx512KernelINtBa_6KernelfffE11pack_im2col18pack_im2col_avx512Kj2_Kj20_EBc_"
+    }
+  ],
+  "lost_samples_header": "# Total Lost Samples: 0",
+  "warnings": [
+    "addr2line /home/lilith/.debug/.build-id/e0/e8396d804dd4fb05a348c6635cef4dd9014817/elf: could not read first record"
+  ],
+  "resource_receipt": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-next-four-flags-v1/hyperiqa-first-original-cid22-t8-profile.log",
+    "sha256": "42cfc176375d5a2e6f08c5c9aa1bf25c76fe748eb527a2568abd960da1ce589c",
+    "receipt": "run-heavy: done rc=0 33s | peak-RSS 0.39GiB | min-avail 14000MiB | peak-load 1.72"
+  },
+  "shared_debug_audit": {
+    "file": "../arniqa-first-profiles-2026-10-20/index.json",
+    "sha256": "95c7e72dddfa315309bd18f36ab74ad2691747940f5bbe1fc012a7e868be9f56"
+  },
+  "scope": "Complete native probe includes immutable-model priming, first evaluation and score-stability controls. Partial source-line attribution. No isolated first-clock share, comparative timing or causal attribution."
+}

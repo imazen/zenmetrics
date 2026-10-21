@@ -1830,3 +1830,14 @@ benchmarks/canonical_recheck_2026-10-19/fsim-photo64-t28-first-confirmation20.js
 benchmarks/canonical_recheck_2026-10-19/flip17-screen4k-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/ssim1-photo64-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/ssim1-photo-odd-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-additional-2026-10-21/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-additional-2026-10-21/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-additional-2026-10-21/profile-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-additional-2026-10-21/profile-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-additional-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/paq2piq-first-original-cid22-t1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/paq2piq-first-original-cid22-t8.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/maniqa-first-original-cid22-t8.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/hyperiqa-first-original-cid22-t8.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli1mp-t1-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

@@ -1,0 +1,133 @@
+import datetime
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+H = Path.home()/'tmp/handoff'
+K = H/'classical-gpu-first-boundary-20261020'
+B = Path('benchmarks/iqa_compete_2026-10-16')
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+if len(sys.argv) == 1:
+    while True:
+        text = (R/'publish-niqe-planes-after-warm-v1.log').read_text()
+        if 'NIQE_PLANES_INTERVALS_VERIFIED' in text and 'run-heavy: done rc=0 ' in text:
+            break
+        if 'run-heavy: done rc=' in text and 'run-heavy: done rc=0 ' not in text:
+            raise SystemExit('Prior publication failed; preserve all profiles')
+        time.sleep(20)
+    command = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'),
+               'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'),
+               '--mem', '12G', '--jobs', '1', '--', 'env',
+               'TMPDIR='+str(Path.home()/'tmp'), sys.executable, '-B', __file__, '--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+sys.path.insert(0, str(B.resolve()))
+from compare_canonical import sha
+from publish_classical_first_profiles import publish
+from reference_publication import register_outputs
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+def load(path):
+    return json.loads(path.read_text())
+
+artifacts = []
+
+def write(path, value):
+    data = (json.dumps(value, indent=2, allow_nan=False)+'\n').encode()
+    assert len(data) <= 30000
+    with path.open('xb') as stream:
+        stream.write(data)
+    artifacts.append((path, 'provenance'))
+
+def resource(path):
+    receipts = [line for line in path.read_text().splitlines() if line.startswith('run-heavy: done ')]
+    assert len(receipts) == 1 and 'rc=0 ' in receipts[0]
+    return dict(path=str(path), sha256=sha(path), receipt=receipts[0])
+
+assert not subprocess.check_output(['jj', 'diff', '--name-only'], text=True).strip()
+run('jj', 'new', 'master@origin', '-m', 'data: retain completed supplemental CPU CUDA and neural profiles')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing completed supplemental profiles\n')
+publish(R/'cold-profile-publication-ready-v6.json', PUBLIC/'cpu-first-profiles-additional-2026-10-21')
+
+plan_path = R/'nn-first-56-numpy125-run/plan.json'
+plan = load(plan_path)
+debug_path = PUBLIC/'arniqa-first-profiles-2026-10-20/index.json'
+debug = load(debug_path)['debug_review']
+nn_output = PUBLIC/'neural-first-profiles-additional-2026-10-21'
+nn_output.mkdir()
+nn_index = []
+for job in load(R/'nn-first-next-four-flags-v1/requests.json')['cases']:
+    root = Path(job['profile'])
+    receipt = load(root/'receipt.json')
+    case = next(c for c in plan['cases'] if c['id'] == job['case'])
+    binary = Path(case['native']['command'][0])
+    assert sha(binary) == plan['bindings'][str(binary)] == debug['binary_sha256']
+    assert receipt['case'] == case['id'] and receipt['threads'] == case['threads']
+    assert receipt['plan_sha256'] == sha(plan_path) == job['plan_sha256']
+    assert receipt['worker_sha256'] == sha(B/'profile_first_evaluation.py')
+    assert receipt['profile_sha256'] == sha(root/'perf.data')
+    assert receipt['report_sha256'] == sha(root/'report.txt')
+    expected = [arg.format_map(dict(case, samples=1, output=str(root))) for arg in case['native']['command']]
+    assert receipt['command'][-len(expected):] == expected
+    report = (root/'report.txt').read_text()
+    symbols = []
+    for line in report.splitlines():
+        found = re.match(r'^\s+([\d.]+)%\s+(\S+)\s+(\S+)\s+\[([.k])\]\s+(.*)$', line)
+        if found:
+            symbols.append(dict(self_percent=float(found[1]), process=found[2], object=found[3],
+                                domain=found[4], symbol=found[5]))
+    assert symbols
+    lost = next(line for line in report.splitlines() if 'Total Lost Samples:' in line)
+    log = root.with_suffix('.log')
+    warnings = list(dict.fromkeys(line for line in log.read_text().splitlines() if 'could not read first record' in line))
+    rss = re.search(r'Maximum resident set size \(kbytes\):\s*(\d+)', (root/'native-memory.txt').read_text())
+    assert rss
+    target = nn_output/(case['id']+'.json')
+    write(target, dict(case=case['id'], raw_directory=str(root), receipt=receipt,
+                       receipt_sha256=sha(root/'receipt.json'), native_binary_sha256=sha(binary),
+                       native_max_process_rss_kbytes=int(rss[1]), top_self_symbols=symbols[:12],
+                       lost_samples_header=lost, warnings=warnings, resource_receipt=resource(log),
+                       shared_debug_audit=dict(file='../arniqa-first-profiles-2026-10-20/index.json', sha256=sha(debug_path)),
+                       scope='Complete native probe includes immutable-model priming, first evaluation and score-stability controls. Partial source-line attribution. No isolated first-clock share, comparative timing or causal attribution.'))
+    nn_index.append(dict(file=target.name, sha256=sha(target), case=case['id']))
+write(nn_output/'index.json', dict(profiles=nn_index, qualification='Four distinct completed captures. Symbol samples and their exact lost-sample headers retained. Shared ELF debug audit applies to the same binary; unavailable split debug references limit source-line attribution.'))
+
+gpu_root = K/'butteraugli1mp-t1-first-profile-v1'
+gpu = load(gpu_root/'receipt.json')
+assert sha(K/'profile_gpu_first_v1.py') == gpu['source_sha256']
+assert sha(PUBLIC/'gpu-first-profile-source.py.txt') == gpu['source_sha256']
+for row in gpu['profiles']:
+    for path, expected in row['files'].items():
+        assert sha(path) == expected
+counts = load(gpu_root/'nsys/cuda-trace-counts.json')
+assert counts['CUPTI_ACTIVITY_KIND_KERNEL'] > 0 and counts['CUPTI_ACTIVITY_KIND_RUNTIME'] > 0
+write(PUBLIC/'butteraugli1mp-t1-first-profile-v1.json',
+      dict(receipt=gpu, raw_receipt=dict(path=str(gpu_root/'receipt.json'), sha256=sha(gpu_root/'receipt.json')),
+           resource_receipt=resource(K/'butteraugli1mp-t1-first-profile-v1.log'),
+           trace_counts=load(gpu_root/'nsys/cuda-trace-counts.json'),
+           historical_source=dict(file='gpu-first-profile-source.py.txt', sha256=gpu['source_sha256']),
+           scope='Complete fresh native CUDA process. CPU-clock stacks and CUDA API/kernel traces are profiling diagnostics, not isolated first-call clocks or comparative timing.'))
+source = PUBLIC/'publish-next-completed-profiles-v1.py.txt'
+shutil.copyfile(__file__, source)
+register_outputs(artifacts)
+for path, relative in [(PUBLIC/'README.md', ''), (Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'), '../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write('\n### Additional completed first-call profiles (2026-10-21)\n\n')
+        stream.write(f'Four [CPU captures]({relative}cpu-first-profiles-additional-2026-10-21/index.json) cover SSIMULACRA1 screen64 at one and 28 threads, FSIM screen64 at 28 threads, and FLIP v1.7 AIC odd at 28 threads. Two original attempts stopped at disk preflight before recording; their completed resumptions are identified separately.\n\n')
+        stream.write(f'Four [neural captures]({relative}neural-first-profiles-additional-2026-10-21/index.json) cover Paq2Piq at one and eight threads, MANIQA and HyperIQA at eight threads. Their source-line attribution remains partial because split debug references are unavailable.\n\n')
+        stream.write(f'The [Butteraugli CUDA photo1MP capture]({relative}butteraugli1mp-t1-first-profile-v1.json) supplies CPU stacks plus CUDA API and kernel traces. These profiles cover complete native processes; their instrumented durations and sample shares do not qualify a timing exception or isolate the first-evaluation clock. Fixed interleaved confirmations remain separate.\n')
+run('just', 'bench-iqa-canonical-check')
+run('jj', 'describe', '-m', 'data: retain completed supplemental CPU CUDA and neural profiles')
+run(sys.executable, '-B', str(R/'push-owned-stack.py'), '@')
+print('NEXT_COMPLETED_PROFILES_VERIFIED', flush=True)

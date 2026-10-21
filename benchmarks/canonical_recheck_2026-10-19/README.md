@@ -947,3 +947,11 @@ These complete initial stages retain every original block and revalidate their n
 `ssimulacra1-grid-pairA-255x257-t1` final-block resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14288MiB | peak-load 1.67`.
 
 FSIM photo64/t28 and FLIP v1.7 screen4K/t28 have fixed additional 40 stages queued. FSIM remains borderline at 1.08. These descriptive cold intervals remain separate from warm results and accepted exceptions.
+
+### Additional completed first-call profiles (2026-10-21)
+
+Four [CPU captures](cpu-first-profiles-additional-2026-10-21/index.json) cover SSIMULACRA1 screen64 at one and 28 threads, FSIM screen64 at 28 threads, and FLIP v1.7 AIC odd at 28 threads. Two original attempts stopped at disk preflight before recording; their completed resumptions are identified separately.
+
+Four [neural captures](neural-first-profiles-additional-2026-10-21/index.json) cover Paq2Piq at one and eight threads, MANIQA and HyperIQA at eight threads. Their source-line attribution remains partial because split debug references are unavailable.
+
+The [Butteraugli CUDA photo1MP capture](butteraugli1mp-t1-first-profile-v1.json) supplies CPU stacks plus CUDA API and kernel traces. These profiles cover complete native processes; their instrumented durations and sample shares do not qualify a timing exception or isolate the first-evaluation clock. Fixed interleaved confirmations remain separate.
