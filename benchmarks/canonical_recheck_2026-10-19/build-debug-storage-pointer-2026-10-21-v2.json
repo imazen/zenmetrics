@@ -1,0 +1,42 @@
+{
+  "machine": "AMD Ryzen 9 7950X / WSL2; paths refer to the original benchmark host",
+  "observed_at_utc": "2026-10-21T06:47:48.432088+00:00",
+  "records": [
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/deps/iqa_compete-11f822ae1d623b89.dwp",
+      "bytes": 57964664,
+      "sha256": "6bd909f5cc99e33eda5636b24eead961470509b0f1645212eb638940b0431ea3",
+      "associated_binary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/deps/iqa_compete-11f822ae1d623b89",
+        "sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005"
+      },
+      "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+      "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/6bd909f5cc99e33eda5636b24eead961470509b0f1645212eb638940b0431ea3.dwp",
+      "original_path_preserved": true
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/deps/iqa_compete-890b04ef19565ca7.dwp",
+      "bytes": 55194696,
+      "sha256": "44b3f460e22f984ccc924b0dfcca9227d1d0d43a0fd7aca3c5fa50e57b6a57a8",
+      "associated_binary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/deps/iqa_compete-890b04ef19565ca7",
+        "sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0"
+      },
+      "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+      "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/44b3f460e22f984ccc924b0dfcca9227d1d0d43a0fd7aca3c5fa50e57b6a57a8.dwp",
+      "original_path_preserved": true
+    }
+  ],
+  "plan_sha256": "1c072d60be06d8ae6146de3f908d09e17bd3c81975fba8b3e4b73306f8a1e7a9",
+  "raw_result": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v2.result.json",
+    "sha256": "78de77e1c65d5c8386bc2954f4d65474e41173c7d24be96e57c82395b9113b5b"
+  },
+  "total_bytes": 113159360,
+  "resource_receipt": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v2.log",
+    "sha256": "1de5ce8decd569265582e83df1b97e6341389751ebf3c54468be5403dd5db6f8",
+    "receipt": "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 13941MiB | peak-load 2.28"
+  },
+  "qualification": "Additional Cargo paths for retained native-build debug sidecars copied and verified before atomic original-path symlinks. Native ELF hashes remain unchanged. All bytes and original consumers retained; no native calls, observation replacement or claim of debug completeness."
+}

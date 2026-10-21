@@ -1,0 +1,71 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+if len(sys.argv) == 1:
+    while True:
+        relocation = (R/'build-debug-storage-relocation-v2.log').read_text()
+        publication = (R/'publish-build-debug-storage-pointer-v1.log').read_text()
+        if ('run-heavy: done rc=0 ' in relocation and (R/'build-debug-storage-relocation-v2.result.json').exists()
+                and 'BUILD_DEBUG_STORAGE_POINTER_VERIFIED' in publication and 'run-heavy: done rc=0 ' in publication):
+            break
+        for log in [relocation, publication]:
+            if 'run-heavy: done rc=' in log and 'run-heavy: done rc=0 ' not in log:
+                raise SystemExit('Prerequisite failed; preserve all debug data')
+        time.sleep(20)
+    command = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'), 'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '1', '--',
+               'env', 'TMPDIR='+str(Path.home()/'tmp'), sys.executable, '-B', __file__, '--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+sys.path.insert(0, str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+assert not subprocess.check_output(['jj', 'diff', '--name-only'], text=True).strip()
+result_path = R/'build-debug-storage-relocation-v2.result.json'
+result = json.loads(result_path.read_text())
+assert len(result['records']) == 2
+for row in result['records']:
+    source = Path(row['path'])
+    target = Path(row['destination'])
+    assert source.is_symlink() and source.resolve() == target
+    assert source.stat().st_size == row['bytes'] and sha(source) == sha(target) == row['sha256']
+    assert sha(row['associated_binary']['path']) == row['associated_binary']['sha256']
+log = R/'build-debug-storage-relocation-v2.log'
+resources = [line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+assert len(resources) == 1 and 'rc=0 ' in resources[0]
+run('jj', 'new', 'master@origin', '-m', 'docs: retain completed build debug storage pointers')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing preserved debug sidecar pointers\n')
+target = PUBLIC/'build-debug-storage-pointer-2026-10-21-v2.json'
+data = (json.dumps(dict(machine='AMD Ryzen 9 7950X / WSL2; paths refer to the original benchmark host', observed_at_utc=result['observed_at_utc'], records=result['records'],
+        plan_sha256=result['plan_sha256'], raw_result=dict(path=str(result_path), sha256=sha(result_path)),
+        total_bytes=sum(row['bytes'] for row in result['records']),
+        resource_receipt=dict(path=str(log), sha256=sha(log), receipt=resources[0]),
+        qualification='Additional Cargo paths for retained native-build debug sidecars copied and verified before atomic original-path symlinks. Native ELF hashes remain unchanged. All bytes and original consumers retained; no native calls, observation replacement or claim of debug completeness.'), indent=2, allow_nan=False)+'\n').encode()
+assert len(data) <= 30000
+with target.open('xb') as stream:
+    stream.write(data)
+for source in [Path(__file__), R/'prepare_and_relocate_build_debug_v2.py', R/'relocate_completed_build_debug_v2.py']:
+    destination = PUBLIC/(source.name+'.txt')
+    assert not destination.exists()
+    shutil.copyfile(source, destination)
+register_outputs([(target, 'provenance')])
+with (PUBLIC/'README.md').open('a') as stream:
+    stream.write('\n### Completed build debug storage (2026-10-21)\n\nThe [debug-sidecar pointer](build-debug-storage-pointer-2026-10-21-v2.json) retains two additional Cargo debug aliases on the dataset volume with hash-verified original-path symlinks. Associated native ELF hashes and every observed score remain unchanged. This storage move does not establish debug completeness or new profiling evidence.\n')
+run('just', 'bench-iqa-canonical-check')
+run('jj', 'describe', '-m', 'docs: retain completed build debug storage pointers')
+run(sys.executable, '-B', str(R/'push-owned-stack.py'), '@')
+print('BUILD_DEBUG_STORAGE_POINTER_VERIFIED', flush=True)

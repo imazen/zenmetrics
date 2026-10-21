@@ -1013,3 +1013,7 @@ Further initial20 stages retain all original blocks and numerical contracts:
 | butteraugli-gpu-grid-pairA-64x64-t1 | 433.818280 | [416.617869, 450.459627] | False |
 
 IW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages queued after precision misses. The Butteraugli reference is the original CPU implementation. SSIMULACRA2 photo odd/t1 meets the precision target. These cold intervals remain separate from warm headline ratios and accepted runtime exceptions.
+
+### Completed build debug storage (2026-10-21)
+
+The [debug-sidecar pointer](build-debug-storage-pointer-2026-10-21-v2.json) retains two additional Cargo debug aliases on the dataset volume with hash-verified original-path symlinks. Associated native ELF hashes and every observed score remain unchanged. This storage move does not establish debug completeness or new profiling evidence.
