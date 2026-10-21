@@ -1885,3 +1885,8 @@ benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/index.json	
 benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/summary.meta.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/summary.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/publication-resume-v2.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-screen-odd-t28-capped-adopt-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-photo-odd-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/ssim2-photo-odd-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/iwssim-cuda-reference-t28-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/butter64-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.

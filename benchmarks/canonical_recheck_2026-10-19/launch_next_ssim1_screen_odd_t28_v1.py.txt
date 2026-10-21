@@ -1,0 +1,19 @@
+import copy,hashlib,importlib,json,pathlib,subprocess,sys
+P=pathlib.Path;H=P.home()/'tmp/handoff';R=H/'classical-first-gmsd-flags-20261020';B=P('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B));m=importlib.import_module('compare_classical_first_verified')
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+def write(p,x):
+ with p.open('x') as f:json.dump(x,f,indent=2,allow_nan=False)
+snap=P('/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/flag-snapshots-v3/20261021T055659828988Z.json');flags=json.loads(snap.read_text())['flags'];names=['ssimulacra1-grid-pairB-255x257-t28'];out=R/'next-ssim1-screen-odd-t28-flag-v1';out.mkdir();jobs=[];children=[]
+for name in names:
+ flag=next(x for x in flags if x['case']==name);summary=P(flag['summary']);parent=summary.parent.parent/'plan.json';plan=json.loads(parent.read_text());case=next(c for c in plan['cases'] if c['id']==name);plan['cases']=[copy.deepcopy(case)];plan['bindings']=dict(plan['bindings']);plan['preceding_plan_sha256']=sha(parent);plan['confirmation_stage']='Fixed twenty after original three-block flag; preserve every observation and unchanged clock, case contracts and bounds.'
+ for p in [snap,parent,summary,*[B/n for n in [*m.HELPERS,'check_fixed_factor_oracle.py','fixed_factor_oracle.py','image_resize_source.py']],P('/usr/bin/python3'),P('/usr/bin/python3').resolve()]:
+  h=sha(p)
+  if str(p) in plan['bindings']:assert plan['bindings'][str(p)]==h
+  plan['bindings'][str(p)]=h
+ root=out/name;root.mkdir();path=root/'fixed20.plan.json';write(path,plan);assert plan['cases']==[case] # Full immutable verification runs inside every admitted measurement block.
+ command=['/usr/bin/python3','-B',str(B/'compare_classical_first_verified.py'),str(path),str(root/'fixed20-run'),'--blocks','20'];f=(root/'controller.log').open('x');child=subprocess.Popen(command,stdout=f,stderr=subprocess.STDOUT);children.append((child,f,name));job=dict(case=name,command=command,pid=child.pid,plan_sha256=sha(path));jobs.append(job);print(json.dumps(job),flush=True)
+write(out/'processes.json',jobs)
+results=[]
+for child,f,name in children:
+ rc=child.wait();f.close();results.append(dict(case=name,returncode=rc));print(json.dumps(results[-1]),flush=True)
+write(out/'exits.json',results)

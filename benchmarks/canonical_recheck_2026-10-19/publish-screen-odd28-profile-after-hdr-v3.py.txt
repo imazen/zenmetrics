@@ -1,0 +1,117 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+F = Path.home()/'tmp/handoff/classical-first-gmsd-flags-20261020'
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+if len(sys.argv) == 1:
+    while True:
+        previous = (R/'resume-completed-hdr-publication-v2.log').read_text()
+        if ('HDR_ORIGINAL_GRID_VERIFIED' in previous and 'run-heavy: done rc=0 ' in previous
+                and (F/'ssim1-screen-odd-t28-capped-adopt-v1/receipt.json').exists()):
+            break
+        if 'run-heavy: done rc=' in previous and 'run-heavy: done rc=0 ' not in previous:
+            raise SystemExit('Prior publication failed; preserve new capture')
+        adoption_log = (F/'ssim1-screen-odd-t28-capped-adopt-v1.log').read_text()
+        if 'run-heavy: done rc=' in adoption_log and 'run-heavy: done rc=0 ' not in adoption_log:
+            raise SystemExit('Capped capture postprocessing failed; preserve recording and do not rerun calls')
+        time.sleep(20)
+    command = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'), 'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '1', '--',
+               'env', 'TMPDIR='+str(Path.home()/'tmp'), sys.executable, '-B', __file__, '--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+sys.path.insert(0, str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from classical_first_intervals import analyze
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+assert not subprocess.check_output(['jj', 'diff', '--name-only'], text=True).strip()
+run('jj', 'new', 'master@origin', '-m', 'investigate: retain capped cold profile and fixed intervals')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing SSIMULACRA1 screen odd28 capture\n')
+adoption = F/'ssim1-screen-odd-t28-capped-adopt-v1'
+receipt = json.loads((adoption/'receipt.json').read_text())
+assert receipt['partial_capture'] is True and receipt['native_metric_calls'] == 0
+assert 0 < receipt['completed_repetitions'] < receipt['requested_repetitions'] == 30
+capture = Path(receipt['capture'])
+assert sha(capture/'perf.data') == receipt['perf_data_sha256']
+for filename,expected in receipt['worker_log_sha256'].items():
+    assert sha(capture/filename) == expected
+for filename,expected in receipt['output_sha256'].items():
+    assert sha(adoption/filename) == expected
+resource_receipts = []
+for label,log in [('capped capture',F/'ssim1-screen-odd-t28-first-profile-v1.log'),('postprocessing only',F/'ssim1-screen-odd-t28-capped-adopt-v1.log')]:
+    lines = [line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+    assert len(lines) == 1
+    resource_receipts.append(dict(role=label,path=str(log),sha256=sha(log),receipt=lines[0]))
+assert 'rc=0 ' in resource_receipts[-1]['receipt']
+profile_target = PUBLIC/'ssim1-screen-odd-t28-capped-adopt-v1.json'
+profile_data = (json.dumps(dict(receipt=receipt,raw_receipt=dict(path=str(adoption/'receipt.json'),sha256=sha(adoption/'receipt.json')),resource_receipts=resource_receipts),indent=2,allow_nan=False)+'\n').encode()
+assert len(profile_data) <= 30000
+with profile_target.open('xb') as stream:
+    stream.write(profile_data)
+register_outputs([(profile_target,'provenance')])
+interval_source = F/'all-fixed20-intervals-v1/ssimulacra1-grid-pairA-255x257-t28.json'
+interval = json.loads(interval_source.read_text())
+initial = F/'next-ssim1-odd28-flag-v1/ssimulacra1-grid-pairA-255x257-t28/fixed20-run'
+assert interval == analyze(initial, [], ['ssimulacra1-grid-pairA-255x257-t28'])
+log = initial/'ssimulacra1-grid-pairA-255x257-t28/block-19-wrapper.log'
+resources = [line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+assert len(resources) == 1 and 'rc=0 ' in resources[0]
+interval['publication_resource_receipt'] = dict(path=str(log),sha256=sha(log),receipt=resources[0])
+interval_target = PUBLIC/'ssim1-photo-odd-t28-first-confirmation20.json'
+data = (json.dumps(interval,indent=2,allow_nan=False)+'\n').encode()
+assert len(data) <= 30000
+with interval_target.open('xb') as stream:
+    stream.write(data)
+register_outputs([(interval_target,'interval')])
+K = F.parent/'classical-gpu-first-boundary-20261020'
+new_intervals = []
+for case,stem,initial in [
+    ('ssim2-grid-pairA-255x257-t1','ssim2-photo-odd-t1',F/'next-ssim2-odd1-flag-v1/ssim2-grid-pairA-255x257-t1/fixed20-run'),
+    ('iwssim-gpu-cuda-reference-pair-cid22-t28','iwssim-cuda-reference-t28',K/'next-two-first-flags-v1/iwssim-gpu-cuda-reference-pair-cid22-t28/fixed20-run'),
+    ('butteraugli-gpu-grid-pairA-64x64-t1','butter64-t1',K/'next-two-first-flags-v1/butteraugli-gpu-grid-pairA-64x64-t1/fixed20-run')]:
+    candidates = list(F.glob('all-fixed20-intervals-v*/'+case+'.json'))
+    assert len(candidates) == 1
+    value = json.loads(candidates[0].read_text())
+    assert value == analyze(initial,[],[case])
+    last_log = initial/case/'block-19-wrapper.log'
+    receipts = [line for line in last_log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+    assert len(receipts) == 1 and 'rc=0 ' in receipts[0]
+    value['publication_resource_receipt'] = dict(path=str(last_log),sha256=sha(last_log),receipt=receipts[0])
+    target = PUBLIC/(stem+'-first-confirmation20.json')
+    payload = (json.dumps(value,indent=2,allow_nan=False)+'\n').encode()
+    assert len(payload) <= 30000
+    with target.open('xb') as stream:
+        stream.write(payload)
+    register_outputs([(target,'interval')])
+    new_intervals.append(value['rows'][0])
+for source in [Path(__file__), F/'launch_next_ssim1_screen_odd_t28_v1.py', F/'analyze_fixed20_when_ready_v10.py', K/'launch_iwssim_t28_first_add40_v1.py', K/'analyze_iwssim_t28_first_combined60_v1.py', K/'launch_butter64_t1_first_add40_v1.py', K/'analyze_butter64_t1_first_combined60_v1.py']:
+    target = PUBLIC/(source.name+'.txt')
+    assert not target.exists()
+    shutil.copyfile(source, target)
+for path, relative in [(PUBLIC/'README.md', ''), (Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'), '../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write(f'\n### SSIMULACRA1 screen odd/t28 first-call capture (2026-10-21)\n\nThe [capped profile prefix]({relative}ssim1-screen-odd-t28-capped-adopt-v1.json) retains 17/30 requested worker captures for the newly observed initial-three-block ratio 1.219720689786165. Its 32 MB size stop remains explicit. Postprocessing makes no scorer calls, and all original completed observations remain retained. A separate fixed20 confirmation retains the original input, source and clock. The instrumented capture covers complete fresh worker processes, including startup and RGB loading; it does not isolate the internal first-call clock, assign an external numerical bound or qualify a runtime exception.\n')
+    with path.open('a') as stream:
+        stream.write(f'\nThe [photo odd/t28 initial20 interval]({relative}ssim1-photo-odd-t28-first-confirmation20.json) is 1.141342 [1.116921, 1.159368]. Its precision target is met and the interval is above 1.08; no additional40 is selected. An external numerical bound and runtime acceptance remain unassigned. Final-block resource receipt: `{resources[0]}`.\n')
+    with path.open('a') as stream:
+        stream.write('\nFurther initial20 stages retain all original blocks and numerical contracts:\n\n| Case | Ratio | 95% interval | Precision target |\n| --- | ---: | --- | --- |\n')
+        for row in new_intervals:
+            stream.write(f"| {row['case']} | {row['ratio']:.6f} | [{row['lower_95']:.6f}, {row['upper_95']:.6f}] | {row['precision_within_three_percent']} |\n")
+        stream.write('\nIW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages queued after precision misses. The Butteraugli reference is the original CPU implementation. SSIMULACRA2 photo odd/t1 meets the precision target. These cold intervals remain separate from warm headline ratios and accepted runtime exceptions.\n')
+run('just', 'bench-iqa-canonical-check')
+run('jj', 'describe', '-m', 'investigate: retain capped cold profile and fixed intervals')
+run(sys.executable, '-B', str(R/'push-owned-stack.py'), '@')
+print('SCREEN_ODD28_PROFILE_VERIFIED', flush=True)

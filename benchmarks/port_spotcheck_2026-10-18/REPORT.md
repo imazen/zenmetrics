@@ -641,3 +641,19 @@ hdrvdp: 24/24 complete observation pairs; maximum absolute raw-score difference 
 hdrvdp3: 21/24 complete observation pairs; maximum absolute raw-score difference 7.815970093361102e-14. Retained fixture checks: 0 pass and 0 miss.
 
 The v2 check is the unchanged fixture-derived 0.005 TOL_Q, not a universal parity bound. V3 has no assigned original-Octave bound for this grid. The reference is the frozen Octave runner with the named image-2.20.1 resize overlay; the separately retained official Octave 11.1 controls remain separate. Incomplete warm rounds and resource-gate findings are retained. Spectral preparation differs across clocks, so comparative ratios and native-parity/timing qualification remain withheld. Every row retains its source, raw outcome, measured arm maximum RSS and run-heavy receipt.
+
+### SSIMULACRA1 screen odd/t28 first-call capture (2026-10-21)
+
+The [capped profile prefix](../canonical_recheck_2026-10-19/ssim1-screen-odd-t28-capped-adopt-v1.json) retains 17/30 requested worker captures for the newly observed initial-three-block ratio 1.219720689786165. Its 32 MB size stop remains explicit. Postprocessing makes no scorer calls, and all original completed observations remain retained. A separate fixed20 confirmation retains the original input, source and clock. The instrumented capture covers complete fresh worker processes, including startup and RGB loading; it does not isolate the internal first-call clock, assign an external numerical bound or qualify a runtime exception.
+
+The [photo odd/t28 initial20 interval](../canonical_recheck_2026-10-19/ssim1-photo-odd-t28-first-confirmation20.json) is 1.141342 [1.116921, 1.159368]. Its precision target is met and the interval is above 1.08; no additional40 is selected. An external numerical bound and runtime acceptance remain unassigned. Final-block resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14035MiB | peak-load 1.17`.
+
+Further initial20 stages retain all original blocks and numerical contracts:
+
+| Case | Ratio | 95% interval | Precision target |
+| --- | ---: | --- | --- |
+| ssim2-grid-pairA-255x257-t1 | 1.439884 | [1.407924, 1.471711] | True |
+| iwssim-gpu-cuda-reference-pair-cid22-t28 | 1.436002 | [1.395810, 1.480209] | False |
+| butteraugli-gpu-grid-pairA-64x64-t1 | 433.818280 | [416.617869, 450.459627] | False |
+
+IW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages queued after precision misses. The Butteraugli reference is the original CPU implementation. SSIMULACRA2 photo odd/t1 meets the precision target. These cold intervals remain separate from warm headline ratios and accepted runtime exceptions.

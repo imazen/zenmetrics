@@ -1,0 +1,130 @@
+{
+  "receipt": {
+    "case": "ssimulacra1-grid-pairB-255x257-t28",
+    "partial_capture": true,
+    "requested_repetitions": 30,
+    "completed_repetitions": 17,
+    "completed": [
+      {
+        "log": "worker-000.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-001.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-002.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-003.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-004.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-005.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-006.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-007.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-008.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-009.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-010.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-011.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-012.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-013.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-014.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-015.log",
+        "score_bits": "3faf472ee11526a0"
+      },
+      {
+        "log": "worker-016.log",
+        "score_bits": "3faf472ee11526a0"
+      }
+    ],
+    "incomplete_worker_logs": [],
+    "native_metric_calls": 0,
+    "capture": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-screen-odd-t28-first-profile-v1",
+    "plan_sha256": "a1435da3bda02b716ef38002fc40e4b251b08bfafdfb16c7bfc1783a61116340",
+    "request_sha256": "20ed34d9308d05f9e1b452cc829e55e16c46c795a0bbd3010531e218a9738660",
+    "config_sha256": "e9ec8ca23c5c0e4a52a7de026a09670ca15d25d2bdcbde22b1d7a97a8dd5657d",
+    "perf_data_sha256": "8963a02265956308a84f74c842474d5bd9a9a32cae96f31dc9f46ec5dcc0232f",
+    "worker_log_sha256": {
+      "worker-000.log": "2548e3cf338f1786e7c1e0b0a6d7f24b3f5a772358b4808c85ddadf430d569c9",
+      "worker-001.log": "d25fe8a77985a09730ca0e73b53a9a54cc0789456775a4595d330cdc49e757b2",
+      "worker-002.log": "3f6d5b4430828d2c92302fd8754dce8601818f5a5463f7e9e6262d798aced6aa",
+      "worker-003.log": "7d474bb4b8a07c4f08b0a17e7095304b6b69bf1765218b528c414a4c3fa43b0a",
+      "worker-004.log": "cc2299f4e5bd5a8f0b2a64b3cbfa7f4469f13fedaa82a6d121d0d961ab83d87d",
+      "worker-005.log": "a518eb80c4d86eacab0269b5c1c1a0d730b668f9727abbd4baf2ae0998de8a04",
+      "worker-006.log": "4db12c2f4f3ea8be37e34bae2a11ae28de4b78f29c4e066c01bbfae64bb02220",
+      "worker-007.log": "bc14677cbc6d4c7a55b7e9a68dd019c84183bb76d3682a89eb34dcd4444ae931",
+      "worker-008.log": "e7a277b9c8cab30f647d5eb503b9cd4af9c47867939a9886a8b0e7f70a18e7e2",
+      "worker-009.log": "d5b08cbc88a1c84e7f0e963890840592f00a73030f51067e8c94a6d1777145c2",
+      "worker-010.log": "e638519f19b89fceca36dc55fd94dd8699d4bcbfe4638efb79606ebcd2e71ee1",
+      "worker-011.log": "f5ffb64517c7ed301e4be12c7a269a2db63d30cc13f0e2729d5fd708acfc34c7",
+      "worker-012.log": "41735358a8185416597e0337cd24f3353f61adbe3b77ee20addbc00b39b26fb5",
+      "worker-013.log": "f2f7951a3c16ba4c1f9bd05695a04d5eb7a681023bcef8537e2b7df0cc39f8c8",
+      "worker-014.log": "6d7e862436b124108d5d42915724a4c77ad37857c78767c7c924134949e9a7ae",
+      "worker-015.log": "c0f2638899f47c8e61ea887a122f83ece7be04632fb5718b86c2f7e2ae975fd8",
+      "worker-016.log": "13c7e056b66d5428549b563e05ee65899ef66f12904d4aa38873a89e1190a86f"
+    },
+    "postprocessor_sha256": "df8db4c76761abe93cf459254a2a0fa3ccbccfb3838420dba34ceda9b6d1222b",
+    "perf_tool_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "output_sha256": {
+      "script.txt": "27ceb2b5ffdba1038d26835e75990f515606715463ef490c61cd80716ba1fc7d",
+      "report.txt": "2c10c01df48a5e1a69416d826cc8000f37b198d583fbea7e19fa40fbf7e4f047",
+      "header.txt": "f77a8a6578bf2216f73ad9600a918507e0e2baf55e154999960b72571c0af47d"
+    },
+    "qualification": "Size-capped whole-process diagnostic, with every completed scalar revalidated and any interrupted final worker retained explicitly. No scorer rerun, complete requested capture, isolated cold clock, timing ratio, numerical parity acceptance or qualified regression is claimed."
+  },
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-screen-odd-t28-capped-adopt-v1/receipt.json",
+    "sha256": "e063566956c1850d026e87c5d91318114c2dce54541a491a0b1786b0535ba688"
+  },
+  "resource_receipts": [
+    {
+      "role": "capped capture",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-screen-odd-t28-first-profile-v1.log",
+      "sha256": "70b6af1335555b8a6673c66032b1c39c3f516dabf3995a202ddbf3be263e0d1e",
+      "receipt": "run-heavy: done rc=1 1s | peak-RSS 0.05GiB | min-avail 13834MiB | peak-load 1.31"
+    },
+    {
+      "role": "postprocessing only",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-screen-odd-t28-capped-adopt-v1.log",
+      "sha256": "f2fb6448bc069de2532e258962228949b730361d2e3639250e3f9e383693f268",
+      "receipt": "run-heavy: done rc=0 1s | peak-RSS 0.07GiB | min-avail 14317MiB | peak-load 2.00"
+    }
+  ]
+}
