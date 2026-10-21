@@ -983,3 +983,7 @@ The [additional batch](acquired-cold-additions-2026-10-21-v2/index.json) retains
 The [SSIMULACRA1 screen odd/t1 capture](cpu-first-profiles-screen-odd-2026-10-21/index.json) and [Butteraugli CUDA photo1MP/t28 capture](butteraugli1mp-t28-first-profile-v1.json) supply profiling evidence for the two newly observed cold flags. Fixed 20-block confirmations retain their original clocks and bounds; these full-process profiles do not qualify a timing exception.
 
 The [IW-SSIM CUDA-reference/t1 initial20 interval](iwssim-cuda-reference-t1-first-confirmation20.json) is 1.485914 [1.360269, 1.560884], missing the unchanged precision target. Its fixed additional40 stage is queued; every initial block remains retained. Runtime/causal qualification and accepted exceptions remain unassigned.
+
+### Completed build debug storage (2026-10-21)
+
+The [debug-sidecar pointer](build-debug-storage-pointer-2026-10-21.json) retains three completed build sidecars on the dataset volume with hash-verified original-path symlinks. Associated native ELF hashes and every observed score remain unchanged. This storage move does not establish debug completeness or new profiling evidence.

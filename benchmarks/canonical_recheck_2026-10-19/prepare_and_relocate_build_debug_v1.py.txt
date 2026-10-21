@@ -1,0 +1,35 @@
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+R = Path(__file__).parent
+
+def sha(path):
+    value = hashlib.sha256()
+    with path.open('rb') as stream:
+        while chunk := stream.read(1024*1024):
+            value.update(chunk)
+    return value.hexdigest()
+
+expected = {
+    'current40-classical-build/target/release/iqa-compete':'19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005',
+    'gpu-target/release/iqa-compete':'05cb053608004f225f153c2ef7699e74973b7bb7f162129053df4d982736d815',
+    'build/target/release/iqa-compete':'7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0',
+}
+rows = []
+for relative in ['current40-classical-build/target/release/iqa-compete',
+                 'gpu-target/release/iqa-compete', 'build/target/release/iqa-compete']:
+    binary = R/relative
+    sidecar = binary.with_suffix('.dwp')
+    assert sidecar.is_file() and not sidecar.is_symlink()
+    assert sha(binary) == expected[relative], 'Frozen native ELF changed before debug relocation'
+    rows.append(dict(path=str(sidecar), bytes=sidecar.stat().st_size, sha256=sha(sidecar),
+                     associated_binary=dict(path=str(binary), sha256=sha(binary)),
+                     disposition='Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.'))
+plan = R/'build-debug-storage-relocation-v1.plan.json'
+with plan.open('x') as stream:
+    json.dump(dict(destination='/mnt/v/zenmetrics/canonical-build-debug-20261021', files=rows,
+                   qualification='Prepared under exclusive shared heavy admission. Completed build sidecars only, before verified-copy and atomic original-path symlinks. Shared admission excludes other participating measurements during relocation.'), stream, indent=2)
+subprocess.run([sys.executable, '-B', str(R/'relocate_completed_build_debug_v1.py')], check=True)

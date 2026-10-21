@@ -1,0 +1,54 @@
+{
+  "machine": "AMD Ryzen 9 7950X / WSL2; paths refer to the original benchmark host",
+  "observed_at_utc": "2026-10-21T05:40:56.054791+00:00",
+  "records": [
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete.dwp",
+      "bytes": 57964664,
+      "sha256": "6bd909f5cc99e33eda5636b24eead961470509b0f1645212eb638940b0431ea3",
+      "associated_binary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+        "sha256": "19898e546917c9b62badcf1733ec74aacb3e02b4e14d88af1e31923a88a54005"
+      },
+      "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+      "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/6bd909f5cc99e33eda5636b24eead961470509b0f1645212eb638940b0431ea3.dwp",
+      "original_path_preserved": true
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/gpu-target/release/iqa-compete.dwp",
+      "bytes": 77978016,
+      "sha256": "e584164e7ab4d6338fcd84b5162a980713b044c8c75699a7bf7cbb566574aeca",
+      "associated_binary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/gpu-target/release/iqa-compete",
+        "sha256": "05cb053608004f225f153c2ef7699e74973b7bb7f162129053df4d982736d815"
+      },
+      "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+      "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/e584164e7ab4d6338fcd84b5162a980713b044c8c75699a7bf7cbb566574aeca.dwp",
+      "original_path_preserved": true
+    },
+    {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/iqa-compete.dwp",
+      "bytes": 55194696,
+      "sha256": "44b3f460e22f984ccc924b0dfcca9227d1d0d43a0fd7aca3c5fa50e57b6a57a8",
+      "associated_binary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/iqa-compete",
+        "sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0"
+      },
+      "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+      "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/44b3f460e22f984ccc924b0dfcca9227d1d0d43a0fd7aca3c5fa50e57b6a57a8.dwp",
+      "original_path_preserved": true
+    }
+  ],
+  "plan_sha256": "d9637ba7fabf62fa12807fe3a537e51848d5d4cbbdbc6fcfa0c91d766aa92c59",
+  "raw_result": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v1.result.json",
+    "sha256": "6aa997b03ba15c4a33dc573c9917cd1664b9a2b0e6e9022ad316c9685be695a7"
+  },
+  "total_bytes": 191137376,
+  "resource_receipt": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v1.log",
+    "sha256": "1c0f9bd7f68fd647ee277eb75599403fe4ee0980ee2ecfb344bd88baf4b1b5c1",
+    "receipt": "run-heavy: done rc=0 4s | peak-RSS 0.02GiB | min-avail 14258MiB | peak-load 1.47"
+  },
+  "qualification": "Completed native-build debug sidecars copied and verified before atomic original-path symlinks. Native ELF hashes remain unchanged. All bytes and original consumers retained; no native calls, observation replacement or claim of debug completeness."
+}
