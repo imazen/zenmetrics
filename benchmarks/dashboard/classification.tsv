@@ -1937,3 +1937,6 @@ benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v4/pr
 benchmarks/canonical_recheck_2026-10-19/full-neural-first-grid-declaration-2026-10-21.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/arniqa-t8-first-combined60-2026-10-21.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
 benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-14.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/unclaimed-warm-fixed20-requests-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/unclaimed-warm-profiles-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

@@ -1,0 +1,20 @@
+{
+  "observed_at_utc": "2026-10-21T08:59:08.635711+00:00",
+  "fixed20_requests": 15,
+  "new_native_profiles_requested": 10,
+  "retained_native_profiles_reused": 3,
+  "earlier_native_profiles_complete": 2,
+  "original_requests": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/recovery-tools-v1/unclaimed-warm-fixed20-requests-v1.json",
+    "sha256": "6ae91dc4ac1692e554aec2b73398c774a13d97f77a3b43ff2bbb430e877f7f41"
+  },
+  "profiles": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/recovery-tools-v1/unclaimed-warm-profiles-v1.json",
+    "sha256": "14c4ea71f127ea5d034e021ba769aa2652aea5257185376fb4b043433b1c3090"
+  },
+  "dedup_audit": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/recovery-tools-v1/warm-followup-dedup-audit-v1.json",
+    "sha256": "52ee53e83b274e263161f765ccc9bc33963d94cfc83e6db58687fdf7d64864d9"
+  },
+  "qualification": "Existing initial20 request plans and their original samples/blocks reused; completed stages and live queued outputs excluded. Request counts are not acquired or passing cases. Native-only profile reuse requires identical binary invocation and complete configuration; no canonical timing reused. New captures retain source checks, disk preflight and a 64 MiB per-file profiler output cap; instrumented timing is not comparative evidence."
+}

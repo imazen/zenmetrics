@@ -1,0 +1,21 @@
+"""Check a frozen profile request inside shared admission, then capture it once."""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+B=Path('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B))
+from compare_canonical import sha
+request=Path(sys.argv[1]);number=int(sys.argv[2]);job=json.loads(request.read_text())['profiles'][number];root=Path(job['output'])
+if root.exists():raise ValueError('Profile output already exists; preserve it')
+if shutil.disk_usage(root.parent).free<1500*1024*1024:raise ValueError('At least1500MiB free required before profile; remaining requests retained')
+assert sha(job['config'])==job['config_sha256']
+plan=json.loads(Path(job['source_plan']).read_text());assert sha(job['source_plan'])==job['source_plan_sha256']
+for path,expected in plan['bindings'].items():
+    if sha(path)!=expected:raise ValueError('Frozen profile asset changed: '+path)
+env=dict(os.environ,TMPDIR=str(Path.home()/'tmp'),CUDA_VISIBLE_DEVICES='')
+for key in ['RAYON_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS']:env[key]=str(job['threads'])
+command=['prlimit','--fsize=67108864:67108864','--',sys.executable,'-B',str(B/'profile_canonical_warm.py'),job['binary'],job['config'],str(root)]
+print('ORIGINAL_WARM_PROFILE',json.dumps(dict(command=command,source_plan_sha256=job['source_plan_sha256'],config_sha256=job['config_sha256'],file_size_limit_bytes=67108864)),flush=True)
+raise SystemExit(subprocess.run(command,env=env).returncode)

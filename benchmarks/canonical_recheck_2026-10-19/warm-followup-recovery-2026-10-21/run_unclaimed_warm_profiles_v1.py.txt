@@ -1,0 +1,20 @@
+import json
+from pathlib import Path
+import subprocess
+import sys
+R=Path(__file__).parent;B=Path('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B))
+from compare_canonical import sha
+request=R/'unclaimed-warm-profiles-v1.json';data=json.loads(request.read_text());results=[]
+for reused in data['reuse']:
+    item=reused['native_profile'];root=Path(item['output']);receipt=json.loads((root/'receipt.json').read_text())
+    for path,key in [(item['binary'],'binary_sha256'),(item['config'],'config_sha256'),(root/'perf.data','profile_sha256'),(root/'report.txt','report_sha256')]:assert sha(path)==receipt[key]
+    print('REUSED_NATIVE_PROFILE',json.dumps(reused),flush=True)
+for number,job in enumerate(data['profiles']):
+    command=['flock',str(Path.home()/'tmp/lilith-heavy.lock'),'flock',str(Path.home()/'tmp/lilith-wsl-heavy.lock'),str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs',str(job['threads']),'--','env','TMPDIR='+str(Path.home()/'tmp'),sys.executable,'-B',str(R/'admit_original_warm_profile_v1.py'),str(request),str(number)]
+    log=Path(job['output']).parent/'profile-wrapper.log'
+    with log.open('x') as stream:completed=subprocess.run(command,stdout=stream,stderr=subprocess.STDOUT)
+    record=dict(output=job['output'],returncode=completed.returncode,log=str(log));results.append(record);print('WARM_PROFILE_OUTCOME',json.dumps(record),flush=True)
+    if completed.returncode:
+        with (R/'unclaimed-warm-profile-outcomes-v1.json').open('x') as stream:json.dump(dict(results=results,pending=data['profiles'][number+1:],qualification='Failed capture and all pending requests retained; no metric calls repeated.'),stream,indent=2)
+        raise SystemExit(completed.returncode)
+with (R/'unclaimed-warm-profile-outcomes-v1.json').open('x') as stream:json.dump(dict(results=results,reused=data['reuse']),stream,indent=2)

@@ -1,0 +1,33 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+R=Path(__file__).parent;S=R/'recovery-tools-v1';PUBLIC=Path('benchmarks/canonical_recheck_2026-10-19');B=Path('benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B.resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):subprocess.run(command,check=True)
+request=S/'unclaimed-warm-fixed20-requests-v1.json';spec=json.loads(request.read_text());assert len(spec['jobs'])==15
+for item in spec['jobs']:
+    assert item['options']==['--blocks','20','--samples','5'];plan=json.loads(Path(item['plan']).read_text());assert len(plan['cases'])==1
+profiles=S/'unclaimed-warm-profiles-v1.json';data=json.loads(profiles.read_text());assert len(data['profiles'])==10 and len(data['reuse'])==3
+for item in data['reuse']:
+    profile=item['native_profile'];receipt=json.loads((Path(profile['output'])/'receipt.json').read_text())
+    for path,key in [(profile['binary'],'binary_sha256'),(profile['config'],'config_sha256'),(Path(profile['output'])/'perf.data','profile_sha256'),(Path(profile['output'])/'report.txt','report_sha256')]:assert sha(path)==receipt[key]
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','investigate: retain original unstarted warm followup requests')
+folder=PUBLIC/'warm-followup-recovery-2026-10-21';folder.mkdir();outputs=[]
+for path in [request,profiles]:
+    target=folder/path.name;assert path.stat().st_size<=30000;shutil.copyfile(path,target);outputs.append((target,'provenance'))
+for path in [Path(__file__),S/'admit_original_warm_profile_v1.py',S/'run_unclaimed_warm_profiles_v1.py']:
+    target=folder/(path.name+'.txt');shutil.copyfile(path,target)
+receipt=dict(observed_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),fixed20_requests=15,new_native_profiles_requested=10,retained_native_profiles_reused=3,earlier_native_profiles_complete=2,original_requests=dict(path=str(request),sha256=sha(request)),profiles=dict(path=str(profiles),sha256=sha(profiles)),dedup_audit=dict(path=str(S/'warm-followup-dedup-audit-v1.json'),sha256=sha(S/'warm-followup-dedup-audit-v1.json')),qualification='Existing initial20 request plans and their original samples/blocks reused; completed stages and live queued outputs excluded. Request counts are not acquired or passing cases. Native-only profile reuse requires identical binary invocation and complete configuration; no canonical timing reused. New captures retain source checks, disk preflight and a 64 MiB per-file profiler output cap; instrumented timing is not comparative evidence.')
+target=folder/'index.json';target.write_text(json.dumps(receipt,indent=2)+'\n');outputs.append((target,'provenance'));register_outputs(outputs)
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write('\n### Previously unstarted warm confirmations (2026-10-21)\n\nThe [retained request set]('+relative+'warm-followup-recovery-2026-10-21/index.json) contains 15 original 20-block requests whose output roots were absent and unclaimed by live queues. Existing completed stages remain separate. Their original plans, five samples per block, clocks and numerical bounds are preserved. Ten native profile captures are requested; three matching native-only captures are reused after checking their full configurations and artifact hashes, and two earlier captures already exist. No canonical comparison or timing is reused through this profile mapping. These are declared requests, not completed comparisons or accepted regressions.\n')
+run('just','bench-iqa-canonical-check');run('just','bench-iqa-canonical-recovery-check')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('WARM_FOLLOWUP_RECOVERY_REQUESTS_VERIFIED',flush=True)
