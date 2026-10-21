@@ -12,7 +12,7 @@ import argparse, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-TABS = ['overview', 'speed', 'scaling', 'cost', 'repro', 'data', 'method']
+TABS = ['overview', 'speed', 'scaling', 'cost', 'repro', 'models', 'data', 'method']
 SIZES = [(1920, 1080), (1280, 720)]
 
 

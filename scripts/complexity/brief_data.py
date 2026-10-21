@@ -341,6 +341,33 @@ def csv_evidence(metrics, routes):
     return out
 
 
+def model_card_list(canon):
+    """Model cards for the Models tab: every public card from scripts/dashboard/model_cards.py with its browser
+    workbench status (web/metrics/coverage.json), plus short cards for the private ports and the dvifmish presets
+    built from their canonical records (no private source, weights or per-image values)."""
+    try:
+        import model_cards
+        cards = [{k: v for k, v in c.items() if k != 'links'} for c in model_cards.cards()]
+    except Exception as e:  # the brief still builds; the gap is a page note
+        return [], f'model cards unavailable: {e}'
+    cov = json.loads((ROOT / 'web/metrics/coverage.json').read_text())
+    browser = {m['name']: m for m in cov.get('metrics', [])} if cov.get('schema') == 1 else {}
+    for c in cards:
+        e = browser.get(c['metric'])
+        c['workbench'] = dict(status=e['status'], maps=e['maps'], reason=e['reason']) if e else dict(
+            status='not listed', maps=[], reason='absent from the workbench coverage file')
+    have = {c['metric'] for c in cards}
+    for m, r in sorted(canon.items()):
+        if m in have or m.startswith('__'):
+            continue
+        kind, family = (r.get('family') or 'FR · Classical').split(' · ', 1)
+        cards.append(dict(metric=m, name=m, kind=kind, family=family, private=True, citation=None,
+                          recorded_paper=r.get('paper') or 'not recorded', reference_implementation=r.get('reference') or 'not recorded',
+                          parity_status=r.get('parity') or 'Not documented', parity={'evidence': r['evidence']} if r.get('evidence') else {},
+                          rust_license=r.get('licence') or 'not recorded', source=r.get('source')))
+    return cards, None
+
+
 # ---------------------------------------------------------------- statistics
 
 def boot_ci(xs, ys, fn, n=2000):
@@ -858,6 +885,9 @@ def main():
     canon = canonical(priv)
     if '__error__' in canon:
         notes.append(canon.pop('__error__'))
+    cards, err = model_card_list(canon)
+    if err:
+        notes.append(err)
     pareto = json.loads((ROOT / 'docs/paper/pareto.json').read_text())
     points = json.loads((ROOT / 'docs/paper/points.json').read_text())
     kinds = {m['metric']: m['kind'] for m in points['metrics']}
@@ -938,7 +968,7 @@ def main():
                             extra_timing=[Path(p).name for p in a.timing], agreement=[Path(p).name for p in a.agreement],
                             spotcheck=spot_src),
                dvifmish_versions=[dict(metric='dvifmish-' + v, preset=v, aggregate_name=k) for k, v in DVIFM.items()],
-               source_extra={k: v for k, v in src.items() if k.startswith('@')},
+               source_extra=src, cards=cards,
                tables=tables, metrics=metrics, stats=stats, fronts=fronts, notes=notes, perf=perf, repro=repro,
                checks=coherence(metrics, perf, repro, aic, json.loads(a.sync_status.read_text()) if a.sync_status else None))
     a.out.parent.mkdir(parents=True, exist_ok=True)

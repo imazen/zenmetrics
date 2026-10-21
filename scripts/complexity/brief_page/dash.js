@@ -30,7 +30,7 @@
   const sizeName = n => { const s = SIZE[n]; return s ? `${s.w}×${s.h}` + (n === 'aic-small' ? ' · AIC crop' : '') : n; };
   const thName = t => t === 'both' ? '1 and 8' : t === '8' || t === 8 ? '8 threads' : '1 thread';
   const tq = n => T975[Math.min(n - 2, 19)] || 1.96;
-  const meta = m => M[m] || { src: [], fam: 'classic', csv: 'nocol', csv_why: '', ref_m: 'none', ref_why: '', diffs: [], csv_ev: [], july: [], canon: [], july_cols: [], site_cols: [], est: {} };
+  const meta = m => M[m] || { src: (D.src_extra || {})[m] || [], fam: 'classic', csv: 'nocol', csv_why: '', ref_m: 'none', ref_why: '', diffs: [], csv_ev: [], july: [], canon: [], july_cols: [], site_cols: [], est: {} };
   // Two independent questions: does our score reproduce the published AIC2026 CSV column, and the reference implementation?
   const CAT = { exact: ['= exact', 'mark-ok'], near: ['≈ near-exact', 'mark-near'], miss: ['✗ cannot reproduce', 'mark-dev'],
     none: ['not compared', 'mark-un'], nocol: ['no CSV column', 'mark-un'], own: ['own design', null] };
@@ -39,6 +39,9 @@
   // Rust source of an implementation on GitHub, pinned to the commit the page was built from.
   const srcLink = l => { const a = h('a', 'src', l.label); a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.title = l.url.replace('https://github.com/', ''); return a; };
   const implLink = mm => mm.src.find(l => l.label !== 'CLI dispatch') || mm.src[0];
+  const CARDS = Object.fromEntries((D.cards || []).map(c => [c.metric, c]));
+  const REPO = 'https://github.com/imazen/zenmetrics/blob/master/';
+  const ext = (url, label) => { const a = h('a', 'src', label || url); a.href = url; a.target = '_blank'; a.rel = 'noopener'; return a; };
   const isMatch = c => c === 'exact' || c === 'near';
   // Where the two answers part: the reference reproduced but not the CSV, or the CSV reproduced without (or against) the reference.
   const split = mm => isMatch(mm.ref_m) && mm.csv === 'miss' ? 'ref' : isMatch(mm.csv) && !isMatch(mm.ref_m) ? 'csv' : '';
@@ -129,7 +132,7 @@
   }
   const PIN_DEFAULT = ['psnr-y', 'ssim2', 'butteraugli', 'vmaf', 'lpips-alex', 'dvifmish-port-lap-v0.2'].filter(m => NAMES.includes(m)).map((m, i) => `${m}:${i + 1}`).join(',');
   const DEF = { v: 'overview', host: defaultHost(), size: SIZE['aic-small'] ? 'aic-small' : SIZES[0].name, th: 'both', ph: 'warm', show: 'spread', ax: 'log',
-    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', cf: 'all', xf: 'all', jf: 'all', sort: '' };
+    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', cf: 'all', xf: 'all', jf: 'all', mc: 'all', mk: 'all', sort: '' };
   let S = { ...DEF };
   function readHash() {
     const [v, ...kv] = location.hash.slice(1).split('&');
@@ -275,6 +278,7 @@
     if (mm.est && mm.est.flops) row('Counted flops per pixel', fmt(mm.est.flops));
     if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU time (perf stat)`, `${fmt(mm.c1)} ns/px (${fmt(mpxs(mm.c1))} Mpx/s) at 1 thread, ${fmt(mm.c8)} ns/px (${fmt(mpxs(mm.c8))} Mpx/s) at 8 threads`);
     d.append(dl);
+    if (CARDS[m]) modelCard(d, CARDS[m]);
     if (mm.july.length || mm.canon.length || mm.july_cols.length) {
       d.append(h('h4', null, 'Full-set diff (9,618 crops)'));
       if (!mm.july.length && mm.july_cols.length) d.append(h('div', 'hint', `Maps to ${mm.july_cols.join(', ')}, but the full-set run scored that column with another route or has not reached it.`));
@@ -380,6 +384,7 @@
     { id: 'scaling', name: 'Size scaling', rail: railScaling, draw: drawScaling, plot: true, noAll: true },
     { id: 'cost', name: 'Counted cost', rail: railCost, draw: drawCost, plot: true },
     { id: 'repro', name: 'Reproduction', rail: railRepro, draw: drawRepro },
+    { id: 'models', name: 'Models', rail: railModels, draw: drawModels },
     { id: 'data', name: 'Data', rail: railData, draw: drawData, noAll: true },
     { id: 'method', name: 'Method', page: mountMethod },
   ];
@@ -464,6 +469,8 @@
         s1 ? `${TABLE[D.best_table].label}: Spearman ρ ${s1.spearman.toFixed(2)} [${s1.spearman_lo.toFixed(2)}, ${s1.spearman_hi.toFixed(2)}], log–log slope ${s1.slope.toFixed(2)} [${s1.slope_lo.toFixed(2)}, ${s1.slope_hi.toFixed(2)}], n ${s1.n}.` : ''],
       ['repro', 'Reproduction', 'Each implementation against its reference and the AIC2026 columns.',
         `${okCols} AIC2026 columns reproduced or matched, ${devCols} close but not exact. Full set: ${(D.repro.misses || []).length} columns miss the gate (${(D.repro.misses || []).map(m => m.column).join(', ') || 'none'}). Against the CSV: ${cnt('csv', 'exact')} exact, ${cnt('csv', 'near')} near-exact, ${cnt('csv', 'miss')} cannot reproduce. Against the reference: ${cnt('ref_m', 'exact')} exact, ${cnt('ref_m', 'near')} near-exact, ${cnt('ref_m', 'miss')} cannot reproduce, ${cnt('ref_m', 'none')} not compared. ${nsplit('ref')} reproduce the reference but not the CSV; ${nsplit('csv')} reproduce the CSV without a reproduced reference.`],
+      ['models', 'Models', 'One card per implementation: paper and original authors, reference implementation, licences, input contract, parity evidence, how to reproduce it.',
+        `${(D.cards || []).length} cards, ${(D.cards || []).filter(c => c.citation).length} with a verified primary citation.`],
       ['data', 'Data', 'Time per pixel by metric and CPU, sortable, as CSV.', 'Download: timings.csv (every cell), complexity.csv (counted costs).'],
       ['method', 'Method', 'What is timed, how zenbench protects it, and the limits.', ''],
     ];
@@ -946,6 +953,75 @@
     }
     box.append(grid);
     return box;
+  }
+
+  // ---- models: one card per implementation (scripts/dashboard/model_cards.py), full record in the details panel
+  const cardText = c => [c.metric, c.name, c.family, c.kind, c.citation?.title, ...[].concat(c.citation?.authors || c.original_authors || []),
+    c.reference_implementation, c.recorded_paper].join(' ').toLowerCase();
+  function railModels(rail) {
+    const all = D.cards || [];
+    const n = (k, v) => all.filter(c => v === 'all' || (k === 'mc' ? (v === 'cited') === !!c.citation : c.kind === v)).length;
+    rail.append(famSeg(), search('Find model, author or paper'),
+      seg('Citation', 'mc', [['all', `All (${n('mc', 'all')})`], ['cited', `Verified (${n('mc', 'cited')})`], ['needed', `Needed (${n('mc', 'needed')})`]]),
+      seg('Reference', 'mk', [['all', 'All'], ['FR', `Full-reference (${n('mk', 'FR')})`], ['NR', `No-reference (${n('mk', 'NR')})`]]));
+  }
+  function drawModels(head, body) {
+    const q = (S.q || '').toLowerCase(), host = DEF.host, size = DEF.size;
+    const list = (D.cards || []).filter(c => famOn(c.metric) && (!q || cardText(c).includes(q))
+      && (S.mc === 'all' || (S.mc === 'cited') === !!c.citation) && (S.mk === 'all' || c.kind === S.mk))
+      .sort((a, b) => a.metric.localeCompare(b.metric));
+    setHead(head, 'Model cards', `${list.length} of ${(D.cards || []).length} · click a card for the full record · speed: ${hostName(host)}, ${sizeName(size)}, 1 thread, warm median`, '');
+    const grid = h('div', 'mgrid');
+    for (const c of list) {
+      const mm = meta(c.metric), card = h('div', 'mcard'); card.tabIndex = 0; card.setAttribute('role', 'button');
+      card.onclick = () => openDrawer(c.metric); card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrawer(c.metric); } };
+      const top = h('div', 'mc-top'); top.append(h('code', null, c.metric), h('span', 'tag', [c.kind, c.family].filter(Boolean).join(' · ')));
+      const authors = [].concat(c.citation?.authors || c.original_authors || []);
+      card.append(top, h('h3', null, c.name || c.metric),
+        h('div', 'mc-title', c.citation?.title || (c.private ? c.recorded_paper : 'Citation needed')),
+        h('div', 'mc-auth', authors.length ? authors.slice(0, 3).join(' · ') + (authors.length > 3 ? ' et al.' : '') + (c.citation?.year ? ` · ${c.citation.year}` : '') : ''));
+      const b = h('div', 'mc-badges'), csv = h('span'), ref = h('span');
+      csv.append('CSV ', catSpan(mm.csv)); ref.append('reference ', catSpan(mm.ref_m)); b.append(csv, ref);
+      if (c.private) b.append(h('span', 'mark-un', 'private'));
+      const foot = h('div', 'mc-foot'), cc = cell(host, c.metric, size, 1, 'warm');
+      foot.append(h('span', null, cc ? both(cc.median * perPx(size)) : 'not timed'));
+      const l = implLink(mm); if (l) { const a = srcLink({ ...l, label: 'Rust source' }); a.onclick = e => e.stopPropagation(); foot.append(a); }
+      card.append(b, foot); grid.append(card);
+    }
+    body.replaceChildren(list.length ? grid : h('div', 'hint', 'No card matches these filters.'));
+  }
+  function modelCard(d, c) {
+    const sec = (title, ...kids) => { const x = h('section', 'mc-sec'); x.append(h('h4', null, title), ...kids.filter(Boolean)); d.append(x); };
+    const facts = obj => { const e = Object.entries(obj || {}).filter(([, v]) => v != null && v !== ''); if (!e.length) return null;
+      const dl = h('dl'); for (const [k, v] of e) dl.append(h('dt', null, k.replaceAll('_', ' ')), h('dd', null, typeof v === 'object' ? JSON.stringify(v) : String(v))); return dl; };
+    const copyBtn = (label, text) => { const b = h('button', 'icon', label); b.type = 'button';
+      b.onclick = () => { try { navigator.clipboard.writeText(text).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Copy failed'; }); } catch { b.textContent = 'Copy failed'; } }; return b; };
+    d.append(h('h4', 'mc-head', c.private ? 'Model card (private implementation: aggregate record only)' : 'Model card'));
+    const p = c.citation, paper = h('div');
+    if (p) {
+      paper.append(p.url ? ext(p.url, p.title) : h('b', null, p.title), h('div', null, [].concat(p.authors || []).join(' · ')), h('div', 'hint', [p.venue, p.year].filter(Boolean).join(' · ')));
+      if (p.bibtex) { const det = h('details'); det.append(h('summary', null, 'BibTeX'), h('pre', null, p.bibtex), copyBtn('Copy BibTeX', p.bibtex)); paper.append(det); }
+    } else paper.append(h('div', c.private ? null : 'mark-un', c.private ? `Recorded paper: ${c.recorded_paper}` : `Citation needed. Recorded: ${c.recorded_paper || 'nothing'}`));
+    sec('Paper and original authors', paper);
+    sec('Implementation and credits', facts({ reference_implementation: c.reference_implementation, reference_identity: c.reference_identity,
+      reference_code_license: c.reference_code_license, rust_license: c.rust_license, weights_license: c.weights_license }), facts(c.weights),
+      (c.license_evidence || []).length ? (() => { const x = h('div', 'src-links'); c.license_evidence.forEach(f => x.append(ext(REPO + f, f))); return x; })() : null);
+    if (!c.private) sec('Input and output contract', facts(c.inputs), facts({ display: c.display, output_range: c.output_range, direction: c.direction,
+      engines: (c.engines || []).join(', ') }), c.cli_contract ? h('pre', 'mc-pre', c.cli_contract) : null);
+    sec('Parity evidence', h('div', null, `${c.parity_status || 'Not documented'}. Reported observations are scoped to their oracle, precision, fixtures and engine; declared tolerances are gates, not measured errors.`),
+      facts(c.parity), (c.evidence || []).length ? (() => { const x = h('div', 'src-links'); c.evidence.forEach(f => x.append(ext(REPO + f, f))); return x; })() : null);
+    if ((c.divergences || []).length || Object.keys(c.conventions || {}).length) {
+      const x = h('div'); (c.divergences || []).forEach(v => { const det = h('details'); det.append(h('summary', null, v.heading), h('p', null, v.excerpt), ext(v.url, 'Full divergence record')); x.append(det); });
+      sec('Known divergences and conventions', facts(c.conventions), x);
+    }
+    if (c.repro) sec('Reproduce from the CLI', h('pre', 'mc-pre', c.repro.lines.join('\n')), copyBtn('Copy commands', c.repro.lines.join('\n')),
+      ...(c.repro.notes || []).map(n => h('div', 'hint', n)));
+    if (c.workbench) {
+      const runs = ['score+map', 'score-only', 'nn-webgpu', 'nn-cpu-wasm'].includes(c.workbench.status);
+      sec('Run it in your browser', runs ? ext('https://metrics.imazen.org/?metric=' + encodeURIComponent(c.metric), `Open ${c.metric} in the metric workbench (${c.workbench.status})`)
+        : h('div', 'hint', `Not runnable in the browser workbench: ${c.workbench.reason || c.workbench.status}.`));
+    }
+    if (c.source) d.append(h('div', 'hint', `Card source: ${c.source}`));
   }
 
   // ---- data

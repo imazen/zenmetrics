@@ -264,6 +264,7 @@ def build(data_path, out):
         'aic': aic_categories((ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()),
         'dvifm': d.get('dvifmish_versions') or [], 'sources': d['sources'], 'notes': d.get('notes') or [],
         'src_extra': d.get('source_extra') or {},
+        'cards': d.get('cards') or [],
         'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': (d.get('checks') or []) + undocumented(meta)}
     out.mkdir(parents=True, exist_ok=True)
     write_csvs(d, meta, out)
