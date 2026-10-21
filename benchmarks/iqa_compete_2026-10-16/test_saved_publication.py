@@ -59,3 +59,15 @@ class Rounds(unittest.TestCase):
     def test_no_warm_round_imputation(self):
         from publish_saved_results import round_rows
         self.assertEqual(list(round_rows(dict(timing_phase='warm',status='ok',median_ns=25),{})),[])
+
+    def test_rerun_cells_count_once_with_their_best_state(self):
+        from publish_saved_results import cell_coverage,in_scope
+        a,b,c,d=('a',),('b',),('c',),('d',)
+        got=cell_coverage([(a,'pending'),(a,'ok'),(b,'failed'),(b,'refused_by_design'),(c,'pending'),(d,'failed'),(d,'pending')])
+        self.assertEqual(got,dict(planned=4,ok=1,refused_by_design=1,failed=1,pending=1))
+        base=dict(only_mode='score',width=512,height=512,threads=8,timing_phase='warm',coverage_first=False,
+                  sample_target_ns=100_000_000,required_samples=10,cold_repeat=0)
+        self.assertTrue(in_scope(base))
+        for change in (dict(only_mode='map'),dict(width=7680),dict(threads=4),dict(required_samples=3),
+                       dict(timing_phase='cold',required_samples=1,cold_repeat=3)):
+            self.assertFalse(in_scope({**base,**change}),change)

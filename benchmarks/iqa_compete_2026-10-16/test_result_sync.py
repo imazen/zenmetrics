@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_saved_results import (BLOCKED_EXIT, DESTINATION, FILES, fingerprint, main, public_checks, publish, push_failure,
-                                recover_published, guarded_push)
+from sync_saved_results import (BLOCKED_EXIT, DESTINATION, FILES, KEEP_CYCLES, capture, fingerprint, main, prune, public_checks,
+                                publish, push_failure, recover_published, guarded_push)
 
 
 class SyncControls(unittest.TestCase):
@@ -16,7 +16,7 @@ class SyncControls(unittest.TestCase):
         import sys
         config = root / 'config.json'
         config.write_text(json.dumps(dict(scratch=str(root / 'scratch'), repo=str(root))))
-        def publish_stub(repo, projection, digest, cycle):
+        def publish_stub(repo, projection, digest, cycle, config=None):
             if isinstance(outcome, Exception):
                 raise outcome
             return dict(outcome)
@@ -59,6 +59,35 @@ class SyncControls(unittest.TestCase):
             (root / 'scratch' / 'last-published.json').write_text(json.dumps(dict(evidence_fingerprint='new', revision='r')))
             code, status = self.run_cycle(root, AssertionError('publish must not run'))
             self.assertEqual((code, status['state']), (0, 'no new measured evidence'))
+
+    def test_retired_host_reuses_its_frozen_capture_without_contact(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            frozen = root / 'frozen-mac'
+            frozen.mkdir()
+            (frozen / 'capture-receipt.json').write_text(json.dumps(dict(host='mac', capture_finished_utc='t')))
+            config = dict(hosts=dict(mac=dict(ssh='mac', campaigns={}, retired=dict(since='2026-10-20', capture=str(frozen))),
+                                     i265=dict(campaigns={}, retired=dict(since='x', capture=str(frozen)))))
+            cycle = root / 'cycle'
+            (cycle / 'captures').mkdir(parents=True)
+            with patch('sync_saved_results.ssh', side_effect=AssertionError('retired host contacted')), patch(
+                    'sync_saved_results.subprocess.run', side_effect=AssertionError('retired host contacted')):
+                self.assertEqual(capture(config, 'mac', cycle, root)['host'], 'mac')
+                self.assertEqual((cycle / 'captures' / 'mac').resolve(), frozen.resolve())
+                with self.assertRaisesRegex(ValueError, 'belongs to mac'):
+                    capture(config, 'i265', cycle, root)
+
+    def test_prune_keeps_newest_cycles_and_the_published_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            names = ['20261020T%06d000000Z' % i for i in range(KEEP_CYCLES + 5)]
+            for name in names:
+                (root / name).mkdir()
+            for other in ('retired', 'status.json'):
+                (root / other).mkdir()
+            prune(root, {names[1]})
+            left = sorted(p.name for p in root.iterdir())
+            self.assertEqual(left, sorted(names[-KEEP_CYCLES:] + [names[1], 'retired', 'status.json']))
 
     def test_push_failure_names_guard_and_keeps_log_tail(self):
         import subprocess

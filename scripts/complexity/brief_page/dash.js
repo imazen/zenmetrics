@@ -344,9 +344,27 @@
   }
   const empty = (body, text) => { body.innerHTML = `<p class="hint" style="padding:2rem">${esc(text)}</p>`; };
 
+  // Timing coverage: each logical cell once per host. Pending cells on a retired host will never
+  // run, so they do not keep the data unfinished; they are reported as not run.
+  function coverageSummary() {
+    const cov = P.coverage || {}, v = Object.values(cov);
+    const ok = sum(v.map(c => c.ok)), cells = sum(v.map(c => c.cells));
+    const live = Object.keys(cov).filter(x => !cov[x].retired && (cov[x].pending || 0) > 0);
+    const n = x => x.toLocaleString('en');
+    const host = x => {
+      const c = cov[x]; if (!c) return `${esc(hostName(x))} ?`;
+      const parts = [`${n(c.ok)} of ${n(c.cells)} timed`];
+      if (c.refused) parts.push(`${n(c.refused)} refused by design`);
+      if (c.failed) parts.push(`${n(c.failed)} failed`);
+      if (c.pending) parts.push(c.retired ? `${n(c.pending)} not run` : `${n(c.pending)} pending`);
+      return `${esc(hostName(x))}${c.retired ? ' (retired ' + esc(String(c.retired.since || '')) + ')' : ''}: ${parts.join(', ')}`;
+    };
+    return { cov, ok, cells, final: live.length === 0, hosts: HOSTS.map(host) };
+  }
+
   // ---- overview
   function mountOverview(app) {
-    const cov = P.coverage || {}, ok = sum(Object.values(cov).map(c => c.ok)), cells = sum(Object.values(cov).map(c => c.cells));
+    const C = coverageSummary(), ok = C.ok, cells = C.cells;
     const timed = NAMES.filter(m => HOSTS.some(host => SIZES.some(s => [1, 8].some(t => cell(host, m, s.name, t, 'warm'))))).length;
     const rounds = sum(P.rows.map(r => (r[F.rounds_ms] || []).length + (r[F.cold_ms] || []).length));
     const host = DEF.host, size = DEF.size, k = perPx(size);
@@ -362,14 +380,16 @@
       <h1>What image-quality metrics cost to run</h1>
       <p class="lead">Measured wall time per call for ${timed} metric implementations (zenmetrics, pure Rust) on ${HOSTS.length} CPUs at ${SIZES.length} image sizes,
       and how well counted operations predict CPU time. Every metric reads 8-bit sRGB RGB images already in memory; colour conversion is inside the timed call.</p>
-      <div class="banner"><b>Unfinished data, updated as it arrives.</b> Timing campaigns are still running (${HOSTS.map(x => `${esc(hostName(x))} ${cov[x] ? cov[x].ok.toLocaleString('en') + ' of ' + cov[x].cells.toLocaleString('en') : '?'} cells`).join(' · ')}).
+      <div class="banner">${C.final
+        ? `<b>Timing campaigns are finished.</b> Every planned cell is timed, refused by its input contract, or failed (${C.hosts.join(' · ')}).`
+        : `<b>Unfinished data, updated as it arrives.</b> Timing campaigns are still running (${C.hosts.join(' · ')}).`}
       The page rebuilds every five minutes; timings last synced ${esc((P.synced_utc || '').slice(0, 16).replace('T', ' '))} UTC.
       Agreement with subjective scores is not shown: the preliminary July numbers are superseded and return once the full-dataset reproduction is checked.</div>
       <div class="tiles">
         <div class="tile"><div class="n">${timed}</div><div class="l">metric implementations timed</div></div>
         <div class="tile"><div class="n">${HOSTS.length}</div><div class="l">CPUs: ${HOSTS.map(x => esc(hostName(x))).join(', ')}</div></div>
         <div class="tile"><div class="n">${rounds.toLocaleString('en')}</div><div class="l">timed rounds and fresh-process runs</div></div>
-        <div class="tile"><div class="n">${cells ? Math.round(100 * ok / cells) : 0} %</div><div class="l">of planned cells complete (${ok.toLocaleString('en')} of ${cells.toLocaleString('en')})</div></div>
+        <div class="tile"><div class="n">${cells ? Math.round(100 * ok / cells) : 0} %</div><div class="l">of planned cells timed (${ok.toLocaleString('en')} of ${cells.toLocaleString('en')})</div></div>
       </div>
       <div class="cards" id="cards"></div>`;
     const cards = [
@@ -939,9 +959,9 @@
       const b = h('button'); b.type = 'button'; b.dataset.v = v.id; b.append(document.createTextNode(v.name), h('kbd', null, String(i + 1)));
       b.onclick = () => set({ v: v.id }); tabs.append(b);
     });
-    const cov = P.coverage || {}, ok = sum(Object.values(cov).map(c => c.ok)), cells = sum(Object.values(cov).map(c => c.cells));
-    const pill = $('#datapill'); pill.textContent = `unfinished · ${cells ? Math.round(100 * ok / cells) : 0} % of cells · synced ${(P.synced_utc || '').slice(11, 16)} UTC`;
-    pill.title = HOSTS.map(x => `${P.hosts[x]}: ${cov[x] ? cov[x].ok + ' of ' + cov[x].cells : '?'} cells`).join('\n');
+    const C = coverageSummary();
+    const pill = $('#datapill'); pill.textContent = `${C.final ? 'final' : 'unfinished'} · ${C.cells ? Math.round(100 * C.ok / C.cells) : 0} % of cells timed · synced ${(P.synced_utc || '').slice(11, 16)} UTC`;
+    pill.title = C.hosts.join('\n');
     $('#fullscreen').onclick = toggleFs;
     const ck = D.checks || [], nerr = ck.filter(c => c.level === 'error').length, nwarn = ck.filter(c => c.level === 'warn').length;
     if (nerr || nwarn) {

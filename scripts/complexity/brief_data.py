@@ -385,12 +385,21 @@ def canonical_perf():
              c.get('source'), c.get('binary')]
             for (h, m, s, t, ph), c in sorted(cells.items())]
     cov = json.loads((d / 'coverage.json').read_text()) if (d / 'coverage.json').exists() else {}
+    sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
+    retired = sync.get('retired_hosts') or {}
     coverage = {}
     for h, v in cov.items():
-        ok = sum(c.get('observed_cell_statuses', {}).get('ok', 0) for c in v.get('campaigns', []))
-        total = sum(c.get('manifest_cells', 0) for c in v.get('campaigns', []))
-        coverage[h] = dict(ok=ok, cells=total)
-    sync = json.loads((d / 'sync.json').read_text()) if (d / 'sync.json').exists() else {}
+        if 'cells' in v:
+            # Each logical cell once across a parent campaign and its reruns (publish_saved_results.cell_coverage).
+            c = v['cells']
+            coverage[h] = dict(ok=c['ok'], cells=c['planned'], refused=c['refused_by_design'], failed=c['failed'], pending=c['pending'])
+        else:
+            # Older publications: per-campaign counts overlap parents and successors, so pending is overstated.
+            ok = sum(c.get('observed_cell_statuses', {}).get('ok', 0) for c in v.get('campaigns', []))
+            total = sum(c.get('manifest_cells', 0) for c in v.get('campaigns', []))
+            coverage[h] = dict(ok=ok, cells=total, refused=0, failed=0, pending=total - ok)
+        if h in retired:
+            coverage[h]['retired'] = retired[h]
     order = sorted(sizes, key=lambda s: sizes[s][0] * sizes[s][1])
     return dict(fields=['host', 'metric', 'size', 'threads', 'phase', 'median_ms', 'mean_ms', 'p10_ms', 'p90_ms', 'n', 'cold_ms', 'rounds_ms',
                         'clean', 'flagged', 'rss_gib', 'simd', 'placement', 'placement_cpus', 'flagged_rounds', 'source', 'binary'],
@@ -554,7 +563,10 @@ def coherence(metrics, perf, repro, aic, sync=None):
     for c in sorted(set(aic) - july):
         if july:
             add('info', 'status doc column not in the published tables', f'{c} is classified in the status doc but is not a column of the July/drop published tables')
-    if perf and perf.get('synced_utc'):
+    cov = (perf or {}).get('coverage') or {}
+    # Finished campaigns produce no new results; a quiet sync is then expected, not a stall.
+    live_pending = any(c.get('pending') and not c.get('retired') for c in cov.values())
+    if perf and perf.get('synced_utc') and (live_pending or not cov):
         import datetime
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(perf['synced_utc'])
         if age.total_seconds() > 3 * 3600:

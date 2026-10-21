@@ -45,6 +45,28 @@ def public_row(row, meta, host, campaign):
     return out
 
 
+# One logical cell per host across a parent campaign and its successors (reruns of the same
+# measurement under a newer build or input contract); the binary identity is deliberately absent.
+CELL_KEY=('metric_name','size_name','width','height','threads','timing_phase','cold_repeat','only_mode','device','impl')
+CELL_RANK={'ok':0,'refused_by_design':1,'failed':2,'pending':3}
+
+
+def in_scope(c):
+    """The public projection's scope: score mode, 1/8 threads, below 8K, canonical sampling."""
+    required=1 if c['timing_phase']=='cold' else 10
+    return (c['only_mode']=='score' and max(c['width'],c['height'])<7680 and c['threads'] in (1,8)
+            and c.get('coverage_first') is False and c.get('sample_target_ns')==100_000_000
+            and c.get('required_samples')==required and (c['timing_phase']!='cold' or c['cold_repeat'] in (0,1,2)))
+
+
+def cell_coverage(cells):
+    """Count each logical cell once: its best state over every campaign that planned it."""
+    best={}
+    for key,state in cells:
+        if best.get(key) is None or CELL_RANK[state]<CELL_RANK[best[key]]:best[key]=state
+    return dict(planned=len(best),**{k:sum(v==k for v in best.values()) for k in CELL_RANK})
+
+
 def public_provenance(meta, campaign):
     out={k:meta.get(k) for k in ['campaign','manifest_sha256','binary_sha256','inputs',
          'source_commit','build_receipt_sha256','policy','metrics','manifest_cells']}
@@ -89,7 +111,7 @@ def main():
     all_rows=[];all_rounds=[];provenance=[];coverage={}
     for host in ('mac','i265','r7900x'):
         root=a.captures/host;receipt=json.loads((root/'capture-receipt.json').read_text())
-        campaigns=[]
+        campaigns=[];logical=[]
         for meta in receipt['campaigns']:
             campaign=meta['campaign'];rawdir=root/campaign
             sources=json.loads((rawdir/'sources.json').read_text());by_source={s['id']:s for s in sources}
@@ -113,6 +135,13 @@ def main():
                 included.append(out);all_rows.append(out)
                 for sample in round_rows(out,row):all_rounds.append((out,sample))
                 states[(row['source'],row['cell_id'])]=row['cell_status']
+            failures={(r['source'],r['cell_id']):r['failure_class'] for r in included if r['cell_status']=='failed'}
+            for cell,state in states.items():
+                c=configs[cell]
+                if not in_scope(c):continue
+                if state=='failed' and (failures.get(cell) or '').startswith('input_contract_'):state='refused_by_design'
+                if state=='unsupported':state='refused_by_design'
+                logical.append((tuple(c.get(k) for k in CELL_KEY),state if state in CELL_RANK else 'failed'))
             # Report snapshots and overlays are separate hashes, retained without paths.
             public_meta=public_provenance(meta,campaign)
             public_meta['capture_utc']=meta['capture']['captured_utc']
@@ -143,7 +172,7 @@ def main():
         protocol=a.private_aggregates/(host+'-protocol.json')
         # The existing allowlisted protocol is copied intact; it contains no raw assets.
         (a.output/(host+'-private-protocol.json')).write_bytes(protocol.read_bytes())
-        coverage[host]=dict(campaigns=campaigns,capture_window_utc=[min(c['capture']['captured_utc'] for c in receipt['campaigns']),max(c['capture']['captured_utc'] for c in receipt['campaigns'])])
+        coverage[host]=dict(campaigns=campaigns,cells=cell_coverage(logical),capture_window_utc=[min(c['capture']['captured_utc'] for c in receipt['campaigns']),max(c['capture']['captured_utc'] for c in receipt['campaigns'])])
     groups=defaultdict(list)
     for row in all_rows:groups[key(row)].append(row)
     for rows in groups.values():

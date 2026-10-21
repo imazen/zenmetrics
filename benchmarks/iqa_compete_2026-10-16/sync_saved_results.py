@@ -5,6 +5,13 @@ The caller supplies private host/path configuration outside git. The systemd
 service serializes cycles. Repository mutations also require .workongoing and
 an empty working copy; contention is reported, never overridden.
 
+A host that is gone for good (config `retired: {"since": DATE, "capture": DIR}`) is
+not contacted: its final complete capture is reused every cycle and sync.json
+names it under `retired_hosts`, so its pending cells show as never run rather
+than as unfinished work. Cycle directories older than the newest KEEP_CYCLES are
+removed after each cycle; they are copies of host-held evidence, and a retired
+host's capture lives outside them.
+
 A cycle that holds new evidence but cannot publish it (lock held, dirty
 checkout, unintegrated parent, refused or failed push) exits nonzero, so the
 service shows failed, and status.json records the reason class, when the stall
@@ -29,6 +36,8 @@ FILES = ('capture_saved_results.py', 'export_chart_snapshot.py', 'publish_saved_
          'durable.py', 'admission_recovery.py')
 DESTINATION = 'benchmarks/iqa_saved_latest'
 BLOCKED_EXIT = 2
+KEEP_CYCLES = 12
+CYCLE_NAME = re.compile(r'\d{8}T\d{12}Z')
 # scripts/safe_push.sh exit codes -> publicly displayable reason classes.
 PUSH_REASONS = {2: 'push revision unresolved', 3: 'push not a fast-forward of master', 4: 'push fetch failed',
                 5: 'push transport failed', 6: 'push not verified on remote', 7: 'push refused by hygiene guard',
@@ -85,6 +94,13 @@ def capture(config, host, cycle, tools):
     spec = cycle / (host + '-spec.json')
     spec.write_text(json.dumps(entry['campaigns'], indent=2) + '\n')
     output = cycle / 'captures' / host
+    if entry.get('retired'):
+        frozen = Path(entry['retired']['capture'])
+        receipt = json.loads((frozen / 'capture-receipt.json').read_text())
+        if receipt['host'] != host:
+            raise ValueError('retired capture belongs to ' + receipt['host'])
+        output.symlink_to(frozen, target_is_directory=True)
+        return receipt
     if entry.get('ssh'):
         remote = entry['scratch'].rstrip('/') + '/' + cycle.name
         ssh(entry['ssh'], ['mkdir', '-p', remote])
@@ -138,7 +154,15 @@ def guarded_push(repo, revision, log):
             revision = run(['jj', 'log', '-r', '@', '--no-graph', '-T', 'commit_id'], cwd=repo)
 
 
-def publish(repo, projection, digest, cycle):
+def prune(root, keep):
+    """Remove old cycle directories; the newest KEEP_CYCLES and any named in `keep` stay."""
+    cycles = sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and CYCLE_NAME.fullmatch(p.name))
+    for path in cycles[:-KEEP_CYCLES]:
+        if path.name not in keep:
+            shutil.rmtree(path)
+
+
+def publish(repo, projection, digest, cycle, config=None):
     lock = repo / '.workongoing'
     try:
         fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -167,6 +191,9 @@ def publish(repo, projection, digest, cycle):
                      capture_windows={h: json.loads((cycle / 'captures' / h / 'capture-receipt.json').read_text())['capture_finished_utc']
                                       for h in ('mac', 'i265', 'r7900x')},
                      qualification='Use preferred=True qualified rows; gaps remain explicit; no implementation/protocol pooling')
+        retired = {h: dict(since=e['retired']['since']) for h, e in (config or {}).get('hosts', {}).items() if e.get('retired')}
+        if retired:
+            index['retired_hosts'] = retired
         (destination / 'sync.json').write_text(json.dumps(index, indent=2) + '\n')
         run(['jj', 'describe', '-m', 'data: synchronize three-host IQA results ' + cycle.name], cwd=repo)
         revision = run(['jj', 'log', '-r', '@', '--no-graph', '-T', 'commit_id'], cwd=repo)
@@ -257,7 +284,7 @@ def main():
             if digest == previous.get('evidence_fingerprint'):
                 result = dict(state='no new measured evidence', updated_utc=now(), captured=str(cycle), revision=previous.get('revision'))
             else:
-                result = publish(repo, projection, digest, cycle)
+                result = publish(repo, projection, digest, cycle, config)
                 if result['state'] == 'committed and remote verified':
                     state_path.write_text(json.dumps(result, indent=2) + '\n')
         except Exception as error:
@@ -265,6 +292,8 @@ def main():
             result = dict(state='failed; previous published data retained', error=str(error), captured=str(cycle),
                           blocked=True, reason=reason, detail=detail)
         result.setdefault('updated_utc', now())
+        published = json.loads((root / 'last-published.json').read_text()) if (root / 'last-published.json').exists() else {}
+        prune(root, {Path(published.get('captured') or '').name, cycle.name})
         if result.get('blocked'):
             result = stalled(prior, result)
             write_status(root, result)

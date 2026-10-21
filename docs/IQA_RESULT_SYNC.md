@@ -69,6 +69,28 @@ The coordinator runs on efficiency cores at low CPU/I/O priority, with a 2 GiB
 service memory limit. This is result capture/publication, not a scoring process;
 benchmark workers retain their own shared heavy locks and placement gates.
 
+### Retired hosts and coverage
+
+When a host leaves for good, give its config entry
+`"retired": {"since": "<date>", "capture": "<dir>"}`, where `<dir>` is a copy of
+its last complete capture (the `captures/<host>` folder of a cycle, with its
+`capture-receipt.json`). The sync then never contacts that host: every cycle
+links the frozen capture in, refuses one whose receipt names a different host,
+and `sync.json` lists the host under `retired_hosts`. The mac was retired this
+way on 2026-10-20; its last capture is from 22:20 UTC that day.
+
+`coverage.json` gives each host a `cells` block: every in-scope planned cell
+counted once across a parent campaign and its reruns, at its best state
+(ok, refused by its input contract, failed, pending). The per-campaign counts
+beside it overlap and must not be summed; the dashboard did until 2026-10-21,
+which left a rerun parent's cells "pending" forever. The page calls the data
+final once no host that is still running has a pending cell; a retired host's
+pending cells read as "not run", and the "no new timings" warning stands down because a finished campaign produces no new results.
+
+Each cycle keeps a full copy of the captures (about 190 MB). Only the newest
+12 cycle directories, plus the one last published, are kept; on 2026-10-20 the
+unpruned copies (about 55 GB a day) filled i265's disk.
+
 ### Scatter measurements
 
 Each cycle also projects `*-rounds.csv`: one saved cold repeat or warm zenbench

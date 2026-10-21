@@ -21,6 +21,7 @@ Workspace conventions per the global rules:
 - Require explicit numerical gates in the resident-model first-call confirmation
   successor (`c34646a7`), preserving the earlier active helper and acquired data.
 
+- Results sync: a retired host (the mac, from 2026-10-20) reuses its final capture instead of being contacted, old cycle directories are pruned, and coverage counts each planned cell once across a campaign and its reruns, so the dashboard reports finished campaigns as final.
 - Fail the five-minute results sync loudly: a cycle that cannot publish new evidence (lock, dirty checkout, refused push, failed capture) exits 2 with a reason class, stall start and cycle count in `status.json`; the dashboard watcher turns that into a `results sync blocked` / `not running` check without exposing the private detail.
 
 - Score `hdrvdp` and `hdrvdp3` on 8-bit sRGB through upstream's own `sRGB-display` encoding (100 cd/m² peak, 1 cd/m² black, 30 ppd; v3 task quality, `led-lcd-srgb`) instead of refusing it, in the CLI and the umbrella CPU dispatch; 24 new goldens from the official HDR-VDP-2.2.2 release check the encoding.
