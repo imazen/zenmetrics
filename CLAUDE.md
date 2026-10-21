@@ -2212,6 +2212,18 @@ comparisons; author DSSIM 3.5.1 at `0e44c9b7` is being acquired separately.
 See `benchmarks/canonical_recheck_2026-10-19/dssim-reference-lineage.json`.
 No native code, numerical bound or expected value changes for this correction.
 
+### Known Bugs: browser build of included CLI SIMD kernels (2026-10-21, fixed)
+
+zenmetrics-browser compiles the CLI's metric sources through `#[path]`. The
+SIMD rewrites of `flip.rs` and `ssimulacra1.rs` (`#[attune]`, `attuned!`,
+zenmetrics-math) left it without archmage, magetypes and zenmetrics-math as
+normal dependencies, so every wasm32 site build from at least 05:55 UTC failed
+with 134 errors and nothing deployed. The crate now depends on all three and
+declares the CLI's `avx512` feature for the `cfg(avx512)` arms; the oracle
+example's pinned archmage 0.9.30 is renamed `archmage-zensim`. A wasm32 check
+of the full module fails on the unfixed tree and passes with the fix. Any new
+SIMD module under `zenmetrics-cli/src/metrics/` needs its dependencies here too.
+
 ### Known Bugs: supported-runtime HDR-v2 followup (2026-10-21)
 
 The [Octave 11.1/full image 2.20.1 controls](benchmarks/canonical_recheck_2026-10-19/hdr-octave111-v2-controls.json)

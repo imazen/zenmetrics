@@ -49,8 +49,15 @@ how-far = "0.1.0"
 zensim = { workspace = true, features = ["training", "feature-regime-v2", "custom-profiles", "deprecated-profiles", "candidate-profiles"] }
 wasm-bindgen = "=0.2.129"
 rayon = "1.12.0"
+# The CLI metric sources compiled in through `#[path]` (src/lib.rs) dispatch SIMD with archmage/magetypes
+# (`#[attune]`, `attuned!`: flip.rs, ssimulacra1.rs) and call zenmetrics-math; they need these directly.
+archmage = { workspace = true }
+magetypes = { workspace = true }
+zenmetrics-math = { path = "../zenmetrics-math", features = ["std"] }
 
 [features]
+# The `cfg(avx512)` arms of the included CLI kernels (the CLI's feature of the same name); no effect on wasm32.
+avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512"]
 # Reuse the CLI's CPU dispatch and decoder sources without its networking,
 # fleet process management or native-only command dependencies.
 default = ["full"]
@@ -95,7 +102,7 @@ workspace = true
 imgref = { workspace = true }
 # The browser_oracle example pins zensim's dispatch tier; this must be the
 # archmage copy zensim links (registry 0.9.30), or the disable has no effect.
-archmage = "=0.9.30"
+archmage-zensim = { package = "archmage", version = "=0.9.30" }
 jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }
 # nn_oracle scores the learned metrics natively on the rten engine.
 zenmetrics-nn = { path = "../zenmetrics-nn" }

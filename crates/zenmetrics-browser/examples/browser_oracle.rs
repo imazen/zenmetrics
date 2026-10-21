@@ -10,9 +10,9 @@ fn main() {
     // are bit-identical.
     #[cfg(target_arch = "x86_64")]
     {
-        archmage::X64V4xToken::dangerously_disable_token_process_wide(true)
+        archmage_zensim::X64V4xToken::dangerously_disable_token_process_wide(true)
             .expect("disable AVX-512 (v4x) before any dispatch");
-        archmage::X64V4Token::dangerously_disable_token_process_wide(true)
+        archmage_zensim::X64V4Token::dangerously_disable_token_process_wide(true)
             .expect("disable AVX-512 (v4) before any dispatch");
     }
     let (w, h) = (64, 64);

@@ -7945,6 +7945,7 @@ name = "zenmetrics-browser"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.30",
+ "archmage 0.9.31-beta.1",
  "brisque",
  "butteraugli",
  "bytemuck",
@@ -7961,6 +7962,7 @@ dependencies = [
  "iwssim",
  "jxl-encoder",
  "mad-iqa",
+ "magetypes 0.9.31-beta.1",
  "mdctpsnr",
  "msssim",
  "niqe",
@@ -7979,6 +7981,7 @@ dependencies = [
  "zenjxl",
  "zenmetrics-abstractions",
  "zenmetrics-api",
+ "zenmetrics-math",
  "zenmetrics-nn",
  "zenpixels",
  "zenpixels-convert",
