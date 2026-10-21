@@ -13,7 +13,7 @@
     "ratio_canonical_device": "cpu",
     "ratio_blocks": 3,
     "worst_ratio": 1.2599111006016168,
-    "observed_cases": 23,
+    "observed_cases": 24,
     "expected_cases": 32,
     "passed_cases": 0,
     "failed_cases": 0,

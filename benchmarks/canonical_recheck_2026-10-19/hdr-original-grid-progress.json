@@ -1,7 +1,7 @@
 {
   "expected_cases": 48,
   "expected_metric_children": 96,
-  "acquired_case_records": 35,
+  "acquired_case_records": 44,
   "cases": [
     {
       "case": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
@@ -193,6 +193,54 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-64x64-t28-warm-current40/result.json",
         "sha256": "f590e661a2049aea642f773ef74e39d433e88b06bfed03a8e4989c771004031b"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.010065135754516064,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-1024x1024-t1-warm-current40/result.json",
+        "sha256": "7c0418779c336e36066ab3aeab97151b9322c23630b24900c7fa29b81421ddb2"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.010065135754516064,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-1024x1024-t28-warm-current40/result.json",
+        "sha256": "829f1901d44e2b9c1c489dbc099acecbb142bc5029b4949538a776f564908b56"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 3.837156889119342e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-255x257-t1-warm-current40/result.json",
+        "sha256": "be3eae19978559e86e1a985e72d418316861111200aa1cc7ec06ccd0806d517e"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 3.837156889119342e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-255x257-t28-warm-current40/result.json",
+        "sha256": "3b5787e5f074fc1922abec51b8eeda7fd02e2ba87c046fab2d5074314de7c614"
       }
     },
     {
@@ -412,6 +460,54 @@
       }
     },
     {
+      "case": "original12-hdrvdp3-grid-pairC-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 2.4868995751603507e-14,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-1024x1024-t1-warm-current40/result.json",
+        "sha256": "5fca67337bc40572eba1e55f872e145e7899d0fbf5ff11e57a8b1ea7f1703638"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 2.4868995751603507e-14,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-1024x1024-t28-warm-current40/result.json",
+        "sha256": "f539fb895501e4f9c3902f7d187b13d51bbe64b78d802bfd684cabb05369fe27"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-255x257-t1-warm-current40/result.json",
+        "sha256": "d8e2c90deb2e96331a787f4e31fcdbe5403a196de35026efbcd5a8e3ee3d4a93"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-255x257-t28-warm-current40/result.json",
+        "sha256": "e65f621a8cbd611a88557eeb36aad79a5a3abd22d3ac8b47764147abf09a31b3"
+      }
+    },
+    {
       "case": "original12-hdrvdp3-grid-pairC-64x64-t1-warm-current40",
       "fatal": false,
       "complete": true,
@@ -421,6 +517,18 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-64x64-t1-warm-current40/result.json",
         "sha256": "26666b79bc1845c7027d7f87443406d5affe872198d056bb4ca65a46db2fe89f"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.0,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-64x64-t28-warm-current40/result.json",
+        "sha256": "05b60ff0e37ce22e36c0c5f07ded7c316d6daac347b385e94ee535692a1908a7"
       }
     }
   ],

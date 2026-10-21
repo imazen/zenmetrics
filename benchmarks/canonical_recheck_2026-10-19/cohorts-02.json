@@ -1,4 +1,52 @@
 {
+  "retry-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/retry-run",
+    "plan_sha256": "57f2c85cbf9a02f645d72e1acef9d516a032fdd9443748a2242a821af15ad9a8",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "retry-run.tsv",
+        "sha256": "38afce218a1ae9ae8472b16132910237d090b91afe03bd653d7553d93a6e78d0"
+      }
+    ]
+  },
+  "rgb-variants-corrected-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/rgb-variants-corrected-run",
+    "plan_sha256": "686e73b40966b95704d510d4166ae92544627f255fe849c44559aa3112b44634",
+    "cases": 6,
+    "expected_cases": 6,
+    "artifacts": [
+      {
+        "file": "rgb-variants-corrected-run.tsv",
+        "sha256": "a99c6619295f252850477fd18f1fe8a9393b3e2da23f7db4d994ec33e6f04d3e"
+      }
+    ]
+  },
+  "run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
+    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
+    "cases": 17,
+    "expected_cases": 120,
+    "artifacts": [
+      {
+        "file": "run.tsv",
+        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+      }
+    ]
+  },
+  "ssim1-confirm-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-confirm-run",
+    "plan_sha256": "e76c0282edde347ba84b0249b100d88fec3d0ac0ece244571179a1e250e00c14",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ssim1-confirm-run.tsv",
+        "sha256": "468e7ef51d49d0b55aafba3475e27fb59e0efaa055219f51e3a23e7186e1d5ef"
+      }
+    ]
+  },
   "ssim1-confirm40-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-confirm40-run",
     "plan_sha256": "6466873cd2442a97b9c7f42f795b1322d6e96fcecf33f2efbce919a55dc464f2",
@@ -98,24 +146,24 @@
   "vmaf-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-current-grid-run",
     "plan_sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
-    "cases": 25,
+    "cases": 28,
     "expected_cases": 168,
     "artifacts": [
       {
         "file": "vmaf-current-grid-run.tsv",
-        "sha256": "2c90432f961da9d181756cf301c08f9cd9d8b3d66d990d6f02550b6d006fb79a"
+        "sha256": "1857713ffc76ff644915619fe884b0d63d6744208ad3a2a9549e0a3bd82ddcd1"
       }
     ]
   },
   "vmaf-fullcall-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run",
     "plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
-    "cases": 19,
+    "cases": 22,
     "expected_cases": 144,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current-grid-run.tsv",
-        "sha256": "87452b9c7f28ca7d1e3bc923ca698f6ead0c44a0e1a8f08cc132fbf765cdcdef"
+        "sha256": "e07f9a990f1d77525063880f53448461330e0c8d77066a05278a217f0563983a"
       }
     ]
   },

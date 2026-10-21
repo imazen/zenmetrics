@@ -87,7 +87,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dmm`](docs/MODEL_CARDS.md#dmm) | FR/NN | original DMM / pinned… | partial; 2/2 pass | ≈0.61× R |
 | [`dmm-pyiqa`](docs/MODEL_CARDS.md#dmm-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | partial; 2/2 pass | ≈0.52× O |
 | [`dreamsim`](docs/MODEL_CARDS.md#dreamsim) | FR/NN | DreamSim 0.2.1 / ense… | 2/2 pass | ≈0.921× R |
-| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core3.5.… | Δ 0 | ≈0.22× |
+| [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core3.5.… | Δ 0 | ≈0.38× |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | author dssim-core 3.5… | Δ 0.00038 | ≈0.037× ! |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.22× ! |
 | [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.22× ! |
@@ -122,10 +122,10 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ms-ssim-pyiqa-f32`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32) | FR | PyIQA 0.1.16 / named… | 3/3 pass | ≈0.013× |
 | [`ms-ssim-pyiqa-f32-k2`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k2) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.026× |
 | [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.048× |
-| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.075× |
-| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.22× |
+| [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 5/6 pass | ≈0.075× |
+| [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.21× |
 | [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.26× |
-| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 13/30 pass | ≈0.051× |
+| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 14/30 pass | ≈0.051× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 4 process errors | ≈0.36× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 4/4 pass | ≈0.58× R |
 | [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 2 cold misses | ≈0.18× |
@@ -145,7 +145,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | scikit-image 0.26 / d… | Δ 2.4e-12 | ≈0.04× |
 | [`psnr-ycbcr611`](docs/MODEL_CARDS.md#psnr-ycbcr611) | FR | NumPy / declared floa… | Δ 0 | ≈0.024× |
 | [`psnrhvs`](docs/MODEL_CARDS.md#psnrhvs) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00016× |
-| [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf 3.2.0 / origi… | 22/28 pass | ≈0.36× |
+| [`psnrhvs-daala`](docs/MODEL_CARDS.md#psnrhvs-daala) | FR | libvmaf 3.2.0 / origi… | 25/28 pass | ≈0.57× |
 | [`psnrhvs-y`](docs/MODEL_CARDS.md#psnrhvs-y) | FR | author psnrhvsm.m / s… | 1 process errors | ≈0.00029× |
 | [`ssim`](docs/MODEL_CARDS.md#ssim) | FR | scikit-image SSIM / d… | Δ 6.7e-16 | ≈0.15× |
 | [`ssim-libvmaf`](docs/MODEL_CARDS.md#ssim-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 2e-06 | ≈0.54× |

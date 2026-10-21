@@ -1,0 +1,235 @@
+{
+  "cases": [
+    {
+      "metric": "wadiqam-fr-live",
+      "case": "wadiqam-fr-live-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.02993291,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 2.0318011344500064e-05,
+      "ratio": 0.3819178495276677,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4303147669,
+              "score": 21.55776023864746
+            },
+            "native": {
+              "ns": 1776231421,
+              "score": 21.557739920636116
+            }
+          },
+          "delta": 2.0318011344500064e-05,
+          "passed": true,
+          "ratio": 0.4127749167884761
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 1844615890,
+              "score": 21.557739920636116
+            },
+            "canonical": {
+              "ns": 5235127786,
+              "score": 21.55776023864746
+            }
+          },
+          "delta": 2.0318011344500064e-05,
+          "passed": true,
+          "ratio": 0.352353555711276
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4698254764,
+              "score": 21.55776023864746
+            },
+            "native": {
+              "ns": 1794347356,
+              "score": 21.557739920636116
+            }
+          },
+          "delta": 2.0318011344500064e-05,
+          "passed": true,
+          "ratio": 0.3819178495276677
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 33s | peak-RSS 0.88GiB | min-avail 14147MiB | peak-load 1.19",
+        "run-heavy: done rc=0 37s | peak-RSS 0.86GiB | min-avail 14013MiB | peak-load 2.49",
+        "run-heavy: done rc=0 36s | peak-RSS 0.87GiB | min-avail 13921MiB | peak-load 1.83"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "3ce30fcb249e18a4296476af6fe4ef608972fdd6a1c2457639986814317ec009",
+      "block_sha256": [
+        "9a1aed02b4d289402a596193714cf951abbd5f210a2e849bbef793d0d90472cc",
+        "ea1f8e18747f2b3b07e7397219c169c2e9d4d79c3f5c0ec972fc5bc40a10c2a6",
+        "b00c8fd01a97fe129267a307660624f568495018ad8f959f8d51822db8de9f18"
+      ]
+    },
+    {
+      "metric": "wadiqam-fr-live",
+      "case": "wadiqam-fr-live-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.02993291,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 4.477520882062436e-06,
+      "ratio": 0.09867300409274932,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 5009956974,
+              "score": 21.557735443115234
+            },
+            "native": {
+              "ns": 494347505,
+              "score": 21.557739920636116
+            }
+          },
+          "delta": 4.477520882062436e-06,
+          "passed": true,
+          "ratio": 0.09867300409274932
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 457506417,
+              "score": 21.557739920636116
+            },
+            "canonical": {
+              "ns": 4652172078,
+              "score": 21.557735443115234
+            }
+          },
+          "delta": 4.477520882062436e-06,
+          "passed": true,
+          "ratio": 0.09834253964154419
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4292182041,
+              "score": 21.557735443115234
+            },
+            "native": {
+              "ns": 454244895,
+              "score": 21.557739920636116
+            }
+          },
+          "delta": 4.477520882062436e-06,
+          "passed": true,
+          "ratio": 0.10583076175729239
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 36s | peak-RSS 1.08GiB | min-avail 13517MiB | peak-load 2.06",
+        "run-heavy: done rc=0 33s | peak-RSS 1.11GiB | min-avail 13519MiB | peak-load 2.37",
+        "run-heavy: done rc=0 27s | peak-RSS 1.09GiB | min-avail 13404MiB | peak-load 1.36"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "babe84bf78905f3d7fc5d736e6c88fa1a3e30547c04c4ddbe3478fca7bdff498",
+      "block_sha256": [
+        "5132388de500d8e71d162956430b307b00a30024d32cfa7f1a22e3d54670b417",
+        "51210c4b976bd976230a603b7aeae313c414863271174ab8d602d0ed02a5123b",
+        "fe145fb5b0c5a2c6c5f606367673dc054b4f26813540109537fb72121d171f8b"
+      ]
+    },
+    {
+      "metric": "wadiqam-fr-tid",
+      "case": "wadiqam-fr-tid-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.0052095760000000005,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 1.988584045875541e-06,
+      "ratio": 0.3761673034682635,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4651829673,
+              "score": 13.384376525878906
+            },
+            "native": {
+              "ns": 1784904183,
+              "score": 13.384378514462952
+            }
+          },
+          "delta": 1.988584045875541e-06,
+          "passed": true,
+          "ratio": 0.383699384644258
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 1782075825,
+              "score": 13.384378514462952
+            },
+            "canonical": {
+              "ns": 4737455405,
+              "score": 13.384376525878906
+            }
+          },
+          "delta": 1.988584045875541e-06,
+          "passed": true,
+          "ratio": 0.3761673034682635
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 5214127907,
+              "score": 13.384376525878906
+            },
+            "native": {
+              "ns": 1864543218,
+              "score": 13.384378514462952
+            }
+          },
+          "delta": 1.988584045875541e-06,
+          "passed": true,
+          "ratio": 0.3575944532348044
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 33s | peak-RSS 0.88GiB | min-avail 13844MiB | peak-load 1.16",
+        "run-heavy: done rc=0 31s | peak-RSS 0.87GiB | min-avail 13726MiB | peak-load 1.26",
+        "run-heavy: done rc=0 38s | peak-RSS 0.90GiB | min-avail 13762MiB | peak-load 1.69"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "6eadc269df9a40424265ce39d315035d8e29f11e8d8042dbcf206620c6b4942d",
+      "block_sha256": [
+        "4991f8a1b72345241675a7f0b1085fc7f5809603931e1fa8578528a24f48167b",
+        "fcb96ee9180e57555c19344ba40a89847f81c547074a5e62382bc54da0a69b05",
+        "f89d84e417f3316616f515a29bbd6404133d336ca03e3203ad71facf7c792ef8"
+      ]
+    }
+  ]
+}
