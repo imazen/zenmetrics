@@ -911,3 +911,39 @@ intervals, warm measurements and numerical controls.
 ### Retained profile storage (2026-10-21)
 
 The [storage pointer](profile-storage-pointer-2026-10-21.json) binds 34 completed profile artifacts, totaling 330,248,802 bytes, moved to the persistent data volume after disk preflight refused a new diagnostic. Every original consumer path remains available through a link, with its hash revalidated. All raw bytes, prior receipts and numerical observations are retained. The relocation wrapper recorded 6 s, 0.02 GiB peak RSS, minimum available 14,164 MiB and peak load 2.34. These are storage-operation resources.
+
+### NIQE intermediate-plane control (2026-10-21)
+
+The [plane comparison](niqe-native-original-planes.json) retains exact native/original scalar controls and all eight observed plane comparisons. The [two-shape counterfactual](niqe-shape-counterfactual.json) substitutes only the two observed second-scale shape parameters: its diagnostic score is 18.798994557675755, versus the unchanged canonical 18.799147370663427. This adjusted feature vector is not a replacement native result; the original numerical failure and bound remain unchanged.
+
+| Scale | Plane | Differing f32 words | Max absolute difference |
+| --- | --- | ---: | ---: |
+| 1 | cur | 0/36864 | 0 |
+| 1 | mu | 0/36864 | 0 |
+| 1 | mu_sq | 0/36864 | 0 |
+| 1 | norm | 0/36864 | 0 |
+| 2 | cur | 3654/9216 | 4.57763671875e-05 |
+| 2 | mu | 2043/9216 | 3.0517578125e-05 |
+| 2 | mu_sq | 3715/9216 | 0.0078125 |
+| 2 | norm | 5234/9216 | 0.0020902156829833984 |
+
+### Further fixed20 first-call intervals (2026-10-21)
+
+These complete initial stages retain every original block and revalidate their numerical contracts. Runtime qualification remains unassigned.
+
+| Case | Ratio | 95% interval | Precision target |
+| --- | ---: | --- | --- |
+| fsim-grid-pairA-64x64-t28 | 1.095647 | [1.048398, 1.159399] | False |
+| flip-v17-grid-pairB-3840x2160-t28 | 1.618464 | [1.541807, 1.644737] | False |
+| ssimulacra1-grid-pairA-64x64-t28 | 1.236499 | [1.222225, 1.264232] | True |
+| ssimulacra1-grid-pairA-255x257-t1 | 1.224473 | [1.195467, 1.254944] | True |
+
+`fsim-grid-pairA-64x64-t28` final-block resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.05GiB | min-avail 14359MiB | peak-load 2.52`.
+
+`flip-v17-grid-pairB-3840x2160-t28` final-block resource receipt: `run-heavy: done rc=0 7s | peak-RSS 1.40GiB | min-avail 13367MiB | peak-load 3.22`.
+
+`ssimulacra1-grid-pairA-64x64-t28` final-block resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14354MiB | peak-load 2.32`.
+
+`ssimulacra1-grid-pairA-255x257-t1` final-block resource receipt: `run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14288MiB | peak-load 1.67`.
+
+FSIM photo64/t28 and FLIP v1.7 screen4K/t28 have fixed additional 40 stages queued. FSIM remains borderline at 1.08. These descriptive cold intervals remain separate from warm results and accepted exceptions.

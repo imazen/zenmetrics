@@ -1,0 +1,50 @@
+import hashlib
+import json
+from pathlib import Path
+import numpy as np
+
+Q = Path(__file__).parent
+native_path = Q/'native-review-v2/result.json'
+original_path = Q/'original-features-v2/result.json'
+native = json.loads(native_path.read_text())
+original = json.loads(original_path.read_text())
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+def array(record):
+    assert sha(record['path']) == record['sha256']
+    return np.fromfile(record['path'], dtype='<f4')
+
+assert len(native['planes']) == 8 and len(original['planes']) == 4
+assert len(original['normalized_blocks']) == 8
+rows = []
+for stage, size in [(0, 192), (1, 96)]:
+    original_norm = np.empty((size, size), dtype='<f4')
+    block_size = size//2
+    for column in range(2):
+        for row in range(2):
+            record = original['normalized_blocks'][stage*4+column*2+row]
+            original_norm[row*block_size:(row+1)*block_size,
+                          column*block_size:(column+1)*block_size] = array(record).reshape(block_size, block_size)
+    reference = dict(cur=array(original['planes'][stage*2]['input']),
+                     mu=array(original['planes'][stage*2]['output']),
+                     mu_sq=array(original['planes'][stage*2+1]['output']),
+                     norm=original_norm.ravel())
+    for name in ['cur', 'mu', 'mu_sq', 'norm']:
+        a = array(native['planes'][f'stage-{stage}-{name}.f32'])
+        b = reference[name]
+        assert a.shape == b.shape == (size*size,)
+        assert np.isfinite(a).all() and np.isfinite(b).all()
+        rows.append(dict(stage=stage, plane=name, samples=int(a.size),
+                         differing_bits=int(np.count_nonzero(a.view('<u4') != b.view('<u4'))),
+                         max_absolute_difference=float(np.max(np.abs(a.astype(np.float64)-b.astype(np.float64))))))
+with (Q/'plane-comparison-v2.json').open('x') as stream:
+    json.dump(dict(case=native['case'], native_score=native['native_score'],
+                   canonical_score=original['score'], rows=rows,
+                   native_result_sha256=sha(native_path), original_result_sha256=sha(original_path),
+                   analysis_sha256=sha(__file__),
+                   qualification='Read-only intermediate-plane comparison after exact retained scalar controls. Original normalized planes are assembled from the actual blocks passed to unchanged feature computation. This diagnostic adds no gate, timing claim or production change.'),
+              stream, indent=2, allow_nan=False)
+for row in rows:
+    print(json.dumps(row), flush=True)

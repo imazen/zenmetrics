@@ -1,0 +1,24 @@
+import hashlib,json,os,pathlib,shutil,subprocess,sys,time
+P=pathlib.Path;Q=P(__file__).parent;R=P.home()/'tmp/local-canonical-20261019T2330'
+if len(sys.argv)==1:
+ while not (R/'profile-storage-relocation-v1.result.json').exists():
+  if 'run-heavy: done rc=' in (R/'profile-storage-relocation-v1.log').read_text() and 'done rc=0 ' not in (R/'profile-storage-relocation-v1.log').read_text():raise SystemExit('Relocation failed; no build resumed')
+  time.sleep(20)
+ cmd=['flock',str(P.home()/'tmp/lilith-heavy.lock'),'flock',str(P.home()/'tmp/lilith-wsl-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(P.home()/'tmp'),sys.executable,'-B',str(P(__file__).resolve()),'--admitted']
+ raise SystemExit(subprocess.run(cmd).returncode)
+assert sys.argv[1:]==['--admitted'];root=Q/'native-review-v2';project=root/'project'
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+bindings=json.loads((Q/'native-review-v1/result.json').read_text())['source_files'];assert all(sha(p)==h for p,h in bindings.items());assert not (root/'result.json').exists();assert 'AssertionError' in (Q/'build_native_review_v2.log').read_text()
+assert shutil.disk_usage('/home/lilith').free>1500*1024**2
+env=dict(os.environ,TMPDIR=str(root),CARGO_TARGET_DIR=str(root/'target'),CARGO_INCREMENTAL='0',RUSTFLAGS='');env.pop('CARGO_ENCODED_RUSTFLAGS',None)
+commands=[['cargo','generate-lockfile','--offline','--manifest-path',str(project/'Cargo.toml')],['cargo','build','--locked','--offline','--release','--manifest-path',str(project/'Cargo.toml')]]
+for i,command in enumerate(commands):
+ with (root/f'build-{i}.log').open('x') as f:subprocess.run(command,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+binary=root/'native-review';shutil.copyfile(root/'target/release/niqe-numerical-review',binary);binary.chmod(0o755)
+planpath=P.home()/'tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/plan.json';plan=json.loads(planpath.read_text());case=next(c for c in plan['cases'] if c['id']=='niqe-grid-pairA-255x257-t1');gray=root/'gray.f64';features=root/'features.f64';env['NIQE_REVIEW_FEATURES']=str(features);env['NIQE_REVIEW_PLANES']=str(root)
+command=[str(binary),case['distorted'],str(case['width']),str(case['height']),str(gray)]
+with (root/'native.stdout').open('x') as f:subprocess.run(command,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+score=float(next(l for l in (root/'native.stdout').read_text().splitlines() if l.startswith('SCORE ')).split()[1]);retained=json.loads((planpath.parent/case['id']/'summary.json').read_text())['blocks'][0]['arms']['native']['score'];assert score==retained,'Diagnostic score differs; no intermediate attribution'
+assert all(sha(p)==h for p,h in bindings.items())
+with (root/'result.json').open('x') as f:json.dump(dict(case=case['id'],native_score=score,source_files=bindings,diagnostic_source_files={str(p):sha(p) for p in (project/'src').iterdir() if p.is_file()},binary_sha256=sha(binary),plan_sha256=sha(planpath),gray=dict(path=str(gray),sha256=sha(gray)),features=dict(path=str(features),sha256=sha(features)),planes={p.name:dict(path=str(p),sha256=sha(p)) for p in root.glob('stage-*.f32')},qualification='Private numerical observation only. Frozen source is copied with one output-only feature dump and an appended diagnostic entry. Exact retained native scalar required; no production change, numerical waiver or timing.'),f,indent=2)
+assert (root/'target/CACHEDIR.TAG').is_file();shutil.rmtree(root/'target');print(json.dumps(dict(native_scalar=score,inactive_cargo_output_reclaimed=True)),flush=True)

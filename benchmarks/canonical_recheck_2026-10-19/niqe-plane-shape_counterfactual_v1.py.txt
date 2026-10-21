@@ -1,0 +1,52 @@
+import ast
+import hashlib
+import json
+from pathlib import Path
+import numpy as np
+
+Q = Path(__file__).parent
+prior_path = Q/'stage-comparison-v1.json'
+prior = json.loads(prior_path.read_text())
+native = json.loads((Q/'native-review-v1/result.json').read_text())
+original = json.loads((Q/'original-features-v1/result.json').read_text())
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+source = Q/'compare_stages_v1.py'
+assert sha(source) == prior['analysis_sha256']
+assert sha(native['features']['path']) == native['features']['sha256']
+a = np.fromfile(native['features']['path'], dtype='<f8').reshape(4, 36)
+captured = np.asarray(original['features'], dtype=np.float64)
+b = np.concatenate((captured[:4], captured[4:]), axis=1)
+params = Path(original['source']['path']).parent/'niqe_pris_params.npz'
+assert sha(params) == prior['parameter_sha256']
+with np.load(params) as archive:
+    scope = dict(np=np, pristine_mu=archive['mu_pris_param'], pristine_cov=archive['cov_pris_param'])
+function = next(node for node in ast.parse(source.read_text()).body
+                if isinstance(node, ast.FunctionDef) and node.name == 'rescore')
+exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), scope)
+rescore = scope['rescore']
+assert rescore(b) == original['score']
+assert rescore(a) == prior['native_features_original_mvg']
+selected = [(1, 20), (3, 20)]
+native_swapped = a.copy()
+original_swapped = b.copy()
+entries = []
+for block, column in selected:
+    assert a[block, column] != b[block, column]
+    entries.append(dict(block=block, feature=column,
+                        native=float(a[block, column]), canonical=float(b[block, column])))
+    native_swapped[block, column] = b[block, column]
+    original_swapped[block, column] = a[block, column]
+value = dict(case=native['case'], selected=entries,
+             canonical_score=original['score'], native_score=native['native_score'],
+             native_features_original_mvg=rescore(a),
+             native_features_with_two_original_shapes=rescore(native_swapped),
+             original_features_with_two_native_shapes=rescore(original_swapped),
+             original_baseline_exact_control=rescore(b),
+             prior_comparison_sha256=sha(prior_path), analysis_sha256=sha(__file__),
+             qualification='Counterfactual feature swaps through the unchanged reference final MVG operator. These adjusted features are diagnostics, not replacement canonical or native outputs. Original failure and numerical bound remain unchanged; no scoring fix or timing claim.')
+with (Q/'shape-counterfactual-v1.json').open('x') as stream:
+    json.dump(value, stream, indent=2, allow_nan=False)
+print(json.dumps(value), flush=True)

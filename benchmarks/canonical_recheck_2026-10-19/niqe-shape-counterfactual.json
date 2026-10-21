@@ -1,0 +1,26 @@
+{
+  "case": "niqe-grid-pairA-255x257-t1",
+  "selected": [
+    {
+      "block": 1,
+      "feature": 20,
+      "native": 0.5390000000000004,
+      "canonical": 0.5400000000000003
+    },
+    {
+      "block": 3,
+      "feature": 20,
+      "native": 0.5990000000000004,
+      "canonical": 0.6000000000000003
+    }
+  ],
+  "canonical_score": 18.799147370663427,
+  "native_score": 18.807175290717275,
+  "native_features_original_mvg": 18.80717529071772,
+  "native_features_with_two_original_shapes": 18.798994557675755,
+  "original_features_with_two_native_shapes": 18.8073367020266,
+  "original_baseline_exact_control": 18.799147370663427,
+  "prior_comparison_sha256": "8df240b637804ac1737bbe2185d8ad66ac2456425780bf208b30d2a761a453d5",
+  "analysis_sha256": "0be4b3337bffbc89dc830f3aefa081de73940d529bc7fb1dbd5b779c560c8a04",
+  "qualification": "Counterfactual feature swaps through the unchanged reference final MVG operator. These adjusted features are diagnostics, not replacement canonical or native outputs. Original failure and numerical bound remain unchanged; no scoring fix or timing claim."
+}

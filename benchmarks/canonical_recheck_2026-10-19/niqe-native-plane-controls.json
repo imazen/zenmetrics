@@ -1,0 +1,60 @@
+{
+  "case": "niqe-grid-pairA-255x257-t1",
+  "native_score": 18.807175290717275,
+  "source_files": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/lib.rs": "703c48155be9478e9ce70945ace17a262ed473ca90fcde640ce96a7d6e7dde29",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/params.rs": "a5fd0a82ea0f215e640d493796aa1638db57f714a6ee5c2ad2400bdaff6a6285",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/kernels.rs": "8d911c6022c888d3d0b78e554fc7d0f2f508648289952cdded73b788a4d5f310"
+  },
+  "diagnostic_source_files": {
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/project/src/main.rs": "25736559a6cbcef4a7efe8d53cc2e193fb33459a41e0ec849ecbf6303a4409a7",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/project/src/lib.rs": "5e34c3aa00dfdadc952e30493ee943e3770d560994a6da5643f190c0996060fa",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/project/src/params.rs": "a5fd0a82ea0f215e640d493796aa1638db57f714a6ee5c2ad2400bdaff6a6285",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/project/src/kernels.rs": "8d911c6022c888d3d0b78e554fc7d0f2f508648289952cdded73b788a4d5f310"
+  },
+  "binary_sha256": "1bc06cda44ce99335ab8a210d38647d11c16340034a70c17b2ad925dd8dca28b",
+  "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317",
+  "gray": {
+    "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/gray.f64",
+    "sha256": "373af220ec5bb056bf404b0fc58a7004ff3d2f3e78c20aeea4257aa15a0c3391"
+  },
+  "features": {
+    "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/features.f64",
+    "sha256": "edb33ef98cb425d86ce53b44aa6784f67bc06d3bab92390192d8b52bf4934918"
+  },
+  "planes": {
+    "stage-0-norm.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-0-norm.f32",
+      "sha256": "211eab1c18a0802f6969063e77ad1ee5cd40474b5798c500972fb645d563a353"
+    },
+    "stage-1-mu_sq.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-1-mu_sq.f32",
+      "sha256": "5c4dbc099e69efc8ac09d7ee71bc2082f1cebab4686981d10bac71dc1c7ae867"
+    },
+    "stage-0-mu.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-0-mu.f32",
+      "sha256": "e9992ef88a40779e95010839224c6dcf4bd3351ee96fe9cc3f631b773c04bc89"
+    },
+    "stage-1-cur.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-1-cur.f32",
+      "sha256": "f3661ca7e6902f2f39ca54df1f004b0a9a68482f9576e27954e448444b243430"
+    },
+    "stage-0-mu_sq.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-0-mu_sq.f32",
+      "sha256": "85f81aaeb416bbf8d4463f2352de64d35bbc77f7caa7e02eb71a11fcb2fd9fd8"
+    },
+    "stage-0-cur.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-0-cur.f32",
+      "sha256": "fc8c925a26f8a9689a54459b782c405bc481eee660f15031dee533fdf82ae3d7"
+    },
+    "stage-1-norm.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-1-norm.f32",
+      "sha256": "f76ee0f54e3352fc9367fb778c8ca884d371121f37340b021f0d9d96272c1bab"
+    },
+    "stage-1-mu.f32": {
+      "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v2/stage-1-mu.f32",
+      "sha256": "ed71b15c1adc1478331ec33ca779c22a181c8fd7846ab1fd40bdcf9dde80bcf2"
+    }
+  },
+  "qualification": "Private numerical observation only. Frozen source is copied with one output-only feature dump and an appended diagnostic entry. Exact retained native scalar required; no production change, numerical waiver or timing."
+}

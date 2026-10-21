@@ -960,3 +960,18 @@ Resource receipts: native diagnostic build/control 11 s, peak RSS 0.42 GiB,
 minimum available 13,658 MiB, peak load 1.26; original feature control 2 s,
 0.27 GiB, 13,840 MiB, 1.22; cross-rescore under one second, 0.04 GiB,
 14,108 MiB, 1.18. These are diagnostic-process resources, not metric timings.
+
+### NIQE intermediate-plane control (2026-10-21)
+
+The [plane comparison](benchmarks/canonical_recheck_2026-10-19/niqe-native-original-planes.json) retains exact native/original scalar controls and all eight observed plane comparisons. The [two-shape counterfactual](benchmarks/canonical_recheck_2026-10-19/niqe-shape-counterfactual.json) substitutes only the two observed second-scale shape parameters: its diagnostic score is 18.798994557675755, versus the unchanged canonical 18.799147370663427. This adjusted feature vector is not a replacement native result; the original numerical failure and bound remain unchanged.
+
+| Scale | Plane | Differing f32 words | Max absolute difference |
+| --- | --- | ---: | ---: |
+| 1 | cur | 0/36864 | 0 |
+| 1 | mu | 0/36864 | 0 |
+| 1 | mu_sq | 0/36864 | 0 |
+| 1 | norm | 0/36864 | 0 |
+| 2 | cur | 3654/9216 | 4.57763671875e-05 |
+| 2 | mu | 2043/9216 | 3.0517578125e-05 |
+| 2 | mu_sq | 3715/9216 | 0.0078125 |
+| 2 | norm | 5234/9216 | 0.0020902156829833984 |

@@ -1,0 +1,67 @@
+{
+  "case": "niqe-grid-pairA-255x257-t1",
+  "native_score": 18.807175290717275,
+  "canonical_score": 18.799147370663427,
+  "rows": [
+    {
+      "stage": 0,
+      "plane": "cur",
+      "samples": 36864,
+      "differing_bits": 0,
+      "max_absolute_difference": 0.0
+    },
+    {
+      "stage": 0,
+      "plane": "mu",
+      "samples": 36864,
+      "differing_bits": 0,
+      "max_absolute_difference": 0.0
+    },
+    {
+      "stage": 0,
+      "plane": "mu_sq",
+      "samples": 36864,
+      "differing_bits": 0,
+      "max_absolute_difference": 0.0
+    },
+    {
+      "stage": 0,
+      "plane": "norm",
+      "samples": 36864,
+      "differing_bits": 0,
+      "max_absolute_difference": 0.0
+    },
+    {
+      "stage": 1,
+      "plane": "cur",
+      "samples": 9216,
+      "differing_bits": 3654,
+      "max_absolute_difference": 4.57763671875e-05
+    },
+    {
+      "stage": 1,
+      "plane": "mu",
+      "samples": 9216,
+      "differing_bits": 2043,
+      "max_absolute_difference": 3.0517578125e-05
+    },
+    {
+      "stage": 1,
+      "plane": "mu_sq",
+      "samples": 9216,
+      "differing_bits": 3715,
+      "max_absolute_difference": 0.0078125
+    },
+    {
+      "stage": 1,
+      "plane": "norm",
+      "samples": 9216,
+      "differing_bits": 5234,
+      "max_absolute_difference": 0.0020902156829833984
+    }
+  ],
+  "native_result_sha256": "1f1a5a2d0d1d1cf0db03826e88bb0389544b5c42c8ab6b1ea1f2486b93549085",
+  "original_result_sha256": "0abcbf16034780700f1da8e687bcae5e08048380c201bcd8dca74800ef64991f",
+  "analysis_sha256": "cbfe63b3313cabc999fb50f4acab9c784579540a704f47bc1a70af85b0b3a1be",
+  "qualification": "Read-only intermediate-plane comparison after exact retained scalar controls. Original normalized planes are assembled from the actual blocks passed to unchanged feature computation. This diagnostic adds no gate, timing claim or production change."
+}
