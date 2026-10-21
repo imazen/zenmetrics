@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-10-21T08:24:30.938966+00:00",
+  "observed_at_utc": "2026-10-21T08:51:49.559849+00:00",
   "queues": {
     "/home/lilith/tmp/handoff/canonical-confirmation-queue-audit-20261020/requests-v1/queue.json": {
       "expected": 3,
@@ -18,7 +18,7 @@
     },
     "current40-remaining-queue.json": {
       "expected": 62,
-      "completed": 25,
+      "completed": 26,
       "queue_sha256": "6462c117dd41b2223408ae6c6160f03bbc245e97c71ae5ad31bfdd36bfdde7d9"
     },
     "vmaf-fullcall-current40-queue.json": {
@@ -28,12 +28,12 @@
     },
     "vmaf-fullcall-current-grid-queue.json": {
       "expected": 144,
-      "completed": 24,
+      "completed": 26,
       "queue_sha256": "6be4d4cb8ed9fdc6c418dba48a2348226dc10b1864e39b2584cfd29b9680b3d9"
     },
     "msssim-current-grid-queue.json": {
       "expected": 72,
-      "completed": 24,
+      "completed": 25,
       "queue_sha256": "2c51e0eed3c547f67bd56d3ee9bfffd96c6bf6652c86a3cdc40683f411eea3bd"
     },
     "daala-current-grid-queue.json": {
@@ -43,17 +43,17 @@
     },
     "full-classical-grid-v2/queue.json": {
       "expected": 2016,
-      "completed": 82,
+      "completed": 83,
       "queue_sha256": "9edcd3d065397cdc104d5b6660673af16fc311618bba6c646c6d629eed5146c6"
     },
     "full-gpu-grid-v2/queue.json": {
       "expected": 106,
-      "completed": 60,
+      "completed": 61,
       "queue_sha256": "01003c0fc99b3bc8c5b646143dc5b06984da7762c0a6f90adcd4fcdbf52a6384"
     },
     "psnr-current-queue.json": {
       "expected": 208,
-      "completed": 69,
+      "completed": 71,
       "queue_sha256": "5cb84584b3871f20de13b75da68c4eeafbd8b58f86daf5e2aa88dcdc0813b6d1"
     },
     "dssim-author-queue.json": {
@@ -63,7 +63,7 @@
     },
     "flip-wshv-current-grid-queue.json": {
       "expected": 72,
-      "completed": 50,
+      "completed": 51,
       "queue_sha256": "816b5cb118a8a48994ba3c3463b5f6ee7675967a3aa390dd1604d54fd2642e45"
     },
     "butter-original-budget-queue.json": {
@@ -73,7 +73,7 @@
     },
     "vmaf-current-grid-queue.json": {
       "expected": 168,
-      "completed": 29,
+      "completed": 31,
       "queue_sha256": "107f36bbd4ac5508f95899f3589e4a17aaf1afe0a4d18b92b9d09e4bec3ee162"
     },
     "current-grid-4k-two-confirmation-queue.json": {
@@ -104,12 +104,12 @@
   },
   "nn_first": {
     "expected": 56,
-    "completed": 50,
+    "completed": 51,
     "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0"
   },
   "revised_classical_first": {
     "expected": 240,
-    "completed": 42,
+    "completed": 43,
     "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253"
   },
   "qualification": "Counts are acquired summaries, not qualified or passing cells. Matrices are incomplete; no extrapolated timings."

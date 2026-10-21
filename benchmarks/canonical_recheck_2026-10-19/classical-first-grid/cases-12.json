@@ -397,14 +397,14 @@
       ]
     },
     {
-      "case": "flip-v17-grid-pairC-255x257-t1",
+      "case": "flip-v17-grid-pairC-1024x1024-t1",
       "metric": "flip-v17",
-      "width": 255,
-      "height": 257,
+      "width": 1024,
+      "height": 1024,
       "threads": 1,
       "canonical": "NVIDIA FLIP 1.7",
       "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
-      "ratio": 0.2528903021278748,
+      "ratio": 0.26899376984857976,
       "absolute_bound": null,
       "relative_bound": 0,
       "scope_reasons": [],
@@ -416,17 +416,17 @@
           ],
           "arms": {
             "canonical": {
-              "ns": 62112917.0,
-              "score": 0.06729260087013245
+              "ns": 1031837837.0,
+              "score": 0.06922775506973267
             },
             "native": {
-              "ns": 15621737.0,
-              "score": 0.06729260087013245,
+              "ns": 281462296.0,
+              "score": 0.06922775506973267,
               "worker": {
-                "width": 255,
-                "height": 257,
-                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-reference.rgb",
-                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-distorted.rgb",
+                "width": 1024,
+                "height": 1024,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-distorted.rgb",
                 "metric_name": "flip-v17",
                 "threads": 1,
                 "only_mode": "score",
@@ -435,13 +435,13 @@
                 "required_samples": 1,
                 "locked_process_accounting": true,
                 "mode": "score",
-                "input_load_ns": 194323,
+                "input_load_ns": 2834039,
                 "load_before": [
-                  1.89,
-                  1.78,
-                  2.01
+                  3.19,
+                  2.39,
+                  2.42
                 ],
-                "admitted_unix_ns": 1792551223924182256,
+                "admitted_unix_ns": 1792571537051715686,
                 "model_preload_adapter": true,
                 "declared_columns": [
                   "flip_v17"
@@ -449,15 +449,15 @@
                 "headline_declared_column": "flip_v17",
                 "n": 1,
                 "status": "ok",
-                "median_ns": 15621737,
-                "cold_elapsed_ns": 15621737,
-                "score": 0.06729260087013245,
-                "score_bits": "3fb13a1680000000",
+                "median_ns": 281462296,
+                "cold_elapsed_ns": 281462296,
+                "score": 0.06922775506973267,
+                "score_bits": "3fb1b8e900000000",
                 "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
                 "load_after": [
-                  1.89,
-                  1.78,
-                  2.01
+                  3.19,
+                  2.39,
+                  2.42
                 ]
               }
             }
@@ -475,13 +475,13 @@
           ],
           "arms": {
             "native": {
-              "ns": 16409934.0,
-              "score": 0.06729260087013245,
+              "ns": 280644612.0,
+              "score": 0.06922775506973267,
               "worker": {
-                "width": 255,
-                "height": 257,
-                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-reference.rgb",
-                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-distorted.rgb",
+                "width": 1024,
+                "height": 1024,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-distorted.rgb",
                 "metric_name": "flip-v17",
                 "threads": 1,
                 "only_mode": "score",
@@ -490,13 +490,13 @@
                 "required_samples": 1,
                 "locked_process_accounting": true,
                 "mode": "score",
-                "input_load_ns": 210184,
+                "input_load_ns": 2649346,
                 "load_before": [
-                  2.26,
-                  2.09,
-                  2.02
+                  3.02,
+                  2.2,
+                  2.22
                 ],
-                "admitted_unix_ns": 1792551936683729113,
+                "admitted_unix_ns": 1792572074132574304,
                 "model_preload_adapter": true,
                 "declared_columns": [
                   "flip_v17"
@@ -504,21 +504,21 @@
                 "headline_declared_column": "flip_v17",
                 "n": 1,
                 "status": "ok",
-                "median_ns": 16409934,
-                "cold_elapsed_ns": 16409934,
-                "score": 0.06729260087013245,
-                "score_bits": "3fb13a1680000000",
+                "median_ns": 280644612,
+                "cold_elapsed_ns": 280644612,
+                "score": 0.06922775506973267,
+                "score_bits": "3fb1b8e900000000",
                 "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
                 "load_after": [
-                  2.26,
-                  2.09,
-                  2.02
+                  3.02,
+                  2.2,
+                  2.22
                 ]
               }
             },
             "canonical": {
-              "ns": 63415783.0,
-              "score": 0.06729260087013245
+              "ns": 1043312684.0,
+              "score": 0.06922775506973267
             }
           },
           "errors": {},
@@ -534,17 +534,17 @@
           ],
           "arms": {
             "canonical": {
-              "ns": 63903008.0,
-              "score": 0.06729260087013245
+              "ns": 1030369592.0,
+              "score": 0.06922775506973267
             },
             "native": {
-              "ns": 16160451.0,
-              "score": 0.06729260087013245,
+              "ns": 273862025.0,
+              "score": 0.06922775506973267,
               "worker": {
-                "width": 255,
-                "height": 257,
-                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-reference.rgb",
-                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-distorted.rgb",
+                "width": 1024,
+                "height": 1024,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-distorted.rgb",
                 "metric_name": "flip-v17",
                 "threads": 1,
                 "only_mode": "score",
@@ -553,13 +553,13 @@
                 "required_samples": 1,
                 "locked_process_accounting": true,
                 "mode": "score",
-                "input_load_ns": 179553,
+                "input_load_ns": 2941240,
                 "load_before": [
-                  3.55,
-                  2.74,
-                  2.29
+                  1.56,
+                  1.6,
+                  1.89
                 ],
-                "admitted_unix_ns": 1792552649230996053,
+                "admitted_unix_ns": 1792572599590759631,
                 "model_preload_adapter": true,
                 "declared_columns": [
                   "flip_v17"
@@ -567,15 +567,15 @@
                 "headline_declared_column": "flip_v17",
                 "n": 1,
                 "status": "ok",
-                "median_ns": 16160451,
-                "cold_elapsed_ns": 16160451,
-                "score": 0.06729260087013245,
-                "score_bits": "3fb13a1680000000",
+                "median_ns": 273862025,
+                "cold_elapsed_ns": 273862025,
+                "score": 0.06922775506973267,
+                "score_bits": "3fb1b8e900000000",
                 "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
                 "load_after": [
-                  3.55,
-                  2.74,
-                  2.29
+                  1.56,
+                  1.6,
+                  1.89
                 ]
               }
             }
@@ -587,11 +587,11 @@
           "delta": 0.0
         }
       ],
-      "summary_sha256": "ef03f98d41f693067f85eb31b6e0ace7bf7a659cad671e7ed201cf9486b22980",
+      "summary_sha256": "11ffff8c0b9343dc597c0be1e8832239dde1a59fe277530fdf1f9a935119a59f",
       "wrapper_receipts": [
-        "run-heavy: done rc=0 3s | peak-RSS 0.23GiB | min-avail 13987MiB | peak-load 1.89",
-        "run-heavy: done rc=0 3s | peak-RSS 0.23GiB | min-avail 14137MiB | peak-load 2.26",
-        "run-heavy: done rc=0 3s | peak-RSS 0.23GiB | min-avail 13851MiB | peak-load 3.77"
+        "run-heavy: done rc=0 5s | peak-RSS 0.37GiB | min-avail 13301MiB | peak-load 3.19",
+        "run-heavy: done rc=0 5s | peak-RSS 0.38GiB | min-avail 13092MiB | peak-load 3.11",
+        "run-heavy: done rc=0 5s | peak-RSS 0.38GiB | min-avail 13233MiB | peak-load 1.61"
       ]
     }
   ]

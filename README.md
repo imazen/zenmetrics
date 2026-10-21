@@ -90,7 +90,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`dssim`](docs/MODEL_CARDS.md#dssim) | FR | author dssim-core3.5.… | Δ 0 | ≈0.23× |
 | [`dssim-gpu`](docs/MODEL_CARDS.md#dssim-gpu) | FR | author dssim-core 3.5… | Δ 0.00038 | ≈0.037× ! |
 | [`flip`](docs/MODEL_CARDS.md#flip) | FR | NVIDIA FLIP 1.7 / f64… | Δ 3.6e-14 | ≈0.18× ! |
-| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.22× ! |
+| [`flip-v17`](docs/MODEL_CARDS.md#flip-v17) | FR | NVIDIA FLIP 1.7 | Δ 0 | ≈0.19× ! |
 | [`fsim`](docs/MODEL_CARDS.md#fsim) | FR | original FeatureSIM /… | 6/6 pass | ≈0.22× |
 | [`fsim-k2`](docs/MODEL_CARDS.md#fsim-k2) | FR | original FeatureSIM /… | 6/6 pass | ≈0.18× |
 | [`fsim-k3`](docs/MODEL_CARDS.md#fsim-k3) | FR | original FeatureSIM /… | 6/6 pass | ≈0.16× |
@@ -124,8 +124,8 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.048× |
 | [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.075× |
 | [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.21× |
-| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 5/6 pass | ≈0.26× |
-| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 14/30 pass | ≈0.051× |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.26× |
+| [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 15/30 pass | ≈0.01× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 4 process errors | ≈0.36× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 4/4 pass | ≈0.58× R |
 | [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 4 cold misses | ≈0.18× |
@@ -139,7 +139,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.0014× |
 | [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.098× |
 | [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | FR | scikit-image 0.26 / f… | Δ 0 | ≈0.12× |
-| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | scikit-image 0.26 / d… | Δ 3.7e-12 | ≈0.05× |
+| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | FR | scikit-image 0.26 / d… | Δ 3.1e-11 | ≈0.05× |
 | [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | FR | libvmaf 3.2.0 / named… | Δ 0 | ≈0.16× |
 | [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | FR | scikit-image 0.26 / d… | Δ 0 | ≈0.011× |
 | [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | FR | scikit-image 0.26 / d… | Δ 2.4e-12 | ≈0.04× |
@@ -172,7 +172,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`topiq-fr-pipal`](docs/MODEL_CARDS.md#topiq-fr-pipal) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.91× O |
 | [`vif`](docs/MODEL_CARDS.md#vif) | FR | original vifp_mscale… | 6/6 pass | ≈0.076× |
 | [`vifvec`](docs/MODEL_CARDS.md#vifvec) | FR | original vifvec / Oct… | 6/6 pass | ≈0.096× |
-| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / compl… | 21/76 pass | ≈0.883× |
+| [`vmaf`](docs/MODEL_CARDS.md#vmaf) | FR | libvmaf 3.2.0 / compl… | 24/76 pass | ≈1.03× |
 | [`vmaf-4k`](docs/MODEL_CARDS.md#vmaf-4k) | FR | libvmaf 3.2.0 / compl… | Δ 0.0012 | ≈0.898× |
 | [`vmaf-neg`](docs/MODEL_CARDS.md#vmaf-neg) | FR | libvmaf 3.2.0 / compl… | 20/76 pass | ≈0.878× |
 | [`vmaf-neg-studio601`](docs/MODEL_CARDS.md#vmaf-neg-studio601) | FR | libvmaf 3.2.0 / named… | 2 findings | — |
@@ -671,7 +671,7 @@ Use each exact metric name below with `target/release/zenmetrics score --metric 
 | [`psnr`](docs/MODEL_CARDS.md#psnr) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
 | [`psnr-cb`](docs/MODEL_CARDS.md#psnr-cb) | scikit-image 0.26 / float64 studio601 plane | 0.0 | not recorded | not recorded / not applicable |
 | [`psnr-cr`](docs/MODEL_CARDS.md#psnr-cr) | scikit-image 0.26 / float64 studio601 plane | 0.0 | not recorded | not recorded / not applicable |
-| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | scikit-image 0.26 / declared RGB ingress | 0.000000000003701927653310122 | not recorded | not recorded / not applicable |
+| [`psnr-y`](docs/MODEL_CARDS.md#psnr-y) | scikit-image 0.26 / declared RGB ingress | 0.0000000000311857206725108 | not recorded | not recorded / not applicable |
 | [`psnr-y-libvmaf`](docs/MODEL_CARDS.md#psnr-y-libvmaf) | libvmaf 3.2.0 / named RGB ingress | 0.0 | not recorded | not recorded / not applicable |
 | [`psnr-y-studio601`](docs/MODEL_CARDS.md#psnr-y-studio601) | scikit-image 0.26 / declared RGB ingress | 0.0 | not recorded | not recorded / not applicable |
 | [`psnr-y601`](docs/MODEL_CARDS.md#psnr-y601) | scikit-image 0.26 / declared RGB ingress | 0.0000000000024300561562995426 | not recorded | not recorded / not applicable |

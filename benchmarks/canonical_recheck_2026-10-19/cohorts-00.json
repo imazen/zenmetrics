@@ -1,13 +1,25 @@
 {
-  "arniqa-original-cid22-t8-7a07601a-confirmation-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/confirmation-run",
-    "plan_sha256": "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc",
+  "arniqa-original-cid22-t1-7a07601a-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/confirmation-run",
+    "plan_sha256": "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
-        "file": "arniqa-original-cid22-t8-7a07601a-confirmation-run.tsv",
-        "sha256": "dad94f140c3d9edd0c12c9b80c09e3727979c8392209109e36e4f9e0eb63c902"
+        "file": "arniqa-original-cid22-t1-7a07601a-confirmation-run.tsv",
+        "sha256": "148f1d31434d6fdd1df45046b8911a410c3a6fc9d0e32fd90caf1337aa0c261f"
+      }
+    ]
+  },
+  "arniqa-original-cid22-t8-7a07601a-fixed-add40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/fixed-add40-run",
+    "plan_sha256": "0fa9bc43c310b35839a9c722103dfdf588227b7571e959c3c5cffbc5e4206bb0",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "arniqa-original-cid22-t8-7a07601a-fixed-add40-run.tsv",
+        "sha256": "e63b4363835ba761cad07ba883aee5fe2c846bd27c92d7ab7cb45307d26463c2"
       }
     ]
   },
@@ -48,14 +60,14 @@
     ]
   },
   "confirmation-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/confirmation-run",
-    "plan_sha256": "887c65847bdfe84ab8095971854b79415fe1b51aff57635be03387f90dffc7d4",
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/confirmation-run",
+    "plan_sha256": "e96947c8175d687637dae23c9e6c7ac5e9d4d4bf7fb18f6b98f22aabeab307dc",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
         "file": "confirmation-run.tsv",
-        "sha256": "148f1d31434d6fdd1df45046b8911a410c3a6fc9d0e32fd90caf1337aa0c261f"
+        "sha256": "dad94f140c3d9edd0c12c9b80c09e3727979c8392209109e36e4f9e0eb63c902"
       }
     ]
   },
@@ -122,12 +134,12 @@
   "current40-remaining-comparative-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/current40-remaining-comparative-run",
     "plan_sha256": "21fc4b0c2c8851e486af01139539ce03860ca1606e1d1de59b544140f5de3cb6",
-    "cases": 25,
+    "cases": 26,
     "expected_cases": 80,
     "artifacts": [
       {
         "file": "current40-remaining-comparative-run.tsv",
-        "sha256": "c9b60a7aca05f0916208b5ced4fa901d98009f49c86da61b1e4a7c2f1bd541b5"
+        "sha256": "db16f85af12e4426cd06a8f86d418815cae09b85a49a9b898ed181df7c6deb1e"
       }
     ]
   },
@@ -212,18 +224,6 @@
       {
         "file": "deepdc-pair-cid22-t8-f525415f-confirmation-run.tsv",
         "sha256": "bd378345cec2e2a2f629754bb5ba6862020ed03e76729d8de000893fe090c815"
-      }
-    ]
-  },
-  "deepdc-pair-cid22-t8-f525415f-fixed-add40-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/fixed-add40-run",
-    "plan_sha256": "8d4e791ef629889fc571454ce8fb4f0b7f64848fe809dd21b10be0d699248149",
-    "cases": 1,
-    "expected_cases": 1,
-    "artifacts": [
-      {
-        "file": "deepdc-pair-cid22-t8-f525415f-fixed-add40-run.tsv",
-        "sha256": "b854319f297e01c12dbdbae6cf0f7401367b148a84c54f0ceee132b23928de21"
       }
     ]
   },
@@ -348,14 +348,14 @@
     ]
   },
   "fixed-add40-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/fixed-add40-run",
-    "plan_sha256": "0fa9bc43c310b35839a9c722103dfdf588227b7571e959c3c5cffbc5e4206bb0",
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/deepdc-pair-cid22-t8-f525415f/fixed-add40-run",
+    "plan_sha256": "8d4e791ef629889fc571454ce8fb4f0b7f64848fe809dd21b10be0d699248149",
     "cases": 1,
     "expected_cases": 1,
     "artifacts": [
       {
         "file": "fixed-add40-run.tsv",
-        "sha256": "e63b4363835ba761cad07ba883aee5fe2c846bd27c92d7ab7cb45307d26463c2"
+        "sha256": "b854319f297e01c12dbdbae6cf0f7401367b148a84c54f0ceee132b23928de21"
       }
     ]
   },
@@ -554,12 +554,12 @@
   "flip-wshv-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-run",
     "plan_sha256": "060d464fa5b1671644dfb3c96c1ea12ded7421543797024ebba88a0b4607244e",
-    "cases": 50,
+    "cases": 51,
     "expected_cases": 72,
     "artifacts": [
       {
         "file": "flip-wshv-current-grid-run.tsv",
-        "sha256": "1652df7579bd408081bbf101c188a43e066bb2aeb35ca84bd9faa650cfe49f82"
+        "sha256": "6dab0f67f60d317ea54c2375b3cdb7d958ca0df90b1463beda4461999beb498d"
       }
     ]
   },
@@ -575,27 +575,27 @@
       }
     ]
   },
-  "full-gpu-grid-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+  "full-cw-pyiqa-grid-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
-        "file": "full-gpu-grid-run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "file": "full-cw-pyiqa-grid-run.tsv",
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },
   "full-gpu-grid-v2-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/run",
     "plan_sha256": "c5f16e498740902b9deea5133fa1e2f302b859104792b4dc1dd7ea26bdc7b7a7",
-    "cases": 60,
+    "cases": 61,
     "expected_cases": 106,
     "artifacts": [
       {
         "file": "full-gpu-grid-v2-run.tsv",
-        "sha256": "2a90430895eb7e5cc11d6e5a0831d3096c45043879dbbb068f65cd914ce554ca"
+        "sha256": "2991227c8f2f6b794224a323ef72cd2274474f1cf4c91aa3b264676bf9a75dc4"
       }
     ]
   },

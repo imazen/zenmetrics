@@ -2,7 +2,7 @@
   "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
   "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
   "expected_cases": 240,
-  "completed_cases": 42,
+  "completed_cases": 43,
   "phase": "scorer_construct_first_eval",
   "shards": [
     {
@@ -68,12 +68,17 @@
     {
       "file": "cases-12.json",
       "cases": 3,
-      "sha256": "8e38f1e8839d4d77fc297e4b6b1427e2c6a7b2ba83f3dd3a08b762593365e9a3"
+      "sha256": "e15750e0141c57c70fc44a2915b42bb5de0867c7f49c3946a45a3d98145f1441"
     },
     {
       "file": "cases-13.json",
       "cases": 3,
-      "sha256": "d85d81d265daab63ffc70032d8eabed961bb7f23e6eec089bde39145dcb29f50"
+      "sha256": "707a54ab4242163b05b621c2eb56d0f0b7bd9dd583b60fda39a3cb495d51a016"
+    },
+    {
+      "file": "cases-14.json",
+      "cases": 1,
+      "sha256": "4fd4121510a9c985350204abaed1ea20351d8f95711b01a7625cef227d70c4f2"
     }
   ],
   "fixture_amendment": {
