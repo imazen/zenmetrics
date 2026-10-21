@@ -2484,3 +2484,18 @@ bench-iqa-canonical-classical-first-profiles-publish index output:
 # Caller supplies heavy admission; retain size-capped recordings without executing workers.
 bench-iqa-canonical-classical-first-profile-adopt-capped plan case capture output:
     python3 -B benchmarks/iqa_compete_2026-10-16/adopt_capped_classical_profile.py '{{plan}}' '{{case}}' '{{capture}}' '{{output}}'
+
+# Self-contained admission for the original-archive first-call reference build.
+bench-iqa-canonical-dssim-first-build parent output parent_sha256:
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/build_dssim_first_reference.py '{{parent}}' '{{output}}' --parent-sha256 '{{parent_sha256}}'
+
+# Synthetic clock/lifetime check; no real metric or timing comparison.
+bench-iqa-canonical-dssim-first-boundary-check output compiler:
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 1 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/check_dssim_first_boundary.py '{{output}}' --compiler '{{compiler}}'
+
+# Independently bound original/candidate references; no native comparison.
+bench-iqa-canonical-first-boundary-control plan output:
+    mkdir -p "$HOME/tmp"
+    flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 28 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/first_boundary_control.py '{{plan}}' '{{output}}'
