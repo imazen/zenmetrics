@@ -1,0 +1,125 @@
+{
+  "case": "gmsd-grid-pairB-64x64-t28",
+  "metric": "gmsd",
+  "width": 64,
+  "height": 64,
+  "threads": 28,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t28-first-profile-v1",
+  "receipt": {
+    "case": "gmsd-grid-pairB-64x64-t28",
+    "plan_sha256": "9dc391d04f24490c36b79fc81398616373c0bb5e59a46bcdd5aaaf4ba455954e",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t28-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t28-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t28-first-profile-v1/perf.data",
+    "perf_data_sha256": "96ae621c94926508bfc12f6d749442317a4300118838328555810f58efafaade",
+    "config_sha256": "1a973f76b9b489a311b0e03d8dfca7b5dc702454909de2ebb65d1ec1548fdcd5",
+    "repetitions": 5,
+    "worker_log_sha256": {
+      "worker-004.log": "2ac2a6291a279b4ea1c9c60dc531fae8637c0e827e95f54d29a40b9d6c5cd794",
+      "worker-000.log": "3c1fd88456cde869ba19a0deb9c2ba0af1880ba71bc205361ee91dec59d3b4ae",
+      "worker-002.log": "aba4a48690715e36ab177fb284ac9ecaf82e491ce4e399461c50b273d0b4fd96",
+      "worker-003.log": "8e0742d2e7495ced969c6b4f447cd7d9751123b61dca7e2e64618fc8901976f6",
+      "worker-001.log": "f81f0e42991d285f3c15dbeaea5d256d57b9d503bf18df75f4cee028c5e3a00f"
+    },
+    "score_bits": [
+      "3fa3f899bbac5744"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "a849054d85236baaea1b4ca0b95f81ba6a172e883428de2a81a123ae7a4d928b",
+  "request_sha256": "57a30eb990bc12e6108a7f39e50998c6076b17428df9ce40c9897fbc4270c769",
+  "report_sha256": "60ee820b438a0f6c4de7da1b735901d724cb3262c0cf796fb6a658bf49c5796a",
+  "script_sha256": "f3ae788606c67d70ba444e463438fcdbbe7ba33d05ac7c73ae411a0e4d35df29",
+  "top_self_symbols": [
+    {
+      "self_percent": 18.13,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__kmalloc_cache_noprof"
+    },
+    {
+      "self_percent": 17.48,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__next_zones_zonelist"
+    },
+    {
+      "self_percent": 16.81,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rcu_read_lock"
+    },
+    {
+      "self_percent": 11.99,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__mod_lruvec_state"
+    },
+    {
+      "self_percent": 10.47,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "charge_memcg"
+    },
+    {
+      "self_percent": 7.35,
+      "process": "iqa-compete",
+      "object": "ld-linux-x86-64.so.2",
+      "domain": ".",
+      "symbol": "_dl_relocate_object"
+    },
+    {
+      "self_percent": 6.9,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 4.08,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__pv_queued_spin_lock_slowpath"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_or_adoption",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t28-first-profile-v1.log",
+      "sha256": "c705fc0cb1becfdea785114f1d4ef78726eecdeedbb79ccc64b533e6ecc7c562",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.05GiB | min-avail 14033MiB | peak-load 1.34"
+      ]
+    }
+  ],
+  "source_note": null
+}

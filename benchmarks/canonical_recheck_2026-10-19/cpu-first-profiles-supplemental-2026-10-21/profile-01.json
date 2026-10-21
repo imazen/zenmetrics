@@ -1,0 +1,150 @@
+{
+  "case": "gmsd-grid-pairB-64x64-t1",
+  "metric": "gmsd",
+  "width": 64,
+  "height": 64,
+  "threads": 1,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t1-first-profile-v1",
+  "receipt": {
+    "case": "gmsd-grid-pairB-64x64-t1",
+    "plan_sha256": "768b30a5840e6507cf8ca1206c2c6d60ff75f4b3cfe1692f0b8994a9a908f3b0",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t1-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t1-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t1-first-profile-v1/perf.data",
+    "perf_data_sha256": "1bc4cae6db69021c417ead1865fa90922b8e943045097e3811b86596ec5b69f5",
+    "config_sha256": "c6284568fe382dfb96afddd033108ab63c67ca1dcf54c5a32208528ccb51fcde",
+    "repetitions": 30,
+    "worker_log_sha256": {
+      "worker-008.log": "28f63ab2eb2a965e3f77d8ef95fd6c75b2d53c0e764edc3861495e8af1da57dd",
+      "worker-018.log": "5864b3e6e0f048b267a316645d7d8af0f74cfcfbda623debf4b27c553d07e230",
+      "worker-004.log": "f94245e25672d2f331a7e1f3dc0507406d3cd8f2cfbbdf726debbb420f7a93a1",
+      "worker-020.log": "95405719b3523c3bc42bc1ed9a0e3e6d1030311e3b5b06f21cd87e3931595683",
+      "worker-010.log": "1ebd1dab052c7cc1e712878d3625769d5357b4bfe7894b8c61335e1bc3b91d2d",
+      "worker-013.log": "ee3bfad9a05952ae8a447033043cf713e3ff2b9c2c3c10870f42059f946febeb",
+      "worker-026.log": "503693f513102df68df8707e6eaa2a268b928ef6055cc0c7fd326d790cc6fca1",
+      "worker-000.log": "c4dfa80a54e0dafd7651707c164f135429957d65d698364494893ba80207fa76",
+      "worker-014.log": "66c0478b7bb5abea7f7d59378ab4bf7492c2276b1740a9745c8ba4b79afe7b6f",
+      "worker-007.log": "865b21e9c79eb71f588d7796d35da119f646abb91a757563b78482abc9604da5",
+      "worker-006.log": "2537f30a27668014e0f69ffad33e23131089e146640a90c93771300b57225119",
+      "worker-028.log": "f26a8b25fdba21bd9f61310e7cc5855d7b5466300adcf9ea11e42f65b08682f3",
+      "worker-017.log": "28d65384f8dc27f0d7ee4d39b1c578c53c41b8e6acc91c0018efc73bb11bb554",
+      "worker-024.log": "cff70c5a8a62f84a056fdc13813c9c89da3dbd67b6484c874ac16b92d2eb8751",
+      "worker-015.log": "a4263f29ea03c96747470f73d1735d2207e59b8d1547f467fe881b83e56629bc",
+      "worker-023.log": "c3ae83436211081a7d823d04c47dfaef4b6a218008dcadb5c1ebe3e9786ce9d5",
+      "worker-005.log": "a78345dc82d495cca499ec89b3005a6f9c7c9b6c0692cf6425402dc32ed410c5",
+      "worker-011.log": "88d3404f83d2a7f0aff755d799c0c6814c19a761886dac8a4f4142a44ac62e9f",
+      "worker-016.log": "1bc5bb07953d5a2f3bd2beb7bac499f9b727ae2074699141d3fc41c167cfc2b3",
+      "worker-022.log": "77067277e092befe1da037159becdb2cfd7c80166f99fe3c226d568ed008055f",
+      "worker-002.log": "aa6c1cc5fadcdad27517d0e6ff3461fd1c1bc2733ec8c3b689784738ad16788b",
+      "worker-009.log": "481b3d3aad33939dbea47b377e0e127852f2f6cc6a067c83cb274e7522835637",
+      "worker-003.log": "425ec8545fc42221a52988033499fe3175acfde1df62b9b5d684227b3dcee3ac",
+      "worker-001.log": "6932dde9900f67b8dd3aa6c036e86567bf386e6ee6fd613135e1ecc2e5ac7796",
+      "worker-025.log": "a6f6d8e4a3224005bf2ae461c32ebd4586d930bc25302202125787ac4b140c8a",
+      "worker-029.log": "ec622686cd46e8d4c5325ef1fdc189aff270b43942995243dd4514dd4dccf52a",
+      "worker-021.log": "05377fda7d159d59806ad04d51ed2157cb7aac2dce4065e1adff55824e64a250",
+      "worker-027.log": "c58ed3402821f1823019f9804de5fc570c26b82a88b036fe9841f3a7599f0999",
+      "worker-019.log": "3540872fd34434d52af2baa2196bd92e634ff8ca73d83d1753b5cf3b70fb4bb8",
+      "worker-012.log": "2afc4722524c7c537f81a49b88eab16f588d510803712a67a42721501a1b77f4"
+    },
+    "score_bits": [
+      "3fa3f899bbac5744"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "7dc6a61a5f70d3e46c29b2cd02a2ccb184d09b069a57b3f8a00fb6cccb9c01e8",
+  "request_sha256": "f6248683c04f31d2baf2d4683ee500931454abcdd460aea0283f617b41f18130",
+  "report_sha256": "45f28a0df6eab05cc8db6bf4a4b12a5c234fdb1573924a719db2854a9ae02822",
+  "script_sha256": "6c0df4e4bc14d89ac3705e3f99468d6528459f7243b0c8dd15438aa46264c7d1",
+  "top_self_symbols": [
+    {
+      "self_percent": 8.65,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "filemap_map_pages"
+    },
+    {
+      "self_percent": 4.6,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "ext4_ext_map_blocks"
+    },
+    {
+      "self_percent": 4.59,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvMNtCsSEIYsRY7Z8_14zenmetrics_cli7metricsNtB2_10MetricKind4name"
+    },
+    {
+      "self_percent": 4.52,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtCsgjhxj9CAtik_10serde_json3ser18format_escaped_strQNtNvXs_NtB4_5valueNtB10_5ValueNtNtCsevLNFiNqfJP_4core3fmt7Display3fmt15WriterFormatterNtB2_16CompactFormatterEB4_"
+    },
+    {
+      "self_percent": 4.51,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "mas_walk"
+    },
+    {
+      "self_percent": 4.46,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "srso_alias_safe_ret"
+    },
+    {
+      "self_percent": 4.36,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "nd_jump_root"
+    },
+    {
+      "self_percent": 4.34,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "ext4_es_insert_extent"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_or_adoption",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-screen64-t1-first-profile-v1.log",
+      "sha256": "576e909d9da5bf7515249b0f9614a056c4540abd9a3c0f17a4905c319589e821",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 14683MiB | peak-load 1.26"
+      ]
+    }
+  ],
+  "source_note": null
+}

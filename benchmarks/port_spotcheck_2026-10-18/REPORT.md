@@ -523,3 +523,20 @@ BasicSR 18.799147370663427, difference 0.008027920053848447 above the unchanged
 0.000602329 bound. This is separate from the documented 64² size refusal.
 Root cause and a code correction remain unverified. Earlier golden checks and
 all original observations remain retained.
+
+### Remaining cold-flag profiles (2026-10-21)
+
+The [four additional complete CPU profiles](../canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/index.json)
+bring completed distinct CPU cases to 19. Together with the retained partial
+GMSD captures and [5-of-30 FSIM capture](../canonical_recheck_2026-10-19/fsim64-t28-capped-adopt-v1.json),
+these 21 CPU flags have profiling evidence. Partial captures
+remain partial; no completed scorer is repeated for publication. The five
+additional CUDA profiles bring distinct GPU flag profiles to eight. These are
+whole fresh-worker diagnostics; their instrumented times and sampled shares
+do not qualify comparative timings or a causal fraction of a gap. Each linked
+projection retains its complete resource-wrapper receipt.
+
+The [SSIMULACRA1 64²/t1 initial20 interval](../canonical_recheck_2026-10-19/ssim1-photo64-t1-first-confirmation20.json)
+is 1.250 [1.241, 1.290], missing the unchanged precision target. Its fixed
+additional 40-block stage is queued and retains every original observation.
+No timing exception or regression acceptance is assigned.

@@ -1776,3 +1776,15 @@ benchmarks/canonical_recheck_2026-10-19/brisque-native-original-stages.json	igno
 benchmarks/canonical_recheck_2026-10-19/brisque-native-review-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/brisque-original-stage-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/niqe-odd-numerical-finding.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/profile-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/profile-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cpu-first-profiles-supplemental-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/fsim64-t28-capped-adopt-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cvvdp-t1-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli64-t28-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/cvvdp-t28-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-odd-t1-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/butteraugli-odd-t28-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/ssim1-photo64-t1-first-confirmation20.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

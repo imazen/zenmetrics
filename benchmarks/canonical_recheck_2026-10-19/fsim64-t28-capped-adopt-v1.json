@@ -1,0 +1,56 @@
+{
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/fsim64-t28-capped-adopt-v1/receipt.json",
+    "sha256": "5b07ee4789fcac56e2914cd5246f6ba3171a215f8d330da7bc45629efe8f4475"
+  },
+  "receipt": {
+    "case": "fsim-grid-pairA-64x64-t28",
+    "partial_capture": true,
+    "requested_repetitions": 30,
+    "completed_repetitions": 5,
+    "completed": [
+      {
+        "log": "worker-000.log",
+        "score_bits": "3fed0b57b70a133c"
+      },
+      {
+        "log": "worker-001.log",
+        "score_bits": "3fed0b57b70a133c"
+      },
+      {
+        "log": "worker-002.log",
+        "score_bits": "3fed0b57b70a133c"
+      },
+      {
+        "log": "worker-003.log",
+        "score_bits": "3fed0b57b70a133c"
+      },
+      {
+        "log": "worker-004.log",
+        "score_bits": "3fed0b57b70a133c"
+      }
+    ],
+    "incomplete_worker_logs": [],
+    "native_metric_calls": 0,
+    "capture": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-next-four-v1/fsim-grid-pairA-64x64-t28",
+    "plan_sha256": "fe5b62fa96cb07af726eb8a6d80307fd0b454fd6a3a74442e1e00ee1d3511403",
+    "request_sha256": "46bfc623cb9597070650f5c114750033631cf47a01bad8e0da5f85735f99f230",
+    "config_sha256": "3ed51fca93abff013ee0a43b658d280a76bc2244edb3adcfc2379314e1646865",
+    "perf_data_sha256": "4887aba5bca8408a0fd97b5638d006a4aea887d59218cde0f7d3112595c32371",
+    "worker_log_sha256": {
+      "worker-000.log": "e241263b4c7edfb1b46f1efd63bfe789b29dc9928d21effabd236b251775d46c",
+      "worker-001.log": "31af621778f43f628a56edf7b0c1adb4ed8aeb95138f9ed606690515b5c4004d",
+      "worker-002.log": "182595abeb78ca5fcefdea63da28888d5f8fcd3dd9413bd0d1d977269e6bddc9",
+      "worker-003.log": "4555f3b01245ceb8a4b371bba7a2fb70161400f1e5e66c946f9d1b61ad6fc38d",
+      "worker-004.log": "667620d8f7a0fc2721e98849258f29d8e3acfb20a9076b14b321c7b671d146b5"
+    },
+    "postprocessor_sha256": "df8db4c76761abe93cf459254a2a0fa3ccbccfb3838420dba34ceda9b6d1222b",
+    "perf_tool_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "output_sha256": {
+      "script.txt": "7c0e389e9de0f7e43282dba79afd6ecd69d435400221f566f5f3823a27f6e61e",
+      "report.txt": "321c2087a6e314592a685a05e16951c35eb16251830976a15caae3954cb0e6d0",
+      "header.txt": "51ec6e24dc70a047e08a5b99c8a23e852bc20a7d3012704b207f1dc86d83e466"
+    },
+    "qualification": "Size-capped whole-process diagnostic, with every completed scalar revalidated and any interrupted final worker retained explicitly. No scorer rerun, complete requested capture, isolated cold clock, timing ratio, numerical parity acceptance or qualified regression is claimed."
+  }
+}

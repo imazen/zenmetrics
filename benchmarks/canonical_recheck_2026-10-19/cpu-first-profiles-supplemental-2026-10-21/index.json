@@ -1,0 +1,28 @@
+{
+  "source_index": "/home/lilith/tmp/local-canonical-20261019T2330/cold-profile-publication-ready-v5.json",
+  "source_index_sha256": "6a2d59f24848f7c4432ac00fdeda623fe696709f7c4df69dd2b8e2d3785502b0",
+  "exporter_sha256": "df7e977f26cd124a16a7036542c168767a04af21092149a9bc9fe3c800420224",
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "case": "ssimulacra1-grid-pairA-64x64-t1",
+      "sha256": "dc676a5d06ad3b628cb1bc96b04722d3b7728c47f2caef56cff96ef54842fbdc"
+    },
+    {
+      "file": "profile-01.json",
+      "case": "gmsd-grid-pairB-64x64-t1",
+      "sha256": "0007785064ee3863fad777a95190f6460fc71fbe7bb3b68c7072c4aa849f7f71"
+    },
+    {
+      "file": "profile-02.json",
+      "case": "gmsd-grid-pairB-64x64-t28",
+      "sha256": "17df9ae039953b69fc6623ee636a83dab1ba80daf39599fbe6f8f2130bfcd274"
+    },
+    {
+      "file": "profile-03.json",
+      "case": "ssim2-grid-pairA-255x257-t28",
+      "sha256": "1c95de56a602f172d03581563ef3231c88872d0ceb64b79180ce54f48b2aa022"
+    }
+  ],
+  "qualification": "Whole fresh CPU worker processes, including startup, RGB file loading and teardown. Each worker performs only its first scorer evaluation; all completed scalar observations are revalidated. CPU cycle samples do not isolate the internal clock or worker-thread spans, measure GPU kernels, establish a causal share of a timing gap, or qualify a regression. Instrumented durations are not comparison evidence."
+}
