@@ -58,7 +58,7 @@ drivers and fleet executors with pinned build identities.
 
 ## Metrics
 
-[Models & metrics explorer](https://imazen.github.io/zenmetrics/#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)
+[Models & metrics explorer](https://metric-brief.pages.dev/#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)
 
 Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 

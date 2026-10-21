@@ -10,12 +10,7 @@ on:
     paths:
       - '.github/workflows/site.yml'
       - 'web/site/**'
-      - 'scripts/dashboard/**'
-      - 'benchmarks/dashboard/**'
-      - 'benchmarks/iqa_complexity_2026-10-17/**'
-      - 'scripts/complexity/**'
-      - 'docs/AIC2026_*.md'
-      - 'docs/paper/**'
+      - 'scripts/dashboard/publish_extension.py'
       - 'web/metrics/**'
       - 'crates/zenmetrics-browser/**'
       - 'crates/zenmetrics-api/**'
@@ -75,21 +70,16 @@ jobs:
           export TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
           CHECKPOINT_OUT="$GITHUB_WORKSPACE/browser-build" bash scripts/checkpoint/build-browser.sh
           python scripts/checkpoint/prepare-pages.py --build browser-build --source "$GITHUB_SHA" --out site
-      - name: Generate and merge AIC2026 evidence pages
-        run: |
-          export TMPDIR="$HOME/tmp"
-          python -m unittest discover -s scripts/dashboard -p 'test_*.py'
-          node scripts/dashboard/test-plots.mjs
-          python scripts/dashboard/regenerate.py
-          python scripts/dashboard/build.py --output "$HOME/tmp/aic2026-dashboard"
-          python scripts/dashboard/publish_extension.py --viewer site --dashboard "$HOME/tmp/aic2026-dashboard" --source "$GITHUB_SHA"
+      # Workbench only: benchmark and reproduction evidence is published by the metric brief
+      # (scripts/complexity/brief.sh); web/site/_redirects sends the old /aic2026/ pages there.
+      - name: Add landing navigation
+        run: python scripts/dashboard/publish_extension.py --viewer site --landing-only --source "$GITHUB_SHA"
       - name: Verify isolated browser workers
         env:
           NN_MODELS: ${{ inputs.nn_models }}
         run: |
           python -m pip install playwright==1.63.0
           python -m playwright install --with-deps chromium
-          python scripts/dashboard/check.py "$HOME/tmp/aic2026-dashboard"
           cargo run --locked --release -p zenmetrics-browser --example browser_oracle > "$HOME/tmp/browser-oracle.json"
           # Learned metrics run on Chromium's SwiftShader WebGPU adapter. The
           # default subset covers every model kind (pair graph, no-reference,
@@ -127,7 +117,8 @@ jobs:
             echo "Production still serves ${served:-no provenance}, not $GITHUB_SHA"
             exit 1
           fi
-          python scripts/dashboard/verify_live.py --url https://metrics.imazen.org/aic2026/ --source "$GITHUB_SHA"
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://metrics.imazen.org/aic2026/)
+          [ "$code" = 301 ] || { echo "/aic2026/ should redirect to the metric brief, got HTTP $code"; exit 1; }
           # The full learned-metric parity run checked this build above; the
           # live site re-runs one learned metric end to end.
           python scripts/checkpoint/check-pages.py site --url "$url" --nn-models lpips-squeeze

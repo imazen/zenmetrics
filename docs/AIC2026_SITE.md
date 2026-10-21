@@ -1,5 +1,13 @@
 # AIC2026 results pages
 
+**Retired (2026-10-21).** https://metrics.imazen.org/ now hosts only the browser
+workbench. The site build no longer merges `/aic2026/`; `web/site/_redirects`
+sends those URLs to the matching tabs of the metric brief,
+https://metric-brief.pages.dev/ (reproduction, model cards, cost), a separate
+site. The human-score agreement, Pareto and statistics pages are not published:
+their data is outdated. The deploy check now requires `/aic2026/` to answer 301.
+The rest of this file is the historical record of how the pages were built.
+
 The existing comparison viewer at https://metrics.imazen.org/ is hosted by
 Cloudflare Pages (`.github/workflows/site.yml`, project `zenmetrics-site`).
 The separate benchmark dashboard deploys to https://imazen.github.io/zenmetrics/

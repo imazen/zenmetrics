@@ -15,7 +15,7 @@ from catalog import ROOT, rows as catalog_rows, md_tables, plain, function, mode
 import repro
 from aic_semantics import fixed_factor_contract, description as variant_description
 
-SITE='https://imazen.github.io/zenmetrics/'
+SITE='https://metric-brief.pages.dev/'  # the metric brief (scripts/complexity/brief.sh); the old GitHub Pages dashboard redirects there
 REPO='https://github.com/imazen/zenmetrics/blob/master/'
 MISSING='not recorded'
 
@@ -172,7 +172,7 @@ def cards():
              source=record_path,readme_evidence=readme_evidence,columns=row['columns'],
              repro=repro.commands(metric,row,{'_card_dir':path.parent.name,'_card_source':record_path,
                  '_consent':next((value for value in re.findall(r'ZENMETRICS_NN_ACCEPT_WEIGHTS=([a-z0-9_]+)',contracts.get(metric,''))),None)} if path else {}),
-             links={'speed':SITE+'#speed?metric='+metric,'quality':SITE+'#quality?metric='+metric,'agreement':SITE+'#agreement?metric='+metric} ))
+             links={'card':SITE+'#models&m='+metric,'speed':SITE+'#speed&q='+metric} ))
 
 
 def exports(items):
@@ -390,7 +390,7 @@ def documentation(items):
         if c['readme_evidence']:out+=['**Crate documentation:** ['+c['readme_evidence']['source']+']('+REPO+c['readme_evidence']['source']+')', '', c['readme_evidence']['text'],'']
         out+=['**Sources:** '+ ' · '.join('['+p+']('+REPO+p+')' for p in c['evidence']+c['license_evidence']),'',
               '**Known divergences:** '+(' · '.join('['+d['heading']+']('+d['url']+')' for d in c['divergences']) or '[Consult the divergence ledger]('+REPO+'DIVERGENCES.md); no exact metric heading joined.'),'',
-              '[Speed observations]('+c['links']['speed']+') · [AIC/CID22 and other correlation panels]('+c['links']['quality']+') · [Agreement evidence]('+c['links']['agreement']+')','']
+              '[Model card and reproduction status]('+c['links']['card']+') · [Speed]('+c['links']['speed']+')','']
     return '\n'.join(out)
 
 

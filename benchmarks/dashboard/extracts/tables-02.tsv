@@ -1,4 +1,48 @@
 document	table	row	column	value
+docs/AIC2026_METRICS_AND_FITTING.md	2	11	Verdict	acceptable; one JPG-16 tail
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	Ours	fsim
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	Column	FSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	Space	C
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	med |ΔJND|	0.017
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	max |ΔJND|	0.27
+docs/AIC2026_METRICS_AND_FITTING.md	2	12	Verdict	acceptable
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	Ours	dssim
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	Column	DSSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	Space	C
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	med |ΔJND|	0.0001
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	max |ΔJND|	0.0004
+docs/AIC2026_METRICS_AND_FITTING.md	2	13	Verdict	exact
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	Ours	iwssim (studio-Y)
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	Column	IW-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	Space	C
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	med |ΔJND|	0.077
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	max |ΔJND|	0.68
+docs/AIC2026_METRICS_AND_FITTING.md	2	14	Verdict	superseded by iwssim-piq — the gap was a Gaussian-vs-Laplacian parent-band bug + ingress
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	Ours	iwssim-piq
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	Column	IW-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	Space	raw
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	med |ΔJND|	3.9e-6
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	max |ΔJND|	2.6e-5
+docs/AIC2026_METRICS_AND_FITTING.md	2	15	Verdict	implemented — unrounded YIQ ingress, ~exact (n=54)
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	Ours	msssim (studio-Y)
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	Column	MS-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	med |ΔJND|	0.067
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	max |ΔJND|	2.64
+docs/AIC2026_METRICS_AND_FITTING.md	2	16	Verdict	MATLAB-variant gap — superseded by msssim-libvmaf
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	Ours	ssim-libvmaf
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	Column	SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	med |ΔJND|	0.00004
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	max |ΔJND|	0.0007
+docs/AIC2026_METRICS_AND_FITTING.md	2	17	Verdict	implemented — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.8e-5)
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	Ours	msssim-libvmaf
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	Column	MS-SSIM
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	Space	B
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	med |ΔJND|	0.0001
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	max |ΔJND|	0.0022
+docs/AIC2026_METRICS_AND_FITTING.md	2	18	Verdict	implemented — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.6e-5)
+docs/AIC2026_METRICS_AND_FITTING.md	2	19	Ours	vif (studio-Y)
 docs/AIC2026_METRICS_AND_FITTING.md	2	19	Column	VIF
 docs/AIC2026_METRICS_AND_FITTING.md	2	19	Space	C
 docs/AIC2026_METRICS_AND_FITTING.md	2	19	med |ΔJND|	0.26
@@ -287,42 +331,3 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	in CSV?	dataset
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	zenmetrics metric	psnr-cr
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	n	61
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	median |Δ|	2.1e-3
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ|	5.7e-2
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ| in JND	8.8e-3
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	status	close; chroma residual
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	note	AIC2026_METRICS_AND_FITTING.md; full-resolution studio-601 chroma
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	name	PSNR-HVS-vmaf (= dataset PSNR-HVS)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	zenmetrics metric	psnrhvs-daala (psnrhvs_daala)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	median |Δ|	0.000871
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ|	0.0154
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ| in JND	0.00449
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	status	reproduced
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	note	dataset PSNR-HVS is the same column (identical values)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	name	PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_y)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	median |Δ|	0.00121
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ|	0.0261
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ| in JND	0.00659
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	status	reproduced
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	note	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	name	PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	in CSV?	dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cb)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	median |Δ|	0.00264
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ|	0.0382
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	status	reproduced
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	note	max 0.038 dB of a 27 dB range
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	name	PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	in CSV?	dataset
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cr)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	median |Δ|	0.00306
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ|	0.0691
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	status	reproduced

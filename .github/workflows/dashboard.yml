@@ -6,6 +6,7 @@ on:
       - 'README.md'
       - 'benchmarks/**'
       - 'web/dashboard/**'
+      - 'web/retired-dashboard/**'
       - 'web/metrics/coverage.json'
       - 'scripts/dashboard/**'
       - 'docs/**'
@@ -48,9 +49,11 @@ jobs:
       - run: python scripts/dashboard/model_cards.py --check
       - run: python scripts/dashboard/build.py --output _dashboard
       - run: python scripts/dashboard/check.py _dashboard
+      # The dashboard is still built and checked (it guards benchmark registration), but GitHub Pages now
+      # serves only a redirect to the metric brief: its agreement and quality panels are outdated.
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: _dashboard
+          path: web/retired-dashboard
   deploy:
     # Branch dispatches verify the build; production deploy follows coordinator landing.
     if: github.ref == 'refs/heads/master'

@@ -9,7 +9,7 @@ embedded aggregates. Tabs: overview, speed, size scaling, counted cost, reproduc
 
 Every number on the page comes from the data file; brief_data.py documents its sources.
 """
-import argparse, csv, datetime, json, math, re
+import argparse, csv, datetime, io, json, math, re, sys
 from pathlib import Path
 
 HERE = Path(__file__).with_name('brief_page')
@@ -203,6 +203,26 @@ def cell_stats(F, r):
     return dict(median=med, mean=mean, ci=ci, lo=v[0], hi=v[-1], fast=v[0], n=n)
 
 
+# Card columns the brief does not publish: human-score agreement and quality panels are outdated evaluations.
+UNPUBLISHED_CARD_FIELDS = ('speed_observations', 'agreement_observations', 'quality_panels')
+
+
+def write_cards(cards, out):
+    """model-cards.json / .csv / .bib through the card exporter of the old dashboard (scripts/dashboard/model_cards.py)."""
+    sys.path.insert(0, str(ROOT / 'scripts/dashboard'))
+    import model_cards
+    files = model_cards.exports(cards)
+    rows = list(csv.DictReader(io.StringIO(files['model-cards.csv'])))
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=[f for f in rows[0] if f not in UNPUBLISHED_CARD_FIELDS] if rows else [], lineterminator='\n')
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: v for k, v in r.items() if k not in UNPUBLISHED_CARD_FIELDS})
+    files['model-cards.csv'] = buf.getvalue()
+    for name, text in files.items():
+        (out / name).write_text(text)
+
+
 def write_csvs(d, meta, out):
     perf = d.get('perf') or {}
     F = {f: i for i, f in enumerate(perf.get('fields', []))}
@@ -268,6 +288,7 @@ def build(data_path, out):
         'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': (d.get('checks') or []) + undocumented(meta)}
     out.mkdir(parents=True, exist_ok=True)
     write_csvs(d, meta, out)
+    write_cards(d.get('cards') or [], out)
     built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     blob = json.dumps(data, separators=(',', ':')).replace('</', '<\\/')
     page = (HERE / 'index.html').read_text()

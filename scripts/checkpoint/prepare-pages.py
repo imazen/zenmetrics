@@ -59,7 +59,8 @@ def main():
                     with archive.extractfile(member) as source, target.open('wb') as output:
                         shutil.copyfileobj(source, output)
         provenance={'schema':1,'checkpoint_tag':args.tag,'checkpoint_source':args.source,'archive_sha256':expected}
-    shutil.copyfile(Path(__file__).resolve().parents[2] / 'web/site/_headers', args.out / '_headers')
+    for name in ('_headers', '_redirects'):
+        shutil.copyfile(Path(__file__).resolve().parents[2] / 'web/site' / name, args.out / name)
     index = args.out / 'index.html'
     text = index.read_text()
     if text.count('src="app.js"') != 1:

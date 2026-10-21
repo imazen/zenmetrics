@@ -1,0 +1,13 @@
+# The AIC2026 evidence pages moved to the metric brief (benchmarks, reproduction, model cards), a separate site
+# from this workbench. The human-score agreement, Pareto and statistics pages are retired: their data is outdated.
+/aic2026/reproduction https://metric-brief.pages.dev/#repro 301
+/aic2026/reproduction.html https://metric-brief.pages.dev/#repro 301
+/aic2026/models https://metric-brief.pages.dev/#models 301
+/aic2026/models.html https://metric-brief.pages.dev/#models 301
+/aic2026/configurations https://metric-brief.pages.dev/#models 301
+/aic2026/configurations.html https://metric-brief.pages.dev/#models 301
+/aic2026/complexity https://metric-brief.pages.dev/#cost 301
+/aic2026/complexity.html https://metric-brief.pages.dev/#cost 301
+/aic2026/model-cards.json https://metric-brief.pages.dev/model-cards.json 301
+/aic2026/* https://metric-brief.pages.dev/ 301
+/aic2026 https://metric-brief.pages.dev/ 301

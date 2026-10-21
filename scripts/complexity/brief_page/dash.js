@@ -132,7 +132,7 @@
   }
   const PIN_DEFAULT = ['psnr-y', 'ssim2', 'butteraugli', 'vmaf', 'lpips-alex', 'dvifmish-port-lap-v0.2'].filter(m => NAMES.includes(m)).map((m, i) => `${m}:${i + 1}`).join(',');
   const DEF = { v: 'overview', host: defaultHost(), size: SIZE['aic-small'] ? 'aic-small' : SIZES[0].name, th: 'both', ph: 'warm', show: 'spread', ax: 'log',
-    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', cf: 'all', xf: 'all', jf: 'all', mc: 'all', mk: 'all', sort: '' };
+    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', cf: 'all', xf: 'all', jf: 'all', mc: 'all', mk: 'all', m: '', sort: '' };
   let S = { ...DEF };
   function readHash() {
     const [v, ...kv] = location.hash.slice(1).split('&');
@@ -963,7 +963,16 @@
     const n = (k, v) => all.filter(c => v === 'all' || (k === 'mc' ? (v === 'cited') === !!c.citation : c.kind === v)).length;
     rail.append(famSeg(), search('Find model, author or paper'),
       seg('Citation', 'mc', [['all', `All (${n('mc', 'all')})`], ['cited', `Verified (${n('mc', 'cited')})`], ['needed', `Needed (${n('mc', 'needed')})`]]),
-      seg('Reference', 'mk', [['all', 'All'], ['FR', `Full-reference (${n('mk', 'FR')})`], ['NR', `No-reference (${n('mk', 'NR')})`]]));
+      seg('Reference', 'mk', [['all', 'All'], ['FR', `Full-reference (${n('mk', 'FR')})`], ['NR', `No-reference (${n('mk', 'NR')})`]]),
+      cardDownloads());
+  }
+  function cardDownloads() {
+    const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'Download every card'));
+    const row = h('div', 'seg');
+    for (const [href, text] of [['model-cards.json', 'JSON'], ['model-cards.csv', 'CSV'], ['model-cards.bib', 'BibTeX']]) {
+      const a = h('a', 'icon', text); a.href = href; a.download = ''; a.style.textDecoration = 'none'; row.append(a);
+    }
+    box.append(row); return box;
   }
   function drawModels(head, body) {
     const q = (S.q || '').toLowerCase(), host = DEF.host, size = DEF.size;
@@ -1030,7 +1039,7 @@
     const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'Download'));
     const b = h('button', null, 'This table (CSV)'); b.type = 'button'; b.onclick = downloadView;
     const seg2 = h('div', 'seg'); seg2.append(b);
-    for (const [href, text] of [['timings.csv', 'All timings (CSV)'], ['complexity.csv', 'Counted costs (CSV)'], ['brief.pdf', 'Printable PDF']]) {
+    for (const [href, text] of [['timings.csv', 'All timings (CSV)'], ['complexity.csv', 'Counted costs (CSV)'], ['model-cards.csv', 'Model cards (CSV)'], ['model-cards.json', 'Model cards (JSON)'], ['model-cards.bib', 'Model card citations (BibTeX)'], ['brief.pdf', 'Printable PDF']]) {
       const a = h('a', null, text); a.href = href; a.download = ''; a.className = 'icon'; a.style.textDecoration = 'none'; seg2.append(a);
     }
     box.append(seg2, h('div', 'hint', 'timings.csv has every cell: CPU, metric, size, threads, phase, median, mean, 95 % interval, spread, fastest, n, clean and flagged rounds, peak RSS, SIMD tier, placement.'));
@@ -1145,4 +1154,6 @@
   readHash();
   shell();
   if (PRINT) printAll(); else mount();
+  // Deep link to one metric's record (#models&m=<cli name>), as the workbench coverage file and model-card docs use.
+  if (!PRINT && S.m && (M[S.m] || CARDS[S.m])) openDrawer(S.m);
 })();

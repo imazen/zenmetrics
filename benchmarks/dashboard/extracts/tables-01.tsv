@@ -1,4 +1,10 @@
 document	table	row	column	value
+docs/METRIC_PROVENANCE.md	2	3	AIC-4 column	GMSD
+docs/METRIC_PROVENANCE.md	2	3	published impl	libgmsd lineage
+docs/METRIC_PROVENANCE.md	2	3	med|Δ|	2.8e-7
+docs/METRIC_PROVENANCE.md	2	3	max|Δ|	1.9e-6
+docs/METRIC_PROVENANCE.md	2	3	status	✅ essentially exact
+docs/METRIC_PROVENANCE.md	2	4	AIC-4 column	DSSIM
 docs/METRIC_PROVENANCE.md	2	4	published impl	dssim-core
 docs/METRIC_PROVENANCE.md	2	4	med|Δ|	2.7e-7
 docs/METRIC_PROVENANCE.md	2	4	max|Δ|	6.5e-7
@@ -237,6 +243,58 @@ DIVERGENCES.md	0	32	Crate	zenmetrics-nn dmm
 DIVERGENCES.md	0	32	Reference implementation + version	Baoliang93/DMM DMM_PyTorch 0.1.2 (MIT), CPU fp32 torch.svd
 DIVERGENCES.md	0	32	Oracle for goldens/parity	netlib-sgesdd goldens on the engine's own taps (dmm_goldens_netlib_<engine>.tsv); MKL goldens recorded, not gated
 DIVERGENCES.md	0	32	Worst observed delta	score is solver-draw-dependent in degenerate patches — see ### dmm
+DIVERGENCES.md	1	0	Scale	1
+DIVERGENCES.md	1	0	Plane	cur
+DIVERGENCES.md	1	0	Differing f32 words	0/36864
+DIVERGENCES.md	1	0	Max absolute difference	0
+DIVERGENCES.md	1	1	Scale	1
+DIVERGENCES.md	1	1	Plane	mu
+DIVERGENCES.md	1	1	Differing f32 words	0/36864
+DIVERGENCES.md	1	1	Max absolute difference	0
+DIVERGENCES.md	1	2	Scale	1
+DIVERGENCES.md	1	2	Plane	mu_sq
+DIVERGENCES.md	1	2	Differing f32 words	0/36864
+DIVERGENCES.md	1	2	Max absolute difference	0
+DIVERGENCES.md	1	3	Scale	1
+DIVERGENCES.md	1	3	Plane	norm
+DIVERGENCES.md	1	3	Differing f32 words	0/36864
+DIVERGENCES.md	1	3	Max absolute difference	0
+DIVERGENCES.md	1	4	Scale	2
+DIVERGENCES.md	1	4	Plane	cur
+DIVERGENCES.md	1	4	Differing f32 words	3654/9216
+DIVERGENCES.md	1	4	Max absolute difference	4.57763671875e-05
+DIVERGENCES.md	1	5	Scale	2
+DIVERGENCES.md	1	5	Plane	mu
+DIVERGENCES.md	1	5	Differing f32 words	2043/9216
+DIVERGENCES.md	1	5	Max absolute difference	3.0517578125e-05
+DIVERGENCES.md	1	6	Scale	2
+DIVERGENCES.md	1	6	Plane	mu_sq
+DIVERGENCES.md	1	6	Differing f32 words	3715/9216
+DIVERGENCES.md	1	6	Max absolute difference	0.0078125
+DIVERGENCES.md	1	7	Scale	2
+DIVERGENCES.md	1	7	Plane	norm
+DIVERGENCES.md	1	7	Differing f32 words	5234/9216
+DIVERGENCES.md	1	7	Max absolute difference	0.0020902156829833984
+DIVERGENCES.md	2	0	Case	vmaf-studio601-grid-pairA-3840x2160-t1
+DIVERGENCES.md	2	0	Current native	92.691578992858453
+DIVERGENCES.md	2	0	Canonical first sample	92.719035484555903
+DIVERGENCES.md	2	0	Maximum absolute difference	0.027456491697449792
+DIVERGENCES.md	2	0	Existing bound passes	False
+DIVERGENCES.md	2	1	Case	vmaf-studio601-grid-pairA-3840x2160-t28
+DIVERGENCES.md	2	1	Current native	92.691578992858453
+DIVERGENCES.md	2	1	Canonical first sample	92.719035484555903
+DIVERGENCES.md	2	1	Maximum absolute difference	0.027456491697449792
+DIVERGENCES.md	2	1	Existing bound passes	False
+DIVERGENCES.md	2	2	Case	vmaf-neg-studio601-grid-pairA-3840x2160-t1
+DIVERGENCES.md	2	2	Current native	90.704283702489448
+DIVERGENCES.md	2	2	Canonical first sample	90.731845077129009
+DIVERGENCES.md	2	2	Maximum absolute difference	0.027561374639560654
+DIVERGENCES.md	2	2	Existing bound passes	False
+DIVERGENCES.md	2	3	Case	vmaf-neg-studio601-grid-pairA-3840x2160-t28
+DIVERGENCES.md	2	3	Current native	90.704283702489448
+DIVERGENCES.md	2	3	Canonical first sample	90.731845077129009
+DIVERGENCES.md	2	3	Maximum absolute difference	0.027561374639560654
+DIVERGENCES.md	2	3	Existing bound passes	False
 docs/AIC2026_METRICS_AND_FITTING.md	0	0	Metric	Butteraugli
 docs/AIC2026_METRICS_AND_FITTING.md	0	0	Fitted JND mapping	0.7624 · max(0, x)^0.7387
 docs/AIC2026_METRICS_AND_FITTING.md	0	1	Metric	Butteraugli-3norm
@@ -349,47 +407,3 @@ docs/AIC2026_METRICS_AND_FITTING.md	2	11	Column	FSIMc
 docs/AIC2026_METRICS_AND_FITTING.md	2	11	Space	A (k4)
 docs/AIC2026_METRICS_AND_FITTING.md	2	11	med |ΔJND|	0.0065
 docs/AIC2026_METRICS_AND_FITTING.md	2	11	max |ΔJND|	0.31
-docs/AIC2026_METRICS_AND_FITTING.md	2	11	Verdict	acceptable; one JPG-16 tail
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	Ours	fsim
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	Column	FSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	Space	C
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	med |ΔJND|	0.017
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	max |ΔJND|	0.27
-docs/AIC2026_METRICS_AND_FITTING.md	2	12	Verdict	acceptable
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	Ours	dssim
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	Column	DSSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	Space	C
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	med |ΔJND|	0.0001
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	max |ΔJND|	0.0004
-docs/AIC2026_METRICS_AND_FITTING.md	2	13	Verdict	exact
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	Ours	iwssim (studio-Y)
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	Column	IW-SSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	Space	C
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	med |ΔJND|	0.077
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	max |ΔJND|	0.68
-docs/AIC2026_METRICS_AND_FITTING.md	2	14	Verdict	superseded by iwssim-piq — the gap was a Gaussian-vs-Laplacian parent-band bug + ingress
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	Ours	iwssim-piq
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	Column	IW-SSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	Space	raw
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	med |ΔJND|	3.9e-6
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	max |ΔJND|	2.6e-5
-docs/AIC2026_METRICS_AND_FITTING.md	2	15	Verdict	implemented — unrounded YIQ ingress, ~exact (n=54)
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	Ours	msssim (studio-Y)
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	Column	MS-SSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	Space	B
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	med |ΔJND|	0.067
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	max |ΔJND|	2.64
-docs/AIC2026_METRICS_AND_FITTING.md	2	16	Verdict	MATLAB-variant gap — superseded by msssim-libvmaf
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	Ours	ssim-libvmaf
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	Column	SSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	Space	B
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	med |ΔJND|	0.00004
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	max |ΔJND|	0.0007
-docs/AIC2026_METRICS_AND_FITTING.md	2	17	Verdict	implemented — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.8e-5)
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	Ours	msssim-libvmaf
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	Column	MS-SSIM
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	Space	B
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	med |ΔJND|	0.0001
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	max |ΔJND|	0.0022
-docs/AIC2026_METRICS_AND_FITTING.md	2	18	Verdict	implemented — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.6e-5)
-docs/AIC2026_METRICS_AND_FITTING.md	2	19	Ours	vif (studio-Y)

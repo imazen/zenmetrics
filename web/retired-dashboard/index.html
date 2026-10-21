@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>zenmetrics benchmarks moved</title>
+<meta http-equiv="refresh" content="3;url=https://metric-brief.pages.dev/">
+<style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 16px}</style>
+<script>
+// Old dashboard views map to the brief's tabs; the agreement and quality views are retired (outdated data).
+var tab = {models: '#models', catalog: '#models', ranking: '#speed', speed: '#speed', complexity: '#cost'}[location.hash.slice(1).split('?')[0]] || '';
+if (/reproduction/.test(location.pathname)) tab = '#repro'; else if (/models|configurations/.test(location.pathname)) tab = '#models'; else if (/complexity/.test(location.pathname)) tab = '#cost';
+location.replace('https://metric-brief.pages.dev/' + tab);
+</script></head><body>
+<h1>The zenmetrics benchmarks moved</h1>
+<p>Speed, reproduction status and model cards are now at <a href="https://metric-brief.pages.dev/">metric-brief.pages.dev</a>.
+The browser workbench stays at <a href="https://metrics.imazen.org/">metrics.imazen.org</a>.</p>
+<p>The human-score agreement and quality panels that used to be here are retired: their data is outdated.</p>
+</body></html>

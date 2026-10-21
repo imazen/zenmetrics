@@ -1,0 +1,38 @@
+document	table	row	column	value
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	worst |Δ|	2.981e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	0	worst JND	5.65e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	model	ckdn
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	worst |Δ|	2.683e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	1	worst JND	5.09e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	model	afine
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	worst |Δ|	7.228e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	2	worst JND	1.42e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	model	afine
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	pairs	15
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	worst |Δ|	9.865e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	3	worst JND	1.94e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	model	dreamsim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	pairs	21
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	worst |Δ|	2.064e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	4	worst JND	1.17e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	model	dreamsim
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	pairs	21
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst |Δ|	3.577e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	5	worst JND	2.03e-05
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	engine	rten
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst |Δ|	5.295e-08
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	6	worst JND	2.13e-06
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	model	ahiq
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	engine	ort-cuda
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	pairs	17
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst |Δ|	2.582e-07
+benchmarks/nn_aic2026_crosscheck_2026-10-15.md	1	7	worst JND	1.04e-05

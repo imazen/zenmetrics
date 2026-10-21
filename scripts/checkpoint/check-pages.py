@@ -45,7 +45,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 WORKBENCH = 'https://metrics.imazen.org/'
-DASHBOARD = 'https://imazen.github.io/zenmetrics/#models?metric='
+DASHBOARD = 'https://metric-brief.pages.dev/#models&m='
 
 
 def unavailable_reason(name, refusal):

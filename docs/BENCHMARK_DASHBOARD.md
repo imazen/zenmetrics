@@ -1,8 +1,12 @@
 # Benchmark dashboard
 
-The [GitHub Pages dashboard](https://imazen.github.io/zenmetrics/) rebuilds from
-registered measurements after reviewed changes reach `master`. Its workflow and
-hosting are separate from the Cloudflare scoring viewer.
+**Retired from publication (2026-10-21).** https://imazen.github.io/zenmetrics/ now
+serves only a redirect (`web/retired-dashboard/`) to the metric brief,
+https://metric-brief.pages.dev/ (`scripts/complexity/brief.sh`), which publishes speed,
+reproduction status and model cards. Its agreement and quality panels are not
+published: that data is outdated. `dashboard.yml` still builds and checks this
+dashboard on every relevant push, because it guards benchmark registration; the
+built pages are no longer deployed. The rest of this file describes that build.
 
 ## Coverage and limits
 

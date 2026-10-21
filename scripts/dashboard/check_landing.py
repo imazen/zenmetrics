@@ -23,9 +23,10 @@ try:
             page=browser.new_page(viewport={'width':width,'height':1000},color_scheme=theme)
             page.goto('http://127.0.0.1:3371/',wait_until='networkidle')
             links=page.locator('nav[aria-label="Results"] a').evaluate_all('(nodes)=>nodes.map(n=>n.getAttribute("href"))')
-            assert len(links)==7,links
+            assert len(links)==5,links
             assert 'https://gigapixels.imazen.org/' in links
-            assert '/aic2026/' in links and '/aic2026/complexity.html' in links
+            # Benchmark evidence lives on the metric brief; the workbench links there and hosts no /aic2026/ pages.
+            assert 'https://metric-brief.pages.dev/' in links and not any(l.startswith('/aic2026') for l in links),links
             assert page.locator('.evidence-header').count()==1
             overflow=page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert not overflow,(width,theme)

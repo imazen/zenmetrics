@@ -74,14 +74,14 @@ docs/METRIC_PROVENANCE.md	0	10	crate	in-tree crates/hdrvdp
 docs/METRIC_PROVENANCE.md	0	10	metric paper	Mantiuk et al., HDR-VDP-2, ACM TOG 30(4) 2011
 docs/METRIC_PROVENANCE.md	0	10	reference impl (validation oracle)	official HDR-VDP 2.2.2 MATLAB release (ISC-licensed)
 docs/METRIC_PROVENANCE.md	0	10	provenance	reference reimplementation
-docs/METRIC_PROVENANCE.md	0	10	input convention	absolute luminance cd/m² + display params — not sRGB8
+docs/METRIC_PROVENANCE.md	0	10	input convention	absolute luminance cd/m² + display params; 8-bit sRGB through upstream's sRGB-display encoding (sRGB EOTF onto a 100 cd/m² peak, 1 cd/m² black display) at 30 ppd, checked against the official release in crates/hdrvdp/tests/golden_srgb_display.rs
 docs/METRIC_PROVENANCE.md	0	10	output	JOD / P_det / Q
 docs/METRIC_PROVENANCE.md	0	11	--metric	hdrvdp3
 docs/METRIC_PROVENANCE.md	0	11	crate	in-tree crates/hdrvdp (v3 module)
 docs/METRIC_PROVENANCE.md	0	11	metric paper	same HDR-VDP lineage — Mantiuk et al., ACM TOG 30(4) 2011, doi:10.1145/2010324.1964935 (v3 is the display-adaptive revision; upstream asks to cite the 2011 paper + version number)
 docs/METRIC_PROVENANCE.md	0	11	reference impl (validation oracle)	official HDR-VDP 3.0.7 MATLAB release + jpeg-ai-qaf VDP3/ numpy port @ 0628a6b (verified equal — see DIVERGENCES)
 docs/METRIC_PROVENANCE.md	0	11	provenance	reference reimplementation (f64 end-to-end)
-docs/METRIC_PROVENANCE.md	0	11	input convention	absolute luminance cd/m², explicit required viewing conditions — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age
+docs/METRIC_PROVENANCE.md	0	11	input convention	absolute luminance cd/m², explicit required viewing conditions — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age; 8-bit sRGB through upstream's sRGB-display with task quality, led-lcd-srgb, age 24, no surround, 30 ppd
 docs/METRIC_PROVENANCE.md	0	11	output	q_jod 0–10 (10 = identical) + P_map
 docs/METRIC_PROVENANCE.md	0	12	--metric	vmaf (lib only)
 docs/METRIC_PROVENANCE.md	0	12	crate	in-tree crates/vmaf
@@ -360,9 +360,3 @@ docs/METRIC_PROVENANCE.md	2	2	published impl	RGB-MSE / rounded studio-Y / 6:1:1
 docs/METRIC_PROVENANCE.md	2	2	med|Δ|	≤0.006 (S01 pt)
 docs/METRIC_PROVENANCE.md	2	2	max|Δ|	—
 docs/METRIC_PROVENANCE.md	2	2	status	✅
-docs/METRIC_PROVENANCE.md	2	3	AIC-4 column	GMSD
-docs/METRIC_PROVENANCE.md	2	3	published impl	libgmsd lineage
-docs/METRIC_PROVENANCE.md	2	3	med|Δ|	2.8e-7
-docs/METRIC_PROVENANCE.md	2	3	max|Δ|	1.9e-6
-docs/METRIC_PROVENANCE.md	2	3	status	✅ essentially exact
-docs/METRIC_PROVENANCE.md	2	4	AIC-4 column	DSSIM

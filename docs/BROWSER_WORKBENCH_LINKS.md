@@ -62,7 +62,7 @@ lists every CLI metric name with its browser status. It is served with
   "workbench": "https://metrics.imazen.org/",
   "contract": "docs/BROWSER_WORKBENCH_LINKS.md",
   "workbench_url": "https://metrics.imazen.org/?metric={name}",
-  "dashboard_url": "https://imazen.github.io/zenmetrics/#models?metric={name}",
+  "dashboard_url": "https://metric-brief.pages.dev/#models&m={name}",
   "metrics": [
     {"name": "psnr", "status": "score+map", "module": "full", "maps": ["squared_error"], "reason": null},
     {"name": "ssim2-gpu", "status": "unavailable", "module": null, "maps": [], "reason": "GPU implementation …"}
@@ -99,7 +99,9 @@ by default; the full set's GPU receipt is in
 ## Links from the workbench
 
 For the selected metric the workbench links:
-- its dashboard model card: `https://imazen.github.io/zenmetrics/#models?metric=<cli-name>`;
-- its measured evidence on the dashboard: `#speed?metric=<cli-name>` and
-  `#agreement?metric=<cli-name>` under `https://imazen.github.io/zenmetrics/`;
+- its model card on the metric brief: `https://metric-brief.pages.dev/#models&m=<cli-name>`
+  (opens the card in the details panel);
+- its speed on the brief: `#speed&q=<cli-name>` under `https://metric-brief.pages.dev/`.
+  The former `#agreement` link is retired with the GitHub Pages dashboard (2026-10-21):
+  the agreement data is outdated and no longer published;
 - this coverage entry (`coverage.json`).

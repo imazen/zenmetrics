@@ -3,7 +3,7 @@
   "workbench": "https://metrics.imazen.org/",
   "contract": "docs/BROWSER_WORKBENCH_LINKS.md",
   "workbench_url": "https://metrics.imazen.org/?metric={name}",
-  "dashboard_url": "https://imazen.github.io/zenmetrics/#models?metric={name}",
+  "dashboard_url": "https://metric-brief.pages.dev/#models&m={name}",
   "metrics": [
     {"name": "vmaf", "status": "score-only", "module": "full", "maps": [], "reason": null},
     {"name": "vmaf-neg", "status": "score-only", "module": "full", "maps": [], "reason": null},

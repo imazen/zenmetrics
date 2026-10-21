@@ -8,10 +8,14 @@ import shutil
 from origins import check as check_origins
 
 
+BRIEF = 'https://metric-brief.pages.dev/'
+
+
 def style_landing(text, source):
     if 'class="evidence-header"' in text:raise ValueError("landing theme already present")
     if '<h1>' not in text:raise ValueError('viewer heading changed')
-    navigation='<nav aria-label="Results" style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0;border-bottom:2px solid var(--accent)"><a href="/">Image explorer</a><a href="/aic2026/">AIC2026 results</a><a href="/aic2026/reproduction.html">Reproduction evidence</a><a href="/aic2026/complexity.html">Benchmarks</a><a href="https://github.com/imazen/zenmetrics/tree/'+source+'">Source</a><a href="/aic2026/#downloads">Downloads</a></nav>'
+    # The workbench stays here; benchmark and reproduction evidence lives on its own site (the metric brief).
+    navigation='<nav aria-label="Results" style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0;border-bottom:2px solid var(--accent)"><a href="/">Image explorer</a><a href="'+BRIEF+'">Speed, reproduction and model cards ↗</a><a href="https://github.com/imazen/zenmetrics/tree/'+source+'">Source</a><a href="https://github.com/imazen/zenmetrics/releases">Downloads</a></nav>'
     navigation=navigation.replace('</nav>','<a href="https://gigapixels.imazen.org/">Gigapixels</a></nav>')
     text=text.replace('<h1>',navigation+'\n<h1>',1)
     # Keep the interactive explorer intact while giving its entrance a clear identity.

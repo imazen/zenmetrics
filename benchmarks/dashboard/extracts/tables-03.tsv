@@ -1,4 +1,43 @@
 document	table	row	column	value
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ|	5.7e-2
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	max |Δ| in JND	8.8e-3
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	status	close; chroma residual
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	4	note	AIC2026_METRICS_AND_FITTING.md; full-resolution studio-601 chroma
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	name	PSNR-HVS-vmaf (= dataset PSNR-HVS)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	zenmetrics metric	psnrhvs-daala (psnrhvs_daala)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	median |Δ|	0.000871
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ|	0.0154
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	max |Δ| in JND	0.00449
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	5	note	dataset PSNR-HVS is the same column (identical values)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	name	PSNR-HVS-Y-vmaf (= dataset PSNR-HVS-Y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	in CSV?	site
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_y)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	median |Δ|	0.00121
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ|	0.0261
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	max |Δ| in JND	0.00659
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	6	note	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	name	PSNR-HVS-Cb-vmaf (dataset PSNR-HVS-Cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cb)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	median |Δ|	0.00264
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ|	0.0382
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	status	reproduced
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	7	note	max 0.038 dB of a 27 dB range
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	name	PSNR-HVS-Cr-vmaf (dataset PSNR-HVS-Cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	in CSV?	dataset
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	zenmetrics metric	psnrhvs-daala (psnrhvs_daala_cr)
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	n	61
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	median |Δ|	0.00306
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ|	0.0691
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	max |Δ| in JND	
+docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	status	reproduced
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	8	note	max 0.069 dB of a 24 dB range
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	name	SSIM
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	9	in CSV?	site+dataset
@@ -356,36 +395,3 @@ docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	in CSV?	neither
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	zenmetrics metric	missing
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	n	
 docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	48	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	name	HaarYCoCg-hmask-deltaL1248 (excluded)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	in CSV?	neither
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	zenmetrics metric	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	n	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	median |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	max |Δ|	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	max |Δ| in JND	
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	status	missing
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	1	49	note	excluded; no values, placeholder map; unidentified Haar-wavelet experiment (colour space XYB/Y/YCoCg, ΔL at scales 1,2,4,8?)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	name	VMAF v0 / VMAF-v0.6.1
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	zenmetrics metric	vmaf (differs); vmaf crate on studio-601 Y is close
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	median |Δ|	0.279
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	max |Δ|	2.61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	max |Δ| in JND	0.427
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	status	differs
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	0	note	CLI feeds studio BT.709 Y (--luma-ingress is ignored for vmaf): med 0.28, max 2.6. The vmaf crate fed studio-601 Y (aic_probe) gives med 0.033, max 0.26 (0.04 JND). CLI also rejects odd sizes: scored on even-cropped copies
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	name	VMAF v0 via vmaf crate + studio-601 Y
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	in CSV?	site
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	zenmetrics metric	(not a CLI path: crates/vmaf/examples/aic_probe.rs)
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	n	61
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	median |Δ|	0.0327
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	max |Δ|	0.256
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	max |Δ| in JND	0.0408
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	status	close
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	1	note	the residual vs the site column is not ingress: the same probe matches the older dataset VMAF to med 0.0066 / max 0.076
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	name	VMAF-neg v0 / VMAF-v0.6.1neg
-docs/AIC2026_COVERAGE_AUDIT_2026-10-15.md	2	2	in CSV?	site

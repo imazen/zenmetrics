@@ -108,7 +108,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [afine — A-FINE (zenmetrics-nn, 2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#afine--a-fine-zenmetrics-nn-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=afine) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=afine) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=afine)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=afine) · [Speed](https://metric-brief.pages.dev/#speed&q=afine)
 
 ## ahiq
 
@@ -199,7 +199,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ahiq) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ahiq) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ahiq)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ahiq) · [Speed](https://metric-brief.pages.dev/#speed&q=ahiq)
 
 ## ahiq-pyiqa
 
@@ -290,7 +290,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ahiq-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ahiq-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ahiq-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ahiq-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=ahiq-pyiqa)
 
 ## arniqa
 
@@ -388,7 +388,7 @@ target/release/zenmetrics score --metric arniqa --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=arniqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=arniqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=arniqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=arniqa) · [Speed](https://metric-brief.pages.dev/#speed&q=arniqa)
 
 ## brisque
 
@@ -571,7 +571,7 @@ Paths in the golden panel resolve relative to ZENMETRICS_NR_GOLDEN_ROOT
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=brisque) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=brisque) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=brisque)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=brisque) · [Speed](https://metric-brief.pages.dev/#speed&q=brisque)
 
 ## butteraugli
 
@@ -647,7 +647,7 @@ target/release/zenmetrics score --metric butteraugli --reference ref.png --disto
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=butteraugli) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=butteraugli) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=butteraugli)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=butteraugli) · [Speed](https://metric-brief.pages.dev/#speed&q=butteraugli)
 
 ## butteraugli-gpu
 
@@ -840,7 +840,7 @@ breaks bit-reproducibility).
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=butteraugli-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=butteraugli-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=butteraugli-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=butteraugli-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=butteraugli-gpu)
 
 ## butteraugli-original
 
@@ -910,7 +910,7 @@ target/release/zenmetrics score --metric butteraugli-original --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=butteraugli-original) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=butteraugli-original) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=butteraugli-original)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=butteraugli-original) · [Speed](https://metric-brief.pages.dev/#speed&q=butteraugli-original)
 
 ## cambi
 
@@ -992,7 +992,7 @@ target/release/zenmetrics score --metric cambi --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cambi) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cambi) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cambi)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cambi) · [Speed](https://metric-brief.pages.dev/#speed&q=cambi)
 
 ## cambi-aic2026
 
@@ -1078,7 +1078,7 @@ target/release/zenmetrics score --metric cambi-aic2026 --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cambi-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cambi-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cambi-aic2026)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cambi-aic2026) · [Speed](https://metric-brief.pages.dev/#speed&q=cambi-aic2026)
 
 ## ciede2000
 
@@ -1161,7 +1161,7 @@ target/release/zenmetrics score --metric ciede2000 --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ciede2000) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ciede2000) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ciede2000)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ciede2000) · [Speed](https://metric-brief.pages.dev/#speed&q=ciede2000)
 
 ## ckdn
 
@@ -1263,7 +1263,7 @@ target/release/zenmetrics score --metric ckdn --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ckdn) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ckdn) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ckdn)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ckdn) · [Speed](https://metric-brief.pages.dev/#speed&q=ckdn)
 
 ## cvvdp
 
@@ -1506,7 +1506,7 @@ cvvdp::PYCVVDP_REFERENCE_VERSION.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cvvdp) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cvvdp) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cvvdp)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cvvdp) · [Speed](https://metric-brief.pages.dev/#speed&q=cvvdp)
 
 ## cvvdp-gpu
 
@@ -2095,7 +2095,7 @@ AGPL-3.0-only OR LicenseRef-Imazen-Commercial.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cvvdp-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cvvdp-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cvvdp-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cvvdp-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=cvvdp-gpu)
 
 ## cw-ssim
 
@@ -2176,7 +2176,7 @@ target/release/zenmetrics score --metric cw-ssim --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cw-ssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cw-ssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cw-ssim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cw-ssim) · [Speed](https://metric-brief.pages.dev/#speed&q=cw-ssim)
 
 ## cw-ssim-pyiqa
 
@@ -2270,7 +2270,7 @@ target/release/zenmetrics score --metric cw-ssim-pyiqa --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=cw-ssim-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=cw-ssim-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=cw-ssim-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=cw-ssim-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=cw-ssim-pyiqa)
 
 ## deepdc
 
@@ -2363,7 +2363,7 @@ target/release/zenmetrics score --metric deepdc --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=deepdc) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=deepdc) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=deepdc)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=deepdc) · [Speed](https://metric-brief.pages.dev/#speed&q=deepdc)
 
 ## dists
 
@@ -2456,7 +2456,7 @@ target/release/zenmetrics score --metric dists --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dists) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dists) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dists)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dists) · [Speed](https://metric-brief.pages.dev/#speed&q=dists)
 
 ## dmm
 
@@ -2551,7 +2551,7 @@ target/release/zenmetrics score --metric dmm --reference ref.png --distorted dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dmm) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dmm) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dmm)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dmm) · [Speed](https://metric-brief.pages.dev/#speed&q=dmm)
 
 ## dmm-pyiqa
 
@@ -2638,7 +2638,7 @@ target/release/zenmetrics score --metric dmm-pyiqa --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dmm-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dmm-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dmm-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dmm-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=dmm-pyiqa)
 
 ## dreamsim
 
@@ -2742,7 +2742,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dreamsim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dreamsim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dreamsim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dreamsim) · [Speed](https://metric-brief.pages.dev/#speed&q=dreamsim)
 
 ## dssim
 
@@ -2823,7 +2823,7 @@ target/release/zenmetrics score --metric dssim --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dssim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dssim) · [Speed](https://metric-brief.pages.dev/#speed&q=dssim)
 
 ## dssim-gpu
 
@@ -3042,7 +3042,7 @@ per-kernel breakdown, runtime coverage, and validated parity numbers.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=dssim-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=dssim-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=dssim-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=dssim-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=dssim-gpu)
 
 ## flip
 
@@ -3124,7 +3124,7 @@ target/release/zenmetrics score --metric flip --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=flip) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=flip) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=flip)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=flip) · [Speed](https://metric-brief.pages.dev/#speed&q=flip)
 
 ## flip-v17
 
@@ -3207,7 +3207,7 @@ target/release/zenmetrics score --metric flip-v17 --reference ref.png --distorte
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=flip-v17) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=flip-v17) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=flip-v17)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=flip-v17) · [Speed](https://metric-brief.pages.dev/#speed&q=flip-v17)
 
 ## fsim
 
@@ -3357,7 +3357,7 @@ fixture exporter, so counter-delta measurements exclude decoding and tiling.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim)
 
 ## fsim-k2
 
@@ -3444,7 +3444,7 @@ target/release/zenmetrics score --metric fsim-k2 --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim-k2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim-k2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim-k2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim-k2) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim-k2)
 
 ## fsim-k3
 
@@ -3531,7 +3531,7 @@ target/release/zenmetrics score --metric fsim-k3 --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim-k3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim-k3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim-k3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim-k3) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim-k3)
 
 ## fsim-k4
 
@@ -3618,7 +3618,7 @@ target/release/zenmetrics score --metric fsim-k4 --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim-k4) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim-k4) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim-k4)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim-k4) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim-k4)
 
 ## fsim-nodownscale
 
@@ -3705,7 +3705,7 @@ target/release/zenmetrics score --metric fsim-nodownscale --reference ref.png --
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim-nodownscale) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim-nodownscale) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim-nodownscale)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim-nodownscale) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim-nodownscale)
 
 ## fsim-y
 
@@ -3787,7 +3787,7 @@ target/release/zenmetrics score --metric fsim-y --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=fsim-y) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=fsim-y) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=fsim-y)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=fsim-y) · [Speed](https://metric-brief.pages.dev/#speed&q=fsim-y)
 
 ## gmsd
 
@@ -4010,7 +4010,7 @@ MDSI is written from the paper; see the attribution above.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=gmsd) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=gmsd) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=gmsd)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=gmsd) · [Speed](https://metric-brief.pages.dev/#speed&q=gmsd)
 
 ## haarpsi
 
@@ -4168,7 +4168,7 @@ the reference's f64.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=haarpsi) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=haarpsi) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=haarpsi)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=haarpsi) · [Speed](https://metric-brief.pages.dev/#speed&q=haarpsi)
 
 ## haarpsi-y
 
@@ -4250,7 +4250,7 @@ target/release/zenmetrics score --metric haarpsi-y --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=haarpsi-y) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=haarpsi-y) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=haarpsi-y)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=haarpsi-y) · [Speed](https://metric-brief.pages.dev/#speed&q=haarpsi-y)
 
 ## hdrvdp
 
@@ -4530,7 +4530,7 @@ the 2026-10-19 research note (docs/AIC2026_CANONICAL_2026-10-19.md).
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=hdrvdp) · [Speed](https://metric-brief.pages.dev/#speed&q=hdrvdp)
 
 ## hdrvdp-aic2026
 
@@ -4631,7 +4631,7 @@ target/release/zenmetrics score --metric hdrvdp-aic2026 --reference ref.png --di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp-aic2026)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=hdrvdp-aic2026) · [Speed](https://metric-brief.pages.dev/#speed&q=hdrvdp-aic2026)
 
 ## hdrvdp3
 
@@ -4725,7 +4725,7 @@ target/release/zenmetrics score --metric hdrvdp3 --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=hdrvdp3) · [Speed](https://metric-brief.pages.dev/#speed&q=hdrvdp3)
 
 ## hdrvdp3-aic2026
 
@@ -4844,7 +4844,7 @@ target/release/zenmetrics score --metric hdrvdp3-aic2026 --reference ref.png --d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hdrvdp3-aic2026) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hdrvdp3-aic2026) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hdrvdp3-aic2026)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=hdrvdp3-aic2026) · [Speed](https://metric-brief.pages.dev/#speed&q=hdrvdp3-aic2026)
 
 ## hyperiqa
 
@@ -4946,7 +4946,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=hyperiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=hyperiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=hyperiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=hyperiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=hyperiqa)
 
 ## iwssim
 
@@ -5102,7 +5102,7 @@ HdrFeeding::PuLumaGrayF32 routing.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=iwssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=iwssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=iwssim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=iwssim) · [Speed](https://metric-brief.pages.dev/#speed&q=iwssim)
 
 ## iwssim-gpu
 
@@ -5187,7 +5187,7 @@ Requires a GPU backend at run time.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=iwssim-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=iwssim-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=iwssim-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=iwssim-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=iwssim-gpu)
 
 ## iwssim-piq
 
@@ -5276,7 +5276,7 @@ target/release/zenmetrics score --metric iwssim-piq --reference ref.png --distor
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=iwssim-piq) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=iwssim-piq) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=iwssim-piq)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=iwssim-piq) · [Speed](https://metric-brief.pages.dev/#speed&q=iwssim-piq)
 
 ## liqe
 
@@ -5377,7 +5377,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=liqe) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=liqe) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=liqe)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=liqe) · [Speed](https://metric-brief.pages.dev/#speed&q=liqe)
 
 ## lpips-alex
 
@@ -5474,7 +5474,7 @@ target/release/zenmetrics score --metric lpips-alex --reference ref.png --distor
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=lpips-alex) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=lpips-alex) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=lpips-alex)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=lpips-alex) · [Speed](https://metric-brief.pages.dev/#speed&q=lpips-alex)
 
 ## lpips-squeeze
 
@@ -5569,7 +5569,7 @@ target/release/zenmetrics score --metric lpips-squeeze --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=lpips-squeeze) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=lpips-squeeze) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=lpips-squeeze)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=lpips-squeeze) · [Speed](https://metric-brief.pages.dev/#speed&q=lpips-squeeze)
 
 ## lpips-vgg
 
@@ -5664,7 +5664,7 @@ target/release/zenmetrics score --metric lpips-vgg --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=lpips-vgg) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=lpips-vgg) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=lpips-vgg)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=lpips-vgg) · [Speed](https://metric-brief.pages.dev/#speed&q=lpips-vgg)
 
 ## mad
 
@@ -5752,7 +5752,7 @@ target/release/zenmetrics score --metric mad --reference ref.png --distorted dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=mad) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=mad) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=mad)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=mad) · [Speed](https://metric-brief.pages.dev/#speed&q=mad)
 
 ## maniqa
 
@@ -5851,7 +5851,7 @@ target/release/zenmetrics score --metric maniqa --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=maniqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=maniqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=maniqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=maniqa) · [Speed](https://metric-brief.pages.dev/#speed&q=maniqa)
 
 ## mdctpsnr
 
@@ -6023,7 +6023,7 @@ text is at the top of src/lib.rs.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=mdctpsnr) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=mdctpsnr) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=mdctpsnr)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=mdctpsnr) · [Speed](https://metric-brief.pages.dev/#speed&q=mdctpsnr)
 
 ## mdsi
 
@@ -6105,7 +6105,7 @@ target/release/zenmetrics score --metric mdsi --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=mdsi) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=mdsi) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=mdsi)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=mdsi) · [Speed](https://metric-brief.pages.dev/#speed&q=mdsi)
 
 ## ms-gmsd
 
@@ -6186,7 +6186,7 @@ target/release/zenmetrics score --metric ms-gmsd --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-gmsd) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-gmsd) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-gmsd)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-gmsd) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-gmsd)
 
 ## ms-gmsdc
 
@@ -6267,7 +6267,7 @@ target/release/zenmetrics score --metric ms-gmsdc --reference ref.png --distorte
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-gmsdc) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-gmsdc) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-gmsdc)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-gmsdc) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-gmsdc)
 
 ## ms-ssim-pyiqa
 
@@ -6348,7 +6348,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa)
 
 ## ms-ssim-pyiqa-f32
 
@@ -6429,7 +6429,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32)
 
 ## ms-ssim-pyiqa-f32-k2
 
@@ -6517,7 +6517,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k2 --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32-k2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32-k2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32-k2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32-k2) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32-k2)
 
 ## ms-ssim-pyiqa-f32-k3
 
@@ -6605,7 +6605,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k3 --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32-k3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32-k3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32-k3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32-k3) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32-k3)
 
 ## ms-ssim-pyiqa-f32-k4
 
@@ -6693,7 +6693,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k4 --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32-k4) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32-k4) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32-k4)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32-k4) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32-k4)
 
 ## ms-ssim-pyiqa-f32-k5
 
@@ -6781,7 +6781,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k5 --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32-k5) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32-k5) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32-k5)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32-k5) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32-k5)
 
 ## ms-ssim-pyiqa-f32-k6
 
@@ -6869,7 +6869,7 @@ target/release/zenmetrics score --metric ms-ssim-pyiqa-f32-k6 --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ms-ssim-pyiqa-f32-k6) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ms-ssim-pyiqa-f32-k6) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ms-ssim-pyiqa-f32-k6)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ms-ssim-pyiqa-f32-k6) · [Speed](https://metric-brief.pages.dev/#speed&q=ms-ssim-pyiqa-f32-k6)
 
 ## msssim
 
@@ -7008,7 +7008,7 @@ archmage/magetypes, dispatched on first call.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=msssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=msssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=msssim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=msssim) · [Speed](https://metric-brief.pages.dev/#speed&q=msssim)
 
 ## msssim-libvmaf
 
@@ -7095,7 +7095,7 @@ target/release/zenmetrics score --metric msssim-libvmaf --reference ref.png --di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=msssim-libvmaf) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=msssim-libvmaf) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=msssim-libvmaf)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=msssim-libvmaf) · [Speed](https://metric-brief.pages.dev/#speed&q=msssim-libvmaf)
 
 ## musiq
 
@@ -7195,7 +7195,7 @@ target/release/zenmetrics score --metric musiq --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=musiq) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=musiq) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=musiq)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=musiq) · [Speed](https://metric-brief.pages.dev/#speed&q=musiq)
 
 ## niqe
 
@@ -7357,7 +7357,7 @@ see benchmarks/nr_classic_2026-10-15/jnd.md.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=niqe) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=niqe) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=niqe)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=niqe) · [Speed](https://metric-brief.pages.dev/#speed&q=niqe)
 
 ## nlpd
 
@@ -7438,7 +7438,7 @@ target/release/zenmetrics score --metric nlpd --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=nlpd) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=nlpd) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=nlpd)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=nlpd) · [Speed](https://metric-brief.pages.dev/#speed&q=nlpd)
 
 ## nlpd-iqa
 
@@ -7529,7 +7529,7 @@ target/release/zenmetrics score --metric nlpd-iqa --reference ref.png --distorte
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=nlpd-iqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=nlpd-iqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=nlpd-iqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=nlpd-iqa) · [Speed](https://metric-brief.pages.dev/#speed&q=nlpd-iqa)
 
 ## paq2piq
 
@@ -7632,7 +7632,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=paq2piq) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=paq2piq) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=paq2piq)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=paq2piq) · [Speed](https://metric-brief.pages.dev/#speed&q=paq2piq)
 
 ## pieapp
 
@@ -7768,7 +7768,7 @@ target/release/zenmetrics score --metric pieapp --reference ref.png --distorted 
 
 **Known divergences:** [PieAPP sampling and official entry point (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#pieapp-sampling-and-official-entry-point-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=pieapp) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=pieapp) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=pieapp)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=pieapp) · [Speed](https://metric-brief.pages.dev/#speed&q=pieapp)
 
 ## pieapp-pyiqa
 
@@ -7873,7 +7873,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=pieapp-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=pieapp-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=pieapp-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=pieapp-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=pieapp-pyiqa)
 
 ## piqe
 
@@ -8021,7 +8021,7 @@ $ZENMETRICS_NR_GOLDEN_ROOT (default [local path]).
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=piqe) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=piqe) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=piqe)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=piqe) · [Speed](https://metric-brief.pages.dev/#speed&q=piqe)
 
 ## proposal-butteraugli
 
@@ -8094,7 +8094,7 @@ target/release/zenmetrics score --metric proposal-butteraugli --reference ref.pn
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=proposal-butteraugli) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=proposal-butteraugli) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=proposal-butteraugli)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=proposal-butteraugli) · [Speed](https://metric-brief.pages.dev/#speed&q=proposal-butteraugli)
 
 ## psnr
 
@@ -8164,7 +8164,7 @@ target/release/zenmetrics score --metric psnr --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr)
 
 ## psnr-cb
 
@@ -8236,7 +8236,7 @@ target/release/zenmetrics score --metric psnr-cb --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-cb) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-cb) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-cb)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-cb) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-cb)
 
 ## psnr-cr
 
@@ -8308,7 +8308,7 @@ target/release/zenmetrics score --metric psnr-cr --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-cr) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-cr) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-cr)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-cr) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-cr)
 
 ## psnr-y
 
@@ -8378,7 +8378,7 @@ target/release/zenmetrics score --metric psnr-y --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-y) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-y) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-y)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-y) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-y)
 
 ## psnr-y-libvmaf
 
@@ -8452,7 +8452,7 @@ target/release/zenmetrics score --metric psnr-y-libvmaf --reference ref.png --di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-y-libvmaf) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-y-libvmaf) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-y-libvmaf)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-y-libvmaf) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-y-libvmaf)
 
 ## psnr-y-studio601
 
@@ -8526,7 +8526,7 @@ target/release/zenmetrics score --metric psnr-y-studio601 --reference ref.png --
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-y-studio601) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-y-studio601) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-y-studio601)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-y-studio601) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-y-studio601)
 
 ## psnr-y601
 
@@ -8598,7 +8598,7 @@ target/release/zenmetrics score --metric psnr-y601 --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-y601) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-y601) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-y601)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-y601) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-y601)
 
 ## psnr-ycbcr611
 
@@ -8673,7 +8673,7 @@ target/release/zenmetrics score --metric psnr-ycbcr611 --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnr-ycbcr611) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnr-ycbcr611) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnr-ycbcr611)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnr-ycbcr611) · [Speed](https://metric-brief.pages.dev/#speed&q=psnr-ycbcr611)
 
 ## psnrhvs
 
@@ -8828,7 +8828,7 @@ delta is ≤ ~4e-4 dB.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnrhvs) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnrhvs) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnrhvs)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnrhvs) · [Speed](https://metric-brief.pages.dev/#speed&q=psnrhvs)
 
 ## psnrhvs-daala
 
@@ -8907,7 +8907,7 @@ target/release/zenmetrics score --metric psnrhvs-daala --reference ref.png --dis
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnrhvs-daala) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnrhvs-daala) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnrhvs-daala)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnrhvs-daala) · [Speed](https://metric-brief.pages.dev/#speed&q=psnrhvs-daala)
 
 ## psnrhvs-y
 
@@ -8979,7 +8979,7 @@ target/release/zenmetrics score --metric psnrhvs-y --reference ref.png --distort
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=psnrhvs-y) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=psnrhvs-y) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=psnrhvs-y)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=psnrhvs-y) · [Speed](https://metric-brief.pages.dev/#speed&q=psnrhvs-y)
 
 ## ssim
 
@@ -9060,7 +9060,7 @@ target/release/zenmetrics score --metric ssim --reference ref.png --distorted di
 
 **Known divergences:** [PyIQA SSIM precision conventions observed 2026-10-19](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#pyiqa-ssim-precision-conventions-observed-2026-10-19)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim)
 
 ## ssim-libvmaf
 
@@ -9150,7 +9150,7 @@ target/release/zenmetrics score --metric ssim-libvmaf --reference ref.png --dist
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-libvmaf) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-libvmaf) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-libvmaf)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-libvmaf) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-libvmaf)
 
 ## ssim-pyiqa
 
@@ -9231,7 +9231,7 @@ target/release/zenmetrics score --metric ssim-pyiqa --reference ref.png --distor
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa)
 
 ## ssim-pyiqa-f32
 
@@ -9312,7 +9312,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32 --reference ref.png --di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32)
 
 ## ssim-pyiqa-f32-k2
 
@@ -9400,7 +9400,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k2 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32-k2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32-k2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32-k2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32-k2) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32-k2)
 
 ## ssim-pyiqa-f32-k3
 
@@ -9488,7 +9488,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k3 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32-k3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32-k3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32-k3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32-k3) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32-k3)
 
 ## ssim-pyiqa-f32-k4
 
@@ -9576,7 +9576,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k4 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32-k4) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32-k4) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32-k4)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32-k4) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32-k4)
 
 ## ssim-pyiqa-f32-k5
 
@@ -9664,7 +9664,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k5 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32-k5) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32-k5) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32-k5)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32-k5) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32-k5)
 
 ## ssim-pyiqa-f32-k6
 
@@ -9752,7 +9752,7 @@ target/release/zenmetrics score --metric ssim-pyiqa-f32-k6 --reference ref.png -
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim-pyiqa-f32-k6) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim-pyiqa-f32-k6) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim-pyiqa-f32-k6)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim-pyiqa-f32-k6) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim-pyiqa-f32-k6)
 
 ## ssim2
 
@@ -9822,7 +9822,7 @@ target/release/zenmetrics score --metric ssim2 --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim2) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim2)
 
 ## ssim2-gpu
 
@@ -9997,7 +9997,7 @@ MIT — same terms as the rest of turbo-metrics.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssim2-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssim2-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssim2-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssim2-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=ssim2-gpu)
 
 ## ssimc
 
@@ -10081,7 +10081,7 @@ target/release/zenmetrics score --metric ssimc --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc)
 
 ## ssimc-pyiqa-f32
 
@@ -10162,7 +10162,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32 --reference ref.png --d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32)
 
 ## ssimc-pyiqa-f32-k2
 
@@ -10250,7 +10250,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k2 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32-k2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32-k2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32-k2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32-k2) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32-k2)
 
 ## ssimc-pyiqa-f32-k3
 
@@ -10338,7 +10338,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k3 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32-k3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32-k3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32-k3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32-k3) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32-k3)
 
 ## ssimc-pyiqa-f32-k4
 
@@ -10426,7 +10426,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k4 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32-k4) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32-k4) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32-k4)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32-k4) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32-k4)
 
 ## ssimc-pyiqa-f32-k5
 
@@ -10514,7 +10514,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k5 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32-k5) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32-k5) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32-k5)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32-k5) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32-k5)
 
 ## ssimc-pyiqa-f32-k6
 
@@ -10602,7 +10602,7 @@ target/release/zenmetrics score --metric ssimc-pyiqa-f32-k6 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimc-pyiqa-f32-k6) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimc-pyiqa-f32-k6) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimc-pyiqa-f32-k6)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimc-pyiqa-f32-k6) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimc-pyiqa-f32-k6)
 
 ## ssimulacra1
 
@@ -10672,7 +10672,7 @@ target/release/zenmetrics score --metric ssimulacra1 --reference ref.png --disto
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ssimulacra1) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ssimulacra1) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ssimulacra1)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ssimulacra1) · [Speed](https://metric-brief.pages.dev/#speed&q=ssimulacra1)
 
 ## stlpips-alex
 
@@ -10764,7 +10764,7 @@ target/release/zenmetrics score --metric stlpips-alex --reference ref.png --dist
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=stlpips-alex) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=stlpips-alex) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=stlpips-alex)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=stlpips-alex) · [Speed](https://metric-brief.pages.dev/#speed&q=stlpips-alex)
 
 ## stlpips-vgg
 
@@ -10855,7 +10855,7 @@ target/release/zenmetrics score --metric stlpips-vgg --reference ref.png --disto
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=stlpips-vgg) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=stlpips-vgg) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=stlpips-vgg)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=stlpips-vgg) · [Speed](https://metric-brief.pages.dev/#speed&q=stlpips-vgg)
 
 ## topiq-fr
 
@@ -10957,7 +10957,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=topiq-fr) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=topiq-fr) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=topiq-fr)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=topiq-fr) · [Speed](https://metric-brief.pages.dev/#speed&q=topiq-fr)
 
 ## topiq-fr-pipal
 
@@ -11058,7 +11058,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=topiq-fr-pipal) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=topiq-fr-pipal) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=topiq-fr-pipal)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=topiq-fr-pipal) · [Speed](https://metric-brief.pages.dev/#speed&q=topiq-fr-pipal)
 
 ## vif
 
@@ -11243,7 +11243,7 @@ tradeoff before merging and requalifying published benchmarks.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vif) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vif) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vif)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vif) · [Speed](https://metric-brief.pages.dev/#speed&q=vif)
 
 ## vifvec
 
@@ -11332,7 +11332,7 @@ target/release/zenmetrics score --metric vifvec --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vifvec) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vifvec) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vifvec)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vifvec) · [Speed](https://metric-brief.pages.dev/#speed&q=vifvec)
 
 ## vmaf
 
@@ -11402,7 +11402,7 @@ target/release/zenmetrics score --metric vmaf --reference ref.png --distorted di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf)
 
 ## vmaf-4k
 
@@ -11472,7 +11472,7 @@ target/release/zenmetrics score --metric vmaf-4k --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf-4k) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf-4k) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf-4k)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf-4k) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf-4k)
 
 ## vmaf-neg
 
@@ -11542,7 +11542,7 @@ target/release/zenmetrics score --metric vmaf-neg --reference ref.png --distorte
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf-neg) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf-neg) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf-neg)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf-neg) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf-neg)
 
 ## vmaf-neg-studio601
 
@@ -11612,7 +11612,7 @@ target/release/zenmetrics score --metric vmaf-neg-studio601 --reference ref.png 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf-neg-studio601) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf-neg-studio601) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf-neg-studio601)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf-neg-studio601) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf-neg-studio601)
 
 ## vmaf-studio601
 
@@ -11683,7 +11683,7 @@ target/release/zenmetrics score --metric vmaf-studio601 --reference ref.png --di
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf-studio601) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf-studio601) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf-studio601)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf-studio601) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf-studio601)
 
 ## vmaf-v1
 
@@ -11753,7 +11753,7 @@ target/release/zenmetrics score --metric vmaf-v1 --reference ref.png --distorted
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vmaf-v1) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vmaf-v1) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vmaf-v1)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vmaf-v1) · [Speed](https://metric-brief.pages.dev/#speed&q=vmaf-v1)
 
 ## vsi
 
@@ -11898,7 +11898,7 @@ automatic factor. Factor 1 disables decimation; map geometry records the factor.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vsi) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vsi) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vsi)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vsi) · [Speed](https://metric-brief.pages.dev/#speed&q=vsi)
 
 ## vsi-k2
 
@@ -11985,7 +11985,7 @@ target/release/zenmetrics score --metric vsi-k2 --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vsi-k2) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vsi-k2) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vsi-k2)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vsi-k2) · [Speed](https://metric-brief.pages.dev/#speed&q=vsi-k2)
 
 ## vsi-k3
 
@@ -12072,7 +12072,7 @@ target/release/zenmetrics score --metric vsi-k3 --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vsi-k3) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vsi-k3) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vsi-k3)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vsi-k3) · [Speed](https://metric-brief.pages.dev/#speed&q=vsi-k3)
 
 ## vsi-k4
 
@@ -12159,7 +12159,7 @@ target/release/zenmetrics score --metric vsi-k4 --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vsi-k4) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vsi-k4) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vsi-k4)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vsi-k4) · [Speed](https://metric-brief.pages.dev/#speed&q=vsi-k4)
 
 ## vsi-nodownscale
 
@@ -12246,7 +12246,7 @@ target/release/zenmetrics score --metric vsi-nodownscale --reference ref.png --d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=vsi-nodownscale) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=vsi-nodownscale) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=vsi-nodownscale)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=vsi-nodownscale) · [Speed](https://metric-brief.pages.dev/#speed&q=vsi-nodownscale)
 
 ## wadiqam-fr-live
 
@@ -12347,7 +12347,7 @@ target/release/zenmetrics score --metric wadiqam-fr-live --reference ref.png --d
 
 **Known divergences:** [wadiqam — deepIQA WaDIQaM FR+NR (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#wadiqam--deepiqa-wadiqam-frnr-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-fr-live) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-fr-live) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-fr-live)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wadiqam-fr-live) · [Speed](https://metric-brief.pages.dev/#speed&q=wadiqam-fr-live)
 
 ## wadiqam-fr-tid
 
@@ -12443,7 +12443,7 @@ target/release/zenmetrics score --metric wadiqam-fr-tid --reference ref.png --di
 
 **Known divergences:** [wadiqam — deepIQA WaDIQaM FR+NR (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#wadiqam--deepiqa-wadiqam-frnr-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-fr-tid) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-fr-tid) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-fr-tid)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wadiqam-fr-tid) · [Speed](https://metric-brief.pages.dev/#speed&q=wadiqam-fr-tid)
 
 ## wadiqam-nr-live
 
@@ -12542,7 +12542,7 @@ target/release/zenmetrics score --metric wadiqam-nr-live --reference ref.png --d
 
 **Known divergences:** [wadiqam — deepIQA WaDIQaM FR+NR (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#wadiqam--deepiqa-wadiqam-frnr-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-nr-live) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-nr-live) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-nr-live)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wadiqam-nr-live) · [Speed](https://metric-brief.pages.dev/#speed&q=wadiqam-nr-live)
 
 ## wadiqam-nr-tid
 
@@ -12639,7 +12639,7 @@ target/release/zenmetrics score --metric wadiqam-nr-tid --reference ref.png --di
 
 **Known divergences:** [wadiqam — deepIQA WaDIQaM FR+NR (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#wadiqam--deepiqa-wadiqam-frnr-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-nr-tid) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-nr-tid) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-nr-tid)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wadiqam-nr-tid) · [Speed](https://metric-brief.pages.dev/#speed&q=wadiqam-nr-tid)
 
 ## wadiqam-pyiqa
 
@@ -12742,7 +12742,7 @@ After reviewing and accepting the linked weight terms, set ZENMETRICS_NN_ACCEPT_
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wadiqam-pyiqa) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wadiqam-pyiqa) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wadiqam-pyiqa)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wadiqam-pyiqa) · [Speed](https://metric-brief.pages.dev/#speed&q=wadiqam-pyiqa)
 
 ## wd
 
@@ -12847,7 +12847,7 @@ target/release/zenmetrics score --metric wd --reference ref.png --distorted dist
 
 **Known divergences:** [wd — Cool-Chic Wasserstein Distortion (2026-10-16)](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md#wd--cool-chic-wasserstein-distortion-2026-10-16)
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=wd) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=wd) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=wd)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=wd) · [Speed](https://metric-brief.pages.dev/#speed&q=wd)
 
 ## ws-hv
 
@@ -12917,7 +12917,7 @@ target/release/zenmetrics score --metric ws-hv --reference ref.png --distorted d
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=ws-hv) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=ws-hv) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=ws-hv)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=ws-hv) · [Speed](https://metric-brief.pages.dev/#speed&q=ws-hv)
 
 ## zensim
 
@@ -12987,7 +12987,7 @@ target/release/zenmetrics score --metric zensim --reference ref.png --distorted 
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=zensim) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=zensim) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=zensim)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=zensim) · [Speed](https://metric-brief.pages.dev/#speed&q=zensim)
 
 ## zensim-gpu
 
@@ -13261,4 +13261,4 @@ docs/DIFFMAP_DIVERGENCES.md.
 
 **Known divergences:** [Consult the divergence ledger](https://github.com/imazen/zenmetrics/blob/master/DIVERGENCES.md); no exact metric heading joined.
 
-[Speed observations](https://imazen.github.io/zenmetrics/#speed?metric=zensim-gpu) · [AIC/CID22 and other correlation panels](https://imazen.github.io/zenmetrics/#quality?metric=zensim-gpu) · [Agreement evidence](https://imazen.github.io/zenmetrics/#agreement?metric=zensim-gpu)
+[Model card and reproduction status](https://metric-brief.pages.dev/#models&m=zensim-gpu) · [Speed](https://metric-brief.pages.dev/#speed&q=zensim-gpu)
