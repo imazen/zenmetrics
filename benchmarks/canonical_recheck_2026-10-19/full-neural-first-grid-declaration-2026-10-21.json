@@ -1,0 +1,67 @@
+{
+  "expected": 672,
+  "metrics": [
+    "afine",
+    "ahiq",
+    "ahiq-pyiqa",
+    "arniqa",
+    "ckdn",
+    "deepdc",
+    "dists",
+    "dmm",
+    "dmm-pyiqa",
+    "dreamsim",
+    "hyperiqa",
+    "liqe",
+    "lpips-alex",
+    "lpips-squeeze",
+    "lpips-vgg",
+    "maniqa",
+    "musiq",
+    "paq2piq",
+    "stlpips-alex",
+    "stlpips-vgg",
+    "topiq-fr",
+    "topiq-fr-pipal",
+    "wadiqam-fr-live",
+    "wadiqam-fr-tid",
+    "wadiqam-nr-live",
+    "wadiqam-nr-tid",
+    "wadiqam-pyiqa",
+    "wd"
+  ],
+  "threads": [
+    1,
+    28
+  ],
+  "pairs": 12,
+  "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+  "plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-first-grid-v1/plan.json",
+    "sha256": "48f96c5e56cb40dd2780f2f3d95b1fe7b65927d5c815ccdc008643a1f28a306c"
+  },
+  "source_first_plan": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run/plan.json",
+    "sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0"
+  },
+  "pairs_manifest": {
+    "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json",
+    "sha256": "83d61ef3ce1877a20e07a2c8f8ac0df0a761a0a77903a5784b011a74b17f0712"
+  },
+  "preparer": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/prepare-full-neural-first-grid-v1.py",
+    "sha256": "3ba7759c2cc9e10ed5f2b6434eed2560280d4ec350bb9bf3bfb79a14b441f704"
+  },
+  "classical_warm_prerequisite": "/home/lilith/tmp/local-canonical-20261019T2330/full-classical-grid-v2/queue.json",
+  "classical_first_prerequisite": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-first-grid-v1/classical-first-prerequisites.json",
+    "sha256": "00e484fa6b95752aed5041a1541d36dc56fb2d91e9d4acd188abae2302eda7a4"
+  },
+  "qualification": "Declared original first-call contracts, not acquired/passing observations. Classical warm/constructor-first outcomes precede this neural acquisition; every original bound and helper remains frozen.",
+  "preparation_resource_receipt": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-neural-first-grid-prepare-v1.log",
+    "sha256": "4f33c75e815d34d146adcc87d95ce0e2c2c9e704ac84ddc047c7df779ee1221c",
+    "receipt": "run-heavy: done rc=0 10s | peak-RSS 0.06GiB | min-avail 13265MiB | peak-load 2.24"
+  },
+  "observed_at_utc": "2026-10-21T08:23:39.672821+00:00"
+}

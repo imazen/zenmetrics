@@ -1934,3 +1934,4 @@ benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v4/ca
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v4/cases-012.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v4/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v4/previous-cold-recovery-compatibility-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/full-neural-first-grid-declaration-2026-10-21.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

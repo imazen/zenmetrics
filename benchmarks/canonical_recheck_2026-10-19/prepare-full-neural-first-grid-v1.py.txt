@@ -1,0 +1,27 @@
+"""Extend the existing first-call contracts through the frozen grid preparer."""
+import json
+from pathlib import Path
+import sys
+R=Path(__file__).parent;B=Path('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B))
+from compare_canonical import sha
+from prepare_canonical_grid import prepare
+source=R/'nn-first-56-numpy125-run/plan.json';parent=json.loads(source.read_text());names=sorted({case['metric'] for case in parent['cases']});assert len(names)==28 and not any('pieapp' in name or 'aimos' in name for name in names)
+assert parent['phase'].startswith('First evaluation after resident model construction;')
+for case in parent['cases']:
+    assert all('{'+key+'}' in ' '.join(case['native']['command']) for key in ['width','height','reference','distorted','threads'])
+folder=R/'full-neural-first-grid-v1';folder.mkdir();output=folder/'plan.json';pairs=Path.home()/'tmp/portcheck-primary-grid-20261019T1020/inputs/pairs.json'
+count=prepare(source,pairs,output,names,[1,28]);plan=json.loads(output.read_text());assert count==len(plan['cases'])==672 and plan['phase']==parent['phase']
+plan['grid_scope']='First evaluation after resident immutable-model construction, on every declared RGB8 geometry/content pair at one/28 threads. Input/model I/O and outer CLI dispatch remain outside the existing clocks. No warm, full-startup, map or runtime-qualified acceptance claim.'
+plan['bindings'][str(Path(__file__).resolve())]=sha(__file__)
+# This newly prepared output has no consumers until preparation returns.
+output.write_text(json.dumps(plan,indent=2)+'\n')
+prerequisites=[]
+public=Path('benchmarks/canonical_recheck_2026-10-19')
+latest=public/'acquired-cold-additions-2026-10-21-v3/index.json'
+for item in json.loads(latest.read_text())['campaigns']:
+    root=Path(item['raw_directory']);p=root/'plan.json';frozen=json.loads(p.read_text());assert sha(p)==item['plan_sha256']
+    prerequisites.append(dict(plan=str(p),output=str(root),expected=len(frozen['cases'])))
+assert sum(item['expected'] for item in prerequisites)==2092
+(folder/'classical-first-prerequisites.json').write_text(json.dumps(dict(jobs=prerequisites),indent=2)+'\n')
+receipt=dict(expected=672,metrics=names,threads=[1,28],pairs=len(json.loads(pairs.read_text())['pairs']),phase=plan['phase'],plan=dict(path=str(output),sha256=sha(output)),source_first_plan=dict(path=str(source),sha256=sha(source)),pairs_manifest=dict(path=str(pairs),sha256=sha(pairs)),preparer=dict(path=str(Path(__file__).resolve()),sha256=sha(__file__)),classical_warm_prerequisite=str(R/'full-classical-grid-v2/queue.json'),classical_first_prerequisite=dict(path=str(folder/'classical-first-prerequisites.json'),sha256=sha(folder/'classical-first-prerequisites.json')),qualification='Declared original first-call contracts, not acquired/passing observations. Classical warm/constructor-first outcomes precede this neural acquisition; every original bound and helper remains frozen.')
+(folder/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print(json.dumps(receipt),flush=True)

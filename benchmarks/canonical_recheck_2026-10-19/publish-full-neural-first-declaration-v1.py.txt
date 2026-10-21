@@ -1,0 +1,39 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+R=Path(__file__).parent;PUBLIC=Path('benchmarks/canonical_recheck_2026-10-19');folder=R/'full-neural-first-grid-v1'
+if len(sys.argv)==1:
+    while True:
+        log=(R/'full-neural-first-grid-prepare-v1.log').read_text()
+        if 'run-heavy: done rc=0 ' in log:break
+        if 'run-heavy: done rc=' in log:raise SystemExit('Neural first-grid preparation failed; preserve evidence')
+        time.sleep(20)
+    command=['flock',str(Path.home()/'tmp/lilith-heavy.lock'),'flock',str(Path.home()/'tmp/lilith-wsl-heavy.lock'),str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(Path.home()/'tmp'),sys.executable,'-B',__file__,'--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+sys.path.insert(0,str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):subprocess.run(command,check=True)
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+receipt=json.loads((folder/'receipt.json').read_text());assert receipt['expected']==672 and receipt['threads']==[1,28] and len(receipt['metrics'])==28 and receipt['pairs']==12
+assert sha(folder/'plan.json')==receipt['plan']['sha256']
+log=R/'full-neural-first-grid-prepare-v1.log';resources=[line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')];assert len(resources)==1 and 'rc=0 ' in resources[0]
+run('jj','new','master@origin','-m','data: declare full resident-model first-evaluation grid')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+' codex-root-canonical publishing verified neural first-grid declaration\n')
+receipt['preparation_resource_receipt']=dict(path=str(log),sha256=sha(log),receipt=resources[0]);receipt['observed_at_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+target=PUBLIC/'full-neural-first-grid-declaration-2026-10-21.json';data=(json.dumps(receipt,indent=2,allow_nan=False)+'\n').encode();assert len(data)<=30000
+with target.open('xb') as stream:stream.write(data)
+register_outputs([(target,'provenance')])
+for source in [Path(__file__),R/'prepare-full-neural-first-grid-v1.py',R/'run-full-neural-first-grid-v1.py',R/'watch-full-neural-first-flags-v1.py']:
+    target=PUBLIC/(source.name+'.txt');assert not target.exists();shutil.copyfile(source,target)
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write('\n### Remaining neural first-evaluation geometry coverage (2026-10-21)\n\nThe [declared resident-model first grid]('+relative+'full-neural-first-grid-declaration-2026-10-21.json) extends all 28 eligible neural names over the same 12 hashed RGB8 pairs with 1 and 28 threads: 672 declared cases. The two PieAPP names remain excluded by the owner. Native/canonical commands, numerical bounds, immutable-model scope and executable/model bindings come from the retained 56-case first-call program; input/model I/O, model construction and outer CLI dispatch remain outside its clock. This declaration supplies no acquired score or timing, warm measurement, full-startup result or runtime acceptance. Its coordinator waits for the frozen classical warm and 2,092 constructor/first-call outcomes; the older 56-case acquisition and 672-case neural warm grid stay separate.\n')
+run('just','bench-iqa-canonical-check');run('just','bench-iqa-canonical-recovery-check')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('FULL_NEURAL_FIRST_DECLARATION_VERIFIED',flush=True)

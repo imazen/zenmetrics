@@ -1,0 +1,19 @@
+import datetime,json,pathlib,statistics,time
+r=pathlib.Path.home()/'tmp/local-canonical-20261019T2330'
+root=r/'full-neural-first-grid-v1/run'
+log=pathlib.Path.home()/'tmp/handoff/aic2026-portcheck-20261018/REGRESSIONS.md'
+while True:
+ summaries=list(root.glob('*/summary.json'));flagged=[]
+ for p in summaries:
+  value=json.loads(p.read_text())
+  if value.get('ratio') is None or value['ratio']<=1.08:continue
+  flagged.append(dict(case=value['case'],summary=str(p),ratio=value['ratio']))
+  if str(p) in log.read_text():continue
+  native=statistics.median(b['arms']['native']['ns'] for b in value['blocks'])/1e6
+  canonical=statistics.median(b['arms']['canonical']['ns'] for b in value['blocks'])/1e6
+  line=f"{datetime.datetime.now(datetime.timezone.utc).isoformat()} | {value['metric']} first-evaluation | {value['width']}x{value['height']} | {value['threads']} | ours {native} ms | canonical {canonical} ms | {value['ratio']} | measured-here {p}; descriptive three-block resident-model first evaluation; confirmation and profile required\n"
+  with log.open('a') as f:f.write(line)
+  print(line,flush=True)
+ (r/'full-neural-first-flag-index-v1.json').write_text(json.dumps(dict(completed=len(summaries),expected=672,flags=flagged),indent=2)+'\n')
+ if len(summaries)==672:break
+ time.sleep(30)

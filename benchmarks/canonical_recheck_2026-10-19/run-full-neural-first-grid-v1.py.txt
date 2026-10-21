@@ -1,0 +1,27 @@
+"""Wait for frozen classical prerequisites, then acquire the declared first grid."""
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+R=Path(__file__).parent;B=Path('/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16');sys.path.insert(0,str(B))
+from compare_canonical import sha
+from resume_canonical_queue import pending
+folder=R/'full-neural-first-grid-v1'
+while True:
+    log=(R/'full-neural-first-grid-prepare-v1.log').read_text()
+    if 'run-heavy: done rc=0 ' in log:break
+    if 'run-heavy: done rc=' in log:raise SystemExit('First-grid preparation failed; do not acquire')
+    time.sleep(20)
+receipt=json.loads((folder/'receipt.json').read_text());plan=folder/'plan.json';assert sha(plan)==receipt['plan']['sha256']
+previous=None
+while True:
+    warm=pending(json.loads((R/'full-classical-grid-v2/queue.json').read_text()))
+    cold=pending(json.loads((folder/'classical-first-prerequisites.json').read_text()))
+    counts=(len(warm),len(cold))
+    if counts!=previous:print('NEURAL_FIRST_WAIT_CLASSICAL',json.dumps(dict(warm_cases=len(warm),constructor_first_cases=len(cold))),flush=True);previous=counts
+    if not warm and not cold:break
+    time.sleep(30)
+command=['/usr/bin/python3','-u','-B',str(B/'resume_canonical_campaign.py'),str(plan),str(folder/'run'),'--mode','first']
+print('STARTING_FULL_NEURAL_FIRST',json.dumps(command),flush=True)
+raise SystemExit(subprocess.run(command).returncode)
