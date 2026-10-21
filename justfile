@@ -2522,3 +2522,10 @@ bench-iqa-canonical-queue-resume manifest *options:
 
 bench-iqa-canonical-recovery-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_resume_canonical_campaign
+
+# Original three-block CPU constructor/first-evaluation campaigns only.
+bench-iqa-canonical-classical-first-resume plan output helper helper-sha256:
+    python3 -B benchmarks/iqa_compete_2026-10-16/resume_classical_first_campaign.py '{{plan}}' '{{output}}' --original-helper '{{helper}}' --original-helper-sha256 '{{helper-sha256}}'
+
+bench-iqa-canonical-classical-first-recovery-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_resume_classical_first_campaign

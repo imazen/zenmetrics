@@ -425,3 +425,12 @@ it does not add a binding retroactively to the frozen plan. Each original block
 still performs its own asset checks and uses shared resource admission.
 Use `--flags DIRECTORY --regression-log FILE` on queue recovery to audit every
 newly completed case. Check recovery with `just bench-iqa-canonical-recovery-check`.
+
+`just bench-iqa-canonical-classical-first-resume PLAN EXISTING_OUTPUT HELPER
+HELPER_SHA256` recovers the original three-block CPU constructor/first-evaluation
+campaign. The explicit helper must already be bound in the frozen plan. Its
+original 1100-second admitted block deadline, per-arm deadline, numerical gates
+and summary schema remain in force. Completed failures and interrupted output
+are retained. This command refuses fixed 20/40-block confirmation stages and
+stops at source/admission failures. Test it with
+`just bench-iqa-canonical-classical-first-recovery-check`.
