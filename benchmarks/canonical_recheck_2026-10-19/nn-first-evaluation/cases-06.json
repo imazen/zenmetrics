@@ -230,6 +230,109 @@
         "fcb96ee9180e57555c19344ba40a89847f81c547074a5e62382bc54da0a69b05",
         "f89d84e417f3316616f515a29bbd6404133d336ca03e3203ad71facf7c792ef8"
       ]
+    },
+    {
+      "metric": "wadiqam-fr-tid",
+      "case": "wadiqam-fr-tid-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "original deepIQA / Chainer 7.8.1 / inference",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.0052095760000000005,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 1.034909729469291e-06,
+      "ratio": 0.0966580315459374,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4439426181,
+              "score": 13.384377479553223
+            },
+            "native": {
+              "ns": 443805103,
+              "score": 13.384378514462952
+            }
+          },
+          "delta": 1.034909729469291e-06,
+          "passed": true,
+          "ratio": 0.0999690241273549
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 367934466,
+              "score": 13.384378514462952
+            },
+            "canonical": {
+              "ns": 4491336817,
+              "score": 13.384377479553223
+            }
+          },
+          "delta": 1.034909729469291e-06,
+          "passed": true,
+          "ratio": 0.08192092488083821
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4657395219,
+              "score": 13.384377479553223
+            },
+            "native": {
+              "ns": 450174654,
+              "score": 13.384378514462952
+            }
+          },
+          "delta": 1.034909729469291e-06,
+          "passed": true,
+          "ratio": 0.0966580315459374
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 30s | peak-RSS 1.09GiB | min-avail 13041MiB | peak-load 1.73",
+        "run-heavy: done rc=0 30s | peak-RSS 1.11GiB | min-avail 12595MiB | peak-load 2.67",
+        "run-heavy: done rc=0 34s | peak-RSS 1.10GiB | min-avail 13087MiB | peak-load 2.46"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "f57cb1111329156bb2ea2415592f96b41a681b450ed5e47af426d0ccc86cf172",
+      "block_sha256": [
+        "8459026b397d5348769f79a6e1be2ab4aac65a5731397f6670337ea0fab053b6",
+        "8ca638c1f4e0a02fb836a5e207eba25e23641bee8c83da01091c43b333e15a1f",
+        "acefbaf21e188df9400857f559543c454c29cee011f21f28fe1c95abf81f69b5"
+      ],
+      "recovery_evidence": {
+        "completed_blocks": [
+          {
+            "number": 0,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run/wadiqam-fr-tid-first-original-cid22-t8/block-00-recovery-1/result.json",
+            "sha256": "8459026b397d5348769f79a6e1be2ab4aac65a5731397f6670337ea0fab053b6"
+          },
+          {
+            "number": 1,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run/wadiqam-fr-tid-first-original-cid22-t8/block-01/result.json",
+            "sha256": "8ca638c1f4e0a02fb836a5e207eba25e23641bee8c83da01091c43b333e15a1f"
+          },
+          {
+            "number": 2,
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run/wadiqam-fr-tid-first-original-cid22-t8/block-02/result.json",
+            "sha256": "acefbaf21e188df9400857f559543c454c29cee011f21f28fe1c95abf81f69b5"
+          }
+        ],
+        "interrupted_logs": [
+          {
+            "path": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run/wadiqam-fr-tid-first-original-cid22-t8/block-00.log",
+            "sha256": "bffa815d654286a3eb533c0e3224eecb8ad41f843a34452f214469ad88599592"
+          }
+        ],
+        "qualification": "Original completed blocks and interrupted output retained; recovered result paths supply their own actual wrapper receipts."
+      }
     }
   ]
 }

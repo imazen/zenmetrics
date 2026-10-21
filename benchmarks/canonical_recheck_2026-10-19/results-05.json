@@ -1,4 +1,60 @@
 {
+  "wadiqam-pyiqa": {
+    "canonical": "PyIQA 0.1.16 / native ORT CPU comparison",
+    "check": "2/2 pass",
+    "ratio": 0.7751317355001583,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310",
+    "ratio_engine": "ort-cpu",
+    "ratio_canonical_device": "cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.7990613373164661,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 2.092197051023481e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "470612f3a16bfd0d8f86be3eab764895fc2246b8e8a21c711afc719d8dcdb310"
+    ],
+    "qualified": false
+  },
+  "wd": {
+    "canonical": "original Cool-Chic WD / five sigmas",
+    "check": "2/2 pass",
+    "ratio": 0.11094338612430271,
+    "ratio_width": 512,
+    "ratio_height": 512,
+    "ratio_threads": 1,
+    "ratio_cases": 1,
+    "ratio_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+    "ratio_plan_sha256": "72c27785831b0259539128047c2f237c591167395125b76867efd0ed192d7fd0",
+    "ratio_engine": "rten",
+    "ratio_canonical_device": "cpu",
+    "ratio_blocks": 3,
+    "worst_ratio": 0.11094338612430271,
+    "observed_cases": 2,
+    "expected_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0,
+    "process_error_cases": 0,
+    "max_abs_delta": 1.862645149230957e-09,
+    "rust_sources": [
+      "efae6b8fed9e57346157d92dffc3cdb57c44560e"
+    ],
+    "plan_sha256": [
+      "72c27785831b0259539128047c2f237c591167395125b76867efd0ed192d7fd0"
+    ],
+    "qualified": false
+  },
   "ws-hv": {
     "canonical": "IVP-Lab original WS_HV notebook",
     "check": "\u0394 5.3e-09",

@@ -124,7 +124,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ms-ssim-pyiqa-f32-k3`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k3) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.048× |
 | [`ms-ssim-pyiqa-f32-k4`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k4) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.075× |
 | [`ms-ssim-pyiqa-f32-k5`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k5) | FR | PyIQA 0.1.16 / named… | 6/6 pass | ≈0.21× |
-| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 4/4 pass | ≈0.26× |
+| [`ms-ssim-pyiqa-f32-k6`](docs/MODEL_CARDS.md#ms-ssim-pyiqa-f32-k6) | FR | PyIQA 0.1.16 / named… | 5/6 pass | ≈0.26× |
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 14/30 pass | ≈0.051× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 4 process errors | ≈0.36× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 4/4 pass | ≈0.58× R |

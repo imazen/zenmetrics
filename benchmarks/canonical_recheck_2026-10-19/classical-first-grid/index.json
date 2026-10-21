@@ -2,7 +2,7 @@
   "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
   "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
   "expected_cases": 240,
-  "completed_cases": 41,
+  "completed_cases": 42,
   "phase": "scorer_construct_first_eval",
   "shards": [
     {
@@ -33,47 +33,47 @@
     {
       "file": "cases-05.json",
       "cases": 3,
-      "sha256": "ba748057320442778de7856f5fd05f5e5341d158119dc5b93f2604802c8b555d"
+      "sha256": "5dec141bb2f0b821d4a17733e78aadc15248659dce8cc95d0e9c6377457a796f"
     },
     {
       "file": "cases-06.json",
       "cases": 3,
-      "sha256": "190af03dbb8ce99c56d8a6872b4dcac93635b8f55f824060b24698e3b2fdb399"
+      "sha256": "74b8d6379d80e7893b032848ded00a59650bfb551b99c8b85469b85bb1430db9"
     },
     {
       "file": "cases-07.json",
       "cases": 3,
-      "sha256": "e04a30cb87953801de1146b21cd753d026aabdbd5d977c3f9af8aec82697d242"
+      "sha256": "0672db89fe8d63ebfff1821245eb8ba9e27412f77ac3bf671a82054ede00fe5a"
     },
     {
       "file": "cases-08.json",
       "cases": 3,
-      "sha256": "de30be66deaed83eb0ffa2d3a2f5371552e525ff33ad8650242b4709912d2e95"
+      "sha256": "84d50b920b94d2eb67d82d693fba8bd596a5051e54040186210fa8ce19127a49"
     },
     {
       "file": "cases-09.json",
       "cases": 3,
-      "sha256": "a7f6d8c016eb039fb4721ab8d03784b44d3169f9344cdd5f65bd7ffef1d0898a"
+      "sha256": "6fa30926e5b8b410ecba03df33518eaab722775eb4d49c4a899d6cad0be9a7c9"
     },
     {
       "file": "cases-10.json",
       "cases": 3,
-      "sha256": "2dafbc76c9123f70c995fc7527fa396e00005c7dc9d5c67c98d55b1f7f5b2390"
+      "sha256": "6a183bce50fba4e856ac83de67fd70f7c7e2345e9aa67627c81e2252e7f641f3"
     },
     {
       "file": "cases-11.json",
       "cases": 3,
-      "sha256": "0ab77628cdab9d368b316126aabaf5e5e26162135bc4dab0e26b47e99726e5a5"
+      "sha256": "4af595a051503d92a13304c754061748522a7c6d25e0fad978e4e417613b47c7"
     },
     {
       "file": "cases-12.json",
       "cases": 3,
-      "sha256": "1ad8d62ab69faf16d00253085db052dc379e9e21c36a6105301a0c033389e79f"
+      "sha256": "8e38f1e8839d4d77fc297e4b6b1427e2c6a7b2ba83f3dd3a08b762593365e9a3"
     },
     {
       "file": "cases-13.json",
-      "cases": 2,
-      "sha256": "8e9be46e19c4fec2f8cddc2af8fbb4c646f7c963a3d9c949f05a2d6c5d8871f9"
+      "cases": 3,
+      "sha256": "d85d81d265daab63ffc70032d8eabed961bb7f23e6eec089bde39145dcb29f50"
     }
   ],
   "fixture_amendment": {
