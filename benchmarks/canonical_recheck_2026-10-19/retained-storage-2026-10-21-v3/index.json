@@ -1,0 +1,76 @@
+{
+  "machine": "AMD Ryzen 9 7950X / WSL2 measurement host",
+  "panels": [
+    {
+      "kind": "profile",
+      "records": 25,
+      "logical_bytes": 1336595916,
+      "shards": [
+        {
+          "path": "profile-00.json",
+          "sha256": "4816db2d02830a11fbb2424b5c5a6cc488202559ed55ebf90952bcfb7fabf732"
+        },
+        {
+          "path": "profile-01.json",
+          "sha256": "548d1ddb6abe64cb2d5d7b1c905ef74cb454ed88c305c77a631e11790c507d2f"
+        },
+        {
+          "path": "profile-02.json",
+          "sha256": "7db75f5cbbf39ac1869010f610608e74b3390d5e6003d4aebb351e54a44542d6"
+        },
+        {
+          "path": "profile-03.json",
+          "sha256": "cdf5df9263ccb40cbf2cd3040f190523df0aaabf2fda7c9d5e7d2d8a9cc19dc4"
+        }
+      ],
+      "raw_result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/profile-storage-relocation-v2.result.json",
+        "sha256": "c077b1931dc76b1e49ddd1caa2ce89441c1acdf54f29e680f4491a703b2177c3"
+      },
+      "observed_at_utc": "2026-10-21T08:53:54.112489+00:00",
+      "root_free_before_bytes": 343334912,
+      "root_free_after_bytes": 1679904768,
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/profile-storage-relocation-v2.log",
+        "sha256": "c0767271d6edb38fd05275ef7506b32a6974273459365d6aa069c4e83ed85bbe",
+        "receipt": "run-heavy: done rc=0 22s | peak-RSS 0.02GiB | min-avail 13698MiB | peak-load 0.97"
+      }
+    },
+    {
+      "kind": "build-debug",
+      "records": 25,
+      "logical_bytes": 945462536,
+      "shards": [
+        {
+          "path": "build-debug-00.json",
+          "sha256": "9b26d3816b9f1beb07be9b6c36fc21508d80b94c107255c6383a0d257545b843"
+        },
+        {
+          "path": "build-debug-01.json",
+          "sha256": "ca1ea03edae76b3c631dedb9d1095ed82bbde09ee503d29b0c38da4bde63e713"
+        },
+        {
+          "path": "build-debug-02.json",
+          "sha256": "0b6cb66243af97b3d2ebac8a759906258998f67b1765234dde5a980eb76f6845"
+        },
+        {
+          "path": "build-debug-03.json",
+          "sha256": "a8b246e3d8cc5956d1d5a9d642894e08e075d300ea95bc79464f5deeb705602f"
+        }
+      ],
+      "raw_result": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v3.result.json",
+        "sha256": "36cdb2398729a4e9e74e7edb461e9c79c67198e63ca6599e9bd41cf5545930a7"
+      },
+      "observed_at_utc": "2026-10-21T08:58:27.634813+00:00",
+      "root_free_before_bytes": 1675677696,
+      "root_free_after_bytes": 2144923648,
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/build-debug-storage-relocation-v3.log",
+        "sha256": "bff5673ee183de90028a7a2eec5bc3305c0c4bfb229611cafeb5308aa5bbdbe9",
+        "receipt": "run-heavy: done rc=0 15s | peak-RSS 0.02GiB | min-avail 13688MiB | peak-load 2.92"
+      }
+    }
+  ],
+  "qualification": "Completed diagnostic captures and build debug sidecars only. Copies and original-path symlinks preserve size and SHA-256. Metric ELFs, shared libraries, input data and models remain at their original storage locations. Logical copied bytes are not a claim of physical reclaimed space; free-space values were observed after each operation. No scoring or comparative timing is performed by the storage operation."
+}

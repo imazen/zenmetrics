@@ -1,0 +1,98 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t28-c5f16e49/profile/perf.data",
+    "bytes": 17343080,
+    "sha256": "f069500d17de6b9f42bb5c193478c086483fe5753a19c056c3d7450d419f988b",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t28-c5f16e49/profile/receipt.json",
+      "sha256": "fa7cca68c5cfc839219817f0067ca321d6e6942a152d95c2cc57ba0676e082d8"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/f069500d17de6b9f42bb5c193478c086483fe5753a19c056c3d7450d419f988b.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t1-3bc4fc38/profile/perf.data",
+    "bytes": 14931292,
+    "sha256": "3f07df417a76e2dcd7285389e0393357e96cd533e5e6ae4cce40983f294705b7",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t1-3bc4fc38/profile/receipt.json",
+      "sha256": "56cc0360f9878144751404212fdea8bee8c715a1d6e69bd91d21403df4059ece"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/3f07df417a76e2dcd7285389e0393357e96cd533e5e6ae4cce40983f294705b7.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t28-3cb87691/profile/perf.data",
+    "bytes": 14482312,
+    "sha256": "a16c42d8aa9c4e4a339b5fc689fb6d419c4bf2f7e8b8fd823a20c12b97564513",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t28-3cb87691/profile/receipt.json",
+      "sha256": "aa402f3f8d863a37be27d873db3c4a0aa9dfc4ae2444a501909ba07a3fa76618"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/a16c42d8aa9c4e4a339b5fc689fb6d419c4bf2f7e8b8fd823a20c12b97564513.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t1-3cb87691/profile/perf.data",
+    "bytes": 14196580,
+    "sha256": "5184cbdd3d35d80c38c1063f67739d84b2778a4c447b18aa8984fcf92aa7b205",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid/flags/dssim-gpu-grid-pairA-64x64-t1-3cb87691/profile/receipt.json",
+      "sha256": "9c743ebfa15693d068cefa810bdfa78f22305e68d3747c35ec33c9fb9001dd1b"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/5184cbdd3d35d80c38c1063f67739d84b2778a4c447b18aa8984fcf92aa7b205.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/warm-profile-control/perf.data",
+    "bytes": 13592668,
+    "sha256": "dec654c491ed47a7be69700aedd64b141e934bf752d80fb3bff5bc9d64ed5d61",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/warm-profile-control/receipt.json",
+      "sha256": "bc0a4b45ab83ac7ad665addda91485d6153d3621a2646dab5d44ec985c44d974"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/dec654c491ed47a7be69700aedd64b141e934bf752d80fb3bff5bc9d64ed5d61.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile/perf.data",
+    "bytes": 11729968,
+    "sha256": "89bfb157deef70e9a3a62958c109c60d2856f650c6fbe276c52277e4c5ef71e5",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-current-512x512-t8-bb7819c0/profile/receipt.json",
+      "sha256": "4ea1d716d668cd12f2bca739fff6f5595b156245a0cc16c4ff029eddbb3da339"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/89bfb157deef70e9a3a62958c109c60d2856f650c6fbe276c52277e4c5ef71e5.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile/perf.data",
+    "bytes": 11576228,
+    "sha256": "50fdc4e45f927f50486b56da02b31d98700ae6ed8f9ba5649671d8667bda944d",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/dssim-gpu-grid-pairB-64x64-t1-c5f16e49/profile/receipt.json",
+      "sha256": "c146333975664970c7e526d40b16a1800c733ce4fb3e558efb080736ab04a625"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/50fdc4e45f927f50486b56da02b31d98700ae6ed8f9ba5649671d8667bda944d.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile/perf.data",
+    "bytes": 11462536,
+    "sha256": "52ca4a875de4f4fa81fb4ab42d7300e5cf6502281d5504eb811a46dcabcfc393",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/profile/receipt.json",
+      "sha256": "fa1c0207475629227421739e9c29216fd2cd9a26604ce823b92da806ba9b497f"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/52ca4a875de4f4fa81fb4ab42d7300e5cf6502281d5504eb811a46dcabcfc393.data",
+    "original_path_preserved": true
+  }
+]

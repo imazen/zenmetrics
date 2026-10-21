@@ -1,0 +1,32 @@
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+R=Path(__file__).parent
+
+def sha(path):
+    value=hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        while chunk:=stream.read(1024*1024):value.update(chunk)
+    return value.hexdigest()
+files=[]
+for row in json.loads((R/'completed-profile-storage-candidates-v2.json').read_text())['files']:
+    source=Path(row['path'])
+    if source.is_symlink():continue
+    digest=sha(source);assert source.stat().st_size==row['bytes'];bound=False
+    for parent in source.parents:
+        receipt=parent/'receipt.json'
+        if receipt.exists():
+            value=json.loads(receipt.read_text());expected=value.get('profile_sha256') if source.name=='perf.data' else value.get('report_sha256') if source.name=='report.txt' else None
+            expected=expected or (value.get('perf_data_sha256') if source.name=='perf.data' else None) or value.get('files',{}).get(str(source))
+            if expected==digest:bound=True;break
+        if parent in [R,Path.home()/'tmp/handoff']:break
+    if not bound:raise ValueError('Completed receipt does not bind artifact: '+str(source))
+    files.append(dict(path=str(source),bytes=row['bytes'],sha256=digest,receipt=dict(path=str(receipt),sha256=sha(receipt)),original_link_count=source.stat().st_nlink))
+assert files
+plan=R/'profile-storage-relocation-v2.plan.json';assert not plan.exists()
+with plan.open('x') as stream:json.dump(dict(destination='/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2',files=files,root_free_before_bytes=shutil.disk_usage(Path.home()).free,maintenance_admission='Only the shared second lock is held; all participating measurement workers require both locks, so no measurement overlaps this storage operation. No first-lock acquisition is attempted here.'),stream,indent=2)
+subprocess.run([sys.executable,'-B',str(R/'relocate_completed_profiles_v2.py')],check=True)
+with (R/'profile-storage-relocation-v2-free-space.json').open('x') as stream:json.dump(dict(root_free_after_bytes=shutil.disk_usage(Path.home()).free),stream)

@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile/perf.data",
+    "bytes": 10761528,
+    "sha256": "06cde416e431139dd1e984f7e6328ba34711375c3235c3535734bf31075291b7",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-flags/flip-v17-current-512x512-t8-bb7819c0/profile/receipt.json",
+      "sha256": "6d8b35dfed13ee192dfc0ab320312f52844fd3d3d881645d0ca132e18e26e35f"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/06cde416e431139dd1e984f7e6328ba34711375c3235c3535734bf31075291b7.data",
+    "original_path_preserved": true
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/profile/perf.data",
+    "bytes": 69452316,
+    "sha256": "66a8a624432d1a6cc885127bed12ec393c876c0ab49690a485b9e3a515fc39d0",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t8-7a07601a/profile/receipt.json",
+      "sha256": "a0c516f5c223a1ed71b3e51c3fe21f0216a5d80b1b04b38bc9775c7b6459569c"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/66a8a624432d1a6cc885127bed12ec393c876c0ab49690a485b9e3a515fc39d0.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/profile/perf.data",
+    "bytes": 45713008,
+    "sha256": "851144239cc54dc0449eabce5d6e08fd8a823fd8f4e3f9e0961b3a165db15b4d",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/arniqa-original-cid22-t1-7a07601a/profile/receipt.json",
+      "sha256": "fb46139aba690a13db95e0634916205a7cf773626c23bdbda9f9a4aa0acf7ebb"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/851144239cc54dc0449eabce5d6e08fd8a823fd8f4e3f9e0961b3a165db15b4d.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-v17-grid-pairA-1024x1024-t28-060d464f/profile/perf.data",
+    "bytes": 42577716,
+    "sha256": "8fd26f47c2071d8524967047472fe77ad6240ea2c28e3f819cd122fc369a0509",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-v17-grid-pairA-1024x1024-t28-060d464f/profile/receipt.json",
+      "sha256": "ae20f62bc417a0d7b83f133394631bc88d2b5a8f1fa7ce9ab02e5e90d5d036ff"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/8fd26f47c2071d8524967047472fe77ad6240ea2c28e3f819cd122fc369a0509.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t8-1d3aa20e/profile/perf.data",
+    "bytes": 39205400,
+    "sha256": "0a96f345c653f2918831c3caa47178b1b8c2740583dd156f23a8c89422a46b11",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t8-1d3aa20e/profile/receipt.json",
+      "sha256": "20c15c2032b77e029f7c7841eaf1be55b0f382800d57263183668a43e8f73f88"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/0a96f345c653f2918831c3caa47178b1b8c2740583dd156f23a8c89422a46b11.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t1-1d3aa20e/profile/perf.data",
+    "bytes": 29499048,
+    "sha256": "8f43666014c674bf7b71f9d64cd917daf0d3d2f2fb91875e9f137bca22a62e6c",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/stlpips-alex-pair-cid22-t1-1d3aa20e/profile/receipt.json",
+      "sha256": "1ed74b96af96bc1d7ef97655f1762461a7324928be3d63c85cda495435175643"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/8f43666014c674bf7b71f9d64cd917daf0d3d2f2fb91875e9f137bca22a62e6c.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/profile/perf.data",
+    "bytes": 28224568,
+    "sha256": "0acd83c2c735df5387b34f7ae59783034708d6de1a6ab7720735dcbb1765e2be",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/neural-flags/paq2piq-original-cid22-t8-3bc4fc38/profile/receipt.json",
+      "sha256": "0e926266fedaa4663e8467bc27ad6a76ea2f456fa021fa2e5dda2e612d91b9d7"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/0acd83c2c735df5387b34f7ae59783034708d6de1a6ab7720735dcbb1765e2be.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-1024x1024-t28-060d464f/profile/perf.data",
+    "bytes": 28062816,
+    "sha256": "7309398461e0b06cde45585c9f4038679d4f3b832f5804a1e041724ad4a740a8",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-grid-pairA-1024x1024-t28-060d464f/profile/receipt.json",
+      "sha256": "84fa426bd9b8877c95be0f493be0f4ab6b8079cfb54dfc0b9ecc3f1fd1b9a453"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/7309398461e0b06cde45585c9f4038679d4f3b832f5804a1e041724ad4a740a8.data",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile/perf.data",
+    "bytes": 18365712,
+    "sha256": "82977bfed78c787bd179cea578e3c7b0aefb7a04c3fbd581abce52f95ad11822",
+    "receipt": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/profile/receipt.json",
+      "sha256": "73c1cdaef48aa255f8f2a9a6d314fb9b36e8cacbbe1452bae01efb5854ce50e6"
+    },
+    "original_link_count": 1,
+    "destination": "/mnt/v/zenmetrics/canonical-completed-profiles-20261021-v2/82977bfed78c787bd179cea578e3c7b0aefb7a04c3fbd581abce52f95ad11822.data",
+    "original_path_preserved": true
+  }
+]

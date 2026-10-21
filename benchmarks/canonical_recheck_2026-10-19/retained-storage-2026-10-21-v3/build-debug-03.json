@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/retained-gpu-reference/release/iqa-compete.dwp",
+    "bytes": 77978016,
+    "sha256": "e584164e7ab4d6338fcd84b5162a980713b044c8c75699a7bf7cbb566574aeca",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/retained-gpu-reference/release/iqa-compete",
+      "sha256": "05cb053608004f225f153c2ef7699e74973b7bb7f162129053df4d982736d815"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/e584164e7ab4d6338fcd84b5162a980713b044c8c75699a7bf7cbb566574aeca.dwp",
+    "original_path_preserved": true
+  }
+]

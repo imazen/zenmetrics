@@ -1,0 +1,27 @@
+import datetime,json,shutil,subprocess,sys
+from pathlib import Path
+R=Path(__file__).parent;P=Path('benchmarks/canonical_recheck_2026-10-19');sys.path.insert(0,str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*args):subprocess.run(args,check=True)
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','docs: retain completed profile and debug storage evidence')
+folder=P/'retained-storage-2026-10-21-v3';folder.mkdir();outputs=[];panels=[]
+for label,version in [('profile',2),('build-debug',3)]:
+ stem=f'{label}-storage-relocation-v{version}';result=R/(stem+'.result.json');value=json.loads(result.read_text());rows=value['records']
+ for row in rows:
+  path=Path(row['path']);assert path.is_symlink() and path.resolve()==Path(row['destination']);assert path.stat().st_size==row['bytes'] and sha(path)==row['sha256']
+  if 'associated_binary' in row:assert sha(row['associated_binary']['path'])==row['associated_binary']['sha256']
+ log=R/(stem+'.log');resource=[x for x in log.read_text().splitlines() if x.startswith('run-heavy: done ')];assert len(resource)==1 and 'rc=0 ' in resource[0]
+ files=[]
+ for offset in range(0,len(rows),8):
+  target=folder/(label+f'-{offset//8:02d}.json');data=(json.dumps(rows[offset:offset+8],indent=2)+'\n').encode();assert len(data)<=30000;target.write_bytes(data);outputs.append((target,'provenance'));files.append(dict(path=target.name,sha256=sha(target)))
+ plan=R/(stem+'.plan.json');free=R/(stem+'-free-space.json')
+ panels.append(dict(kind=label,records=len(rows),logical_bytes=sum(x['bytes'] for x in rows),shards=files,raw_result=dict(path=str(result),sha256=sha(result)),observed_at_utc=value['observed_at_utc'],root_free_before_bytes=json.loads(plan.read_text()).get('root_free_before_bytes'),root_free_after_bytes=json.loads(free.read_text())['root_free_after_bytes'],resource_receipt=dict(path=str(log),sha256=sha(log),receipt=resource[0])))
+index=folder/'index.json';index.write_text(json.dumps(dict(machine='AMD Ryzen 9 7950X / WSL2 measurement host',panels=panels,qualification='Completed diagnostic captures and build debug sidecars only. Copies and original-path symlinks preserve size and SHA-256. Metric ELFs, shared libraries, input data and models remain at their original storage locations. Logical copied bytes are not a claim of physical reclaimed space; free-space values were observed after each operation. No scoring or comparative timing is performed by the storage operation.'),indent=2)+'\n');outputs.append((index,'provenance'));register_outputs(outputs)
+for source in [Path(__file__),R/'prepare_and_relocate_profiles_v2.py',R/'relocate_completed_profiles_v2.py',R/'prepare_and_relocate_build_debug_v3.py',R/'relocate_completed_build_debug_v3.py',R/'recovery-tools-v1/run_unclaimed_warm_profiles_v2.py']:
+ shutil.copyfile(source,folder/(source.name+'.txt'))
+with (P/'README.md').open('a') as stream:stream.write('\n### Further retained diagnostic storage (2026-10-21)\n\nThe [storage evidence](retained-storage-2026-10-21-v3/index.json) retains 25 completed profiling captures and 25 build debug sidecar paths on the dataset volume. Hash checks preserve all original consumer paths. The observed root free space after the two operations was 1,679,904,768 and 2,144,923,648 bytes, respectively. The wrappers recorded 22 s / 0.02 GiB peak RSS and 15 s / 0.02 GiB; these describe storage operations. The profile stopped at disk preflight is resumed with a new wrapper log, preserving the old failure and unchanged capture request.\n')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+' codex-root-canonical validating retained storage provenance\n')
+run('just','bench-iqa-canonical-check');run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@');print('RETAINED_STORAGE_V3_VERIFIED',flush=True)

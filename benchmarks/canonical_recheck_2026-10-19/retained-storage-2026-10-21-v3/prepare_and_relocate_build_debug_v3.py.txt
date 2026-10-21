@@ -1,0 +1,33 @@
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+R = Path(__file__).parent
+
+def sha(path):
+    value = hashlib.sha256()
+    with path.open('rb') as stream:
+        while chunk := stream.read(1024*1024):
+            value.update(chunk)
+    return value.hexdigest()
+
+rows = []
+for sidecar in sorted(R.rglob('*.dwp')):
+    if sidecar.is_symlink() or not sidecar.is_file(): continue
+    binary = sidecar.with_suffix('')
+    if not binary.is_file(): raise ValueError('Missing debug-associated binary: '+str(binary))
+    rows.append(dict(path=str(sidecar), bytes=sidecar.stat().st_size, sha256=sha(sidecar),
+                     associated_binary=dict(path=str(binary), sha256=sha(binary)),
+                     disposition='Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.'))
+assert rows
+plan = R/'build-debug-storage-relocation-v3.plan.json'
+with plan.open('x') as stream:
+    json.dump(dict(destination='/mnt/v/zenmetrics/canonical-build-debug-20261021', files=rows,
+                   root_free_before_bytes=shutil.disk_usage(Path.home()).free, qualification='Prepared under exclusive shared heavy admission. Completed build sidecars only, before verified-copy and atomic original-path symlinks. Shared admission excludes other participating measurements during relocation.'), stream, indent=2)
+subprocess.run([sys.executable, '-B', str(R/'relocate_completed_build_debug_v3.py')], check=True)
+
+for row in rows: assert sha(Path(row['associated_binary']['path'])) == row['associated_binary']['sha256']
+with (R/'build-debug-storage-relocation-v3-free-space.json').open('x') as stream: json.dump(dict(root_free_after_bytes=shutil.disk_usage(Path.home()).free),stream)

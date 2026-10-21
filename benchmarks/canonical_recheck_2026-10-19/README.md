@@ -1050,3 +1050,7 @@ The [retained initial20 plus additional40](arniqa-t8-first-combined60-2026-10-21
 ### Previously unstarted warm confirmations (2026-10-21)
 
 The [retained request set](warm-followup-recovery-2026-10-21/index.json) contains 15 original 20-block requests whose output roots were absent and unclaimed by live queues. Existing completed stages remain separate. Their original plans, five samples per block, clocks and numerical bounds are preserved. Ten native profile captures are requested; three matching native-only captures are reused after checking their full configurations and artifact hashes, and two earlier captures already exist. No canonical comparison or timing is reused through this profile mapping. These are declared requests, not completed comparisons or accepted regressions.
+
+### Further retained diagnostic storage (2026-10-21)
+
+The [storage evidence](retained-storage-2026-10-21-v3/index.json) retains 25 completed profiling captures and 25 build debug sidecar paths on the dataset volume. Hash checks preserve all original consumer paths. The observed root free space after the two operations was 1,679,904,768 and 2,144,923,648 bytes, respectively. The wrappers recorded 22 s / 0.02 GiB peak RSS and 15 s / 0.02 GiB; these describe storage operations. The profile stopped at disk preflight is resumed with a new wrapper log, preserving the old failure and unchanged capture request.

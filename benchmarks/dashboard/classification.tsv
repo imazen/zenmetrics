@@ -1940,3 +1940,12 @@ benchmarks/canonical_recheck_2026-10-19/classical-first-grid/cases-14.json	ignor
 benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/unclaimed-warm-fixed20-requests-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/unclaimed-warm-profiles-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/warm-followup-recovery-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/profile-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/profile-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/profile-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/profile-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

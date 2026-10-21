@@ -1,0 +1,98 @@
+[
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/deps/piqe-dde250b14a09cbed.dwp",
+    "bytes": 3249736,
+    "sha256": "0a210125f46f1b285131189a766c82618166a7976d58bd8afca36399333eb811",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/build/target/release/deps/piqe-dde250b14a09cbed",
+      "sha256": "63e0a503c8d85366a60bfadc33f70625d7b26a1fed7d673427d2efd3efbe7eab"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/0a210125f46f1b285131189a766c82618166a7976d58bd8afca36399333eb811.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/deps/iqa_compete-c0df2f12b68b7b13.dwp",
+    "bytes": 78086936,
+    "sha256": "c5b9880de04ec875458a89eea6dc23e48f83b55d114de3486ccc74a0c0c306cb",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/deps/iqa_compete-c0df2f12b68b7b13",
+      "sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/c5b9880de04ec875458a89eea6dc23e48f83b55d114de3486ccc74a0c0c306cb.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/deps/librten-002e9e8193d1cdad.so.dwp",
+    "bytes": 12599864,
+    "sha256": "25f99f1465996a9bd8c9a4fc1b031d5669e87be5391ab064f3f0996152e1e798",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/deps/librten-002e9e8193d1cdad.so",
+      "sha256": "4f077cc40f6936b712e02e753910ab99e2ef748774dbe728d6f37822093add40"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/25f99f1465996a9bd8c9a4fc1b031d5669e87be5391ab064f3f0996152e1e798.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete.dwp",
+    "bytes": 78086936,
+    "sha256": "c5b9880de04ec875458a89eea6dc23e48f83b55d114de3486ccc74a0c0c306cb",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/current38-comparative-build/target/release/iqa-compete",
+      "sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/c5b9880de04ec875458a89eea6dc23e48f83b55d114de3486ccc74a0c0c306cb.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/iqa_compete-2386043ab2a7f9be.dwp",
+    "bytes": 57084488,
+    "sha256": "89e315d4d5fe67e51d331bd83797eb7be0d3a48567f5683db7fa9ba982608f2b",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/deps/iqa_compete-2386043ab2a7f9be",
+      "sha256": "600beda3df7b720b423de1a4fbf9c4476f271511e0a22f69fa9201a1f31fcb49"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/89e315d4d5fe67e51d331bd83797eb7be0d3a48567f5683db7fa9ba982608f2b.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/iqa-compete.dwp",
+    "bytes": 57084488,
+    "sha256": "89e315d4d5fe67e51d331bd83797eb7be0d3a48567f5683db7fa9ba982608f2b",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-harness-fixed-build/target/release/iqa-compete",
+      "sha256": "600beda3df7b720b423de1a4fbf9c4476f271511e0a22f69fa9201a1f31fcb49"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/89e315d4d5fe67e51d331bd83797eb7be0d3a48567f5683db7fa9ba982608f2b.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/latest-comparative-build/target/release/deps/iqa_compete-c2cae6c7d2f212c6.dwp",
+    "bytes": 75679872,
+    "sha256": "2a77c742627c0c4ca488a139df1f6b4855dc9b4af20f9c4c59e00c45f3fb13fb",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/latest-comparative-build/target/release/deps/iqa_compete-c2cae6c7d2f212c6",
+      "sha256": "22ea6c5f4fdcf91ce81c5c3bb7641842fcad288068793a85d1e808c840eb7833"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/2a77c742627c0c4ca488a139df1f6b4855dc9b4af20f9c4c59e00c45f3fb13fb.dwp",
+    "original_path_preserved": true
+  },
+  {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/latest-comparative-build/target/release/deps/librten-002e9e8193d1cdad.so.dwp",
+    "bytes": 12599368,
+    "sha256": "3547ae77bb3619baa7cf8849244c821da518fe8e6dfadf6b07cac68f9ba57bf6",
+    "associated_binary": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/latest-comparative-build/target/release/deps/librten-002e9e8193d1cdad.so",
+      "sha256": "fca866efba36b2e09d4a1151c13851f1033a6532dadd0da3821ba0770bc1aa85"
+    },
+    "disposition": "Retain completed-build debug sidecar and exact consumer path. Native ELF and all scored observations remain in place. No debug-completeness claim.",
+    "destination": "/mnt/v/zenmetrics/canonical-build-debug-20261021/3547ae77bb3619baa7cf8849244c821da518fe8e6dfadf6b07cac68f9ba57bf6.dwp",
+    "original_path_preserved": true
+  }
+]
