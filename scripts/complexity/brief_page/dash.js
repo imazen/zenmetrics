@@ -30,7 +30,15 @@
   const sizeName = n => { const s = SIZE[n]; return s ? `${s.w}×${s.h}` + (n === 'aic-small' ? ' · AIC crop' : '') : n; };
   const thName = t => t === 'both' ? '1 and 8' : t === '8' || t === 8 ? '8 threads' : '1 thread';
   const tq = n => T975[Math.min(n - 2, 19)] || 1.96;
-  const meta = m => M[m] || { fam: 'classic', status: 'unchecked', why: [], diffs: [], july: [], canon: [], july_cols: [], est: {} };
+  const meta = m => M[m] || { fam: 'classic', csv: 'nocol', csv_why: '', ref_m: 'none', ref_why: '', diffs: [], csv_ev: [], july: [], canon: [], july_cols: [], site_cols: [], est: {} };
+  // Two independent questions: does our score reproduce the published AIC2026 CSV column, and the reference implementation?
+  const CAT = { exact: ['= exact', 'mark-ok'], near: ['≈ near-exact', 'mark-near'], miss: ['✗ cannot reproduce', 'mark-dev'],
+    none: ['not compared', 'mark-un'], nocol: ['no CSV column', 'mark-un'], own: ['own design', null] };
+  const CAT_ORDER = ['exact', 'near', 'miss', 'none', 'nocol', 'own'];
+  const catSpan = c => h('span', CAT[c][1], CAT[c][0]);
+  const isMatch = c => c === 'exact' || c === 'near';
+  // Where the two answers part: the reference reproduced but not the CSV, or the CSV reproduced without (or against) the reference.
+  const split = mm => isMatch(mm.ref_m) && mm.csv === 'miss' ? 'ref' : isMatch(mm.csv) && !isMatch(mm.ref_m) ? 'csv' : '';
   const famOn = m => S.fam.split(',').includes(meta(m).fam);
   const qOn = m => !S.q || m.toLowerCase().includes(S.q.toLowerCase());
   const sum = a => a.reduce((x, y) => x + y, 0);
@@ -96,11 +104,13 @@
   }
   function flagTspans(m) {
     const mm = meta(m);
-    return mm.status === 'deviation' ? '<tspan class="g-dev">*</tspan>' : mm.status === 'unchecked' ? '<tspan class="g-lab-dim">°</tspan>' : '';
+    const f = flagText(m);
+    return f === '*' ? '<tspan class="g-dev">*</tspan>' : f ? '<tspan class="g-lab-dim">°</tspan>' : '';
   }
   const short = m => m.length > 26 ? m.slice(0, 25) + '…' : m;
-  const flagText = m => { const mm = meta(m); return mm.status === 'deviation' ? '*' : mm.status === 'unchecked' ? '°' : ''; };
-  const MARKS_LEGEND = '<span><b class="mark-dev">*</b> deviation recorded</span><span><b class="mark-un">°</b> no parity check recorded</span>';
+  const flagText = m => { const mm = meta(m); return mm.csv === 'miss' || mm.ref_m === 'miss' ? '*' : mm.ref_m === 'none' && !isMatch(mm.csv) && mm.csv !== 'miss' ? '°' : ''; };
+  const flagClass = m => flagText(m) === '*' ? 'mark-dev' : 'mark-un';
+  const MARKS_LEGEND = '<span><b class="mark-dev">*</b> cannot reproduce the CSV column or the reference</span><span><b class="mark-un">°</b> compared with neither</span>';
 
   // ------------------------------------------------------------------ state (URL hash)
   function defaultHost() {
@@ -110,7 +120,7 @@
   }
   const PIN_DEFAULT = ['psnr-y', 'ssim2', 'butteraugli', 'vmaf', 'lpips-alex', 'dvifmish-port-lap-v0.2'].filter(m => NAMES.includes(m)).map((m, i) => `${m}:${i + 1}`).join(',');
   const DEF = { v: 'overview', host: defaultHost(), size: SIZE['aic-small'] ? 'aic-small' : SIZES[0].name, th: 'both', ph: 'warm', show: 'spread', ax: 'log',
-    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', jf: 'all', sort: '' };
+    unit: 'px', fam: FAMS.map(f => f[0]).join(','), q: '', tb: D.best_table, cth: '1', cax: 'log', pins: PIN_DEFAULT, rf: 'all', cf: 'all', xf: 'all', jf: 'all', sort: '' };
   let S = { ...DEF };
   function readHash() {
     const [v, ...kv] = location.hash.slice(1).split('&');
@@ -198,13 +208,16 @@
     const mm = meta(m), t = h('h4', null, m + ' ');
     t.append(h('span', 'tag', FAMS.find(f => f[0] === mm.fam)?.[1] || mm.fam));
     tip.append(t);
-    if (mm.status === 'deviation') {
-      tip.append(h('div', 'mark-dev', '* ' + mm.why.join('; ')));
+    for (const [k, c, why] of [['CSV column', mm.csv, mm.csv_why], ['Reference', mm.ref_m, mm.ref_why]]) {
+      const d = h('div', 'note'); d.append(h('b', null, k + ': '), catSpan(c));
+      if (why) d.append(document.createTextNode(' — ' + (why.length > 120 ? why.slice(0, 119) + '…' : why)));
+      tip.append(d);
+    }
+    if (!isMatch(mm.csv) || !isMatch(mm.ref_m)) {
       const lines = diffLines(mm);
       for (const l of lines.slice(0, 4)) tip.append(h('div', 'note', '· ' + l));
       if (lines.length > 4) tip.append(h('div', 'note', `· ${lines.length - 4} more in the details`));
     }
-    else if (mm.status === 'unchecked') tip.append(h('div', 'note', '° no parity check against the reference recorded yet'));
   }
   // One short line per recorded difference: full-set rows, reference comparisons, oracle cases, golden floors, card notes.
   function diffLines(mm) {
@@ -242,8 +255,10 @@
     row('AIC2026 column', mm.col);
     row('AIC2026 match', mm.aic);
     row('Primary-oracle check', mm.spot === 'missing' ? 'not run' : mm.spot);
-    row('Evidence', mm.status === 'deviation' ? 'deviation: ' + mm.why.join('; ') : mm.status === 'checked' ? 'agrees with at least one reference record' : mm.status === 'own' ? 'our own design: no external reference' : 'no parity record yet');
-    if (mm.evidence) row('Reference comparison', mm.evidence);
+    const crow = (k, c, why) => { const dd = h('dd'); dd.append(catSpan(c)); if (why) dd.append(document.createTextNode(' — ' + why)); dl.append(h('dt', null, k), dd); };
+    crow('Against the CSV column', mm.csv, mm.csv_why);
+    crow('Against the reference', mm.ref_m, mm.ref_why);
+    if (mm.evidence && mm.evidence !== mm.ref_why) row('Reference comparison', mm.evidence);
     if (mm.alias) row('Same implementation as', mm.alias);
     if (mm.est && mm.est.flops) row('Counted flops per pixel', fmt(mm.est.flops));
     if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU ns/px (perf stat)`, `${fmt(mm.c1)} at 1 thread, ${fmt(mm.c8)} at 8 threads`);
@@ -271,7 +286,17 @@
         t.append(tb); const w = h('div', 'scroll'); w.append(t); d.append(w);
       }
       if (notes.length) { const ul = h('ul'); for (const r of notes) { const li = h('li'); li.append(h('b', null, r.source + ': '), document.createTextNode(r.text)); ul.append(li); } d.append(ul); }
-    } else if (mm.status === 'deviation' && !mm.july.length && !mm.canon.length) d.append(h('div', 'mark-dev', 'Marked as a deviation, but no measured difference is recorded.'));
+    } else if (['near', 'miss'].includes(mm.ref_m) && !mm.canon.length) d.append(h('div', 'mark-dev', 'Short of exact against the reference, but no measured difference is recorded.'));
+    if (mm.csv_ev.length) {
+      d.append(h('h4', null, 'Against the CSV column: other records'));
+      const ul = h('ul');
+      for (const e of mm.csv_ev) {
+        const li = h('li'); li.append(h('b', null, `${e.column} (${e.source}${e.section ? ', ' + e.section : ''}): `));
+        li.append(document.createTextNode(e.text || [e.median && `raw median ${e.median}`, e.max && `max ${e.max}`, e.max_jnd && `max ${e.max_jnd} site-JND`, `${e.n} crops`].filter(Boolean).join(', ')));
+        ul.append(li);
+      }
+      d.append(ul);
+    }
     d.append(h('div', 'hint', `Wall time per call, ${S.ph} phase, median ns per pixel [95 % interval of the mean]; empty cells are not measured yet.`));
     const tbl = h('table'), thead = h('thead'), tr = h('tr');
     tr.append(h('th', null, 'size'));
@@ -397,7 +422,8 @@
     const med = at.length ? at[Math.floor(at.length / 2)] : null;
     const scal = scalingSummary(host);
     const s1 = D.stats.find(s => s.table === D.best_table && s.threads === 1);
-    const cnt = st => Object.values(M).filter(x => !x.alias && x.status === st).length;
+    const cnt = (ax, c) => Object.values(M).filter(x => !x.alias && x[ax] === c).length;
+    const nsplit = k => Object.values(M).filter(x => !x.alias && split(x) === k).length;
     const aicN = D.aic.map(([c, cls, names]) => [c, cls, names.length]);
     const okCols = sum(aicN.filter(a => a[1] === 'ok').map(a => a[2])), devCols = sum(aicN.filter(a => a[1] === 'dev').map(a => a[2]));
     const o = h('div', 'overview');
@@ -425,7 +451,7 @@
       ['cost', 'Counted cost', 'Operation counts against measured CPU time, with fits and intervals.',
         s1 ? `${TABLE[D.best_table].label}: Spearman ρ ${s1.spearman.toFixed(2)} [${s1.spearman_lo.toFixed(2)}, ${s1.spearman_hi.toFixed(2)}], log–log slope ${s1.slope.toFixed(2)} [${s1.slope_lo.toFixed(2)}, ${s1.slope_hi.toFixed(2)}], n ${s1.n}.` : ''],
       ['repro', 'Reproduction', 'Each implementation against its reference and the AIC2026 columns.',
-        `${okCols} AIC2026 columns reproduced or matched, ${devCols} close but not exact. Full set: ${(D.repro.misses || []).length} columns miss the gate (${(D.repro.misses || []).map(m => m.column).join(', ') || 'none'}). Metrics: ${cnt('checked')} checked, ${cnt('deviation')} with a recorded deviation, ${cnt('unchecked')} without a parity record yet.`],
+        `${okCols} AIC2026 columns reproduced or matched, ${devCols} close but not exact. Full set: ${(D.repro.misses || []).length} columns miss the gate (${(D.repro.misses || []).map(m => m.column).join(', ') || 'none'}). Against the CSV: ${cnt('csv', 'exact')} exact, ${cnt('csv', 'near')} near-exact, ${cnt('csv', 'miss')} cannot reproduce. Against the reference: ${cnt('ref_m', 'exact')} exact, ${cnt('ref_m', 'near')} near-exact, ${cnt('ref_m', 'miss')} cannot reproduce, ${cnt('ref_m', 'none')} not compared. ${nsplit('ref')} reproduce the reference but not the CSV; ${nsplit('csv')} reproduce the CSV without a reproduced reference.`],
       ['data', 'Data', 'Time per pixel by metric and CPU, sortable, as CSV.', 'Download: timings.csv (every cell), complexity.csv (counted costs).'],
       ['method', 'Method', 'What is timed, how zenbench protects it, and the limits.', ''],
     ];
@@ -800,10 +826,14 @@
 
   // ---- reproduction
   function railRepro(rail) {
-    const cnt = st => Object.values(M).filter(x => !x.alias && (st === 'all' || x.status === st)).length;
+    const cnt = (ax, c) => Object.values(M).filter(x => !x.alias && (c === 'all' || x[ax] === c)).length;
+    const nsplit = k => Object.values(M).filter(x => !x.alias && (k === 'all' || split(x) === k)).length;
+    const catOpts = (ax, cats) => [['all', `All (${cnt(ax, 'all')})`], ...cats.map(c => [c, `${CAT[c][0]} (${cnt(ax, c)})`])];
     const jn = j => Object.values(M).filter(x => !x.alias && (j === 'all' || (x.july_cols.length > 0) === (j === 'in'))).length;
     rail.append(seg('Published AIC2026 column', 'jf', [['all', `All (${jn('all')})`], ['in', `Has a column (${jn('in')})`], ['out', `No column (${jn('out')})`]]),
-      seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`], ['own', `Own design (${cnt('own')})`]]),
+      seg('Against the CSV column', 'cf', catOpts('csv', ['exact', 'near', 'miss', 'none', 'nocol'])),
+      seg('Against the reference', 'rf', catOpts('ref_m', ['exact', 'near', 'miss', 'none', 'own'])),
+      seg('Where they differ', 'xf', [['all', `All (${nsplit('all')})`], ['ref', `Reference yes, CSV no (${nsplit('ref')})`], ['csv', `CSV yes, reference no or unchecked (${nsplit('csv')})`]]),
       famSeg(), search());
     const links = h('div', 'ctl'); links.append(h('div', 'ctl-label', 'Full-set diff against the published scores'));
     const lseg = h('div', 'card');
@@ -849,36 +879,29 @@
     }
     tbl.append(tb); body.replaceChildren(tbl);
   }
-  const evidenceCell = (m, td) => { const mm = meta(m); td.append(h('span', mm.status === 'deviation' ? 'mark-dev' : mm.status === 'checked' ? 'mark-ok' : mm.status === 'own' ? null : 'mark-un', mm.status === 'deviation' ? '* deviation' : mm.status === 'checked' ? '✓ checked' : mm.status === 'own' ? 'own design' : '° none yet')); if (mm.why.length) td.title = mm.why.join('; '); };
+  const catCell = ax => (m, td) => { td.append(catSpan(meta(m)[ax])); };
+  const whyCell = ax => (m, td) => { const w = meta(m)[ax]; td.textContent = w ? (w.length > 70 ? w.slice(0, 69) + '…' : w) : '–'; if (w && w.length > 70) td.title = w; };
+  const catSort = ax => m => CAT_ORDER.indexOf(meta(m)[ax]);
   function drawRepro(head, body) {
     const host = S.host === 'all' ? DEF.host : S.host;
-    const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].status === S.rf)
+    const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].ref_m === S.rf) && (S.cf === 'all' || M[m].csv === S.cf) && (S.xf === 'all' || split(M[m]) === S.xf)
       && (S.jf === 'all' || (M[m].july_cols.length > 0) === (S.jf === 'in')));
     setHead(head, 'Ours against the reference implementations',
-      `${rows.length} metrics. Full-set diff: our score on all 9,618 crops against the published column (July/drop union; median |Δ site-JND|, gate 1e-3) or, where the CSV has no column, against the reference implementation. Status doc: docs/AIC2026_REPRODUCTION_STATUS.md. Reference parity: the provenance ledger or model card. Oracle check: primary-oracle spot check.`,
+      `${rows.length} metrics. Against the CSV column: our scores against the published AIC2026 values (all 9,618 crops where the full-set run covers the column, else the 61-pair panel); exact = every crop within 1e-3 site-JND, near-exact = the median within it, cannot reproduce = the median beyond it. Against the reference: our scores against the reference implementation (primary-oracle spot check, parity gates in the model cards, recorded goldens); exact = every case within its bound, near-exact = worst case within 10× the bound. Status doc: docs/AIC2026_REPRODUCTION_STATUS.md.`,
       MARKS_LEGEND);
-    const diffv = m => { const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0]; return j ? +j.median_dJND : null; };
-    const diffCell = (m, td) => {
-      const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0], c = M[m].canon[0];
-      if (j) { td.append(h('span', j.match === 'MATCH' ? 'mark-ok' : 'mark-dev', (j.match === 'MATCH' ? '✓ ' : '✗ ') + j.median_dJND)); td.append(h('div', 'ci', `${j.column} · ρ ${j.spearman}`)); }
-      else if (c) { td.append(h('span', c.match === 'MATCH' ? 'mark-ok' : c.match === 'MISS' ? 'mark-dev' : null, `${c.match === 'MATCH' ? '✓' : c.match === 'MISS' ? '✗' : ''} rel ${c.median_rel}`)); td.append(h('div', 'ci', `vs ${c.reference} · ρ ${c.spearman}`)); }
-      else if (M[m].evidence) { td.append(h('span', M[m].status === 'checked' ? 'mark-ok' : null, M[m].evidence.length > 60 ? M[m].evidence.slice(0, 59) + '…' : M[m].evidence)); td.title = M[m].evidence; }
-      else if (M[m].diffs.length) { td.textContent = `${M[m].diffs.length} recorded difference${M[m].diffs.length > 1 ? 's' : ''}`; td.title = diffLines(M[m]).join('\n'); }
-      else if (M[m].july_cols.length) { td.textContent = 'not scored'; td.title = `${M[m].july_cols.join(', ')}: the full-set run used a different route or has not reached this column`; }
-      else td.textContent = '–';
-    };
     const speed = m => { const c = cell(host, m, DEF.size, 1, 'warm'); return c ? c.median * perPx(DEF.size) : null; };
     const txt = (f) => (r, td) => { td.textContent = f(r) ?? '–'; };
     const tableHost = h('div');
     body.replaceChildren(missesPanel(), tableHost);
     sortable(tableHost, [
-      { id: 'm', label: 'metric', cell: (m, td) => { td.append(h('code', null, m)); const f = flagText(m); if (f) td.append(h('span', meta(m).status === 'deviation' ? 'mark-dev' : 'mark-un', ' ' + f)); }, sortv: m => m },
+      { id: 'm', label: 'metric', cell: (m, td) => { td.append(h('code', null, m)); const f = flagText(m); if (f) td.append(h('span', flagClass(m), ' ' + f)); }, sortv: m => m },
       { id: 'fam', label: 'family', cell: txt(m => FAMS.find(f => f[0] === M[m].fam)?.[1]), sortv: m => M[m].fam },
-      { id: 'ev', label: 'evidence', cell: evidenceCell, sortv: m => M[m].status },
+      { id: 'csv', label: 'vs CSV column', title: 'our scores against the published AIC2026 values', cell: catCell('csv'), sortv: catSort('csv') },
+      { id: 'csvw', label: 'CSV evidence', cell: whyCell('csv_why'), sortv: m => M[m].csv_why },
+      { id: 'refm', label: 'vs reference', title: 'our scores against the reference implementation', cell: catCell('ref_m'), sortv: catSort('ref_m') },
+      { id: 'refw', label: 'reference evidence', cell: whyCell('ref_why'), sortv: m => M[m].ref_why },
       { id: 'ref', label: 'reference implementation', cell: txt(m => M[m].ref || 'not recorded'), sortv: m => M[m].ref },
-      { id: 'par', label: 'reference parity', cell: txt(m => M[m].parity === 'Not documented' ? 'none recorded' : M[m].parity), sortv: m => M[m].parity },
       { id: 'col', label: 'published column', title: 'columns of the July/drop published tables; columns only named on the AIC site in grey', cell: (m, td) => { td.textContent = M[m].july_cols.join(', ') || (M[m].site_cols.length ? '' : '–'); if (M[m].site_cols.length) td.append(h('div', 'ci', 'site only: ' + M[m].site_cols.join(', '))); }, sortv: m => M[m].july_cols[0] },
-      { id: 'diff', label: 'full-set diff', title: 'median |Δ site-JND| against the published column (✓ ≤ 1e-3), or median relative difference from the reference implementation', cell: (m, td) => diffCell(m, td), sortv: diffv },
       { id: 'aic', label: 'status doc', cell: txt(m => M[m].aic), sortv: m => M[m].aic },
       { id: 'spot', label: 'oracle check', cell: txt(m => M[m].spot === 'missing' ? 'not run' : M[m].spot), sortv: m => M[m].spot },
       { id: 'ns', label: 'ns/px', num: true, title: `${hostName(host)}, ${sizeName(DEF.size)}, 1 thread, warm median`, cell: (m, td) => { td.textContent = fmt(speed(m)); }, sortv: speed },
@@ -929,12 +952,13 @@
     const rows = dataRows(), u = unitShort();
     setHead(head, `Summary: ${unitName()} by metric and CPU`, `${sizeName(S.size)} · ${thName(S.th === '8' ? '8' : '1')} · ${S.ph} · median [95 % interval of the mean] (n) · ${rows.length} metrics · click a header to sort`, MARKS_LEGEND);
     const cols = [
-      { id: 'm', label: 'metric', cell: (r, td) => { td.append(h('code', null, r.m)); const f = flagText(r.m); if (f) td.append(h('span', meta(r.m).status === 'deviation' ? 'mark-dev' : 'mark-un', ' ' + f)); }, sortv: r => r.m },
+      { id: 'm', label: 'metric', cell: (r, td) => { td.append(h('code', null, r.m)); const f = flagText(r.m); if (f) td.append(h('span', flagClass(r.m), ' ' + f)); }, sortv: r => r.m },
       { id: 'fam', label: 'family', cell: (r, td) => { td.textContent = FAMS.find(f => f[0] === meta(r.m).fam)?.[1] || ''; }, sortv: r => meta(r.m).fam },
       ...HOSTS.map((host, i) => ({ id: 'h' + i, label: `${hostName(host)} ${u}`, num: true, title: P.hosts[host],
         cell: (r, td) => { const c = r.c[i]; if (!c) { td.textContent = '–'; return; } td.append(h('b', null, fmt(c.median * r.k))); td.append(h('span', 'ci', (c.ci ? ` [${fmt(c.ci[0] * r.k)}, ${fmt(c.ci[1] * r.k)}]` : '') + ` (${c.n})`)); },
         sortv: r => r.c[i] ? r.c[i].median * r.k : null })),
-      { id: 'ev', label: 'evidence', cell: (r, td) => evidenceCell(r.m, td), sortv: r => meta(r.m).status },
+      { id: 'csv', label: 'vs CSV', cell: (r, td) => catCell('csv')(r.m, td), sortv: r => catSort('csv')(r.m) },
+      { id: 'refm', label: 'vs reference', cell: (r, td) => catCell('ref_m')(r.m, td), sortv: r => catSort('ref_m')(r.m) },
     ];
     if (!S.sort) S.sort = 'h' + HOSTS.indexOf(DEF.host) + ':a';
     sortable(body, cols, rows, r => openDrawer(r.m));
@@ -969,7 +993,8 @@
       <h3>Counted cost</h3>
       <p>Operations per pixel tallied from each implementation's source and weighted by ${D.tables.length} cost tables (flop count, the Pedzisz draft weights, scalar costs measured on the ${esc(D.fit_host)}, LLVM cost models, llvm-mca). Compared with CPU time from <code>perf stat</code> on the ${esc(D.fit_host)} at ${esc(D.fit_shape)}, one content pair, three repeats. Counts ignore vectorization, memory traffic, caches and threading. Several neural tallies await recounts; DVIFM counts are core-only aggregates.</p>
       <h3>Marks</h3>
-      <p><span class="mark-dev">*</span> a recorded deviation: an AIC2026 column that is close but not exact or not reproduced, a primary-oracle finding, or partial reference parity. <span class="mark-un">°</span> no parity record yet (not a known difference).</p>
+      <p>Each metric is judged twice, because the published AIC2026 CSV and the reference implementation can disagree with each other. <b>Against the CSV column</b>: exact when every compared crop is within 1e-3 site-JND, near-exact when the median is (or the only record is a match without per-crop site-JND), cannot reproduce when the median is not or the status doc records the column as not reproduced by ours. <b>Against the reference</b>: exact when every compared case is within its recorded bound (primary-oracle spot check, a model card's parity gate, the author's builds), near-exact when the worst case is within 10× the bound, cannot reproduce beyond that. Every result short of exact lists its measured differences in the details panel.</p>
+      <p><span class="mark-dev">*</span> cannot reproduce the CSV column or the reference. <span class="mark-un">°</span> compared with neither.</p>
       <h3>DVIFM versions</h3>
       <p>dvifmish ports M. Pedzisz's four released C++ variants (${dv}) and adds presets reconstructed from his talk.</p>
       <h3>Not shown</h3>

@@ -118,7 +118,7 @@ th{position:sticky;top:0;background:var(--surface);font-weight:600;color:var(--i
 th[aria-sort]::after{content:" ▾";color:var(--accent)}th[aria-sort="ascending"]::after{content:" ▴"}
 td.num,th.num{text-align:right}
 tbody tr:hover{background:var(--hover);cursor:pointer}
-.mark-dev{color:var(--crit);font-weight:700}.mark-ok{color:var(--good)}.mark-un{color:var(--muted)}
+.mark-dev{color:var(--crit);font-weight:700}.mark-ok{color:var(--good)}.mark-near{color:var(--ink2)}.mark-un{color:var(--muted)}
 .tag{font-size:.7em;border:1px solid var(--ring);border-radius:.3rem;padding:0 .3em;color:var(--ink2);margin-left:.35em;white-space:nowrap}
 
 /* reproduction misses */

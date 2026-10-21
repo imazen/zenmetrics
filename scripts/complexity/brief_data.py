@@ -267,7 +267,7 @@ def recorded_diffs():
             cases = {}
             for shard in json.loads(ev.read_text()).get('shards') or []:
                 for row in csv.DictReader((ev.parent / shard['path']).open(), delimiter='\t'):
-                    if row.get('status') in PASSED or row.get('passed') == 'True':
+                    if row.get('status') in PASSED or row.get('passed') == 'True' or row.get('metric', r['metric']) != r['metric']:
                         continue
                     w, h = row.get('width'), row.get('height')
                     key = (row.get('pair'), f'{w}×{h}' if w else row.get('size'), row.get('status'))
@@ -303,6 +303,41 @@ def recorded_diffs():
                 out.setdefault(name, []).append(dict(source=f"model card {k.removeprefix('measured_').replace('_', ' ')}", text=v))
         if isinstance(par.get('blocker'), str):
             out.setdefault(name, []).append(dict(source='model card blocker', text=par['blocker']))
+    return out
+
+
+def csv_evidence(metrics, routes):
+    """Per metric, evidence against its published AIC2026 column beyond the full-set run: the retained 61-pair panel,
+    private aggregates (site-JND where they record it) and the status-doc row that classifies the column. DVIFM port
+    presets also pick up the doc rows that name them ('port mode' or the preset), since no column map lists them."""
+    doc = status_rows()
+    panel = {}
+    for r in csv.DictReader((ROOT / 'benchmarks/dashboard/aic2026/retained-comparisons.tsv').open(), delimiter='\t'):
+        col = re.split(r' / | \(', r['column'])[0].strip()
+        panel[col] = dict(column=col, n=r['n'], median=r['median'] or None, max=r['maximum'] or None, max_jnd=r['max_jnd'] or None,
+                          source='61-pair panel')
+    for x in json.loads((ROOT / 'benchmarks/dashboard/aic2026/private-aggregates.json').read_text())['models']:
+        j = re.search(r'maximum ([\d.e-]+) JND', x['published_match'])
+        panel.setdefault(x['published_column'], dict(column=x['published_column'], n='61', max_jnd=j and j[1],
+                                                     text=x['published_match'], source='private aggregate'))
+    out = {}
+    for m in metrics:
+        name = m['metric']
+        cols = ({m['column']} if m['column'] else set()) | {c for c, ms in routes.items() if name in ms}
+        rows = {c: r for c, r in doc.items() if c in cols}
+        if name.startswith('dvifmish-port-'):
+            preset = name.removeprefix('dvifmish-')
+            rows.update({c: r for c, r in doc.items() if c.startswith('proposal-DVIFM')
+                         and any(k == 'Ours' and ('port mode' in v or preset in v) for k, v in r['cells'])})
+        ev = [panel[c] for c in sorted(cols) if c in panel]
+        merged = {}  # one table row can name several columns
+        for c, r in sorted(rows.items()):
+            text = '; '.join(f'{k}: {v}' for k, v in r['cells'] if k not in ('What to ask', 'Evidence', 'Open detail'))
+            merged.setdefault(text, dict(column=[], source='status doc', section=r['section'], text=text,
+                                         ours=dict(r['cells']).get('Ours')))['column'].append(c)
+        ev += [dict(e, column=', '.join(e['column'])) for e in merged.values()]
+        if ev:
+            out[name] = ev
     return out
 
 
@@ -759,6 +794,9 @@ def main():
 
     perf = canonical_perf()
     repro = reproduction({m['metric'] for m in metrics} | {r[1] for r in (perf or {}).get('rows', [])})
+    csv_ev = csv_evidence(metrics, repro.get('routes') or {})
+    for m in metrics:
+        m['csv_evidence'] = csv_ev.get(m['metric']) or []
     doc = dict(schema=1, host=HOST, shape=f'{W}x{H}', seed=SEED,
                sources=dict(public=public_rev(), private=priv and git_rev(priv, 'origin/main'),
                             dvifmish=git_rev(Path.home() / 'work/dvifmish', 'origin/main'),
