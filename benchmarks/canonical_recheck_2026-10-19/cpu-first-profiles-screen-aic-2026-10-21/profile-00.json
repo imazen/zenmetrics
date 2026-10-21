@@ -1,0 +1,150 @@
+{
+  "case": "ssim2-grid-pairB-255x257-t1",
+  "metric": "ssim2",
+  "width": 255,
+  "height": 257,
+  "threads": 1,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-screen-odd-t1-first-profile-v1",
+  "receipt": {
+    "case": "ssim2-grid-pairB-255x257-t1",
+    "plan_sha256": "fd29463a0a6a3b200676b14d4d8d853d39d2fbc72b409146e975fa226f45e568",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-screen-odd-t1-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-screen-odd-t1-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-screen-odd-t1-first-profile-v1/perf.data",
+    "perf_data_sha256": "46355cf00badeeeba613aec3053e18d208354008e7da70df48514d59fa7598d6",
+    "config_sha256": "5828db7df8d54d8db5b119d7a5e2ad62d116969055bb030400ed3cba7c89cbca",
+    "repetitions": 30,
+    "worker_log_sha256": {
+      "worker-008.log": "33643fb8073eeab524b75a89c0fd33e12bac0a7d0428180afe1076a483184d1c",
+      "worker-018.log": "74932dcbdc94a058749c233eaa3489b02955cae6d1a4081fe7f356e36c78581c",
+      "worker-004.log": "bdf9870855bcc68d43fa535cc0488f928d09d5cadbc2fd2928bc892fbe88c0e4",
+      "worker-020.log": "8c695c082469bd010413c374caa5922090616621dc56de62c06acfa1b9c461f9",
+      "worker-010.log": "4546c94564ca57bb79c42b292f20d4ea0988be7d34e9e05221d0b858a9631ed7",
+      "worker-013.log": "f0921f21a42dcf59042f4c7088d2406c4478f6bbdd04991c098e00ac6cec3792",
+      "worker-026.log": "2fb305e71edce271f6005bf2856ac95b8611d54615e203dcd054df5788e8bdc8",
+      "worker-000.log": "0377e7c070e0dbbdd80228905cec5bfe88708ab2fe8fa2965437d1a6306edd12",
+      "worker-014.log": "1e650b1762fe995df6be041b50b71e6e009aec4414930bb3d570cc77f6e5ea3a",
+      "worker-007.log": "d872784f49aeff48a0ed1dd192f04a387db8d499d4b16d36f59d0bd94f4e6ad0",
+      "worker-006.log": "1fdfbf3092a0a8e84f2747e1ff77e54236b9e90e8967ee9e59e4af25be29c688",
+      "worker-028.log": "218842384b12f288f626870da75e53aa6ab01bc5fc3ae68d2217c6fe306e0284",
+      "worker-017.log": "7359fcf4537511d68c1664320461417e701b1c0cb4ae964368cfb38bcd0176ba",
+      "worker-024.log": "2bff20ec1ac27bee7b2f4e3350947003552b8660eafd8776a19152e8c7929323",
+      "worker-015.log": "3296fe757c22161288395e369249f93c4e5f411a1ba0bedddba7bfc7abe4f6bd",
+      "worker-023.log": "e39fb466220ea0f9f14ef3248f3cc58393c256234466c02b986d514e9d757016",
+      "worker-005.log": "16f1ff5c0bbf081ff844e86bf96241e82baf727276a115d067c8e089ef23d515",
+      "worker-011.log": "f14e19936b8d266f5295c2904d8a678ab75a3f6de778aa9c3140e4ea2d748384",
+      "worker-016.log": "069cba16eee68a8b87f99aad7b0700d5b0a48727ff4d5dc33ad313e02e268f6f",
+      "worker-022.log": "0ea949db97954b09339b96ecff612caa9c8f7fd20a7009ed05560e2d3cb8559b",
+      "worker-002.log": "32114593e165243af61e96c697eab8cf65b45864bf8ac93aabd82d5242cc0b6c",
+      "worker-009.log": "80c46ba7c42ec645674064f6a9b58fa905216262ded9db733d475a42d46ffec7",
+      "worker-003.log": "a50fc573c007b7bee9c95791e3043d0b51c2ecebd8d182767a4bd15aadec9847",
+      "worker-001.log": "624b77b68fbc78238276d7c7e6441499362e717de0082a3cbe623c96b90af1ed",
+      "worker-025.log": "e5f34244c5e2439c17de68c366cbb2d1d607b32e10553dcb8dd015cb974777fe",
+      "worker-029.log": "ef308c9cadbad35e22dd3f1f9a8ffc3192547883e20e279aff4cbcf0d1bb9808",
+      "worker-021.log": "a0dc8ffc97dbf9a159d62d201ecfedbb2d28bba53e8a1488567c9da5e9e4ff95",
+      "worker-027.log": "3b160224d19293decaae85fc669967a1df6318b759693f27697738c586ccbcf7",
+      "worker-019.log": "edcf9ac5399c043b56dfb12317cc5830088e9475f8cca047588684e925ad4235",
+      "worker-012.log": "ac0fe0a21eedb588c16b1aabc1102a3cff5805285dd2506ba0db96a8313f7f6c"
+    },
+    "score_bits": [
+      "40493aa369e2cab9"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "e6c7c3d0272a8fe9d9e073f81753c238bcc9ffe2326dcdfc79d0827dafd55b46",
+  "request_sha256": "2bed199408de326de00aaec4d3ef6ef7ea83656e3590890202146ece4e210683",
+  "report_sha256": "c76e6d3b1714afd0e4bc573b485ab9c6fef4417fc4c1f587b208c627bc3d0467",
+  "script_sha256": "5a2cdcf5d13aeddd2c7125c0ff7c6d42cab0eb946d394cd0ed75ec093cd89081",
+  "top_self_symbols": [
+    {
+      "self_percent": 29.65,
+      "process": "python3",
+      "object": "libc.so.6",
+      "domain": ".",
+      "symbol": "_int_realloc"
+    },
+    {
+      "self_percent": 9.01,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "exc_page_fault"
+    },
+    {
+      "self_percent": 6.6,
+      "process": "iqa-compete",
+      "object": "ld-linux-x86-64.so.2",
+      "domain": ".",
+      "symbol": "_dl_relocate_object"
+    },
+    {
+      "self_percent": 6.24,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "set_pte_range"
+    },
+    {
+      "self_percent": 5.3,
+      "process": "iqa-compete",
+      "object": "ld-linux-x86-64.so.2",
+      "domain": ".",
+      "symbol": "do_lookup_x"
+    },
+    {
+      "self_percent": 4.44,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__raw_callee_save___pv_queued_spin_unlock"
+    },
+    {
+      "self_percent": 4.22,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vma_interval_tree_remove"
+    },
+    {
+      "self_percent": 2.69,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "___pte_offset_map"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-screen-odd-t1-first-profile-v1.log",
+      "sha256": "2e925b6903d5b0ed6e6b3f08a471067100174fbcfd9699d2e250eecaf940a5b1",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 14332MiB | peak-load 1.33"
+      ]
+    }
+  ],
+  "source_note": null
+}

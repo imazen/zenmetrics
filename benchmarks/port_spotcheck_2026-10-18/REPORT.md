@@ -661,3 +661,16 @@ IW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages 
 ### Further acquired cold cases (2026-10-21)
 
 The [next immutable batch](../canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v3/index.json) adds 60 observations and brings the published acquisition cut to 376/2092 candidates. All previously published records, source/input bindings, numerical classifications and measured arm maximum RSS values are revalidated. This is partial acquired coverage, separate from fixed-stage confidence intervals, runtime qualification and warm headline ratios.
+
+### Screen/AIC cold flag profiles (2026-10-21)
+
+The [two CPU captures](../canonical_recheck_2026-10-19/cpu-first-profiles-screen-aic-2026-10-21/index.json) retain SSIMULACRA2 screen 255×257 at one thread (30 fresh workers) and GMSD AIC 64×64 at one thread (100 fresh workers). [CUDA screen 64×64, one thread](../canonical_recheck_2026-10-19/butteraugli-screen64-t1-first-profile-v1.json) and [28 threads](../canonical_recheck_2026-10-19/butteraugli-screen64-t28-first-profile-v1.json) retain CPU stack and CUDA API/kernel traces for Butteraugli. Source, input, binary, raw recording and resource hashes are retained. These complete-process diagnostic captures do not isolate the first-call clock, replace fixed confirmations or qualify a causal share of any measured gap. GPU comparisons retain their named CPU canonical reference. The GMSD capture contains the AVX-512 `gmsd_band_v4x_t` entry. The initial numerical bounds and null-bound qualifications remain in force.
+
+Six further initial fixed20 intervals are retained, with all original observations, bounds and resource receipts revalidated. Three miss the unchanged precision target: CVVDP CUDA at 1 and 28 threads, and GMSD on 64×64 screen input at 28 threads. Their fixed additional40 stages are declared separately and retain the initial20; no runtime acceptance follows from these descriptive intervals.
+
+- [cvvdp-gpu-cuda-reference-pair-cid22-t1](../canonical_recheck_2026-10-19/cvvdp-cuda-reference-t1-first-confirmation20.json): 1.48365601, 95% [1.42796158, 1.53549289], precision target False.
+- [butteraugli-gpu-grid-pairA-64x64-t28](../canonical_recheck_2026-10-19/butter64-t28-first-confirmation20.json): 192.340776, 95% [187.21259, 196.408828], precision target True.
+- [ssim2-grid-pairA-255x257-t28](../canonical_recheck_2026-10-19/ssim2-photo-odd-t28-first-confirmation20.json): 1.15990239, 95% [1.12582335, 1.17834385], precision target True.
+- [gmsd-grid-pairB-64x64-t28](../canonical_recheck_2026-10-19/gmsd-screen64-t28-first-confirmation20.json): 16.6931143, 95% [15.2322789, 18.2260591], precision target False.
+- [cvvdp-gpu-cuda-reference-pair-cid22-t28](../canonical_recheck_2026-10-19/cvvdp-cuda-reference-t28-first-confirmation20.json): 1.56341366, 95% [1.51940318, 1.65986757], precision target False.
+- [butteraugli-gpu-grid-pairA-255x257-t1](../canonical_recheck_2026-10-19/butter-photo-odd-t1-first-confirmation20.json): 55.1597957, 95% [54.1103653, 55.809449], precision target True.

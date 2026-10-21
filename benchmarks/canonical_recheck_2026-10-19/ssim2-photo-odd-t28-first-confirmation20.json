@@ -1,0 +1,65 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "Descriptive first-call variability; runtime cleanliness not independently qualified. Null numerical bounds remain unqualified.",
+  "analysis_source_sha256": {
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/classical_first_intervals.py": "3514276ce354359471dc5fb6ed5361cbc19f60f7ff9b461f02851075f0c03d9c",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_intervals.py": "b2fb1f17bbbe53a5cc5598c3cdd0f01d5db93b8ebda3ac0e7c05089a3cf1a6b4",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c"
+  },
+  "rows": [
+    {
+      "case": "ssim2-grid-pairA-255x257-t28",
+      "metric": "ssim2",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "phase": "scorer_construct_first_eval",
+      "blocks": 20,
+      "ratio": 1.1599023857099062,
+      "lower_95": 1.1258233450792872,
+      "upper_95": 1.1783438471443946,
+      "relative_halfwidth": 0.029380955717029013,
+      "precision_within_three_percent": true,
+      "borderline": false,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "numerical_qualified": false,
+      "max_abs_delta": 0.0,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": [
+        "ecc4532f3cba4a074c8aa10b0f6a6a2d5d7766dffb89f330cf8bb648cf2c4d85"
+      ],
+      "stage_summary_sha256": [
+        "d5a23e157ffd3fc5cc91b7d2201fb770f9e6c47d8adf7c27b7f68022539eb2de"
+      ],
+      "block_sha256": [
+        "975850769a69c5bc803af36545b5eca0fd7b29bd6cc58508962787e166a82227",
+        "f6f9538ab33a11c29cdbc752970f904522c2064ae2fb7490e53443cbbadb3f76",
+        "4c70d81281cfc5082ece5a1be7e65bdf89bc9dffc39598e2cd83070ab626b811",
+        "6c165b6fbbe19199dcdc602733e47c359f183437d2390461b14d5dc8b4495c69",
+        "59db1a47ddc8066e7151b95341547d3fc37a34ec418016a440a8cedd1c353019",
+        "a7a10cf668cffcb22382b29002f141b3f0cf075704904a31892eedee74ad280e",
+        "5052e89959fd29f65409c52cb73cd6dd02832d1af0e9c18a2d9b468185c76a31",
+        "605887704d6509a79e8c7cea7b12b05b8b4d13128399e7e73cb314e15ef6815f",
+        "5524297de48e1639644c59e40e0c3802fdeabef2d0332b997fb2314b25751f09",
+        "cf44c573413a5d0ca11019c18fe5e812b81fcd7b8735aba83b3fed062567a83e",
+        "365a02ad59221e2fd89a1500e75ea8bbcf9eec10ab49bb732436512e0f0d7729",
+        "1adb35fcac5f5676d4e0357128980d921f4702f869e5de67f09f7240acf3840d",
+        "dc5cd050ceeb087c6209ee6f1b59be5cef07a4c8b89ef32441041e49be8b640c",
+        "1f373dcc6f9558f87d532d7f0952ec22da9572e5f2c6107f0d2e98daa5399c40",
+        "166531cdcc348cfc2a48eb8e69c2e461fec3205deecfe403f4db66c6c44deb2c",
+        "5e89ad440a794cb4653cc33c836f9f0041c644198f5044c7d3a4574931026356",
+        "af8c08722219c7d3c4e4dd11005357d6b8c1d610067c558c4a23f7cf1fbb3e1a",
+        "0bb814d15b74ecf88b29bba84bb4f6dd1dc6530f303d597b44da246245abfb73",
+        "0c3093f4bf9ad33c173e6b8a235e3734a56667d5b80a5a4c6db1d57619349447",
+        "31f35b95b22b357b5859920f9481cf6ac95041e10a9c7e47c0be89e844880525"
+      ],
+      "regression_qualified": false
+    }
+  ],
+  "publication_resource_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/next-two-cpu-flags-v2/ssim2-grid-pairA-255x257-t28/fixed20-run/ssim2-grid-pairA-255x257-t28/block-19-wrapper.log",
+    "sha256": "d67b4ce6e006219789811a43516a81ac0483e79ba963cffff4d74151deb5995c",
+    "receipt": "run-heavy: done rc=0 2s | peak-RSS 0.02GiB | min-avail 14253MiB | peak-load 1.50"
+  }
+}

@@ -1,0 +1,22 @@
+import json
+from pathlib import Path
+import subprocess
+import time
+R=Path(__file__).parent
+request=R/'next-three-first-add40-requests-v1.json'
+while not request.exists():time.sleep(20)
+items=json.loads(request.read_text());active={};finished={}
+while len(finished)<len(items):
+    for item in items:
+        case=item['case']
+        if case in active or case in finished or not (Path(item['additional'])/case/'summary.json').exists():continue
+        command=['flock',str(Path.home()/'tmp/lilith-heavy.lock'),'flock',str(Path.home()/'tmp/lilith-wsl-heavy.lock'),str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(Path.home()/'tmp'),'just','bench-iqa-canonical-classical-first-interval',item['initial'],item['output'],'--additional',item['additional'],'--case',case]
+        log=Path(item['output']+'.log').open('x');process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT);active[case]=(process,log,item)
+        print('COMBINED60_QUEUED',case,process.pid,flush=True)
+    for case,(process,log,item) in list(active.items()):
+        code=process.poll()
+        if code is None:continue
+        log.close();finished[case]=dict(case=case,returncode=code,output=item['output']);del active[case]
+        print('COMBINED60_EXIT',json.dumps(finished[case]),flush=True)
+    if len(finished)<len(items):time.sleep(30)
+with (R/'next-three-first-combined60-completed-v1.json').open('x') as stream:json.dump(list(finished.values()),stream,indent=2)

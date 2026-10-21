@@ -1,0 +1,65 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "Descriptive first-call variability; runtime cleanliness not independently qualified. Null numerical bounds remain unqualified.",
+  "analysis_source_sha256": {
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/classical_first_intervals.py": "3514276ce354359471dc5fb6ed5361cbc19f60f7ff9b461f02851075f0c03d9c",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_intervals.py": "b2fb1f17bbbe53a5cc5598c3cdd0f01d5db93b8ebda3ac0e7c05089a3cf1a6b4",
+    "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_canonical.py": "f7606eafb0534206b7e6ef0c4bd4d5a6206994ef65404124f658c7e2be89f31c"
+  },
+  "rows": [
+    {
+      "case": "butteraugli-gpu-grid-pairA-64x64-t28",
+      "metric": "butteraugli-gpu",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "phase": "scorer_construct_first_eval",
+      "blocks": 20,
+      "ratio": 192.34077569566148,
+      "lower_95": 187.2125898236045,
+      "upper_95": 196.40882837707508,
+      "relative_halfwidth": 0.026661979777866978,
+      "precision_within_three_percent": true,
+      "borderline": false,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "numerical_qualified": false,
+      "max_abs_delta": 0.00016236305236816406,
+      "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "plan_sha256": [
+        "c853c10cc982c0182cde128671afa382e5fc82d9fadb8af55fa1aff8b8e82e61"
+      ],
+      "stage_summary_sha256": [
+        "1dfdbb884381d41de67b599aed8c5d2fc136ceefd7f4c9fdc156d2dd25db9497"
+      ],
+      "block_sha256": [
+        "cd3b783ab8da2ff44fdacdf71b14273fe3daf160a3bb13a13fe8c90e215fa0af",
+        "b6d7946883feea15830a5358ecab42762b32dc829b72d81c61f78d3dc311d69c",
+        "18c792b0132cd1a012764316ddb3ada7a0020b287377fc6f1fc92359bf2a59c8",
+        "e484d5d021b75a4534f894a6e8324ce8dfb6d16d81c5aaf2f928c60f81b28a54",
+        "23ea9854ac4250e38c097329aef8874e0dc10c79e4e59ebd88ff642dca19bea9",
+        "68b1f245fa7e82fc7eedab2ac84b849e20b89508f6494d3c46be9173af4970e3",
+        "07c1ed0e872aebc94ed5203e64fcff6bcd3bc730251bacabb2950728404c4e50",
+        "5dc5ebb8e978aea13a28b4c3f056d0456e17af2731a8149b6213fb7f899dbeb3",
+        "6a6afe7f57112180991fd0ae2022e2fa2f3a31df3b97a449cfe6c625ba6f27d0",
+        "da7bff54e229b7782d4235f8d2da6910cf98578917ecb5139a3f5d3dfe577c17",
+        "a8eec8e19fc58a12d3df5c8e0576413fef2d087de1901e265f346f3c2b55c131",
+        "3cd9b5c3d61d89f3015e8a2780c3c66e6e48105965835e1bc09aa64b076997b8",
+        "6c0cb023274757918ee86f2cd959d2f9d0bbf33f231bf1e036841d5f0ca0b755",
+        "b975e679cbea1f894ed10d615c1ec00e1e0a026d18992b63e4d62c652770b754",
+        "1be5912c78b3e6c67b6321d1e7a79b000d0aca1797a19b6734414b737e7c9d88",
+        "5a60220789d4fa52f2789f09cefa6e921ff5feaa7ed63da7fd4d2899c0da2146",
+        "84bd60ae328c77024d072c95bae83c0d93af1cfc2e3489000b65c015688b8d63",
+        "16b67f5a90a2367b52653ca88a61346b9628168070901bdbc8c228ed2be85256",
+        "1cd33794e33b088d10681bac9c6f0e5c0d6d6632b8381292c6e75ca9c4b7c667",
+        "3851d753da247755836575d9ef8c7199babdb131825f57fba4c319f85cffb52a"
+      ],
+      "regression_qualified": false
+    }
+  ],
+  "publication_resource_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/next-two-first-flags-v2/butteraugli-gpu-grid-pairA-64x64-t28/fixed20-run/butteraugli-gpu-grid-pairA-64x64-t28/block-19-wrapper.log",
+    "sha256": "7cb7b6a8abc139714bd29298ab53c841b6ee54b2cac1dac8ded998a705f0abd0",
+    "receipt": "run-heavy: done rc=0 11s | peak-RSS 0.26GiB | min-avail 13992MiB | peak-load 2.20"
+  }
+}

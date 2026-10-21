@@ -1,0 +1,27 @@
+import copy
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+H=Path.home()/'tmp/handoff';F=H/'classical-first-gmsd-flags-20261020';K=H/'classical-gpu-first-boundary-20261020';R=Path(__file__).parent
+requests=[dict(case='gmsd-grid-pairB-64x64-t28',initial=F/'next-two-cpu-flags-v2/gmsd-grid-pairB-64x64-t28/fixed20-run',interval=F/'all-fixed20-intervals-v3/gmsd-grid-pairB-64x64-t28.json',output=F/'gmsd-screen64-t28-add40-v1',helper='compare_classical_first_verified.py'),dict(case='cvvdp-gpu-cuda-reference-pair-cid22-t1',initial=K/'next-two-first-flags-v2/cvvdp-gpu-cuda-reference-pair-cid22-t1/fixed20-run',interval=F/'all-fixed20-intervals-v2/cvvdp-gpu-cuda-reference-pair-cid22-t1.json',output=K/'cvvdp-t1-first-add40-v1',helper='compare_gpu_first_verified.py'),dict(case='cvvdp-gpu-cuda-reference-pair-cid22-t28',initial=K/'next-two-first-flags-v3/cvvdp-gpu-cuda-reference-pair-cid22-t28/fixed20-run',interval=F/'all-fixed20-intervals-v3/cvvdp-gpu-cuda-reference-pair-cid22-t28.json',output=K/'cvvdp-t28-first-add40-v1',helper='compare_gpu_first_verified.py')]
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+children=[];records=[]
+for item in requests:
+    row=json.loads(item['interval'].read_text())['rows'][0]
+    assert row['blocks']==20 and (row['precision_within_three_percent'] is False or row['borderline'] is True)
+    assert row['case']==item['case'] and len(list((item['initial']/item['case']).glob('block-*/result.json')))==20
+    parent=item['initial']/'plan.json';original=json.loads(parent.read_text());assert len(original['cases'])==1 and original['cases'][0]['id']==item['case']
+    helper=next(Path(path) for path in original['bindings'] if Path(path).name==item['helper']);assert sha(helper)==original['bindings'][str(helper)]
+    plan=copy.deepcopy(original);plan['preceding_plan_sha256']=sha(parent);plan['confirmation_stage']='Fixed additional forty after initial20 missed unchanged precision target; retain all original and additional blocks.'
+    for path in [parent,item['interval'],item['initial']/item['case']/'summary.json']:plan['bindings'][str(path)]=sha(path)
+    item['output'].mkdir();target=item['output']/'fixed40.plan.json'
+    with target.open('x') as stream:json.dump(plan,stream,indent=2)
+    command=['/usr/bin/python3','-B',str(helper),str(target),str(item['output']/'fixed40-run'),'--blocks','40']
+    log=(item['output']/'controller.log').open('x');process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT);children.append((process,log,item))
+    record=dict(case=item['case'],command=command,pid=process.pid,plan_sha256=sha(target),initial_interval_sha256=sha(item['interval']));records.append(record);print(json.dumps(record),flush=True)
+with (R/'next-three-first-add40-requests-v1.json').open('x') as stream:json.dump([dict(case=i['case'],initial=str(i['initial']),additional=str(i['output']/'fixed40-run'),output=str(i['output'].parent/(i['output'].name.replace('add40','combined60')+'.json'))) for i in requests],stream,indent=2)
+for process,log,item in children:
+    code=process.wait();log.close()
+    with (item['output']/'exit.json').open('x') as stream:json.dump(dict(returncode=code),stream)
+    print('FIXED40_STAGE_EXIT',item['case'],code,flush=True)

@@ -1,0 +1,80 @@
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+R=Path(__file__).parent;F=Path.home()/'tmp/handoff/classical-first-gmsd-flags-20261020';K=F.parent/'classical-gpu-first-boundary-20261020';PUBLIC=Path('benchmarks/canonical_recheck_2026-10-19')
+CPU=['ssim2-screen-odd-t1-first-profile-v1','gmsd-aic64-t1-first-profile-v1']
+GPU=['butteraugli-screen64-t1-first-profile-v1','butteraugli-screen64-t28-first-profile-v1']
+if len(sys.argv)==1:
+    while True:
+        log=(R/'recovery-tools-v1/publication-resume-v1.log').read_text()
+        ready='CANONICAL_RECOVERY_VERIFIED' in log and 'run-heavy: done rc=0 ' in log
+        ready=ready and all((folder/name/'receipt.json').exists() for folder,names in [(F,CPU),(K,GPU)] for name in names)
+        if ready:break
+        if 'run-heavy: done rc=' in log and 'run-heavy: done rc=0 ' not in log:raise SystemExit('Cold recovery publication failed; retain captures')
+        for folder,names in [(F,CPU),(K,GPU)]:
+            for name in names:
+                content=(folder/(name+'.log')).read_text()
+                if 'run-heavy: done rc=' in content and 'run-heavy: done rc=0 ' not in content:raise SystemExit('Capture failed; preserve it without repeating metric calls: '+name)
+        time.sleep(20)
+    command=['flock',str(Path.home()/'tmp/lilith-heavy.lock'),'flock',str(Path.home()/'tmp/lilith-wsl-heavy.lock'),str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(Path.home()/'tmp'),sys.executable,'-B',__file__,'--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+sys.path.insert(0,str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from classical_first_intervals import analyze
+from compare_canonical import sha
+from publish_classical_first_profiles import publish
+from reference_publication import register_outputs
+
+def run(*command):subprocess.run(command,check=True)
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','investigate: retain screen and AIC cold flag profiles')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+' codex-root-canonical publishing completed cold flag profiles\n')
+request=R/'screen-aic-first-profile-publication-v1.json'
+with request.open('x') as stream:json.dump(dict(profiles=[dict(output=str(F/name),resource_logs=dict(capture=str(F/(name+'.log')))) for name in CPU]),stream,indent=2)
+assert 'gmsd_band_v4x_t' in (F/'gmsd-aic64-t1-first-profile-v1/report.txt').read_text()
+publish(request,PUBLIC/'cpu-first-profiles-screen-aic-2026-10-21')
+for name in GPU:
+    root=K/name;receipt=json.loads((root/'receipt.json').read_text())
+    assert receipt['source_sha256']==sha(K/'profile_gpu_first_v1.py')==sha(PUBLIC/'gpu-first-profile-source.py.txt')
+    for profile in receipt['profiles']:
+        for path,expected in profile['files'].items():assert sha(path)==expected
+    counts=json.loads((root/'nsys/cuda-trace-counts.json').read_text());assert counts['CUPTI_ACTIVITY_KIND_KERNEL']>0 and counts.get('CUPTI_ACTIVITY_KIND_DRIVER',0)+counts.get('CUPTI_ACTIVITY_KIND_RUNTIME',0)>0
+    log=K/(name+'.log');lines=[line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+    assert len(lines)==1 and 'rc=0 ' in lines[0]
+    value=dict(receipt=receipt,raw_receipt=dict(path=str(root/'receipt.json'),sha256=sha(root/'receipt.json')),trace_counts=counts,resource_receipt=dict(path=str(log),sha256=sha(log),receipt=lines[0]),historical_source=dict(file='gpu-first-profile-source.py.txt',sha256=receipt['source_sha256']),scope='Complete fresh native CUDA process. CPU stacks and CUDA API/kernel traces; not an isolated first clock, comparative measurement or causal fraction. Canonical comparison remains the explicitly named CPU original.')
+    data=(json.dumps(value,indent=2,allow_nan=False)+'\n').encode();assert len(data)<=30000
+    target=PUBLIC/(name+'.json')
+    with target.open('xb') as stream:stream.write(data)
+    register_outputs([(target,'provenance')])
+interval_rows=[]
+interval_stems={'cvvdp-gpu-cuda-reference-pair-cid22-t1':'cvvdp-cuda-reference-t1','butteraugli-gpu-grid-pairA-64x64-t28':'butter64-t28','ssim2-grid-pairA-255x257-t28':'ssim2-photo-odd-t28','gmsd-grid-pairB-64x64-t28':'gmsd-screen64-t28','cvvdp-gpu-cuda-reference-pair-cid22-t28':'cvvdp-cuda-reference-t28','butteraugli-gpu-grid-pairA-255x257-t1':'butter-photo-odd-t1'}
+for version in [2,3]:
+    request=json.loads((F/f'all-fixed20-interval-requests-v{version}.json').read_text())
+    for item in request['cases']:
+        case=item['case'];root=Path(item['root']);source=F/f'all-fixed20-intervals-v{version}'/(case+'.json')
+        value=json.loads(source.read_text());assert value==analyze(root,[],[case])
+        log=root/case/'block-19-wrapper.log';receipts=[line for line in log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+        assert len(receipts)==1 and 'rc=0 ' in receipts[0]
+        value['publication_resource_receipt']=dict(path=str(log),sha256=sha(log),receipt=receipts[0])
+        target=PUBLIC/(interval_stems[case]+'-first-confirmation20.json')
+        data=(json.dumps(value,indent=2,allow_nan=False)+'\n').encode();assert len(data)<=30000
+        with target.open('xb') as stream:stream.write(data)
+        register_outputs([(target,'interval')]);interval_rows.append(value['rows'][0])
+assert len(interval_rows)==6 and sum(not row['precision_within_three_percent'] for row in interval_rows)==3
+for source in [Path(__file__),F/'launch_next_two_screen_aic_flags_v1.py',F/'analyze_fixed20_when_ready_v11.py',K/'launch_next_butter_screen64_first_flags_v1.py',F/'analyze_fixed20_when_ready_v12.py',R/'launch-next-three-first-add40-v1.py',R/'analyze-next-three-first-combined60-v1.py']:
+    target=PUBLIC/(source.name+'.txt');assert not target.exists();shutil.copyfile(source,target)
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write('\n### Screen/AIC cold flag profiles (2026-10-21)\n\nThe [two CPU captures]('+relative+'cpu-first-profiles-screen-aic-2026-10-21/index.json) retain SSIMULACRA2 screen 255×257 at one thread (30 fresh workers) and GMSD AIC 64×64 at one thread (100 fresh workers). [CUDA screen 64×64, one thread]('+relative+GPU[0]+'.json) and [28 threads]('+relative+GPU[1]+'.json) retain CPU stack and CUDA API/kernel traces for Butteraugli. Source, input, binary, raw recording and resource hashes are retained. These complete-process diagnostic captures do not isolate the first-call clock, replace fixed confirmations or qualify a causal share of any measured gap. GPU comparisons retain their named CPU canonical reference. The GMSD capture contains the AVX-512 `gmsd_band_v4x_t` entry. The initial numerical bounds and null-bound qualifications remain in force.\n')
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write('\nSix further initial fixed20 intervals are retained, with all original observations, bounds and resource receipts revalidated. Three miss the unchanged precision target: CVVDP CUDA at 1 and 28 threads, and GMSD on 64×64 screen input at 28 threads. Their fixed additional40 stages are declared separately and retain the initial20; no runtime acceptance follows from these descriptive intervals.\n\n')
+        for row in interval_rows:
+            link=relative+interval_stems[row['case']]+'-first-confirmation20.json'
+            stream.write(f"- [{row['case']}]({link}): {row['ratio']:.9g}, 95% [{row['lower_95']:.9g}, {row['upper_95']:.9g}], precision target {row['precision_within_three_percent']}.\n")
+run('just','bench-iqa-canonical-recovery-check');run('just','bench-iqa-canonical-check')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('SCREEN_AIC_FIRST_PROFILES_VERIFIED',flush=True)

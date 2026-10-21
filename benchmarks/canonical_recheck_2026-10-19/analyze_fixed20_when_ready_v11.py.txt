@@ -1,0 +1,18 @@
+import datetime,json,pathlib,subprocess,time
+P=pathlib.Path;R=P(__file__).parent;request=R/'all-fixed20-interval-requests-v11.json';spec=json.loads(request.read_text());out=R/'all-fixed20-intervals-v11';out.mkdir();active={};finished={}
+if len({r['case'] for r in spec['cases']})!=len(spec['cases']):raise ValueError('duplicate case')
+while len(finished)!=len(spec['cases']):
+ for item in spec['cases']:
+  case=item['case'];root=P(item['root'])
+  if case in active or case in finished or not (root/case/'summary.json').exists():continue
+  command=['flock',str(P.home()/'tmp/lilith-heavy.lock'),'flock',str(P.home()/'tmp/lilith-wsl-heavy.lock'),str(P.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--','env','TMPDIR='+str(P.home()/'tmp'),'just','bench-iqa-canonical-classical-first-interval',str(root),str(out/(case+'.json')),'--case',case]
+  log=(out/(case+'.log')).open('x');child=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT);active[case]=(child,log,command);print(json.dumps(dict(event='analysis_queued',case=case,pid=child.pid)),flush=True)
+ for case,(child,log,command) in list(active.items()):
+  rc=child.poll()
+  if rc is None:continue
+  log.close();record=dict(case=case,returncode=rc,command=command)
+  if rc==0:
+   v=json.loads((out/(case+'.json')).read_text())['rows'][0];record.update(ratio=v['ratio'],lower_95=v['lower_95'],upper_95=v['upper_95'],precision_within_three_percent=v['precision_within_three_percent'],borderline=v['borderline'],regression_qualified=False)
+  finished[case]=record;del active[case];print(json.dumps(dict(event='analysis_complete',**record)),flush=True)
+ if len(finished)!=len(spec['cases']):time.sleep(30)
+with (out/'completed.json').open('x') as f:json.dump(dict(request=str(request),results=list(finished.values()),qualification='Each frozen initial20 stage analyzed once through the existing public helper. Numerical/source/order validation is retained; failures remain explicit. Additional40 stages require separate requests and retain all existing observations.'),f,indent=2)
