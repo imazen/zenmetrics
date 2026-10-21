@@ -1,0 +1,400 @@
+{
+  "cases": [
+    {
+      "case": "flip-v17-grid-pairC-64x64-t1",
+      "metric": "flip-v17",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "canonical": "NVIDIA FLIP 1.7",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "ratio": 0.24340253252930394,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "arms": {
+            "canonical": {
+              "ns": 3997100.0,
+              "score": 0.06950362771749496
+            },
+            "native": {
+              "ns": 989777.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 1,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 22840,
+                "load_before": [
+                  1.75,
+                  1.59,
+                  1.55
+                ],
+                "admitted_unix_ns": 1792542208194822184,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 989777,
+                "cold_elapsed_ns": 989777,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  1.75,
+                  1.59,
+                  1.55
+                ]
+              }
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "arms": {
+            "native": {
+              "ns": 953877.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 1,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 22241,
+                "load_before": [
+                  2.57,
+                  1.72,
+                  1.55
+                ],
+                "admitted_unix_ns": 1792542669477695123,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 953877,
+                "cold_elapsed_ns": 953877,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  2.57,
+                  1.72,
+                  1.55
+                ]
+              }
+            },
+            "canonical": {
+              "ns": 3918928.0,
+              "score": 0.06950362771749496
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "arms": {
+            "canonical": {
+              "ns": 4238386.0,
+              "score": 0.06950362771749496
+            },
+            "native": {
+              "ns": 1030877.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 1,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 24140,
+                "load_before": [
+                  3.2,
+                  2.69,
+                  1.99
+                ],
+                "admitted_unix_ns": 1792543139931549690,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 1030877,
+                "cold_elapsed_ns": 1030877,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  3.2,
+                  2.69,
+                  1.99
+                ]
+              }
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        }
+      ],
+      "summary_sha256": "2a885c7568873b0d9ce17fef039f48e89cb997952aa3ad94d29162ce83b3a213",
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.22GiB | min-avail 14262MiB | peak-load 1.75",
+        "run-heavy: done rc=0 3s | peak-RSS 0.22GiB | min-avail 14666MiB | peak-load 2.57",
+        "run-heavy: done rc=0 3s | peak-RSS 0.22GiB | min-avail 14691MiB | peak-load 3.20"
+      ]
+    },
+    {
+      "case": "flip-v17-grid-pairC-64x64-t28",
+      "metric": "flip-v17",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "canonical": "NVIDIA FLIP 1.7",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "ratio": 0.36913879466100724,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "arms": {
+            "canonical": {
+              "ns": 2444663.0,
+              "score": 0.06950362771749496
+            },
+            "native": {
+              "ns": 924456.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 28,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 22700,
+                "load_before": [
+                  2.45,
+                  2.4,
+                  2.07
+                ],
+                "admitted_unix_ns": 1792543574708331622,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 924456,
+                "cold_elapsed_ns": 924456,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  2.45,
+                  2.4,
+                  2.07
+                ]
+              }
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "arms": {
+            "native": {
+              "ns": 952977.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 28,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 23581,
+                "load_before": [
+                  1.5,
+                  1.69,
+                  1.82
+                ],
+                "admitted_unix_ns": 1792544122505549414,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 952977,
+                "cold_elapsed_ns": 952977,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  1.5,
+                  1.69,
+                  1.82
+                ]
+              }
+            },
+            "canonical": {
+              "ns": 2736254.0,
+              "score": 0.06950362771749496
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "arms": {
+            "canonical": {
+              "ns": 2548196.0,
+              "score": 0.06950362771749496
+            },
+            "native": {
+              "ns": 940638.0,
+              "score": 0.06950362771749496,
+              "worker": {
+                "width": 64,
+                "height": 64,
+                "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+                "distorted": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-distorted.rgb",
+                "metric_name": "flip-v17",
+                "threads": 28,
+                "only_mode": "score",
+                "timing_phase": "cold",
+                "probe_only": false,
+                "required_samples": 1,
+                "locked_process_accounting": true,
+                "mode": "score",
+                "input_load_ns": 25110,
+                "load_before": [
+                  1.46,
+                  1.28,
+                  1.54
+                ],
+                "admitted_unix_ns": 1792544633209394067,
+                "model_preload_adapter": true,
+                "declared_columns": [
+                  "flip_v17"
+                ],
+                "headline_declared_column": "flip_v17",
+                "n": 1,
+                "status": "ok",
+                "median_ns": 940638,
+                "cold_elapsed_ns": 940638,
+                "score": 0.06950362771749496,
+                "score_bits": "3fb1cafd60000000",
+                "notes": "First scorer construction and evaluation in this process; raw input loading excluded; no warmup",
+                "load_after": [
+                  1.46,
+                  1.28,
+                  1.54
+                ]
+              }
+            }
+          },
+          "errors": {},
+          "passed": null,
+          "phase": "scorer_construct_first_eval",
+          "scope_reasons": [],
+          "delta": 0.0
+        }
+      ],
+      "summary_sha256": "946bf267fc24293eeaa6af095ae6663a8aafd975409bc221ee68dc164a603338",
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 3s | peak-RSS 0.22GiB | min-avail 14711MiB | peak-load 2.45",
+        "run-heavy: done rc=0 3s | peak-RSS 0.22GiB | min-avail 14560MiB | peak-load 1.50",
+        "run-heavy: done rc=0 2s | peak-RSS 0.22GiB | min-avail 14649MiB | peak-load 1.50"
+      ]
+    }
+  ]
+}

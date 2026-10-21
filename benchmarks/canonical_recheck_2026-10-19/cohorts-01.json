@@ -1,4 +1,28 @@
 {
+  "group-00-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-classical-grid-v2/group-00-run",
+    "plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
+    "cases": 79,
+    "expected_cases": 264,
+    "artifacts": [
+      {
+        "file": "group-00-run.tsv",
+        "sha256": "b5be6317f9be53d8678bb6caf78f3b5ecfca353863b9d0e904be6fc6ba490ce1"
+      }
+    ]
+  },
+  "hyperiqa-original-cid22-t8-dd2c2213-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/neural-flags/hyperiqa-original-cid22-t8-dd2c2213/confirmation-run",
+    "plan_sha256": "36ab072c0cd73b6e191b1a93d8b5f670aea3ee1dbdcf50a3b8e233263ce81fe0",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "hyperiqa-original-cid22-t8-dd2c2213-confirmation-run.tsv",
+        "sha256": "79e0ae53ed460e575f994071c931ec47ba3d11f9fbcc14732fe87ceee627ed5e"
+      }
+    ]
+  },
   "iw-compat-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/iw-compat-run",
     "plan_sha256": "a1fa827c673199f587864096ade19d2e33844f606f70acbd1178c6f0e78a2ede",
@@ -122,12 +146,12 @@
   "msssim-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/msssim-current-grid-run",
     "plan_sha256": "7b0ca6a027def87caf33b7e80ba35698bd48ae013767b557bd52b2bf5d805323",
-    "cases": 9,
+    "cases": 19,
     "expected_cases": 72,
     "artifacts": [
       {
         "file": "msssim-current-grid-run.tsv",
-        "sha256": "e06860fd9b768f974e718f32cfc0f4bdc10f555222b43c3b743ba7f168305cb3"
+        "sha256": "b03d5bf9cbd926d7fd8c1bfaa759bd3f16e577fa0f4159982c5fe66c254077aa"
       }
     ]
   },
@@ -498,12 +522,12 @@
   "psnr-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/psnr-current-grid-run",
     "plan_sha256": "08ee0c28878d5441fe1d971cd48c118ab8a0ffa4fedf216d5ff3b897dd3bd613",
-    "cases": 41,
+    "cases": 50,
     "expected_cases": 192,
     "artifacts": [
       {
         "file": "psnr-current-grid-run.tsv",
-        "sha256": "6d7b5654e057a3c2c1d25bdfcf8fdde1c19e92b69f5000506bfdd9a81b383f96"
+        "sha256": "4ddbca4edf6c42b695660262e323e0153d629ec40b5881c8b255b4e547bc4924"
       }
     ]
   },
@@ -616,14 +640,14 @@
     ]
   },
   "run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid/run",
-    "plan_sha256": "3cb87691f69259169dbcb4379a7389379ce6643d9216a85526825b9cce6b615d",
-    "cases": 17,
-    "expected_cases": 120,
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/full-cw-pyiqa-grid/run",
+    "plan_sha256": "316d14df20c9ee8ce09f752c1a8de64f8339f79746d44e4e7b90315bd2dfb0ae",
+    "cases": 24,
+    "expected_cases": 24,
     "artifacts": [
       {
         "file": "run.tsv",
-        "sha256": "8f42f0b7e29f150f30d02b73f1564d9828f44a1e8858442d813e182afcb8cbd4"
+        "sha256": "63745cab10cace6a11035ba5c92c4f270b60d876c0648e00a3d1268dc9a48d43"
       }
     ]
   },
@@ -636,30 +660,6 @@
       {
         "file": "ssim1-confirm-run.tsv",
         "sha256": "468e7ef51d49d0b55aafba3475e27fb59e0efaa055219f51e3a23e7186e1d5ef"
-      }
-    ]
-  },
-  "ssim1-confirm40-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-confirm40-run",
-    "plan_sha256": "6466873cd2442a97b9c7f42f795b1322d6e96fcecf33f2efbce919a55dc464f2",
-    "cases": 1,
-    "expected_cases": 1,
-    "artifacts": [
-      {
-        "file": "ssim1-confirm40-run.tsv",
-        "sha256": "952f807884bbcd27363803ed79cfafdc5eda37eed96a19abe5cb2a52fdda679e"
-      }
-    ]
-  },
-  "ssim1-rgb-run": {
-    "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-rgb-run",
-    "plan_sha256": "6e1ad806dc033cd0cd990b138e984260e494bb8fd2c4ca78d4da7eeebc6ab60f",
-    "cases": 2,
-    "expected_cases": 2,
-    "artifacts": [
-      {
-        "file": "ssim1-rgb-run.tsv",
-        "sha256": "7d5172b22a56bc6297d00895a112454ff4c67e293b16ecb1476339b5f37311ec"
       }
     ]
   }

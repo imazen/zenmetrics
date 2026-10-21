@@ -1,0 +1,620 @@
+{
+  "cases": [
+    {
+      "metric": "liqe",
+      "case": "liqe-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "original LIQE / pinned source",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.000393781,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 7.331605286431397e-06,
+      "ratio": 0.088060463663106,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2148708067,
+              "score": 3.5577380657196045
+            },
+            "native": {
+              "ns": 183009451,
+              "score": 3.557730734114318
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.08517185457190356
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 175781456,
+              "score": 3.557730734114318
+            },
+            "canonical": {
+              "ns": 1996145020,
+              "score": 3.5577380657196045
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.088060463663106
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2002524668,
+              "score": 3.5577380657196045
+            },
+            "native": {
+              "ns": 176930178,
+              "score": 3.557730734114318
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.0883535573005985
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 70s | peak-RSS 2.78GiB | min-avail 12960MiB | peak-load 2.56",
+        "run-heavy: done rc=0 63s | peak-RSS 2.78GiB | min-avail 12735MiB | peak-load 1.55",
+        "run-heavy: done rc=0 64s | peak-RSS 2.78GiB | min-avail 12749MiB | peak-load 2.15"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "317f67f3d63f94f10f805d73bdacbfd3c62549d4e0ad384688b11144959f4b0b",
+      "block_sha256": [
+        "a9a7c6eb61c1a7c22737a25a7c2b74cc36e09df31495f0deac856d0ed38316da",
+        "27dc5c4e30f2a36c90ca06692e738ce3f771e400f4ea622aa159403aafa71558",
+        "7ed44d97a6d107c28688418a23ae9fe353d77ff32f7fc10385a46c64cb4b0699"
+      ]
+    },
+    {
+      "metric": "liqe",
+      "case": "liqe-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "original LIQE / pinned source",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.000393781,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 7.331605286431397e-06,
+      "ratio": 0.2722272880154419,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 346657080,
+              "score": 3.5577380657196045
+            },
+            "native": {
+              "ns": 99356589,
+              "score": 3.557730734114318
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.2866134711571447
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 115139286,
+              "score": 3.557730734114318
+            },
+            "canonical": {
+              "ns": 452883121,
+              "score": 3.5577380657196045
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.2542362050185571
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 410840562,
+              "score": 3.5577380657196045
+            },
+            "native": {
+              "ns": 111842012,
+              "score": 3.557730734114318
+            }
+          },
+          "delta": 7.331605286431397e-06,
+          "passed": true,
+          "ratio": 0.2722272880154419
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 33s | peak-RSS 2.78GiB | min-avail 12188MiB | peak-load 2.64",
+        "run-heavy: done rc=0 34s | peak-RSS 2.78GiB | min-avail 11888MiB | peak-load 2.15",
+        "run-heavy: done rc=0 32s | peak-RSS 2.78GiB | min-avail 12561MiB | peak-load 5.76"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "b9ffced5b293bb4d664aa4e5a2e576afb416e99b487830204eae59fda521ce1b",
+      "block_sha256": [
+        "0283c9fa8ac400571181797695b0266ce1cdad0f0b459a7166e4500afceabba6",
+        "b50887e0f43baa692813816886fb6308e245ba71d770569e184fb460c3b28820",
+        "d9c54c96a34156d06c105e96e8c613716c2931633b8d76ba249155372c917597"
+      ]
+    },
+    {
+      "metric": "maniqa",
+      "case": "maniqa-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "original MANIQA / KonIQ",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 2.1396e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 5.960464477539063e-08,
+      "ratio": 0.8922658154613872,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4692425393,
+              "score": 0.802169680595398
+            },
+            "native": {
+              "ns": 4167981096,
+              "score": 0.8021697402000427
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.8882359860675999
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 4241397263,
+              "score": 0.8021697402000427
+            },
+            "canonical": {
+              "ns": 4753513123,
+              "score": 0.802169680595398
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.8922658154613872
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 4683471617,
+              "score": 0.802169680595398
+            },
+            "native": {
+              "ns": 4206005217,
+              "score": 0.8021697402000427
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 0.8980528891715924
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 43s | peak-RSS 1.71GiB | min-avail 13781MiB | peak-load 1.87",
+        "run-heavy: done rc=0 40s | peak-RSS 1.72GiB | min-avail 13962MiB | peak-load 1.32",
+        "run-heavy: done rc=0 40s | peak-RSS 1.71GiB | min-avail 14058MiB | peak-load 0.91"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "45703b7b3ea9ab1707105168d731932e6dc916c956dfe94fa73222a64e899155",
+      "block_sha256": [
+        "ca8283c8ef399bbe9ddee036072b6dab796f0e3361eb00c2e7b1adfb3eedc8ba",
+        "8c056efea54fb1f6f52488e31efefcfb60f6cad4e2b1afde29bb9285384d9427",
+        "61d65e4340b6749fcd41b68129cf5893deeecbb4d5f5cd4a186e01f184ab8275"
+      ]
+    },
+    {
+      "metric": "maniqa",
+      "case": "maniqa-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "original MANIQA / KonIQ",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 2.1396e-05,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 5.960464477539063e-08,
+      "ratio": 1.106940942227531,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 822476498,
+              "score": 0.802169680595398
+            },
+            "native": {
+              "ns": 903678905,
+              "score": 0.8021697402000427
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 1.0987291517720668
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 924625078,
+              "score": 0.8021697402000427
+            },
+            "canonical": {
+              "ns": 831365274,
+              "score": 0.802169680595398
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 1.112176689256328
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 873382907,
+              "score": 0.802169680595398
+            },
+            "native": {
+              "ns": 966783298,
+              "score": 0.8021697402000427
+            }
+          },
+          "delta": 5.960464477539063e-08,
+          "passed": true,
+          "ratio": 1.106940942227531
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 27s | peak-RSS 1.71GiB | min-avail 14168MiB | peak-load 2.80",
+        "run-heavy: done rc=0 25s | peak-RSS 1.72GiB | min-avail 14019MiB | peak-load 1.12",
+        "run-heavy: done rc=0 26s | peak-RSS 1.72GiB | min-avail 14039MiB | peak-load 1.62"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "921f8d48b020080851ffe34d4c348e26024f97316d2f91702492091a87f83e01",
+      "block_sha256": [
+        "2a0ed0e8789f16afc5d6a0c1efc7d5dcdfcbc3864e33ee9d5e0fb371d880e7ee",
+        "c1076c2c42abdf519b5fceac810d2914da03dbfdbfa9e26dc2c7c08b46f70b61",
+        "96f1051d18f36387e1abfafd11cb3540f98961f851805c67e4d8fa8f13ba53bc"
+      ]
+    },
+    {
+      "metric": "musiq",
+      "case": "musiq-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "Google MUSIQ 3ef5211 / JAX 0.3.25 / NumPy 1.25.2 compatibility runtime",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.0019689250000000003,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 3.0517578125e-05,
+      "ratio": 0.2976719071107509,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2613687040,
+              "score": 71.7724380493164
+            },
+            "native": {
+              "ns": 795668752,
+              "score": 71.77246856689453
+            }
+          },
+          "delta": 3.0517578125e-05,
+          "passed": true,
+          "ratio": 0.30442388083310845
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 789218624,
+              "score": 71.77246856689453
+            },
+            "canonical": {
+              "ns": 2718884572,
+              "score": 71.7724380493164
+            }
+          },
+          "delta": 3.0517578125e-05,
+          "passed": true,
+          "ratio": 0.2902729421203248
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2546206222,
+              "score": 71.7724380493164
+            },
+            "native": {
+              "ns": 757934062,
+              "score": 71.77246856689453
+            }
+          },
+          "delta": 3.0517578125e-05,
+          "passed": true,
+          "ratio": 0.2976719071107509
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 30s | peak-RSS 0.89GiB | min-avail 14373MiB | peak-load 0.83",
+        "run-heavy: done rc=0 30s | peak-RSS 0.88GiB | min-avail 14318MiB | peak-load 1.28",
+        "run-heavy: done rc=0 28s | peak-RSS 0.89GiB | min-avail 14427MiB | peak-load 1.93"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "684da9d7adbce105659cf77476624df8218ec0246e709a6d78d5df808e890f75",
+      "block_sha256": [
+        "93e84d1ab47917e17da7458ec75c8f21d33085aec9fb7717acf48acd6b4d4933",
+        "dfceb281b7da6d7227e8cb983f7ab09c4c9a0f455205831cc127254d59f490a1",
+        "e6e342fba3356838944c1fcc89b023f9fa55d18a0895a19a55cfc7b59add0f3b"
+      ]
+    },
+    {
+      "metric": "musiq",
+      "case": "musiq-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "Google MUSIQ 3ef5211 / JAX 0.3.25 / NumPy 1.25.2 compatibility runtime",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.0019689250000000003,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 2.288818359375e-05,
+      "ratio": 0.3059250999934832,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2132929890,
+              "score": 71.77244567871094
+            },
+            "native": {
+              "ns": 644147580,
+              "score": 71.77246856689453
+            }
+          },
+          "delta": 2.288818359375e-05,
+          "passed": true,
+          "ratio": 0.3020012908159865
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 685639792,
+              "score": 71.77246856689453
+            },
+            "canonical": {
+              "ns": 2159612003,
+              "score": 71.77244567871094
+            }
+          },
+          "delta": 2.288818359375e-05,
+          "passed": true,
+          "ratio": 0.3174828585169704
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 2083227509,
+              "score": 71.77244567871094
+            },
+            "native": {
+              "ns": 637311584,
+              "score": 71.77246856689453
+            }
+          },
+          "delta": 2.288818359375e-05,
+          "passed": true,
+          "ratio": 0.3059250999934832
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 24s | peak-RSS 0.89GiB | min-avail 14423MiB | peak-load 1.37",
+        "run-heavy: done rc=0 26s | peak-RSS 0.89GiB | min-avail 14285MiB | peak-load 1.49",
+        "run-heavy: done rc=0 26s | peak-RSS 0.89GiB | min-avail 14395MiB | peak-load 3.88"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "aa87b28f247e88ac52f52a915b0cb672da16c5f67dbb60c20b55fb8085e25e14",
+      "block_sha256": [
+        "ace225571d9f038a2cd87f38ae7772521b7506d91a311ab6221ec73c1578e0e9",
+        "5805737bfda134876d8ee9761d1f6cea7237978b1191ae9d3960d5873bc79f3a",
+        "6af1f8e43f6e6cb335123b6191f24aea718a1f97c3e8e7e56e0afcc1442c03ba"
+      ]
+    },
+    {
+      "metric": "paq2piq",
+      "case": "paq2piq-first-original-cid22-t1",
+      "width": 512,
+      "height": 512,
+      "threads": 1,
+      "canonical": "original Paq2piq / 401 ROIs",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.001229401,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 7.62939453125e-06,
+      "ratio": 1.2392859261282079,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 379852055,
+              "score": 73.73063659667969
+            },
+            "native": {
+              "ns": 479719432,
+              "score": 73.73064422607422
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.2629112458006841
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 498799025,
+              "score": 73.73064422607422
+            },
+            "canonical": {
+              "ns": 402489058,
+              "score": 73.73063659667969
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.2392859261282079
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 390951905,
+              "score": 73.73063659667969
+            },
+            "native": {
+              "ns": 481357314,
+              "score": 73.73064422607422
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.2312443240300874
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 24s | peak-RSS 0.92GiB | min-avail 14541MiB | peak-load 1.21",
+        "run-heavy: done rc=0 28s | peak-RSS 0.92GiB | min-avail 14048MiB | peak-load 1.72",
+        "run-heavy: done rc=0 27s | peak-RSS 0.93GiB | min-avail 13472MiB | peak-load 1.40"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "950d1b54c1125e57596b3070eca31f1f2e17ed72e6ac0adc871b1802ee547d87",
+      "block_sha256": [
+        "4130e124dc456e0d7c1af93feec26414fb265c63f26072fd78aa62b3a12a291e",
+        "3b1a53815da3ac35d7b81e2a305d52fb17c353eadad9874e5e0f83d15a10d48d",
+        "4126fc8118cd1d573816c0a2b328bd844daccfbfefe341c24fd33b76944a33dc"
+      ]
+    },
+    {
+      "metric": "paq2piq",
+      "case": "paq2piq-first-original-cid22-t8",
+      "width": 512,
+      "height": 512,
+      "threads": 8,
+      "canonical": "original Paq2piq / 401 ROIs",
+      "phase": "First evaluation after resident model construction; input and model file I/O excluded; fresh processes, no OS-cache flushing; outer CLI dispatch excluded",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "native_binary_sha256": "aba1c690560092c8c28414db5236a2199bd3ee1827ec7f64633a6bb9abd58565",
+      "engine": "rten",
+      "absolute_bound": 0.001229401,
+      "relative_bound": 0,
+      "passed": true,
+      "max_abs_delta": 7.62939453125e-06,
+      "ratio": 1.5108690467339392,
+      "blocks": [
+        {
+          "arms": {
+            "canonical": {
+              "ns": 92425558,
+              "score": 73.73063659667969
+            },
+            "native": {
+              "ns": 162672508,
+              "score": 73.73064422607422
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.7600381487553476
+        },
+        {
+          "arms": {
+            "native": {
+              "ns": 159677639,
+              "score": 73.73064422607422
+            },
+            "canonical": {
+              "ns": 124537593,
+              "score": 73.73063659667969
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.2821641654821447
+        },
+        {
+          "arms": {
+            "canonical": {
+              "ns": 105596427,
+              "score": 73.73063659667969
+            },
+            "native": {
+              "ns": 159542373,
+              "score": 73.73064422607422
+            }
+          },
+          "delta": 7.62939453125e-06,
+          "passed": true,
+          "ratio": 1.5108690467339392
+        }
+      ],
+      "wrapper_receipts": [
+        "run-heavy: done rc=0 23s | peak-RSS 0.92GiB | min-avail 13817MiB | peak-load 4.88",
+        "run-heavy: done rc=0 27s | peak-RSS 0.93GiB | min-avail 14317MiB | peak-load 2.60",
+        "run-heavy: done rc=0 24s | peak-RSS 0.93GiB | min-avail 14107MiB | peak-load 2.48"
+      ],
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
+      "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0",
+      "summary_sha256": "17b9a7d850b41d0abfc84082d5051e1983c2e5d64872e52d87cc030ed0a9ed6b",
+      "block_sha256": [
+        "caafbb8ce0e324af0b06e77012f0b7e289fac877ac060e9a17fe8d1d02208929",
+        "082b14e58bbc3f31eeb3fa9b78975bbcc576dabf0f940d44be321a33b7e77a68",
+        "5e15d5f9b7f6d826f0906e54dc2efebec03c479623de19f7241d94fc42a7b6df"
+      ]
+    }
+  ]
+}

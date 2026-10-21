@@ -2,7 +2,7 @@
   "phase": "First evaluation after resident immutable-model construction",
   "qualification": "Descriptive alternating first calls; no warm timing, full-startup or regression acceptance claim",
   "host_cpu": "Ryzen 9 7950X / WSL2",
-  "observed": 39,
+  "observed": 48,
   "cohorts": [
     {
       "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-two-family-three-block-run",
@@ -12,7 +12,7 @@
     },
     {
       "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/nn-first-56-numpy125-run",
-      "observed": 37,
+      "observed": 46,
       "expected": 56,
       "plan_sha256": "030d3458e55722c6b687471494f0c543ca4c7b8cccd9347a43c6f5c9358975f0"
     }
@@ -42,8 +42,13 @@
     },
     {
       "file": "cases-04.json",
-      "cases": 7,
-      "sha256": "18f7ff40b94d1ceb97d925c2bf37e79dd97e7b23bf6bde4f9f0820d6dd786fc0"
+      "cases": 8,
+      "sha256": "5fb74c684963913dea8a3993295d567b2ad6aba8191d57c79b02bab7a57526c3"
+    },
+    {
+      "file": "cases-05.json",
+      "cases": 8,
+      "sha256": "ac1b8f55d0544c968c7264fc279975ff4d430ff371625fe24120fec5106a01d0"
     }
   ]
 }

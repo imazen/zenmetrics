@@ -1,8 +1,32 @@
 {
   "expected_cases": 48,
   "expected_metric_children": 96,
-  "acquired_case_records": 6,
+  "acquired_case_records": 35,
   "cases": [
+    {
+      "case": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/result.json",
+        "sha256": "1b4c5a9e9a8eb2d8906280bc93445ef189229a8ba3e8150e3e31e418dd95d095"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/result.json",
+        "sha256": "622c13c34db6ed4771e4f7e0a6c5919a1664210b45161e37bd9a6f216a760491"
+      }
+    },
     {
       "case": "original12-hdrvdp-grid-pairA-255x257-t1-warm-current40",
       "fatal": false,
@@ -13,6 +37,42 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-255x257-t1-warm-current40/result.json",
         "sha256": "42bab70b386b884dbc38b2c500d3c841196c37c49d27e63543c524db6ef19fe4"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 4.4966493675246966e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-255x257-t28-warm-current40/result.json",
+        "sha256": "00f04550acc7832b10e0c936b7c23dd33b1dc4e5ce15591e6cf0aa361d4cc43f"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.014122660901634276,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-3840x2160-t1-warm-current40/result.json",
+        "sha256": "f81221a9dcfc59a5993d1a499b570b83d6f73a4185247a5dbab28a91671f0bd6"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.014122660901634276,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-3840x2160-t28-warm-current40/result.json",
+        "sha256": "be405a8dc1e200e06e4ab8e32328e77a5549f6cfde73feb7b5a7ebeff140a6cf"
       }
     },
     {
@@ -40,6 +100,150 @@
       }
     },
     {
+      "case": "original12-hdrvdp-grid-pairB-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.012382754793129891,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-1024x1024-t1-warm-current40/result.json",
+        "sha256": "6a864d39053793a50e9340cb64300676cd55835e5532423f0c0d2a0f07afb431"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.012382754793129891,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-1024x1024-t28-warm-current40/result.json",
+        "sha256": "b5f9c10ed238a1790625d30607348039ecc42bfd2acd7cdd7bb9145ccd30ad98"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.340082724738295e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-255x257-t1-warm-current40/result.json",
+        "sha256": "bfa738b5844e8a81e5b62d93df56681b5a27e8fee71d92fe36e093e66437908b"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.340082724738295e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-255x257-t28-warm-current40/result.json",
+        "sha256": "1daf384ae52f47b8ffc95dd929c53417cad3add285465f5cfb42b70c8a397664"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.02003825875114984,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-3840x2160-t1-warm-current40/result.json",
+        "sha256": "a263fc1791973cf33d7b392007e49258b71d56743b1f0bd7dd43028aba8d269c"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.02003825875114984,
+      "absolute_bound": 0.005,
+      "bound_pass": false,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-3840x2160-t28-warm-current40/result.json",
+        "sha256": "a37437cf472b7b645193d4726e3f0baea2a34bb470236b85d4dcc8ed8297e778"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 8.674560312726953e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-64x64-t1-warm-current40/result.json",
+        "sha256": "7aa346dabf6e45564417a502858ae4a207166a9480e1a475a8feb8711e5728aa"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairB-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 8.674560312726953e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairB-64x64-t28-warm-current40/result.json",
+        "sha256": "f590e661a2049aea642f773ef74e39d433e88b06bfed03a8e4989c771004031b"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 9.674099707979167e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-64x64-t1-warm-current40/result.json",
+        "sha256": "5e0c44334f780e79d0203d01e7531792f0bcbacb31305285cd551f04b135b1d2"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairC-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 9.674099707979167e-06,
+      "absolute_bound": 0.005,
+      "bound_pass": true,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairC-64x64-t28-warm-current40/result.json",
+        "sha256": "1c871b7da645700a29850b1fc4eb81dd80ac74d9f3e065045525621b8c5a9b8b"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/result.json",
+        "sha256": "694a5db4ed86b38b8a58189df5db65b9a7984d3091cb312228d0892f69676105"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/result.json",
+        "sha256": "b0d658a49b3627412721ef83e8ff7666bb522e765d24e5a0b452ae9c0d0335ef"
+      }
+    },
+    {
       "case": "original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40",
       "fatal": false,
       "complete": true,
@@ -49,6 +253,42 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40/result.json",
         "sha256": "ba70f8a133ac00d539d6324c42a839cf5486f0d5e97f01988ef2e37223bde736"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.105427357601002e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-255x257-t28-warm-current40/result.json",
+        "sha256": "b51a743c1933f78709d7876bcbda06c2de185ef7ebe1de6ad770e5318bb29393"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": false,
+      "absolute_difference": null,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-3840x2160-t1-warm-current40/result.json",
+        "sha256": "abc1cff611a9e9fdd7f7c791192b05ff5d51069c51b803f702672c4d4d637604"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 7.815970093361102e-14,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-3840x2160-t28-warm-current40/result.json",
+        "sha256": "2a1d0ca262f7ed785650cc4bea92b8f363d66906558055309c06634530712e35"
       }
     },
     {
@@ -73,6 +313,114 @@
       "raw_result": {
         "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-64x64-t28-warm-current40/result.json",
         "sha256": "a08886e2c6ca27f77389e0ceeb51a6955cf9204b2dc4316559bd44450e35369b"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-1024x1024-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 3.552713678800501e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-1024x1024-t1-warm-current40/result.json",
+        "sha256": "ca307656564f489f7c8ea65f35046b9efa1dc8f8560a82f42a750a0bab1962fc"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-1024x1024-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 3.552713678800501e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-1024x1024-t28-warm-current40/result.json",
+        "sha256": "95d0288f01ec9511213933da00cf3aaed28e32426278de6d551bf69fa37731e9"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-255x257-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 1.7763568394002505e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-255x257-t1-warm-current40/result.json",
+        "sha256": "bcedff1e2066fecc2f80f998acfd65debf0125568e2b136c56748c9765f1186a"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-255x257-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 1.7763568394002505e-15,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-255x257-t28-warm-current40/result.json",
+        "sha256": "28abde3fd5fc4ff026225ae1f4551411b99e4102d3273c32b798b6188c5ae066"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-3840x2160-t1-warm-current40",
+      "fatal": false,
+      "complete": false,
+      "absolute_difference": null,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-3840x2160-t1-warm-current40/result.json",
+        "sha256": "9ecebda48c5eb58fae935d93456c55efbdc65522afa51f799999a52500bd8dd3"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-3840x2160-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 2.842170943040401e-14,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-3840x2160-t28-warm-current40/result.json",
+        "sha256": "4b573ae15bf2c0156dee24686529c23c67ccdfc65b9c674edc71b7757cfcf8b8"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.0,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-64x64-t1-warm-current40/result.json",
+        "sha256": "d634e0ea3782f57778113e223526b26db0581e465cc0273ea08b7b8c0e1b0bd4"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairB-64x64-t28-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.0,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairB-64x64-t28-warm-current40/result.json",
+        "sha256": "e3d9555cae9096ebe509b5ff24519a5decd92b3dce664ff3ea1accda47480824"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairC-64x64-t1-warm-current40",
+      "fatal": false,
+      "complete": true,
+      "absolute_difference": 0.0,
+      "absolute_bound": null,
+      "bound_pass": null,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairC-64x64-t1-warm-current40/result.json",
+        "sha256": "26666b79bc1845c7027d7f87443406d5affe872198d056bb4ca65a46db2fe89f"
       }
     }
   ],

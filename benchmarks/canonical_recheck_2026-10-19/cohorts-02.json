@@ -1,4 +1,28 @@
 {
+  "ssim1-confirm40-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-confirm40-run",
+    "plan_sha256": "6466873cd2442a97b9c7f42f795b1322d6e96fcecf33f2efbce919a55dc464f2",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ssim1-confirm40-run.tsv",
+        "sha256": "952f807884bbcd27363803ed79cfafdc5eda37eed96a19abe5cb2a52fdda679e"
+      }
+    ]
+  },
+  "ssim1-rgb-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/ssim1-rgb-run",
+    "plan_sha256": "6e1ad806dc033cd0cd990b138e984260e494bb8fd2c4ca78d4da7eeebc6ab60f",
+    "cases": 2,
+    "expected_cases": 2,
+    "artifacts": [
+      {
+        "file": "ssim1-rgb-run.tsv",
+        "sha256": "7d5172b22a56bc6297d00895a112454ff4c67e293b16ecb1476339b5f37311ec"
+      }
+    ]
+  },
   "ssim2-gpu-grid-pairB-64x64-t1-c5f16e49-confirmation-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/full-gpu-grid-v2/flags/ssim2-gpu-grid-pairB-64x64-t1-c5f16e49/confirmation-run",
     "plan_sha256": "a194c4ab40b0eeb9f078be5d466497c866a898ede53e69a79dbaecaeb8d3d0e9",
@@ -74,36 +98,36 @@
   "vmaf-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-current-grid-run",
     "plan_sha256": "eb62e27712339dde441c34ac358daaf63650802e85c96b9a097d0693dcd33284",
-    "cases": 15,
+    "cases": 25,
     "expected_cases": 168,
     "artifacts": [
       {
         "file": "vmaf-current-grid-run.tsv",
-        "sha256": "0630737fda2f94cc5c6a8793935fd70109051f1b118b96a7793621dfa9fff531"
+        "sha256": "2c90432f961da9d181756cf301c08f9cd9d8b3d66d990d6f02550b6d006fb79a"
       }
     ]
   },
   "vmaf-fullcall-current-grid-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run",
     "plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
-    "cases": 10,
+    "cases": 19,
     "expected_cases": 144,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current-grid-run.tsv",
-        "sha256": "ed5f297b393bb0b72b5f7dc1e7424f3796ea111934da9685219bcb5b130c9682"
+        "sha256": "87452b9c7f28ca7d1e3bc923ca698f6ead0c44a0e1a8f08cc132fbf765cdcdef"
       }
     ]
   },
   "vmaf-fullcall-current40-run": {
     "raw_directory": "~/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run",
     "plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
-    "cases": 11,
+    "cases": 12,
     "expected_cases": 12,
     "artifacts": [
       {
         "file": "vmaf-fullcall-current40-run.tsv",
-        "sha256": "9bb33e1772894f5092a723cb0a4d4bfdeb59d7528ff6e16f4726053c058a5bd8"
+        "sha256": "640904e78a7dc708ecce91062b50a9c1a818d0db5c1bdda5b428485570d659b2"
       }
     ]
   },
@@ -140,6 +164,18 @@
       {
         "file": "ws-hv-current-512x512-t1-bb7819c0-fixed-add40-run.tsv",
         "sha256": "2e56742d50ed5cf22f84fc8d99ac772df679c71af39e00b5dbfe403ed706ebcc"
+      }
+    ]
+  },
+  "ws-hv-grid-pairA-3840x2160-t1-060d464f-confirmation-run": {
+    "raw_directory": "~/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/ws-hv-grid-pairA-3840x2160-t1-060d464f/confirmation-run",
+    "plan_sha256": "e9eda9acc43c29fb91b9c06e4cbdbddfbf82aa0f5b050027c641dba051dac7ff",
+    "cases": 1,
+    "expected_cases": 1,
+    "artifacts": [
+      {
+        "file": "ws-hv-grid-pairA-3840x2160-t1-060d464f-confirmation-run.tsv",
+        "sha256": "a3f2ac29fdc34b17fd4c09bf4590d27cbf904e966b659fb8e16f152adb4ab50d"
       }
     ]
   }

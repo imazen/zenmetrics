@@ -1,0 +1,57 @@
+{
+  "method": "20,000 bootstrap resamples of complete alternating-block ratios; median estimator; seed 20261020",
+  "qualification": "descriptive; runtime closure and canonical contamination not independently audited",
+  "rows": [
+    {
+      "case": "flip-v17-grid-pairA-1024x1024-t28",
+      "blocks": 20,
+      "ratio": 1.3353963522209455,
+      "lower_95": 1.2436274515805232,
+      "upper_95": 1.3802793151116735,
+      "relative_halfwidth": 0.06872034695002587,
+      "precision_within_three_percent": false,
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "plan_sha256": "607741f2279b4ecc9b5db3542d04287ab9cd6823b561f9d3a62034c55265e4dd",
+      "summary_sha256": "b1914705cc1083225758a64b75410fe0cd6fcac993a2c9981f83e5c663bda7a3",
+      "stage_summary_sha256": [
+        "b1914705cc1083225758a64b75410fe0cd6fcac993a2c9981f83e5c663bda7a3"
+      ],
+      "block_sha256": [
+        "f0be80e7806d6c8951cc1b6491c61c2190a41558f6db4057f5235edc2791595e",
+        "ff1f6fecfa5fa19b17480cc18cdda3ce13740b7d6d58aec9f5ccd89a1e5fb030",
+        "a740cf737722c248f9b35331d3f41f72db9dd28d0147dbd0d4a4c7844036bea1",
+        "bef3b0132a93ba22f614f09623d534ab9011ab3637739387986072aef3772a19",
+        "d0b64783421ba224532c7e1e710174aea2fd8690c3f2d4eedfe483d5a2768480",
+        "1ff2510000708f5e353b6a8d7daedd36c2f93f7c9c227d52f53f4a973dce0f32",
+        "e636672e507533a849113262c5e06a82879dd50949fb1faeb61b22cebd5d7e70",
+        "54abad40b3fc152f1c8a117ad5411897128746dc25eda10b4d8a5b3ff036955b",
+        "b4fdee9af253be58974ec9fc273621bcf308e58ff592370c0bb6eb92d893ae6c",
+        "b1d96fbdb8aa84402d4d4ef3c3af789988908ed952f0d5eb7cce10cbb10a8251",
+        "593a4e7a69c47c35faa12ef8f5fed3f1b7c22da3084e9f80131fc23ff38aa4f2",
+        "82946c51ff3965d8938c4ae6b0672782ce32a76fc0f6ede97dfa06d5ceace324",
+        "ac36eaffd8aac2ac642490e008a1fe8d4af7f4a9cdd28de015c8e7b3263d0102",
+        "1bc45624aa30bc8e92cc9f5c16ec828696f2ce45d2272552fa45ea255c74d5c6",
+        "26a4a2819fa00658cb7217983068cc2a04929ad3fdc1b0d65af333d8fbb7fb0f",
+        "f58f4cbbd18a1589d9550180685aa2a28a27a49e7ab1d0bfb6e8dbfe12dada6b",
+        "113eeea007f6f05f0118ffb5299aac6e6bb9173e6a6e72b28acdb34a9097310a",
+        "b285894ed08dda5d2154dd689294dc77e28bcb224320b0c9047418010946e531",
+        "30dc8768d598c399fed90b46eef5f4e77a804b8e2389699fad70553dc3ee1ac0",
+        "352f0560189e3f5c4e3f385ef09993a5ac9699a864c0c394379cbacc0eef0ecb"
+      ],
+      "native_gate_observations": 200,
+      "native_dirty_gate_observations": 23,
+      "native_gates_clean": false,
+      "whole_block_clean_count": 11,
+      "clean_block_diagnostic": null,
+      "regression_qualified": false
+    }
+  ],
+  "raw_interval": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/flip-wshv-current-grid-flags/flip-v17-grid-pairA-1024x1024-t28-060d464f/initial20-interval.json",
+    "sha256": "2b483e3e55df0e77713d1ac4fedaf21ac47124dd83549c96aea38949573f9caf"
+  },
+  "scope_note": "Descriptive interval; numerical bounds and resource flags remain unchanged. Older-fork DSSIM alternatives are not primary canonical evidence."
+}
