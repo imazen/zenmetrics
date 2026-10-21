@@ -68,6 +68,11 @@ def fingerprint(folder):
                 rows.append({k: v for k, v in row.items() if k not in ('capture_utc', 'source')})
         for row in sorted(rows, key=lambda r: json.dumps(r, sort_keys=True)):
             digest.update(json.dumps(row, sort_keys=True).encode())
+    coverage = folder / 'coverage.json'
+    if coverage.exists():
+        # Per-host logical cell counts; the capture windows beside them change every cycle.
+        cells = {h: v.get('cells') for h, v in json.loads(coverage.read_text()).items()}
+        digest.update(json.dumps(cells, sort_keys=True).encode())
     return digest.hexdigest()
 
 

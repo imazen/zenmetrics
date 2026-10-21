@@ -216,6 +216,21 @@ class SyncControls(unittest.TestCase):
             f.write_text('metric_name,median_ns,capture_utc,source\nx,11,new,b\n')
             self.assertNotEqual(first, fingerprint(p))
 
+    def test_coverage_counts_change_the_evidence_but_capture_windows_do_not(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / 'mac-observations.csv').write_text('metric_name,median_ns\nx,10\n')
+            cov = p / 'coverage.json'
+            cov.write_text(json.dumps(dict(mac=dict(capture_window_utc=['a'], campaigns=[]))))
+            base = fingerprint(p)
+            cov.write_text(json.dumps(dict(mac=dict(capture_window_utc=['b'], campaigns=[]))))
+            self.assertEqual(base, fingerprint(p))
+            cov.write_text(json.dumps(dict(mac=dict(capture_window_utc=['b'], cells=dict(planned=2, ok=2)))))
+            withcells = fingerprint(p)
+            self.assertNotEqual(base, withcells)
+            cov.write_text(json.dumps(dict(mac=dict(capture_window_utc=['c'], cells=dict(planned=2, ok=1, pending=1)))))
+            self.assertNotEqual(withcells, fingerprint(p))
+
     def test_foreign_owner_is_never_replaced(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
