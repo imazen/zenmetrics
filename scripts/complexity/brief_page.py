@@ -21,6 +21,7 @@ AIC_OK = {'reproduced', 'matched pyiqa defaults', 'matched by configuring the re
 AIC_DEV = {'close, minor residual', 'not reproduced'}
 PARITY_OK = {'Reported results', 'Declared gate'}
 PARITY_DEV = {'Partial canonical parity'}
+PARITY_NA = {'Not applicable'}  # our own design: no external reference to check against
 
 
 def family(kind, origin):
@@ -30,7 +31,8 @@ def family(kind, origin):
 
 
 def parity(m):
-    """'deviation' when any record shows a difference, 'checked' when one shows agreement, else 'unchecked'."""
+    """'deviation' when any record shows a difference, 'checked' when one shows agreement, 'own' when there is
+    no external reference, else 'unchecked'."""
     aic, spot, par = m.get('aic_match'), m.get('spotcheck') or '', (m.get('canonical') or {}).get('parity')
     why = []
     if aic in AIC_DEV: why.append(f'AIC2026 column: {aic}')
@@ -38,6 +40,7 @@ def parity(m):
     if par in PARITY_DEV: why.append(f'reference parity: {par.lower()}')
     if why: return 'deviation', why
     if aic in AIC_OK or spot.startswith('scalar-pass') or par in PARITY_OK: return 'checked', []
+    if par in PARITY_NA: return 'own', []
     return 'unchecked', []
 
 
@@ -68,8 +71,7 @@ def metric_meta(d):
             'fam': family(m['kind'], m['origin']), 'kind': m['kind'], 'origin': m['origin'], 'col': m.get('column'),
             'ref': c.get('reference') if c.get('reference') not in (None, 'no evidence') else None,
             'family': c.get('family'), 'parity': c.get('parity'), 'aic': m.get('aic_match'), 'spot': m.get('spotcheck'),
-            'status': status, 'why': why,
-            'tuned': m['metric'].startswith('dvifmish-port-'),
+            'status': status, 'why': why, 'diffs': m.get('diffs') or [], 'evidence': c.get('evidence'),
             'est': {k: v for k, v in (m.get('estimate') or {}).items() if v},
             'c1': m.get('cpu_1t'), 'c8': m.get('cpu_8t')}
     for name in sorted({r[1] for r in (d.get('perf') or {}).get('rows', [])} - set(meta)):
@@ -79,8 +81,10 @@ def metric_meta(d):
         else:
             origin = 'dvifmish' if name.startswith('dvifmish-') else 'public'
             meta[name] = {'fam': family('classic-fr', origin), 'kind': 'classic-fr', 'origin': origin, 'col': None, 'ref': None,
-                          'family': None, 'parity': None, 'aic': None, 'spot': None, 'status': 'unchecked', 'why': [],
-                          'tuned': False, 'est': {}, 'c1': None, 'c8': None}
+                          'family': None, 'parity': None, 'aic': None, 'spot': None,
+                          # a timed dvifmish preset outside the port table is one of our talk-inspired designs
+                          'status': 'own' if origin == 'dvifmish' and not name.startswith('dvifmish-port-') else 'unchecked', 'why': [],
+                          'diffs': [], 'evidence': None, 'est': {}, 'c1': None, 'c8': None}
     repro = d.get('repro') or {}
     cols_of = {}
     for col, ms in (repro.get('routes') or {}).items():
@@ -160,6 +164,14 @@ def write_csvs(d, meta, out):
             w.writerow([m['metric'], mm['fam'], g(mm['c1']), g(mm['c8'])] + [g(mm['est'].get(t)) for t in tables])
 
 
+def undocumented(meta):
+    """A deviation must come with the numbers that show it: a full-set row, a reference comparison or a recorded diff."""
+    return [dict(level='warn', check='deviation without a diff list',
+                 detail=f"{m}: marked as a deviation ({'; '.join(mm['why'])}) but no measured difference is recorded")
+            for m, mm in sorted(meta.items())
+            if mm['status'] == 'deviation' and not mm.get('alias') and not (mm['july'] or mm['canon'] or mm['diffs'])]
+
+
 def build(data_path, out):
     d = json.loads(Path(data_path).read_text())
     meta = metric_meta(d)
@@ -172,7 +184,7 @@ def build(data_path, out):
         'fit_host': d.get('host'), 'fit_shape': d.get('shape'),
         'aic': aic_categories((ROOT / 'docs/AIC2026_REPRODUCTION_STATUS.md').read_text()),
         'dvifm': d.get('dvifmish_versions') or [], 'sources': d['sources'], 'notes': d.get('notes') or [],
-        'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': d.get('checks') or []}
+        'repro': {k: v for k, v in (d.get('repro') or {}).items() if k != 'checks'}, 'checks': (d.get('checks') or []) + undocumented(meta)}
     out.mkdir(parents=True, exist_ok=True)
     write_csvs(d, meta, out)
     built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')

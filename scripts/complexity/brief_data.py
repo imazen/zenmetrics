@@ -38,6 +38,7 @@ SEED = 20261020
 DVIFM = {  # aggregate-count name -> dvifmish preset (benchmarks/aic_refusals_2026-10-18/README.md)
     'dvifm-port-rgb': 'port-lap-v0.3', 'dvifm-port-y': 'port-lap-v0.2',
     'dvifm-port-2d-y': 'port-2d-v0.2', 'dvifm-port-min-y': 'port-min-v0.2'}
+DVIFM_LICENCE = 'code (MIT OR Apache-2.0) AND BSD-3-Clause-Clear (port of Nokia\'s Clear BSD releases)'
 DVIFM_DRAFT = {'DVIFM_RGB': 'dvifm-port-rgb', 'DVIFM_Y': 'dvifm-port-y', 'DVIFM_2D_Y': 'dvifm-port-2d-y',
                'DVIFM_MIN_Y': 'dvifm-port-min-y'}
 PRIVATE_COLUMNS = {'idfiqa': 'proposal-IDFIQA', 'msswd': 'MSSWD', 'topiq-fr': 'TOPIQ', 'topiq-fr-pipal': 'TOPIQ-PIPAL'}
@@ -189,8 +190,8 @@ def canonical(private):
     talk = re.findall(r'^\| `([a-z0-9-]+)`: ', dv.read_text(), re.M) if dv.exists() else []
     for preset in set(talk) - set(DVIFM.values()):
         out.setdefault('dvifmish-' + preset, dict(
-            family='FR · Classical', reference='none: dvifmish talk-inspired reconstruction (BMVA talk, 2026-02-04)',
-            parity='Not applicable', licence='private: publishing needs the author\'s consent', source='dvifmish README.md'))
+            family='FR · Classical', reference='dvifmish talk-inspired preset (BMVA talk, 2026-02-04)',
+            parity='Not applicable', licence=DVIFM_LICENCE, source='dvifmish README.md'))
     for preset in DVIFM.values():
         g = rows.get(preset)
         out['dvifmish-' + preset] = dict(
@@ -198,7 +199,7 @@ def canonical(private):
             parity='Reported results' if g else 'Not documented',
             evidence=(f'mean |ΔJND| {g[1]} vs his builds on 9,618 AIC2026 crops; 840×944 1 thread: C++ {g[3]} ms → '
                       f'dvifmish {g[4]} ms' if g else None),
-            licence='private: publishing needs the author\'s consent', paper='DVIFM (AIC-4 proposal; BMVA talk 2026-02-04)',
+            licence=DVIFM_LICENCE, paper='DVIFM (AIC-4 proposal; BMVA talk 2026-02-04)',
             source='dvifmish README.md (port mode table)')
     return out
 
@@ -245,6 +246,64 @@ def spotcheck():
     for r in csv.DictReader(files[-1].open(), delimiter='\t'):
         out[r['metric']] = f"{r['status']} ({r['scalar_pass_cases']}/{r['expected_scalar_cases']})" if r['status'].startswith('scalar') else r['status']
     return out, files[-1].relative_to(ROOT).as_posix()
+
+
+PASSED = {'pass', 'parity_pass', 'bit-identical', 'both-refused'}  # spot-check row statuses that are agreement
+
+
+def recorded_diffs():
+    """Per metric, the measured differences behind a parity record, so a deviation is never shown without its numbers.
+
+    Rows come from three committed sources: the latest primary-oracle spot check (every case that is not a pass),
+    native goldens whose rows are regression floors rather than 1e-3 JND matches (kind=pinned), and the
+    `measured_*` lines of a model card's [parity] table."""
+    out = {}
+    files = sorted(ROOT.glob('benchmarks/port_spotcheck_*/execution-coverage.tsv'))
+    if files:
+        for r in csv.DictReader(files[-1].open(), delimiter='\t'):
+            ev = files[-1].parent / (r.get('evidence') or '')
+            if not r.get('evidence') or not ev.is_file():
+                continue
+            cases = {}
+            for shard in json.loads(ev.read_text()).get('shards') or []:
+                for row in csv.DictReader((ev.parent / shard['path']).open(), delimiter='\t'):
+                    if row.get('status') in PASSED or row.get('passed') == 'True':
+                        continue
+                    w, h = row.get('width'), row.get('height')
+                    key = (row.get('pair'), f'{w}×{h}' if w else row.get('size'), row.get('status'))
+                    delta = row.get('max_abs_delta') or row.get('absolute_delta') or None
+                    c = cases.setdefault(key, dict(source='primary oracle', case=f'{key[0]} {key[1]}', threads=[], status=key[2],
+                                                    delta=delta, bound=row.get('bound') or row.get('score_relative_bound') or None,
+                                                    bound_kind=row.get('bound_kind') or ('relative' if row.get('score_relative_bound') else None),
+                                                    ours=row.get('ours'), reference=row.get('canonical_first') or row.get('canonical') or None))
+                    if row.get('threads') not in c['threads']:
+                        c['threads'].append(row.get('threads'))
+            if cases:
+                out.setdefault(r['metric'], []).extend(cases.values())
+    for card in sorted(ROOT.glob('crates/*/models/*/card.toml')):
+        name = card.parent.name
+        par = tomllib.loads(card.read_text()).get('parity') or {}
+        jnd = par.get('jnd')
+        jnd = float(jnd.split()[0]) if isinstance(jnd, str) and re.match(r'[\d.]+', jnd) else jnd
+        for g in sorted(card.parent.glob('*goldens*.tsv')):
+            rows = csv.DictReader((l for l in g.open() if not l.startswith('#')), delimiter='\t')
+            if not {'kind', 'residual', 'tol'} <= set(rows.fieldnames or []):
+                continue
+            engine = g.stem.rsplit('_', 1)[-1] if '_netlib_' in g.stem else g.stem
+            engine = {'cuda': 'ort-cuda'}.get(engine, engine)
+            for row in rows:
+                if row['kind'] != 'pinned':
+                    continue
+                out.setdefault(name, []).append(dict(
+                    source=f'{engine} golden ({g.name})', case=f"image {row['image']} {row['size']}²", status='pinned regression floor',
+                    delta=row['residual'], delta_jnd=f"{float(row['residual']) / jnd:.3g}" if jnd else None,
+                    bound=f'{1e-3 * jnd:.4g}' if jnd else None, bound_kind='absolute (1e-3 JND)'))
+        for k, v in par.items():
+            if k.startswith('measured_') and isinstance(v, str):
+                out.setdefault(name, []).append(dict(source=f"model card {k.removeprefix('measured_').replace('_', ' ')}", text=v))
+        if isinstance(par.get('blocker'), str):
+            out.setdefault(name, []).append(dict(source='model card blocker', text=par['blocker']))
+    return out
 
 
 # ---------------------------------------------------------------- statistics
@@ -652,6 +711,7 @@ def main():
 
     aic = aic_status()
     spot, spot_src = spotcheck()
+    diffs = recorded_diffs()
     names = sorted(set(est) | {k[0] for k in tim} | set(agree))
     metrics = []
     for m in names:
@@ -673,7 +733,7 @@ def main():
             wall_8t_reps=t8 and [v * 1e6 / px for v in t8['wall_reps']],
             timing_sources=sorted(set((t1 or {}).get('source', []) + (t8 or {}).get('source', []))),
             agreement=agree.get(m), canonical=canon.get(m),
-            aic_match=aic.get(col_of.get(m)) if col_of.get(m) else None, spotcheck=spot.get(m)))
+            aic_match=aic.get(col_of.get(m)) if col_of.get(m) else None, spotcheck=spot.get(m), diffs=diffs.get(m) or []))
 
     stats = []
     for tb in tables:

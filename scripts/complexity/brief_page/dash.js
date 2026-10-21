@@ -30,7 +30,7 @@
   const sizeName = n => { const s = SIZE[n]; return s ? `${s.w}×${s.h}` + (n === 'aic-small' ? ' · AIC crop' : '') : n; };
   const thName = t => t === 'both' ? '1 and 8' : t === '8' || t === 8 ? '8 threads' : '1 thread';
   const tq = n => T975[Math.min(n - 2, 19)] || 1.96;
-  const meta = m => M[m] || { fam: 'classic', status: 'unchecked', why: [], est: {} };
+  const meta = m => M[m] || { fam: 'classic', status: 'unchecked', why: [], diffs: [], july: [], canon: [], july_cols: [], est: {} };
   const famOn = m => S.fam.split(',').includes(meta(m).fam);
   const qOn = m => !S.q || m.toLowerCase().includes(S.q.toLowerCase());
   const sum = a => a.reduce((x, y) => x + y, 0);
@@ -96,12 +96,11 @@
   }
   function flagTspans(m) {
     const mm = meta(m);
-    return (mm.status === 'deviation' ? '<tspan class="g-dev">*</tspan>' : mm.status === 'unchecked' ? '<tspan class="g-lab-dim">°</tspan>' : '')
-      + (mm.tuned ? '<tspan class="g-lab-dim">†</tspan>' : '');
+    return mm.status === 'deviation' ? '<tspan class="g-dev">*</tspan>' : mm.status === 'unchecked' ? '<tspan class="g-lab-dim">°</tspan>' : '';
   }
   const short = m => m.length > 26 ? m.slice(0, 25) + '…' : m;
-  const flagText = m => { const mm = meta(m); return (mm.status === 'deviation' ? '*' : mm.status === 'unchecked' ? '°' : '') + (mm.tuned ? '†' : ''); };
-  const MARKS_LEGEND = '<span><b class="mark-dev">*</b> deviation recorded</span><span><b class="mark-un">°</b> no parity check recorded</span><span><b class="mark-un">†</b> DVIFM release retuned on AIC2026 data</span>';
+  const flagText = m => { const mm = meta(m); return mm.status === 'deviation' ? '*' : mm.status === 'unchecked' ? '°' : ''; };
+  const MARKS_LEGEND = '<span><b class="mark-dev">*</b> deviation recorded</span><span><b class="mark-un">°</b> no parity check recorded</span>';
 
   // ------------------------------------------------------------------ state (URL hash)
   function defaultHost() {
@@ -199,9 +198,23 @@
     const mm = meta(m), t = h('h4', null, m + ' ');
     t.append(h('span', 'tag', FAMS.find(f => f[0] === mm.fam)?.[1] || mm.fam));
     tip.append(t);
-    if (mm.status === 'deviation') tip.append(h('div', 'mark-dev', '* ' + mm.why.join('; ')));
+    if (mm.status === 'deviation') {
+      tip.append(h('div', 'mark-dev', '* ' + mm.why.join('; ')));
+      const lines = diffLines(mm);
+      for (const l of lines.slice(0, 4)) tip.append(h('div', 'note', '· ' + l));
+      if (lines.length > 4) tip.append(h('div', 'note', `· ${lines.length - 4} more in the details`));
+    }
     else if (mm.status === 'unchecked') tip.append(h('div', 'note', '° no parity check against the reference recorded yet'));
-    if (mm.tuned) tip.append(h('div', 'note', '† released DVIFM variant, retuned on AIC2026 data'));
+  }
+  // One short line per recorded difference: full-set rows, reference comparisons, oracle cases, golden floors, card notes.
+  function diffLines(mm) {
+    const out = [];
+    for (const r of mm.july || []) if (r.match !== 'nodata') out.push(`${r.column} (${r.set}): median ${r.median_dJND} JND, max ${r.max_dJND}, ρ ${r.spearman} · ${r.match}`);
+    for (const r of mm.canon || []) out.push(`vs ${r.reference} (${r.set}): median rel ${r.median_rel}, max rel ${r.max_rel} · ${r.match}`);
+    for (const r of mm.diffs || []) out.push(r.text ? `${r.source}: ${r.text}`
+      : `${r.source}, ${r.case}: ${r.delta != null ? `|Δ| ${r.delta}${r.delta_jnd ? ` (${r.delta_jnd} JND)` : ''}` : r.status}${r.bound ? `, bound ${r.bound}` : ''}`);
+    if (!out.length && mm.evidence) out.push(mm.evidence);
+    return out;
   }
   function openChecks() {
     hideTip();
@@ -229,8 +242,8 @@
     row('AIC2026 column', mm.col);
     row('AIC2026 match', mm.aic);
     row('Primary-oracle check', mm.spot === 'missing' ? 'not run' : mm.spot);
-    row('Evidence', mm.status === 'deviation' ? 'deviation: ' + mm.why.join('; ') : mm.status === 'checked' ? 'agrees with at least one reference record' : 'no parity record yet');
-    if (mm.tuned) row('Note', 'released DVIFM variant; the author retuned it on AIC2026 data');
+    row('Evidence', mm.status === 'deviation' ? 'deviation: ' + mm.why.join('; ') : mm.status === 'checked' ? 'agrees with at least one reference record' : mm.status === 'own' ? 'our own design: no external reference' : 'no parity record yet');
+    if (mm.evidence) row('Reference comparison', mm.evidence);
     if (mm.alias) row('Same implementation as', mm.alias);
     if (mm.est && mm.est.flops) row('Counted flops per pixel', fmt(mm.est.flops));
     if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU ns/px (perf stat)`, `${fmt(mm.c1)} at 1 thread, ${fmt(mm.c8)} at 8 threads`);
@@ -247,6 +260,18 @@
       const st = (D.repro.sets || [])[0];
       if (mm.code_changed.length) d.append(h('div', 'mark-dev', `Code for this route changed after the reproduction's source commit ${st ? st.commit : ''}: ${mm.code_changed.join(', ')}. Rescore, or confirm the change is bit-exact.`));
     }
+    if (mm.diffs.length) {
+      d.append(h('h4', null, 'Recorded differences'));
+      const num = mm.diffs.filter(r => !r.text), notes = mm.diffs.filter(r => r.text);
+      if (num.length) {
+        const t = h('table'), tr = h('tr');
+        ['source', 'case', 'threads', 'ours', 'reference', '|Δ|', '|Δ| JND', 'bound', 'status'].forEach(x => tr.append(h('th', null, x)));
+        const th = h('thead'); th.append(tr); t.append(th); const tb = h('tbody');
+        for (const r of num) { const q = h('tr'); [r.source, r.case, (r.threads || []).join(', '), r.ours, r.reference, r.delta, r.delta_jnd, r.bound && `${r.bound} ${r.bound_kind || ''}`, r.status].forEach(x => q.append(h('td', null, x ?? '–'))); tb.append(q); }
+        t.append(tb); const w = h('div', 'scroll'); w.append(t); d.append(w);
+      }
+      if (notes.length) { const ul = h('ul'); for (const r of notes) { const li = h('li'); li.append(h('b', null, r.source + ': '), document.createTextNode(r.text)); ul.append(li); } d.append(ul); }
+    } else if (mm.status === 'deviation' && !mm.july.length && !mm.canon.length) d.append(h('div', 'mark-dev', 'Marked as a deviation, but no measured difference is recorded.'));
     d.append(h('div', 'hint', `Wall time per call, ${S.ph} phase, median ns per pixel [95 % interval of the mean]; empty cells are not measured yet.`));
     const tbl = h('table'), thead = h('thead'), tr = h('tr');
     tr.append(h('th', null, 'size'));
@@ -778,7 +803,7 @@
     const cnt = st => Object.values(M).filter(x => !x.alias && (st === 'all' || x.status === st)).length;
     const jn = j => Object.values(M).filter(x => !x.alias && (j === 'all' || (x.july_cols.length > 0) === (j === 'in'))).length;
     rail.append(seg('Published AIC2026 column', 'jf', [['all', `All (${jn('all')})`], ['in', `Has a column (${jn('in')})`], ['out', `No column (${jn('out')})`]]),
-      seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`]]),
+      seg('Evidence', 'rf', [['all', `All (${cnt('all')})`], ['deviation', `* Deviation (${cnt('deviation')})`], ['checked', `✓ Checked (${cnt('checked')})`], ['unchecked', `° Unchecked (${cnt('unchecked')})`], ['own', `Own design (${cnt('own')})`]]),
       famSeg(), search());
     const links = h('div', 'ctl'); links.append(h('div', 'ctl-label', 'Full-set diff against the published scores'));
     const lseg = h('div', 'card');
@@ -824,7 +849,7 @@
     }
     tbl.append(tb); body.replaceChildren(tbl);
   }
-  const evidenceCell = (m, td) => { const mm = meta(m); td.append(h('span', mm.status === 'deviation' ? 'mark-dev' : mm.status === 'checked' ? 'mark-ok' : 'mark-un', mm.status === 'deviation' ? '* deviation' : mm.status === 'checked' ? '✓ checked' : '° none yet')); if (mm.why.length) td.title = mm.why.join('; '); };
+  const evidenceCell = (m, td) => { const mm = meta(m); td.append(h('span', mm.status === 'deviation' ? 'mark-dev' : mm.status === 'checked' ? 'mark-ok' : mm.status === 'own' ? null : 'mark-un', mm.status === 'deviation' ? '* deviation' : mm.status === 'checked' ? '✓ checked' : mm.status === 'own' ? 'own design' : '° none yet')); if (mm.why.length) td.title = mm.why.join('; '); };
   function drawRepro(head, body) {
     const host = S.host === 'all' ? DEF.host : S.host;
     const rows = Object.keys(M).filter(m => !M[m].alias && famOn(m) && qOn(m) && (S.rf === 'all' || M[m].status === S.rf)
@@ -837,6 +862,8 @@
       const j = M[m].july.find(r => r.set === 'cropped') || M[m].july[0], c = M[m].canon[0];
       if (j) { td.append(h('span', j.match === 'MATCH' ? 'mark-ok' : 'mark-dev', (j.match === 'MATCH' ? '✓ ' : '✗ ') + j.median_dJND)); td.append(h('div', 'ci', `${j.column} · ρ ${j.spearman}`)); }
       else if (c) { td.append(h('span', c.match === 'MATCH' ? 'mark-ok' : c.match === 'MISS' ? 'mark-dev' : null, `${c.match === 'MATCH' ? '✓' : c.match === 'MISS' ? '✗' : ''} rel ${c.median_rel}`)); td.append(h('div', 'ci', `vs ${c.reference} · ρ ${c.spearman}`)); }
+      else if (M[m].evidence) { td.append(h('span', M[m].status === 'checked' ? 'mark-ok' : null, M[m].evidence.length > 60 ? M[m].evidence.slice(0, 59) + '…' : M[m].evidence)); td.title = M[m].evidence; }
+      else if (M[m].diffs.length) { td.textContent = `${M[m].diffs.length} recorded difference${M[m].diffs.length > 1 ? 's' : ''}`; td.title = diffLines(M[m]).join('\n'); }
       else if (M[m].july_cols.length) { td.textContent = 'not scored'; td.title = `${M[m].july_cols.join(', ')}: the full-set run used a different route or has not reached this column`; }
       else td.textContent = '–';
     };
@@ -942,9 +969,9 @@
       <h3>Counted cost</h3>
       <p>Operations per pixel tallied from each implementation's source and weighted by ${D.tables.length} cost tables (flop count, the Pedzisz draft weights, scalar costs measured on the ${esc(D.fit_host)}, LLVM cost models, llvm-mca). Compared with CPU time from <code>perf stat</code> on the ${esc(D.fit_host)} at ${esc(D.fit_shape)}, one content pair, three repeats. Counts ignore vectorization, memory traffic, caches and threading. Several neural tallies await recounts; DVIFM counts are core-only aggregates.</p>
       <h3>Marks</h3>
-      <p><span class="mark-dev">*</span> a recorded deviation: an AIC2026 column that is close but not exact or not reproduced, a primary-oracle finding, or partial reference parity. <span class="mark-un">°</span> no parity record yet (not a known difference). <span class="mark-un">†</span> DVIFM releases the author retuned on AIC2026 data after the published columns were computed.</p>
+      <p><span class="mark-dev">*</span> a recorded deviation: an AIC2026 column that is close but not exact or not reproduced, a primary-oracle finding, or partial reference parity. <span class="mark-un">°</span> no parity record yet (not a known difference).</p>
       <h3>DVIFM versions</h3>
-      <p>dvifmish ports M. Pedzisz's four released C++ variants (${dv}) and adds presets reconstructed from his talk. dvifmish is not published; only aggregate results appear here.</p>
+      <p>dvifmish ports M. Pedzisz's four released C++ variants (${dv}) and adds presets reconstructed from his talk.</p>
       <h3>Not shown</h3>
       <p>Agreement with subjective scores. The July numbers came from a preliminary JND reconstruction and are superseded; they return once the full-dataset reproduction of the published objective columns is checked. Reference-implementation speed is not shown either: the reference implementations have not yet been timed on the same hosts.</p>
       <h3>Sources</h3>
