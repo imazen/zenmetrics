@@ -71,9 +71,15 @@
   }
   const cell = (host, m, size, th, ph) => cellStats(CELL.get([host, m, size, +th, ph].join('|')));
   const perPx = size => 1e6 / (SIZE[size].w * SIZE[size].h);
-  const unitK = size => S.unit === 'img' ? 1 : perPx(size);
-  const unitName = () => S.unit === 'img' ? 'ms per image' : 'ns per pixel';
-  const unitShort = () => S.unit === 'img' ? 'ms' : 'ns/px';
+  // Display unit as a converter from ms per call: ns per pixel, ms per image, or throughput in megapixels per second
+  // (the reciprocal, so higher is faster and a converted interval reverses; ival puts it back in order).
+  const unitK = size => { const px = SIZE[size].w * SIZE[size].h;
+    return S.unit === 'img' ? (v => v) : S.unit === 'mps' ? (v => px / (v * 1e3)) : (v => v * 1e6 / px); };
+  const ival = (k, a, b) => [k(a), k(b)].sort((x, y) => x - y);
+  const unitName = () => S.unit === 'img' ? 'ms per image' : S.unit === 'mps' ? 'megapixels per second' : 'ns per pixel';
+  const unitShort = () => S.unit === 'img' ? 'ms' : S.unit === 'mps' ? 'Mpx/s' : 'ns/px';
+  const mpxs = nsPerPx => 1e3 / nsPerPx;  // ns per pixel -> Mpx/s
+  const both = nsPerPx => `${fmt(nsPerPx)} ns/px (${fmt(mpxs(nsPerPx))} Mpx/s)`;
   const pick = s => S.show === 'fast' ? s.fast : s.median;
 
   function niceStep(span, target) {
@@ -267,7 +273,7 @@
     if (mm.evidence && mm.evidence !== mm.ref_why) row('Reference comparison', mm.evidence);
     if (mm.alias) row('Same implementation as', mm.alias);
     if (mm.est && mm.est.flops) row('Counted flops per pixel', fmt(mm.est.flops));
-    if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU ns/px (perf stat)`, `${fmt(mm.c1)} at 1 thread, ${fmt(mm.c8)} at 8 threads`);
+    if (mm.c1) row(`${D.fit_host} ${D.fit_shape}, CPU time (perf stat)`, `${fmt(mm.c1)} ns/px (${fmt(mpxs(mm.c1))} Mpx/s) at 1 thread, ${fmt(mm.c8)} ns/px (${fmt(mpxs(mm.c8))} Mpx/s) at 8 threads`);
     d.append(dl);
     if (mm.july.length || mm.canon.length || mm.july_cols.length) {
       d.append(h('h4', null, 'Full-set diff (9,618 crops)'));
@@ -303,7 +309,7 @@
       }
       d.append(ul);
     }
-    d.append(h('div', 'hint', `Wall time per call, ${S.ph} phase, median ns per pixel [95 % interval of the mean]; empty cells are not measured yet.`));
+    d.append(h('div', 'hint', `Wall time per call, ${S.ph} phase, median ${unitName()} [95 % interval of the mean]; empty cells are not measured yet. The Unit control on the Speed and Data tabs switches it.`));
     const tbl = h('table'), thead = h('thead'), tr = h('tr');
     tr.append(h('th', null, 'size'));
     for (const host of HOSTS) for (const t of [1, 8]) tr.append(h('th', 'num', `${hostName(host)} ${t}t`));
@@ -312,8 +318,8 @@
     for (const s of SIZES) {
       const r = h('tr'); r.append(h('td', null, sizeName(s.name)));
       for (const host of HOSTS) for (const t of [1, 8]) {
-        const c = cell(host, m, s.name, t, S.ph), k = perPx(s.name), td = h('td', 'num');
-        if (c) { td.append(h('b', null, fmt(c.median * k))); if (c.ci) td.append(h('div', 'ci', `[${fmt(c.ci[0] * k)}, ${fmt(c.ci[1] * k)}]`)); }
+        const c = cell(host, m, s.name, t, S.ph), k = unitK(s.name), td = h('td', 'num');
+        if (c) { td.append(h('b', null, fmt(k(c.median)))); if (c.ci) { const ci = ival(k, c.ci[0], c.ci[1]); td.append(h('div', 'ci', `[${fmt(ci[0])}, ${fmt(ci[1])}]`)); } }
         else td.textContent = '–';
         r.append(td);
       }
@@ -451,7 +457,7 @@
       <div class="cards" id="cards"></div>`;
     const cards = [
       ['speed', 'Speed', 'Every metric ranked by time per pixel, per CPU, size and thread count.',
-        at.length ? `${sizeName(size)}, ${hostName(host)}, 1 thread: fastest ${at[0][0]} ${fmt(at[0][1].median * k)} ns/px; median metric ${med[0]} ${fmt(med[1].median * k)}; slowest ${at.at(-1)[0]} ${fmt(at.at(-1)[1].median * k)}.` : ''],
+        at.length ? `${sizeName(size)}, ${hostName(host)}, 1 thread: fastest ${at[0][0]} ${both(at[0][1].median * k)}; median metric ${med[0]} ${both(med[1].median * k)}; slowest ${at.at(-1)[0]} ${both(at.at(-1)[1].median * k)}.` : ''],
       ['scaling', 'Size scaling', 'Time per pixel across the six image sizes.',
         scal ? `${hostName(host)}, 1 thread: ${scal.flat} of ${scal.n} metrics stay within 1.5× per pixel between ${sizeName(scal.a)} and ${sizeName(scal.b)}.` : ''],
       ['cost', 'Counted cost', 'Operation counts against measured CPU time, with fits and intervals.',
@@ -482,7 +488,7 @@
       seg('Threads', 'th', [['1', '1 thread', null, null], ['8', '8 threads'], ['both', '1 and 8', 'two marks per metric']], { disabled: v => v === 'both' && S.host === 'all' }),
       phaseSeg(), showSeg(),
       seg('Axis', 'ax', [['log', 'Log'], ['lin', 'Linear, by cluster', 'exact 1-D k-means on log time; each cluster gets its own linear axis']]),
-      seg('Unit', 'unit', [['px', 'ns per pixel'], ['img', 'ms per image']]),
+      seg('Unit', 'unit', [['px', 'ns per pixel'], ['mps', 'Mpx/s', 'megapixels per second: higher is faster'], ['img', 'ms per image']]),
       famSeg(), search(),
       h('div', 'hint', 'Hover a row for every number; click it for all sizes and CPUs. Keys: 1–7 tabs, ← → previous/next, F full screen.'));
   }
@@ -501,11 +507,11 @@
     for (const m of NAMES) {
       if (!famOn(m) || !qOn(m)) continue;
       const cs = series.map(se => { const s = cell(se.host, m, S.size, se.t, S.ph); return s && { ...s, k }; });
-      if (cs.some(Boolean)) rows.push({ m, cs, key: pick(cs.find(Boolean)) * k });
+      if (cs.some(Boolean)) rows.push({ m, cs, k, key: pick(cs.find(Boolean)) });  // key: ms, so fastest first in every unit
     }
     rows.sort((a, b) => a.key - b.key);
     const glyphs = S.show === 'fast' ? 'dot = fastest round or run' : 'dot = median · line = spread · band = 95 % interval of the mean · tiny marks = individual rounds (red: flagged busy)';
-    setHead(head, `Time per call, ${unitName()}`, `${sizeName(S.size)} · ${S.host === 'all' ? 'all CPUs' : hostName(S.host)} · ${thName(S.th)} · ${S.ph} · ${rows.length} metrics, fastest first`,
+    setHead(head, `${S.unit === 'mps' ? 'Throughput' : 'Time per call'}, ${unitName()}`, `${sizeName(S.size)} · ${S.host === 'all' ? 'all CPUs' : hostName(S.host)} · ${thName(S.th)} · ${S.ph} · ${rows.length} metrics, fastest first`,
       (series.length > 1 ? series.map(se => `<span><i style="background:${se.color}"></i>${esc(se.label)}</span>`).join('') : '') + `<span>${esc(glyphs)}</span>` + MARKS_LEGEND);
     if (!rows.length) return empty(body, 'No measurements match these settings yet.');
     ranked(body, rows, series);
@@ -513,7 +519,7 @@
   function ranked(body, rows, series) {
     const W = body.clientWidth, H = body.clientHeight, fs = rem(), ns = series.length;
     if (W < 50 || H < 50) return;
-    const v = (c) => c ? pick(c) * c.k : null;
+    const v = (c) => c ? c.k(pick(c)) : null;
     let groups;
     if (S.ax === 'log' || rows.length < 4) groups = [{ rows, title: null }];
     else {
@@ -523,10 +529,10 @@
       groups = [];
       lab.forEach((g, i) => { (groups[g] ||= { rows: [] }).rows.push(rows[i]); });
       groups = groups.filter(Boolean);
-      groups.forEach((g, i) => { g.title = `cluster ${i + 1}: ${fmt(g.rows[0].key)}–${fmt(g.rows.at(-1).key)} ${unitShort()}`; });
+      groups.forEach((g, i) => { const [a, b] = ival(g.rows[0].k, g.rows[0].key, g.rows.at(-1).key); g.title = `cluster ${i + 1}: ${fmt(a)}–${fmt(b)} ${unitShort()}`; });
     }
     const domain = rs => {  // each column gets its own range, fitted to its rows
-      const vals = rs.flatMap(r => r.cs.filter(Boolean).flatMap(c => S.show === 'fast' ? [v(c)] : [c.lo * c.k, c.hi * c.k, v(c), ...(c.ci ? [c.ci[0] * c.k, c.ci[1] * c.k] : [])]))
+      const vals = rs.flatMap(r => r.cs.filter(Boolean).flatMap(c => S.show === 'fast' ? [v(c)] : [c.k(c.lo), c.k(c.hi), v(c), ...(c.ci ? [c.k(c.ci[0]), c.k(c.ci[1])] : [])]))
         .filter(x => x > 0 && isFinite(x));
       if (S.ax === 'lin') return { lo: 0, hi: Math.max(...vals) * 1.04 };
       let lo = Math.min(...vals) / 1.08, hi = Math.max(...vals) * 1.08;
@@ -572,12 +578,12 @@
         r.cs.forEach((s, si) => {
           if (!s) return;
           const y = ym + (si - (ns - 1) / 2) * sub, col = series[si].color, rr = Math.max(2.4, Math.min(rowH * (ns > 1 ? 0.13 : 0.2), fs * 0.3));
-          if (S.show === 'fast') { p.push(`<circle class="g-dot" cx="${X(s.fast * s.k)}" cy="${y}" r="${rr * 1.15}" fill="${col}"/>`); return; }
-          const a = X(s.lo * s.k), b = X(s.hi * s.k), cap = Math.min(rowH * 0.22, fs * 0.3);
-          if (s.ci) { const q0 = X(s.ci[0] * s.k), q1 = X(s.ci[1] * s.k); p.push(`<rect class="g-ci" x="${Math.min(q0, q1)}" y="${y - cap}" width="${Math.max(Math.abs(q1 - q0), 1.5)}" height="${cap * 2}" fill="${col}"/>`); }
+          if (S.show === 'fast') { p.push(`<circle class="g-dot" cx="${X(s.k(s.fast))}" cy="${y}" r="${rr * 1.15}" fill="${col}"/>`); return; }
+          const [a, b] = [X(s.k(s.lo)), X(s.k(s.hi))].sort((x, y) => x - y), cap = Math.min(rowH * 0.22, fs * 0.3);
+          if (s.ci) { const q0 = X(s.k(s.ci[0])), q1 = X(s.k(s.ci[1])); p.push(`<rect class="g-ci" x="${Math.min(q0, q1)}" y="${y - cap}" width="${Math.max(Math.abs(q1 - q0), 1.5)}" height="${cap * 2}" fill="${col}"/>`); }
           p.push(`<path class="g-whisk" stroke="${col}" d="M${a},${y}H${b}M${a},${y - cap}V${y + cap}M${b},${y - cap}V${y + cap}"/>`);
-          for (let di = 0; di < s.dots.length; di++) p.push(`<rect class="${s.flags.has(di) ? 'g-round g-round-flag' : 'g-round'}" fill="var(--ink)" x="${X(s.dots[di] * s.k) - 0.5}" y="${y - cap - 2.5}" width="1" height="1.5"/>`);
-          p.push(`<circle class="g-dot" cx="${X(s.median * s.k)}" cy="${y}" r="${rr}" fill="${col}"/>`);
+          for (let di = 0; di < s.dots.length; di++) p.push(`<rect class="${s.flags.has(di) ? 'g-round g-round-flag' : 'g-round'}" fill="var(--ink)" x="${X(s.k(s.dots[di])) - 0.5}" y="${y - cap - 2.5}" width="1" height="1.5"/>`);
+          p.push(`<circle class="g-dot" cx="${X(s.k(s.median))}" cy="${y}" r="${rr}" fill="${col}"/>`);
         });
         hits.push({ x0: cx, x1: cx + colW, y0, y1: y0 + rowH, r });
       });
@@ -596,8 +602,9 @@
         t.r.cs.forEach((s, si) => {
           if (!s) return tipRow(tip, series[si].color, '–', series[si].label, 'not measured yet');
           const u = unitShort(), k = s.k;
-          tipRow(tip, series[si].color, `${fmt(pick(s) * k)} ${u}`, series[si].label + (S.show === 'fast' ? ' (fastest)' : ' (median)'),
-            `mean ${fmt(s.mean * k)}${s.ci ? ` [${fmt(s.ci[0] * k)}, ${fmt(s.ci[1] * k)}]` : ''} · ${s.spread} ${fmt(s.lo * k)}–${fmt(s.hi * k)} · n ${s.n}`
+          const ci = s.ci && ival(k, s.ci[0], s.ci[1]), sp = ival(k, s.lo, s.hi);
+          tipRow(tip, series[si].color, `${fmt(k(pick(s)))} ${u}`, series[si].label + (S.show === 'fast' ? ' (fastest)' : ' (median)'),
+            `mean ${fmt(k(s.mean))}${ci ? ` [${fmt(ci[0])}, ${fmt(ci[1])}]` : ''} · ${s.spread} ${fmt(sp[0])}–${fmt(sp[1])} · n ${s.n}`
             + (s.clean != null ? ` (${s.clean} clean, ${s.flagged || 0} flagged)` : '') + (s.rss != null ? ` · peak RSS ${s.rss} GiB` : '')
             + (s.simd ? ` · ${s.simd}` : '') + (s.place ? ` · ${s.place}` : '') + (s.src ? ` · build ${s.src.slice(0, 8)}` : ''));
         });
@@ -694,7 +701,7 @@
       hot.setAttribute('d', path(l));
       showTip(ev, tip => {
         tipHead(tip, l.m);
-        for (const q of l.pts) tipRow(tip, l.slot ? `var(--s${l.slot})` : 'var(--muted)', `${fmt(q.v)} ns/px`, sizeName(SIZES[q.i].name),
+        for (const q of l.pts) tipRow(tip, l.slot ? `var(--s${l.slot})` : 'var(--muted)', both(q.v), sizeName(SIZES[q.i].name),
           `n ${q.c.n}${q.c.ci ? ` · 95 % [${fmt(q.c.ci[0] * perPx(SIZES[q.i].name))}, ${fmt(q.c.ci[1] * perPx(SIZES[q.i].name))}]` : ''}`);
         tip.append(h('div', 'note', l.slot ? 'Click to unpin.' : 'Click to pin.'));
       });
@@ -817,7 +824,7 @@
       hot.setAttribute('cx', q.cx); hot.setAttribute('cy', q.cy); hot.setAttribute('r', r0 * 1.8);
       showTip(ev, tip => {
         tipHead(tip, q.m);
-        tipRow(tip, null, `${fmt(q.y)} ns/px`, `CPU time, ${th} thread${th > 1 ? 's' : ''}`);
+        tipRow(tip, null, both(q.y), `CPU time, ${th} thread${th > 1 ? 's' : ''}`);
         tipRow(tip, null, fmt(q.x), `counted cost (${SHORT_T[S.tb] || S.tb})`);
         tipRow(tip, null, `${(q.y / (s.scale * q.x)).toFixed(2)}×`, 'measured ÷ fitted scale');
         if (q.out) tip.append(h('div', 'note', 'Outside the current view.'));
@@ -911,6 +918,7 @@
       { id: 'aic', label: 'status doc', cell: txt(m => M[m].aic), sortv: m => M[m].aic },
       { id: 'spot', label: 'oracle check', cell: txt(m => M[m].spot === 'missing' ? 'not run' : M[m].spot), sortv: m => M[m].spot },
       { id: 'ns', label: 'ns/px', num: true, title: `${hostName(host)}, ${sizeName(DEF.size)}, 1 thread, warm median`, cell: (m, td) => { td.textContent = fmt(speed(m)); }, sortv: speed },
+      { id: 'mps', label: 'Mpx/s', num: true, title: `${hostName(host)}, ${sizeName(DEF.size)}, 1 thread, warm median`, cell: (m, td) => { td.textContent = speed(m) ? fmt(mpxs(speed(m))) : '–'; }, sortv: m => speed(m) && mpxs(speed(m)) },
     ], rows, openDrawer);
   }
 
@@ -942,7 +950,7 @@
 
   // ---- data
   function railData(rail) {
-    rail.append(sizeSeg(), seg('Threads', 'th', [['1', '1 thread'], ['8', '8 threads']], { pressed: v => (S.th === '8' ? '8' : '1') === v }), phaseSeg(), seg('Unit', 'unit', [['px', 'ns per pixel'], ['img', 'ms per image']]), famSeg(), search());
+    rail.append(sizeSeg(), seg('Threads', 'th', [['1', '1 thread'], ['8', '8 threads']], { pressed: v => (S.th === '8' ? '8' : '1') === v }), phaseSeg(), seg('Unit', 'unit', [['px', 'ns per pixel'], ['mps', 'Mpx/s', 'megapixels per second: higher is faster'], ['img', 'ms per image']]), famSeg(), search());
     const box = h('div', 'ctl'); box.append(h('div', 'ctl-label', 'Download'));
     const b = h('button', null, 'This table (CSV)'); b.type = 'button'; b.onclick = downloadView;
     const seg2 = h('div', 'seg'); seg2.append(b);
@@ -963,18 +971,18 @@
       { id: 'm', label: 'metric', cell: (r, td) => { td.append(h('code', null, r.m)); const f = flagText(r.m); if (f) td.append(h('span', flagClass(r.m), ' ' + f)); }, sortv: r => r.m },
       { id: 'fam', label: 'family', cell: (r, td) => { td.textContent = FAMS.find(f => f[0] === meta(r.m).fam)?.[1] || ''; }, sortv: r => meta(r.m).fam },
       ...HOSTS.map((host, i) => ({ id: 'h' + i, label: `${hostName(host)} ${u}`, num: true, title: P.hosts[host],
-        cell: (r, td) => { const c = r.c[i]; if (!c) { td.textContent = '–'; return; } td.append(h('b', null, fmt(c.median * r.k))); td.append(h('span', 'ci', (c.ci ? ` [${fmt(c.ci[0] * r.k)}, ${fmt(c.ci[1] * r.k)}]` : '') + ` (${c.n})`)); },
-        sortv: r => r.c[i] ? r.c[i].median * r.k : null })),
+        cell: (r, td) => { const c = r.c[i]; if (!c) { td.textContent = '–'; return; } const ci = c.ci && ival(r.k, c.ci[0], c.ci[1]); td.append(h('b', null, fmt(r.k(c.median)))); td.append(h('span', 'ci', (ci ? ` [${fmt(ci[0])}, ${fmt(ci[1])}]` : '') + ` (${c.n})`)); },
+        sortv: r => r.c[i] ? r.k(r.c[i].median) : null })),
       { id: 'csv', label: 'vs CSV', cell: (r, td) => catCell('csv')(r.m, td), sortv: r => catSort('csv')(r.m) },
       { id: 'refm', label: 'vs reference', cell: (r, td) => catCell('ref_m')(r.m, td), sortv: r => catSort('ref_m')(r.m) },
     ];
-    if (!S.sort) S.sort = 'h' + HOSTS.indexOf(DEF.host) + ':a';
+    if (!S.sort) S.sort = 'h' + HOSTS.indexOf(DEF.host) + (S.unit === 'mps' ? ':d' : ':a');  // fastest first
     sortable(body, cols, rows, r => openDrawer(r.m));
   }
   function downloadView() {
     const rows = dataRows(), q = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v;
     const lines = [['metric', 'family', 'size', 'threads', 'phase', 'unit', ...HOSTS.flatMap(host => [`${host}_median`, `${host}_ci95_lo`, `${host}_ci95_hi`, `${host}_n`])].join(',')];
-    for (const r of rows) lines.push([r.m, meta(r.m).fam, S.size, S.th, S.ph, unitShort(), ...r.c.flatMap(c => c ? [c.median * r.k, c.ci ? c.ci[0] * r.k : '', c.ci ? c.ci[1] * r.k : '', c.n].map(v => typeof v === 'number' ? +v.toPrecision(6) : v) : ['', '', '', ''])].map(q).join(','));
+    for (const r of rows) lines.push([r.m, meta(r.m).fam, S.size, S.th, S.ph, unitShort(), ...r.c.flatMap(c => c ? [r.k(c.median), ...(c.ci ? ival(r.k, c.ci[0], c.ci[1]) : ['', '']), c.n].map(v => typeof v === 'number' ? +v.toPrecision(6) : v) : ['', '', '', ''])].map(q).join(','));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
     a.download = `metric-timings_${S.size}_${S.th}t_${S.ph}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
