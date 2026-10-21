@@ -21,6 +21,7 @@ Workspace conventions per the global rules:
 - Require explicit numerical gates in the resident-model first-call confirmation
   successor (`c34646a7`), preserving the earlier active helper and acquired data.
 
+- Dashboard: Mpx/s unit beside ns per pixel and ms per image; fixed ns/px displays show Mpx/s too (`7803ed0f`).
 - Dashboard: implementations link to their Rust source on GitHub (dispatch arm plus kernel, model module or crate, pinned to the built commit) from the details panel and the reproduction cards (`7ad9bbeb`).
 - Dashboard: each metric is judged against the published CSV column and against its reference implementation separately (exact / near-exact / cannot reproduce), with filters for where the two differ; the DVIFM column rows move to 'not reproduced' in the status doc (`61be660e`).
 - Dashboard: the DVIFM port presets lose their caveat marks and show their deltas against the author's builds; talk-inspired presets get an 'own design' status; every deviation lists its measured differences, and a build check warns when one has none. IDFIQA moves to Reproduced in the status doc, matching its recorded numbers (`7fb1546a`).
