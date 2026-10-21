@@ -286,6 +286,7 @@ None.
 
 ### Added
 
+- `consensus`: descriptive consensus ranking across evaluation criteria. `ranks_best_first` ranks items per criterion (1 = best, average ties, declared `Better::Higher`/`Lower`); `consensus` orders items by the median of their per-criterion ranks, ties broken by the mean rank, items equal on both sharing the better rank. Not a significance test (docs/EVALUATION_METHODS.md, "Many metrics"). New public API: lands through a PR assigned to lilith.
 - Public Student quantile and upper-tail helpers, checked against independent scipy fixtures at nine Holm tail levels (`d61c43fc`).
 - Directional finite-draw bootstrap probability `Interval::p_nonpositive`, including zero ties and preserving `p_zero` and `n_finite` (737dc977).
 

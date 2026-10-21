@@ -68,6 +68,7 @@
 //! See `imazen/zensim`'s CHANGELOG.md for the BREAKING semantics
 //! migration note.
 
+pub mod consensus;
 pub mod forced_choice;
 pub mod jnd;
 pub mod multiple;

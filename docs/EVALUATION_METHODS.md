@@ -159,6 +159,14 @@ its outcome depends on which other metrics are in the pool (Benavoli et al.
 2016). With five sources an exact two-sided Wilcoxon test cannot go below
 p = 0.0625, so no pair can be declared different at 0.05 by it.
 
+For a single descriptive order across several criteria (SROCC, PLCC after a
+declared map, RMSE, PWRC, outlier ratio, …), use
+`zenmetrics_stats::consensus`: each criterion ranks the metrics best-first, a
+metric's consensus rank is the median of its per-criterion ranks, and ties on
+the median go to the lower mean rank. The median keeps one outlying criterion
+from moving a metric far. It is a summary, not a test: report the criterion
+list with it, and use the paired tests above to say whether neighbours differ.
+
 ## Implementation status
 
 | method | `zenmetrics-stats` | wired into a report |
