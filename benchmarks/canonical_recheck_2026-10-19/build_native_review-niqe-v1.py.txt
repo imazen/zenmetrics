@@ -1,0 +1,50 @@
+import hashlib,json,os,pathlib,shutil,subprocess
+P=pathlib.Path;Q=P(__file__).parent;root=Q/'native-review-v1';root.mkdir();project=root/'project';(project/'src').mkdir(parents=True)
+frozen=P.home()/'tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src'
+def sha(p):return hashlib.sha256(P(p).read_bytes()).hexdigest()
+bindings={str(p):sha(p) for p in frozen.iterdir() if p.is_file()}
+for p in frozen.iterdir():
+ if p.is_file():shutil.copyfile(p,project/'src'/p.name)
+lib=project/'src/lib.rs';source=lib.read_text();anchor='    let mu_dist = nanmean_cols(&distparam, nblocks, NFEAT);';assert source.count(anchor)==1
+injection='''    let review_bytes: Vec<u8> = distparam.iter().flat_map(|v| v.to_le_bytes()).collect();
+    std::fs::write(std::env::var_os("NIQE_REVIEW_FEATURES").unwrap(), review_bytes).unwrap();
+'''
+# The new diagnostic inserts only an observation after feature computation.
+# Retained scalar equality is required before interpreting any intermediate.
+source=source.replace(anchor,injection+anchor)
+source+='''
+pub fn numerical_review(rgb: &[u8], w: usize, h: usize) -> (Vec<f64>, f64) {
+    let pixels = za::zenpixels::PixelSlice::new(rgb, w as u32, h as u32, w*3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let image = za::Image::from(pixels);
+    let (y, width, height) = gray_f64(&image, 0).unwrap();
+    let score = niqe_quality(&y, width, height, za::EvalOpts::new()).unwrap();
+    (y, score)
+}
+'''
+lib.write_text(source)
+manifest=(P.home()/'tmp/handoff/brisque-canonical-finding-20261021/native-review-v1/project/Cargo.toml').read_text().replace('brisque-numerical-review','niqe-numerical-review');(project/'Cargo.toml').write_text(manifest)
+main='''#![forbid(unsafe_code)]
+extern crate alloc;
+#[path="lib.rs"]
+#[allow(dead_code, unreachable_pub)]
+mod port;
+fn main() {
+ let a:Vec<_>=std::env::args().collect();let rgb=std::fs::read(&a[1]).unwrap();let w=a[2].parse().unwrap();let h=a[3].parse().unwrap();
+ let (gray,score)=port::numerical_review(&rgb,w,h);
+ let bytes:Vec<u8>=gray.iter().flat_map(|v|v.to_le_bytes()).collect();std::fs::write(&a[4],bytes).unwrap();
+ println!("SCORE {:.17}",score);
+}
+''';(project/'src/main.rs').write_text(main)
+assert shutil.disk_usage('/home/lilith').free>1500*1024**2
+env=dict(os.environ,TMPDIR=str(root),CARGO_TARGET_DIR=str(root/'target'),CARGO_INCREMENTAL='0',RUSTFLAGS='');env.pop('CARGO_ENCODED_RUSTFLAGS',None)
+commands=[['cargo','generate-lockfile','--offline','--manifest-path',str(project/'Cargo.toml')],['cargo','build','--locked','--offline','--release','--manifest-path',str(project/'Cargo.toml')]]
+for i,command in enumerate(commands):
+ with (root/f'build-{i}.log').open('x') as f:subprocess.run(command,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+binary=root/'native-review';shutil.copyfile(root/'target/release/niqe-numerical-review',binary);binary.chmod(0o755)
+planpath=P.home()/'tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/plan.json';plan=json.loads(planpath.read_text());case=next(c for c in plan['cases'] if c['id']=='niqe-grid-pairA-255x257-t1');gray=root/'gray.f64';features=root/'features.f64';env['NIQE_REVIEW_FEATURES']=str(features)
+command=[str(binary),case['distorted'],str(case['width']),str(case['height']),str(gray)]
+with (root/'native.stdout').open('x') as f:subprocess.run(command,env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+score=float(next(l for l in (root/'native.stdout').read_text().splitlines() if l.startswith('SCORE ')).split()[1]);retained=json.loads((planpath.parent/case['id']/'summary.json').read_text())['blocks'][0]['arms']['native']['score'];assert score==retained,'Diagnostic score differs; no intermediate attribution'
+assert all(sha(p)==h for p,h in bindings.items())
+with (root/'result.json').open('x') as f:json.dump(dict(case=case['id'],native_score=score,source_files=bindings,diagnostic_source_files={str(p):sha(p) for p in (project/'src').iterdir() if p.is_file()},binary_sha256=sha(binary),plan_sha256=sha(planpath),gray=dict(path=str(gray),sha256=sha(gray)),features=dict(path=str(features),sha256=sha(features)),qualification='Private numerical observation only. Frozen source is copied with one output-only feature dump and an appended diagnostic entry. Exact retained native scalar required; no production change, numerical waiver or timing.'),f,indent=2)
+assert (root/'target/CACHEDIR.TAG').is_file();shutil.rmtree(root/'target');print(json.dumps(dict(native_scalar=score,inactive_cargo_output_reclaimed=True)),flush=True)

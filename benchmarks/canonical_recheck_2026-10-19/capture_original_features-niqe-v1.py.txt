@@ -1,0 +1,66 @@
+import hashlib
+import importlib
+import json
+from pathlib import Path
+import sys
+import types
+
+Q = Path(__file__).parent
+root = Q / 'original-features-v1'
+root.mkdir()
+extra = Path.home() / 'tmp/local-canonical-20261019T2330/oracle-extras'
+sys.path.insert(0, str(extra))
+import numpy as np
+import torch
+
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+torch.set_grad_enabled(False)
+for name, directory in [('basicsr', extra/'basicsr'),
+                        ('basicsr.metrics', extra/'basicsr/metrics'),
+                        ('basicsr.utils', extra/'basicsr/utils')]:
+    package = types.ModuleType(name)
+    package.__path__ = [str(directory)]
+    sys.modules[name] = package
+from basicsr.utils.color_util import bgr2ycbcr
+sys.modules['basicsr.utils'].bgr2ycbcr = bgr2ycbcr
+module = importlib.import_module('basicsr.metrics.niqe')
+planpath = Path.home()/'tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe/plan.json'
+plan = json.loads(planpath.read_text())
+case = next(c for c in plan['cases'] if c['id'] == 'niqe-grid-pairA-255x257-t1')
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+source = Path(module.__file__).resolve()
+assert sha(source) == plan['bindings'][str(source)]
+original_niqe = module.niqe
+original_feature = module.compute_feature
+features = []
+
+def observed_niqe(img, *args, **kwargs):
+    np.asarray(img, dtype='<f4').tofile(root/'gray.f32')
+    return original_niqe(img, *args, **kwargs)
+
+def observed_feature(block):
+    result = original_feature(block)
+    features.append(np.asarray(result, dtype='<f8').tolist())
+    return result
+
+module.niqe = observed_niqe
+module.compute_feature = observed_feature
+rgb = np.fromfile(case['distorted'], dtype=np.uint8).reshape(case['height'], case['width'], 3)
+score = float(module.calculate_niqe(rgb[:, :, ::-1].copy(), crop_border=0))
+retained = json.loads((planpath.parent/case['id']/'summary.json').read_text())['blocks'][0]['arms']['canonical']['score']
+assert score == retained, 'Original diagnostic changed scalar; no attribution'
+assert len(features) == 8 and all(len(row) == 18 for row in features)
+assert sha(source) == plan['bindings'][str(source)]
+with (root/'result.json').open('x') as stream:
+    json.dump(dict(case=case['id'], score=score, features=features,
+                   gray=dict(path=str(root/'gray.f32'), sha256=sha(root/'gray.f32')),
+                   source=dict(path=str(source), sha256=sha(source)),
+                   plan_sha256=sha(planpath), controller_sha256=sha(__file__),
+                   numpy=np.__version__, torch=torch.__version__,
+                   qualification='Read-only captures wrap unchanged BasicSR NIQE and block features. Exact retained scalar required. No timing claim, metric change or relaxed numerical gate.'),
+              stream, indent=2, allow_nan=False)
+print(json.dumps(dict(canonical_score=score, feature_blocks=len(features))), flush=True)

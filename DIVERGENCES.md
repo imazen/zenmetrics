@@ -941,3 +941,22 @@ BasicSR 18.799147370663427, difference 0.008027920053848447 above the unchanged
 0.000602329 bound. This is separate from the documented 64² size refusal.
 Root cause and a code correction remain unverified. Earlier golden checks and
 all original observations remain retained.
+
+### NIQE feature attribution (2026-10-21)
+
+The [stage cross-rescore](benchmarks/canonical_recheck_2026-10-19/niqe-native-original-stages.json) reproduces
+both retained scalars before comparing intermediates. All 65,535 native grayscale
+samples equal the original on the 255×257 photo. BasicSR's final MVG operations
+on native block features yield 18.80717529071772, only 4.440892098500626e-13
+from native's 18.807175290717275. Original features reproduce BasicSR's
+18.799147370663427 exactly. The observed score gap is therefore attributable
+to block-feature differences in this control, rather than RGB ingress or the
+final native covariance calculation. Of 144 feature entries, 61 differ: 7 at
+scale one and 54 at scale two. Two second-scale shape parameters differ by
+one 0.001 grid step. The precise operation responsible remains unverified;
+the numerical failure and original 0.000602329 bound remain unchanged.
+
+Resource receipts: native diagnostic build/control 11 s, peak RSS 0.42 GiB,
+minimum available 13,658 MiB, peak load 1.26; original feature control 2 s,
+0.27 GiB, 13,840 MiB, 1.22; cross-rescore under one second, 0.04 GiB,
+14,108 MiB, 1.18. These are diagnostic-process resources, not metric timings.

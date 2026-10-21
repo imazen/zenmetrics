@@ -1,0 +1,26 @@
+{
+  "case": "niqe-grid-pairA-255x257-t1",
+  "native_score": 18.807175290717275,
+  "source_files": {
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/lib.rs": "703c48155be9478e9ce70945ace17a262ed473ca90fcde640ce96a7d6e7dde29",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/params.rs": "a5fd0a82ea0f215e640d493796aa1638db57f714a6ee5c2ad2400bdaff6a6285",
+    "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/work/zenmetrics/crates/niqe/src/kernels.rs": "8d911c6022c888d3d0b78e554fc7d0f2f508648289952cdded73b788a4d5f310"
+  },
+  "diagnostic_source_files": {
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/project/src/main.rs": "25736559a6cbcef4a7efe8d53cc2e193fb33459a41e0ec849ecbf6303a4409a7",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/project/src/lib.rs": "703cf03ae31071c02679e628223711a65101df80adede65066536b846b37420d",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/project/src/params.rs": "a5fd0a82ea0f215e640d493796aa1638db57f714a6ee5c2ad2400bdaff6a6285",
+    "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/project/src/kernels.rs": "8d911c6022c888d3d0b78e554fc7d0f2f508648289952cdded73b788a4d5f310"
+  },
+  "binary_sha256": "6535e16211ae84eaf3e5fb4ee98d95ec3bca66a4d4adf254456582004b4296f0",
+  "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317",
+  "gray": {
+    "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/gray.f64",
+    "sha256": "373af220ec5bb056bf404b0fc58a7004ff3d2f3e78c20aeea4257aa15a0c3391"
+  },
+  "features": {
+    "path": "/home/lilith/tmp/handoff/niqe-canonical-finding-20261021/native-review-v1/features.f64",
+    "sha256": "edb33ef98cb425d86ce53b44aa6784f67bc06d3bab92390192d8b52bf4934918"
+  },
+  "qualification": "Private numerical observation only. Frozen source is copied with one output-only feature dump and an appended diagnostic entry. Exact retained native scalar required; no production change, numerical waiver or timing."
+}

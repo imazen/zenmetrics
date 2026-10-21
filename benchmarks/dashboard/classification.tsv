@@ -1788,3 +1788,6 @@ benchmarks/canonical_recheck_2026-10-19/cvvdp-t28-first-profile-v1.json	ignored	
 benchmarks/canonical_recheck_2026-10-19/butteraugli-odd-t1-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/butteraugli-odd-t28-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/ssim1-photo64-t1-first-confirmation20.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/niqe-native-original-stages.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/niqe-native-review-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/niqe-original-stage-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

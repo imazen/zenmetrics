@@ -1,0 +1,444 @@
+{
+  "case": "niqe-grid-pairA-255x257-t1",
+  "native_score": 18.807175290717275,
+  "canonical_score": 18.799147370663427,
+  "native_features_original_mvg": 18.80717529071772,
+  "original_feature_mvg_exact_control": 18.799147370663427,
+  "native_vs_original_mvg_on_native_features": 4.440892098500626e-13,
+  "differing_gray_samples": 0,
+  "gray_samples": 65535,
+  "feature_differences": [
+    {
+      "block": 0,
+      "feature": 7,
+      "native": 0.0070316947291175136,
+      "canonical": 0.007031694729117513,
+      "difference": 8.673617379884035e-19
+    },
+    {
+      "block": 0,
+      "feature": 11,
+      "native": -0.013743760274900424,
+      "canonical": -0.013743760274900426,
+      "difference": 1.734723475976807e-18
+    },
+    {
+      "block": 0,
+      "feature": 19,
+      "native": 0.1075711078932502,
+      "canonical": 0.10757164518803797,
+      "difference": 5.372947877724243e-07
+    },
+    {
+      "block": 0,
+      "feature": 21,
+      "native": 0.061471598418989845,
+      "canonical": 0.061471664173606,
+      "difference": 6.57546161547673e-08
+    },
+    {
+      "block": 0,
+      "feature": 22,
+      "native": 0.0006408505310030005,
+      "canonical": 0.0006408518676697808,
+      "difference": 1.3366667802987287e-09
+    },
+    {
+      "block": 0,
+      "feature": 23,
+      "native": 0.0016127625316212475,
+      "canonical": 0.0016127649079177458,
+      "difference": 2.3762964983329443e-09
+    },
+    {
+      "block": 0,
+      "feature": 25,
+      "native": -0.010100303924276188,
+      "canonical": -0.010100401324982761,
+      "difference": 9.740070657307531e-08
+    },
+    {
+      "block": 0,
+      "feature": 26,
+      "native": 0.0017553281430058851,
+      "canonical": 0.0017553327796037419,
+      "difference": 4.636597856740379e-09
+    },
+    {
+      "block": 0,
+      "feature": 27,
+      "native": 0.001529949351616065,
+      "canonical": 0.0015299518148086766,
+      "difference": 2.4631926114678654e-09
+    },
+    {
+      "block": 0,
+      "feature": 29,
+      "native": -0.03201812085501323,
+      "canonical": -0.03201804447387349,
+      "difference": 7.638113973945648e-08
+    },
+    {
+      "block": 0,
+      "feature": 30,
+      "native": 0.001695543948436407,
+      "canonical": 0.0016955446538808499,
+      "difference": 7.054444428784834e-10
+    },
+    {
+      "block": 0,
+      "feature": 31,
+      "native": 0.0011041150825252498,
+      "canonical": 0.0011041171988585782,
+      "difference": 2.1163333284186098e-09
+    },
+    {
+      "block": 0,
+      "feature": 33,
+      "native": 0.018921078054430558,
+      "canonical": 0.018921475973660888,
+      "difference": 3.9791923032994614e-07
+    },
+    {
+      "block": 0,
+      "feature": 34,
+      "native": 0.0009405083393826637,
+      "canonical": 0.0009405067798173493,
+      "difference": 1.5595653144557728e-09
+    },
+    {
+      "block": 0,
+      "feature": 35,
+      "native": 0.0012196891537082334,
+      "canonical": 0.001219693465447632,
+      "difference": 4.311739398681069e-09
+    },
+    {
+      "block": 1,
+      "feature": 3,
+      "native": -0.014826344883235575,
+      "canonical": -0.014826344883235577,
+      "difference": 1.734723475976807e-18
+    },
+    {
+      "block": 1,
+      "feature": 7,
+      "native": -0.014237179625615612,
+      "canonical": -0.014237179625615614,
+      "difference": 1.734723475976807e-18
+    },
+    {
+      "block": 1,
+      "feature": 19,
+      "native": 0.07560267641684792,
+      "canonical": 0.07560111880436399,
+      "difference": 1.5576124839378203e-06
+    },
+    {
+      "block": 1,
+      "feature": 20,
+      "native": 0.5390000000000004,
+      "canonical": 0.5400000000000003,
+      "difference": 0.0009999999999998899
+    },
+    {
+      "block": 1,
+      "feature": 21,
+      "native": 0.0012291544701224547,
+      "canonical": 0.001229976103998182,
+      "difference": 8.216338757273227e-07
+    },
+    {
+      "block": 1,
+      "feature": 22,
+      "native": 0.0019353289747814659,
+      "canonical": 0.001950144239490561,
+      "difference": 1.4815264709095192e-05
+    },
+    {
+      "block": 1,
+      "feature": 23,
+      "native": 0.0022110622004484592,
+      "canonical": 0.002227978568947884,
+      "difference": 1.6916368499424617e-05
+    },
+    {
+      "block": 1,
+      "feature": 25,
+      "native": 0.000958989331756696,
+      "canonical": 0.0009566440622329114,
+      "difference": 2.3452695237846438e-06
+    },
+    {
+      "block": 1,
+      "feature": 26,
+      "native": 0.0018431331621825845,
+      "canonical": 0.0018433037019657678,
+      "difference": 1.7053978318328639e-07
+    },
+    {
+      "block": 1,
+      "feature": 27,
+      "native": 0.002056769892509448,
+      "canonical": 0.002056417970054309,
+      "difference": 3.519224551387472e-07
+    },
+    {
+      "block": 1,
+      "feature": 29,
+      "native": -0.0004305452611708372,
+      "canonical": -0.0004262643476023644,
+      "difference": 4.2809135684727766e-06
+    },
+    {
+      "block": 1,
+      "feature": 30,
+      "native": 0.0014138631410510706,
+      "canonical": 0.001413678498964567,
+      "difference": 1.84642086503619e-07
+    },
+    {
+      "block": 1,
+      "feature": 31,
+      "native": 0.0013462528070798338,
+      "canonical": 0.00134674041486383,
+      "difference": 4.876077839962786e-07
+    },
+    {
+      "block": 1,
+      "feature": 33,
+      "native": -0.003296019273528548,
+      "canonical": -0.0032963463317799736,
+      "difference": 3.270582514254376e-07
+    },
+    {
+      "block": 1,
+      "feature": 34,
+      "native": 0.002114302836685608,
+      "canonical": 0.002114367657951804,
+      "difference": 6.482126619581502e-08
+    },
+    {
+      "block": 1,
+      "feature": 35,
+      "native": 0.0014405671755418402,
+      "canonical": 0.00144056514319191,
+      "difference": 2.0323499302747627e-09
+    },
+    {
+      "block": 2,
+      "feature": 3,
+      "native": 0.03024850232173557,
+      "canonical": 0.030248502321735572,
+      "difference": 3.469446951953614e-18
+    },
+    {
+      "block": 2,
+      "feature": 7,
+      "native": -0.0006795165289078458,
+      "canonical": -0.0006795165289078457,
+      "difference": 1.0842021724855044e-19
+    },
+    {
+      "block": 2,
+      "feature": 19,
+      "native": 0.10352460548808273,
+      "canonical": 0.1035519903849258,
+      "difference": 2.7384896843063444e-05
+    },
+    {
+      "block": 2,
+      "feature": 21,
+      "native": 0.05597214088314262,
+      "canonical": 0.05598572210631875,
+      "difference": 1.3581223176128976e-05
+    },
+    {
+      "block": 2,
+      "feature": 22,
+      "native": 5.519797491820738e-05,
+      "canonical": 5.523248581839448e-05,
+      "difference": 3.451090018709898e-08
+    },
+    {
+      "block": 2,
+      "feature": 23,
+      "native": 0.00023491745352657712,
+      "canonical": 0.00023499557201992695,
+      "difference": 7.811849334982482e-08
+    },
+    {
+      "block": 2,
+      "feature": 25,
+      "native": -0.005097546792034507,
+      "canonical": -0.005117794985841199,
+      "difference": 2.024819380669167e-05
+    },
+    {
+      "block": 2,
+      "feature": 26,
+      "native": 0.00047114944916980625,
+      "canonical": 0.0004714804163283312,
+      "difference": 3.309671585249711e-07
+    },
+    {
+      "block": 2,
+      "feature": 27,
+      "native": 0.0004218276811394297,
+      "canonical": 0.00042196273509524933,
+      "difference": 1.350539558196413e-07
+    },
+    {
+      "block": 2,
+      "feature": 29,
+      "native": -0.00551018419784989,
+      "canonical": -0.005519531883102373,
+      "difference": 9.347685252483057e-06
+    },
+    {
+      "block": 2,
+      "feature": 30,
+      "native": 0.00027488486804337576,
+      "canonical": 0.0002750319375149103,
+      "difference": 1.4706947153451987e-07
+    },
+    {
+      "block": 2,
+      "feature": 31,
+      "native": 0.0002438736120674333,
+      "canonical": 0.00024396807286932291,
+      "difference": 9.446080188960917e-08
+    },
+    {
+      "block": 2,
+      "feature": 33,
+      "native": -0.002149310242893823,
+      "canonical": -0.002158902146823338,
+      "difference": 9.591903929515207e-06
+    },
+    {
+      "block": 2,
+      "feature": 34,
+      "native": 0.00019399806758515012,
+      "canonical": 0.0001941043077993471,
+      "difference": 1.0624021419699224e-07
+    },
+    {
+      "block": 2,
+      "feature": 35,
+      "native": 0.00018521776352266743,
+      "canonical": 0.0001852848191504057,
+      "difference": 6.705562773828052e-08
+    },
+    {
+      "block": 3,
+      "feature": 3,
+      "native": -0.012273746777113272,
+      "canonical": -0.012273746777113273,
+      "difference": 1.734723475976807e-18
+    },
+    {
+      "block": 3,
+      "feature": 19,
+      "native": 0.11973927940161234,
+      "canonical": 0.11974935632054906,
+      "difference": 1.007691893671614e-05
+    },
+    {
+      "block": 3,
+      "feature": 20,
+      "native": 0.5990000000000004,
+      "canonical": 0.6000000000000003,
+      "difference": 0.0009999999999998899
+    },
+    {
+      "block": 3,
+      "feature": 21,
+      "native": 0.0038386039270236682,
+      "canonical": 0.003840590415476783,
+      "difference": 1.986488453114589e-06
+    },
+    {
+      "block": 3,
+      "feature": 22,
+      "native": 0.0028264159248632147,
+      "canonical": 0.0028439695916069327,
+      "difference": 1.7553666743717975e-05
+    },
+    {
+      "block": 3,
+      "feature": 23,
+      "native": 0.004067127790355467,
+      "canonical": 0.004091945523915138,
+      "difference": 2.4817733559671235e-05
+    },
+    {
+      "block": 3,
+      "feature": 25,
+      "native": 0.004542600243357763,
+      "canonical": 0.004545363836688065,
+      "difference": 2.763593330302669e-06
+    },
+    {
+      "block": 3,
+      "feature": 26,
+      "native": 0.002926582618356045,
+      "canonical": 0.0029266418749814426,
+      "difference": 5.9256625397751533e-08
+    },
+    {
+      "block": 3,
+      "feature": 27,
+      "native": 0.004577021933596968,
+      "canonical": 0.004578085272210504,
+      "difference": 1.0633386135364478e-06
+    },
+    {
+      "block": 3,
+      "feature": 29,
+      "native": 0.0003460725751900866,
+      "canonical": 0.0003444030207055445,
+      "difference": 1.6695544845420898e-06
+    },
+    {
+      "block": 3,
+      "feature": 30,
+      "native": 0.003427203038174112,
+      "canonical": 0.0034278933642041625,
+      "difference": 6.903260300504185e-07
+    },
+    {
+      "block": 3,
+      "feature": 31,
+      "native": 0.0035378691118188206,
+      "canonical": 0.003538025552609803,
+      "difference": 1.5644079098256145e-07
+    },
+    {
+      "block": 3,
+      "feature": 33,
+      "native": -9.447547602085086e-06,
+      "canonical": -8.037216268990107e-06,
+      "difference": 1.4103313330949786e-06
+    },
+    {
+      "block": 3,
+      "feature": 34,
+      "native": 0.0034474312244201005,
+      "canonical": 0.003448099419154067,
+      "difference": 6.681947339664748e-07
+    },
+    {
+      "block": 3,
+      "feature": 35,
+      "native": 0.003444295962971798,
+      "canonical": 0.0034454321900083493,
+      "difference": 1.136227036551557e-06
+    }
+  ],
+  "native_result_sha256": "d4d4f797222686cc1a726f847ea8db978bbc74953278b433dcc4a1264841151a",
+  "original_result_sha256": "275d3d49c7d06e678fad10427a759442b3fd6081a3e9da62520fe485fd019619",
+  "parameter_sha256": "2a7c182a68c9e7f1b2e2e5ec723279d6f65d912b6fcaf37eb2bf03d7367c4296",
+  "analysis_sha256": "5d7bd0eb01a8bffde8cd5361e5a74d4e5ecb0acfac6c4ba609144009fa5844a4",
+  "qualification": "Read-only diagnostic cross-rescoring of retained block features through unchanged BasicSR final MVG operations. Exact baseline native and original scalar controls precede interpretation. No timing, new numerical bound or production change."
+}

@@ -1,0 +1,57 @@
+import hashlib
+import json
+from pathlib import Path
+import numpy as np
+
+Q = Path(__file__).parent
+native = json.loads((Q/'native-review-v1/result.json').read_text())
+original = json.loads((Q/'original-features-v1/result.json').read_text())
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+for record in [native['gray'], native['features'], original['gray']]:
+    assert sha(record['path']) == record['sha256']
+features = np.fromfile(native['features']['path'], dtype='<f8').reshape(4, 36)
+captured = np.asarray(original['features'], dtype=np.float64)
+original_features = np.concatenate((captured[:4], captured[4:]), axis=1)
+assert original_features.shape == features.shape
+gray = np.fromfile(native['gray']['path'], dtype='<f8')
+original_gray = np.fromfile(original['gray']['path'], dtype='<f4').astype(np.float64)
+assert gray.shape == original_gray.shape
+params = Path(original['source']['path']).parent/'niqe_pris_params.npz'
+with np.load(params) as archive:
+    pristine_mu = archive['mu_pris_param']
+    pristine_cov = archive['cov_pris_param']
+
+def rescore(block_features):
+    # The unchanged BasicSR final MVG operations, applied to retained features.
+    mu = np.nanmean(block_features, axis=0)
+    cov = np.cov(block_features[~np.isnan(block_features).any(axis=1)], rowvar=False)
+    invcov = np.linalg.pinv((pristine_cov + cov)/2)
+    delta = pristine_mu - mu
+    return float(np.squeeze(np.sqrt(np.matmul(np.matmul(delta, invcov), np.transpose(delta)))))
+
+original_rescore = rescore(original_features)
+assert original_rescore == original['score'], 'Retained original features do not reproduce canonical scalar'
+native_features_original_mvg = rescore(features)
+differences = []
+for block, column in zip(*np.nonzero(features.view('<u8') != original_features.view('<u8'))):
+    differences.append(dict(block=int(block), feature=int(column),
+                            native=float(features[block, column]),
+                            canonical=float(original_features[block, column]),
+                            difference=float(abs(features[block, column]-original_features[block, column]))))
+value = dict(case=native['case'], native_score=native['native_score'],
+             canonical_score=original['score'],
+             native_features_original_mvg=native_features_original_mvg,
+             original_feature_mvg_exact_control=original_rescore,
+             native_vs_original_mvg_on_native_features=abs(native['native_score']-native_features_original_mvg),
+             differing_gray_samples=int(np.count_nonzero(gray != original_gray)),
+             gray_samples=int(gray.size), feature_differences=differences,
+             native_result_sha256=sha(Q/'native-review-v1/result.json'),
+             original_result_sha256=sha(Q/'original-features-v1/result.json'),
+             parameter_sha256=sha(params), analysis_sha256=sha(__file__),
+             qualification='Read-only diagnostic cross-rescoring of retained block features through unchanged BasicSR final MVG operations. Exact baseline native and original scalar controls precede interpretation. No timing, new numerical bound or production change.')
+with (Q/'stage-comparison-v1.json').open('x') as stream:
+    json.dump(value, stream, indent=2, allow_nan=False)
+print(json.dumps({key:value[key] for key in value if key not in ['feature_differences','qualification']}), flush=True)
