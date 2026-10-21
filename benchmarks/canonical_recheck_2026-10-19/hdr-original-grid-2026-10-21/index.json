@@ -1,0 +1,370 @@
+{
+  "host": "local AMD Ryzen 9 7950X / WSL2",
+  "metrics": [
+    {
+      "metric": "hdrvdp",
+      "acquired_cases": 24,
+      "complete_observations": 24,
+      "retained_check_passes": 12,
+      "retained_check_misses": 12,
+      "max_absolute_difference": 0.02003825875114984
+    },
+    {
+      "metric": "hdrvdp3",
+      "acquired_cases": 24,
+      "complete_observations": 21,
+      "retained_check_passes": 0,
+      "retained_check_misses": 0,
+      "max_absolute_difference": 7.815970093361102e-14
+    }
+  ],
+  "shards": [
+    {
+      "file": "cases-00.json",
+      "sha256": "5958cf7da0d22bd15f7cff8277388b56359b281b28c17960321c8b42ed1261fc",
+      "cases": 4
+    },
+    {
+      "file": "cases-01.json",
+      "sha256": "7bd54680cb2b01c7418aab9bdd974438fde1d264c70975a299092c897d519238",
+      "cases": 4
+    },
+    {
+      "file": "cases-02.json",
+      "sha256": "720349854fa328738cc5d8616f5ec861552c74dd35ef5a2e4ebaf7da7f9025fb",
+      "cases": 4
+    },
+    {
+      "file": "cases-03.json",
+      "sha256": "41cccb1c503a9af65d21d5ef7a8afc0cb00b54f44b5a1e5f0f1723f072c67f92",
+      "cases": 4
+    },
+    {
+      "file": "cases-04.json",
+      "sha256": "643434c3e6a8173d8dc6bfc3875bfac25a3671739f0b1874b8891be53233801a",
+      "cases": 4
+    },
+    {
+      "file": "cases-05.json",
+      "sha256": "ce80a9ddb42b6e68bb1733f1a964bbbf55580ff021cd96a28b08bb972e5a02ea",
+      "cases": 4
+    },
+    {
+      "file": "cases-06.json",
+      "sha256": "260cc2704a9ccacf948d7c0bd40b71cc8c0414240659eb4d956d230b99d005d0",
+      "cases": 4
+    },
+    {
+      "file": "cases-07.json",
+      "sha256": "3d7414650596580982fa16a8db1588260eb190ffcd3493aafcf0bb7ae5ec2c32",
+      "cases": 4
+    },
+    {
+      "file": "cases-08.json",
+      "sha256": "aad92e3f10238e111805b5bddeb55472905dfd02457616da1ef985416018cf29",
+      "cases": 4
+    },
+    {
+      "file": "cases-09.json",
+      "sha256": "4f87ed78c5b64d8428e017fe0b5c230e449c9d6b5c10172ce4f318713fdfd1e8",
+      "cases": 4
+    },
+    {
+      "file": "cases-10.json",
+      "sha256": "f293ebf754f509ee0c787369eee4b6c20330fc81833f48af116396fe984fb35e",
+      "cases": 4
+    },
+    {
+      "file": "cases-11.json",
+      "sha256": "fecfd17d4d33494398fad6706519c3ab2fab6f6f25355acdc3ddb8c534e1e857",
+      "cases": 4
+    }
+  ],
+  "audited_aggregate": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/result.json",
+    "sha256": "cfb3dd68c548c21c0dcb8b654aa06e3e514b9116d23b949106170051411b0bff"
+  },
+  "sequence": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-sequence.json",
+    "sha256": "8946a8f0da6665feb0043d26f126f8790a89040e7f5beef95b9c3eab4d763b5d"
+  },
+  "cohort": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cohort.json",
+    "sha256": "37835de1275b0838fa3f56401b1f95de24e8a40335125dfe2c5f3f22a91eac22"
+  },
+  "setup": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/setup.json",
+    "sha256": "64efb2d5f7289445e21fc23fc1ed803168c7683767c1f3db9495e0b542289936"
+  },
+  "finish_resource_receipt": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-finish.log",
+    "sha256": "2fb03185adbc10ac924bac67f263f203c6917a6facfaefe9977bcb506888be8f",
+    "receipt": "run-heavy: done rc=1 19s | peak-RSS 0.07GiB | min-avail 13759MiB | peak-load 1.51"
+  },
+  "native_warm_thread_comparisons": [
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "404ed9cefbbad6a1",
+        "28": "404ed9cefbbad6a1"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": "404fef3adb8ad47e",
+        "28": "404fef3adb8ad47e"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "404e481395b7dde1",
+        "28": "404e481395b7dde1"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "404dcfc54215d3e4",
+        "28": "404dcfc54215d3e4"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "404efbf3694d2aa9",
+        "28": "404efbf3694d2aa9"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": "404fd58601b80f48",
+        "28": "404fd58601b80f48"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "404a46df296e479e",
+        "28": "404a46df296e479e"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "404cf1ab92bf2405",
+        "28": "404cf1ab92bf2405"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "404f10fdfa7009c8",
+        "28": "404f10fdfa7009c8"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": "4050366e8599de97",
+        "28": "4050366e8599de97"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "404d610d400c8b0d",
+        "28": "404d610d400c8b0d"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "404e7afa62fa8096",
+        "28": "404e7afa62fa8096"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "4020dcb3010782b5",
+        "28": "4020dcb3010782b5"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": null,
+        "28": "402127e4964a0f7e"
+      },
+      "exact_match": null,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "40200575c08eef25",
+        "28": "40200575c08eef25"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "402045b26ab8dea4",
+        "28": "402045b26ab8dea4"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "4021d9a61c4de604",
+        "28": "4021d9a61c4de604"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": null,
+        "28": "4021814803023bc2"
+      },
+      "exact_match": null,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "4021bdbd6c6ad276",
+        "28": "4021bdbd6c6ad276"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairB-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "4021cd1628af98f0",
+        "28": "4021cd1628af98f0"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-1mp-reference.rgb",
+      "bits_by_threads": {
+        "1": "4020cddfac7276f0",
+        "28": "4020cddfac7276f0"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-4k-reference.rgb",
+      "bits_by_threads": {
+        "1": null,
+        "28": "4020dbc6e2bc4a79"
+      },
+      "exact_match": null,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-64-reference.rgb",
+      "bits_by_threads": {
+        "1": "4020c48a1cc4d1fd",
+        "28": "4020c48a1cc4d1fd"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    },
+    {
+      "metric": "hdrvdp3",
+      "reference": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairC-odd-reference.rgb",
+      "bits_by_threads": {
+        "1": "4021007c1bc311b8",
+        "28": "4021007c1bc311b8"
+      },
+      "exact_match": true,
+      "discharges_first_warm_thread_gate": false
+    }
+  ],
+  "old_gates": {
+    "exact_original_call_gate": {
+      "text": "Each canonical/direct arm twice in separate fresh processes, alternating; every scalar f64 bit must match. This does not assign native v3 parity.",
+      "status": "incomplete"
+    },
+    "native_thread_gate": {
+      "text": "Exact first/warm score bits must agree between thread budgets 1 and 28; retain any disagreement as a finding",
+      "status": "incomplete"
+    },
+    "default_resident_exact": {
+      "text": "Original default/resident exact control, order ['default', 'resident', 'resident', 'default']",
+      "status": "incomplete"
+    },
+    "native_first_call": {
+      "text": "Fresh-process first-call numerical qualification",
+      "status": "incomplete"
+    },
+    "native_timed_score_stability": {
+      "text": "Every timed CPU return observed",
+      "status": "unobserved"
+    }
+  },
+  "source_sha256": "94c46e68eedc0e88cb6e7f6f045c02f4714d4fdaefc81c3ea8fea3623c43e352",
+  "qualification": "All 48 frozen warm grid cells acquired and audited by the original frozen finish helper, with 96 role outcomes retained. Incomplete native warm budgets remain incomplete. Native scalars are initialization/warmup observations; individual timed returns are unobserved. The v2 0.005 check comes from TOL_Q in golden_srgb_display.rs and is not a universal parity bound. No v3 bound is assigned. Original parameter preparation differs across clocks: all ratios, matched scope and timing/native-parity qualification remain withheld; old incomplete gates remain incomplete."
+}

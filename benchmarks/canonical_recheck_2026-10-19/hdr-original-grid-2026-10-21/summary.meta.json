@@ -1,0 +1,8 @@
+{
+  "source_index": "index.json",
+  "index_sha256": "dba7e8debeb3059e410e98229af77d76df0cda89cddd998ff8f14494285871c4",
+  "table_sha256": "4b655b24bd3244cf04f89d2505c78e97d9697e3ce7fee15c4082793eb6619d28",
+  "rows": 48,
+  "source_sha256": "94c46e68eedc0e88cb6e7f6f045c02f4714d4fdaefc81c3ea8fea3623c43e352",
+  "qualification": "Site-readable partial-family numerical table. Warm milliseconds are separately observed medians under different preparation scopes. Blank ratios are intentional, not zero. Native round counts, observation completeness and the fixture-only v2 check remain explicit; no timing or universal parity qualification."
+}

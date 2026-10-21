@@ -1,0 +1,196 @@
+import datetime
+import csv
+import io
+import statistics
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+SOURCE = Path.home()/'tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3'
+ROOT = SOURCE/'campaign-v3'
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+if len(sys.argv) == 1:
+    while True:
+        previous = (R/'publish-vmaf-studio-controls-after-profiles-v1.log').read_text()
+        if ((SOURCE/'campaign-sequence.json').exists() and (ROOT/'result.json').exists()
+                and 'VMAF_STUDIO_CURRENT_CONTROLS_VERIFIED' in previous and 'run-heavy: done rc=0 ' in previous):
+            break
+        if 'run-heavy: done rc=' in previous and 'run-heavy: done rc=0 ' not in previous:
+            raise SystemExit('Prior publication failed; preserve HDR grid')
+        time.sleep(20)
+    command = ['flock', str(Path.home()/'tmp/lilith-heavy.lock'), 'flock', str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'), '--mem', '12G', '--jobs', '1', '--',
+               'env', 'TMPDIR='+str(Path.home()/'tmp'), sys.executable, '-B', __file__, '--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+sys.path.insert(0, str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+def load(path):
+    return json.loads(path.read_text())
+
+def binding(path):
+    return dict(path=str(path), sha256=sha(path))
+
+assert not subprocess.check_output(['jj', 'diff', '--name-only'], text=True).strip()
+sequence = load(SOURCE/'campaign-sequence.json')
+summary = load(ROOT/'result.json')
+cohort = load(ROOT/'cohort.json')
+assert summary['cohort_sha256'] == sha(ROOT/'cohort.json') == sequence['cohort_sha256']
+assert summary['setup_sha256'] == sequence['setup_sha256'] == sha(ROOT/'setup.json')
+assert summary['expected_cases'] == summary['acquired_cases'] == sequence['expected_cases'] == 48
+assert summary['expected_children'] == summary['acquired_children'] == sequence['expected_metric_children'] == 96
+assert summary['ratio'] is None and summary['matched_scope'] is False and summary['qualified_timing_cells'] == 0
+parent_path = Path(cohort['parent_plan'])
+assert sha(parent_path) == cohort['parent_plan_sha256']
+parent_plan = load(parent_path)
+bindings = dict(parent_plan['bindings'])
+for path, expected in cohort['bindings'].items():
+    if path in bindings:
+        assert bindings[path] == expected, 'HDR binding conflict: '+path
+    bindings[path] = expected
+for path, expected in bindings.items():
+    assert sha(path) == expected, 'HDR frozen source/input changed: '+path
+finish_log = SOURCE/'campaign-finish.log'
+finish_receipts = [line for line in finish_log.read_text().splitlines() if line.startswith('run-heavy: done ')]
+assert len(finish_receipts) == 1
+assert sequence['finish_returncode'] == (1 if summary['failed_cases'] else 0)
+assert ('rc='+str(sequence['finish_returncode'])+' ') in finish_receipts[0]
+
+spec_path = Path(cohort['case_specs']) if isinstance(cohort['case_specs'], str) else None
+if spec_path is None:
+    spec_path = ROOT/'case-specs.json'
+specs = {case['id']:case for case in load(spec_path)}
+rows = []
+for path_text, expected in summary['cell_results'].items():
+    path = Path(path_text)
+    assert sha(path) == expected
+    value = load(path)
+    assert value['fatal'] is False and set(value['arms']) == {'native', 'default'}
+    for artifact, digest in value['artifacts'].items():
+        assert sha(artifact) == digest, 'Retained HDR output changed: '+artifact
+    case = specs[value['id']]
+    if value['observation_complete']:
+        assert value['absolute_difference'] == abs(value['arms']['native']['score']-value['arms']['default']['score'])
+    arms = {}
+    for role in ['native', 'default']:
+        original = value['arms'][role]
+        memory = path.parent/role/'control-memory.txt'
+        match = re.search(r'Maximum resident set size \(kbytes\):\s*(\d+)', memory.read_text())
+        assert match
+        arms[role] = {key:original[key] for key in ['returncode','complete','score','score_bits'] if key in original}
+        arms[role].update(max_rss_kib=int(match[1]), memory=binding(memory), command=load(path.parent/role/'control-command.json'))
+        if role == 'native' and 'raw_row' in original:
+            raw = original['raw_row']
+            arms[role].update(completed_warm_rounds=raw.get('n'), round_means_ns=raw.get('round_means_ns'),
+                              resource_gate_clean=original.get('resource_gate_clean'), scalar_scope=original.get('scalar_scope'))
+        elif role == 'default':
+            arms[role]['samples'] = original.get('samples')
+    wrapper = ROOT/'dispatch'/value['id']/'wrapper.log'
+    resources = [line for line in wrapper.read_text().splitlines() if line.startswith('run-heavy: done ')]
+    assert len(resources) == 1
+    rows.append(dict(case=value['id'], metric=case['metric'], width=case['width'], height=case['height'],
+                     threads=case['threads'], native_source=case['rust_source'], inputs={role:dict(path=case[role],sha256=bindings[case[role]]) for role in ['reference','distorted']}, canonical='official HDR-VDP '+('2.2.2' if case['metric']=='hdrvdp' else '3.0.7')+' / frozen Octave runner and named resize overlay', order=value['order'], arms=arms,
+                     observation_complete=value['observation_complete'], absolute_difference=value['absolute_difference'],
+                     retained_check=value['absolute_bound'], retained_check_source=case.get('bound_source'),
+                     retained_check_passed=value['bound_pass'], native_parity_qualified=False,
+                     matched_scope=False, ratio=None, qualified_timing_cells=0,
+                     raw_result=binding(path), resource_receipt=dict(**binding(wrapper), receipt=resources[0])))
+assert len(rows) == 48
+run('jj', 'new', 'master@origin', '-m', 'investigate: retain completed original HDR numerical grid')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing completed original HDR numerical grid\n')
+folder = PUBLIC/'hdr-original-grid-2026-10-21'
+folder.mkdir()
+outputs = []
+
+def write(path, value):
+    data = (json.dumps(value, indent=2, allow_nan=False)+'\n').encode()
+    assert len(data) <= 30000
+    with path.open('xb') as stream:
+        stream.write(data)
+    outputs.append((path, 'provenance'))
+
+shards = []
+pending = []
+def flush():
+    if not pending:
+        return
+    path = folder/('cases-%02d.json'%len(shards))
+    write(path, dict(cases=list(pending)))
+    shards.append(dict(file=path.name, sha256=sha(path), cases=len(pending)))
+    pending.clear()
+
+for row in rows:
+    if pending and len(json.dumps(dict(cases=pending+[row]), indent=2).encode()) > 24000:
+        flush()
+    pending.append(row)
+flush()
+metrics = []
+for metric in ['hdrvdp','hdrvdp3']:
+    selected = [row for row in rows if row['metric'] == metric]
+    finite = [row['absolute_difference'] for row in selected if row['absolute_difference'] is not None]
+    metrics.append(dict(metric=metric, acquired_cases=len(selected), complete_observations=sum(row['observation_complete'] for row in selected),
+                        retained_check_passes=sum(row['retained_check_passed'] is True for row in selected),
+                        retained_check_misses=sum(row['retained_check_passed'] is False for row in selected),
+                        max_absolute_difference=max(finite) if finite else None))
+write(folder/'index.json', dict(host='local AMD Ryzen 9 7950X / WSL2', metrics=metrics, shards=shards,
+    audited_aggregate=binding(ROOT/'result.json'), sequence=binding(SOURCE/'campaign-sequence.json'),
+    cohort=binding(ROOT/'cohort.json'), setup=binding(ROOT/'setup.json'),
+    finish_resource_receipt=dict(**binding(finish_log), receipt=finish_receipts[0]),
+    native_warm_thread_comparisons=summary['native_warm_thread_comparisons'], old_gates=summary['old_gates'],
+    source_sha256=sha(__file__),
+    qualification='All 48 frozen warm grid cells acquired and audited by the original frozen finish helper, with 96 role outcomes retained. Incomplete native warm budgets remain incomplete. Native scalars are initialization/warmup observations; individual timed returns are unobserved. The v2 0.005 check comes from TOL_Q in golden_srgb_display.rs and is not a universal parity bound. No v3 bound is assigned. Original parameter preparation differs across clocks: all ratios, matched scope and timing/native-parity qualification remain withheld; old incomplete gates remain incomplete.'))
+buffer = io.StringIO()
+writer = csv.writer(buffer, delimiter='\t', lineterminator='\n')
+writer.writerow(['metric','case','width','height','threads','absolute_delta','retained_fixture_check','retained_check_passed','native_warm_median_ms','canonical_warm_median_ms','ratio','matched_scope','native_completed_rounds','observation_complete'])
+for row in rows:
+    native = row['arms']['native']
+    canonical = row['arms']['default']
+    native_times = native.get('round_means_ns') or []
+    canonical_times = [sample['elapsed_ns'] for sample in canonical.get('samples') or []]
+    writer.writerow([row['metric'],row['case'],row['width'],row['height'],row['threads'],row['absolute_difference'],
+                     row['retained_check'],row['retained_check_passed'],
+                     statistics.median(native_times)/1e6 if native_times else '',
+                     statistics.median(canonical_times)/1e6 if canonical_times else '',
+                     '',False,native.get('completed_warm_rounds'),row['observation_complete']])
+table = folder/'summary.tsv'
+table_data = buffer.getvalue().encode()
+assert len(table_data) <= 30000
+with table.open('xb') as stream:
+    stream.write(table_data)
+outputs.append((table,'provenance'))
+write(folder/'summary.meta.json',dict(source_index='index.json', index_sha256=sha(folder/'index.json'),
+    table_sha256=sha(table), rows=len(rows), source_sha256=sha(__file__),
+    qualification='Site-readable partial-family numerical table. Warm milliseconds are separately observed medians under different preparation scopes. Blank ratios are intentional, not zero. Native round counts, observation completeness and the fixture-only v2 check remain explicit; no timing or universal parity qualification.'))
+for source in [Path(__file__), ROOT/'helpers/hdr_original_grid_numerical.py']:
+    destination = folder/(source.name+'.txt')
+    shutil.copyfile(source, destination)
+register_outputs(outputs)
+for path, relative in [(PUBLIC/'README.md',''), (Path('DIVERGENCES.md'),'benchmarks/canonical_recheck_2026-10-19/'),
+                       (Path('CLAUDE.md'),'benchmarks/canonical_recheck_2026-10-19/'),
+                       (Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        heading = '## Known Bugs: HDR numerical fixture checks' if path.name == 'CLAUDE.md' else '### Original HDR numerical grid'
+        stream.write(f'\n{heading} (2026-10-21)\n\nThe [complete acquisition index]({relative}hdr-original-grid-2026-10-21/index.json) retains 48/48 warm grid cells and 96 native/reference role outcomes across both HDR names, four geometries, three content pairs and thread budgets 1/28. This is acquisition coverage; the existing incomplete gates remain incomplete. The family [summary.tsv]({relative}hdr-original-grid-2026-10-21/summary.tsv) and its metadata retain site-readable rows with intentionally blank ratios.\n\n')
+        for metric in metrics:
+            stream.write(f"{metric['metric']}: {metric['complete_observations']}/{metric['acquired_cases']} complete observation pairs; maximum absolute raw-score difference {metric['max_absolute_difference']:.17g}. Retained fixture checks: {metric['retained_check_passes']} pass and {metric['retained_check_misses']} miss.\n\n")
+        stream.write('The v2 check is the unchanged fixture-derived 0.005 TOL_Q, not a universal parity bound. V3 has no assigned original-Octave bound for this grid. The reference is the frozen Octave runner with the named image-2.20.1 resize overlay; the separately retained official Octave 11.1 controls remain separate. Incomplete warm rounds and resource-gate findings are retained. Spectral preparation differs across clocks, so comparative ratios and native-parity/timing qualification remain withheld. Every row retains its source, raw outcome, measured arm maximum RSS and run-heavy receipt.\n')
+run('just', 'model-cards-refresh', str(Path.home()/'tmp/portcheck/python/bin/python'))
+run('just', 'model-cards-check', str(Path.home()/'tmp/portcheck/python/bin/python'))
+run('just', 'bench-iqa-canonical-check')
+run('jj', 'describe', '-m', 'investigate: retain completed original HDR numerical grid')
+run(sys.executable, '-B', str(R/'push-owned-stack.py'), '@')
+print('HDR_ORIGINAL_GRID_VERIFIED', flush=True)

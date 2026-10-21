@@ -1,0 +1,73 @@
+"""Adopt intact exported measurements and finish the failed TSV registration."""
+import datetime
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+R = Path(__file__).parent
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+folder = PUBLIC/'hdr-original-grid-2026-10-21'
+sys.path.insert(0, str(Path('benchmarks/iqa_compete_2026-10-16').resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+
+def run(*command):
+    subprocess.run(command, check=True)
+
+def load(path):
+    return json.loads(path.read_text())
+
+assert subprocess.check_output(['jj','log','-r','@','--no-graph','-T','change_id.short()'],text=True).strip() == 'rsozpmynxtuk'
+changed = subprocess.check_output(['jj','diff','--name-only'],text=True).splitlines()
+assert changed and all(path.startswith(str(folder)+'/') for path in changed), 'Unexpected changes; preserve them'
+index = load(folder/'index.json')
+original = R/'publish-completed-hdr-grid-v1.py'
+assert index['source_sha256'] == sha(original) == sha(folder/'publish-completed-hdr-grid-v1.py.txt')
+assert sha(index['audited_aggregate']['path']) == index['audited_aggregate']['sha256']
+aggregate = load(Path(index['audited_aggregate']['path']))
+assert aggregate['acquired_cases'] == 48 and aggregate['acquired_children'] == 96
+assert aggregate['qualified_timing_cells'] == 0 and aggregate['ratio'] is None
+rows = []
+artifacts = []
+for shard in index['shards']:
+    path = folder/shard['file']
+    assert sha(path) == shard['sha256']
+    data = load(path)['cases']
+    assert len(data) == shard['cases']
+    rows.extend(data)
+    artifacts.append((path,'provenance'))
+assert len(rows) == len({row['case'] for row in rows}) == 48
+for row in rows:
+    assert sha(row['raw_result']['path']) == row['raw_result']['sha256']
+    assert aggregate['cell_results'][row['raw_result']['path']] == row['raw_result']['sha256']
+    assert row['ratio'] is None and row['qualified_timing_cells'] == 0
+meta = load(folder/'summary.meta.json')
+assert sha(folder/'index.json') == meta['index_sha256']
+assert sha(folder/'summary.tsv') == meta['table_sha256'] and meta['rows'] == 48
+assert len((folder/'summary.tsv').read_text().splitlines()) == 49
+artifacts.extend([(folder/'index.json','provenance'),(folder/'summary.meta.json','provenance'),(folder/'summary.tsv','cohort')])
+correction = folder/'publication-resume-v2.json'
+with correction.open('x') as stream:
+    json.dump(dict(source_sha256=sha(__file__), original_export_source_sha256=sha(original),
+                   original_failure_log=dict(path=str(R/'publish-completed-hdr-grid-v1.log'),sha256=sha(R/'publish-completed-hdr-grid-v1.log')),
+                   change='Register the retained TSV as cohort, the existing required classification for .tsv; JSON remains provenance.',
+                   retained_index_sha256=sha(folder/'index.json'), retained_table_sha256=sha(folder/'summary.tsv'),
+                   qualification='All 48 exported rows and original audited outcomes adopted unchanged. No scorer call, original data rewrite, numerical-gate change or completed benchmark repetition.'),stream,indent=2)
+    stream.write('\n')
+artifacts.append((correction,'provenance'))
+shutil.copyfile(__file__,folder/'resume-completed-hdr-publication-v2.py.txt')
+register_outputs(artifacts)
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical finishing corrected HDR export registration\n')
+source = original.read_text()
+marker = 'register_outputs(outputs)\n'
+assert source.count(marker) == 1
+tail = source.split(marker,1)[1]
+assert tail.count('investigate: retain completed original HDR numerical grid') == 1
+tail = tail.replace('investigate: retain completed original HDR numerical grid', 'investigate: retain HDR numerical outcomes and explicit findings')
+# The remaining original steps append findings, run the established checks,
+# and push. The measured-data generation above the marker is never rerun.
+environment = dict(PUBLIC=PUBLIC,metrics=index['metrics'],Path=Path,run=run,sys=sys,R=R)
+exec(compile(tail,str(original)+' [publication continuation]','exec'),environment)

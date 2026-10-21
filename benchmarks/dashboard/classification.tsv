@@ -1869,3 +1869,19 @@ benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v2/ca
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v2/cases-016.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v2/index.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/build-debug-storage-pointer-2026-10-21.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-00.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-01.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-04.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-05.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-06.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-07.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-08.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-09.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-10.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/cases-11.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/summary.meta.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/summary.tsv	ignored	Native reference comparison cohort; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/publication-resume-v2.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

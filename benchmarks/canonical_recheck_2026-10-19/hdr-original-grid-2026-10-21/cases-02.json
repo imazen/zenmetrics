@@ -1,0 +1,564 @@
+{
+  "cases": [
+    {
+      "case": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
+      "metric": "hdrvdp",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "inputs": {
+        "reference": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+          "sha256": "a45dd16a564b88d5365b6439775c11241351da3a93a353616575a89fbd9bb608"
+        },
+        "distorted": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-distorted.rgb",
+          "sha256": "f5a00b4cec5f2cedb76f0c940897a6a0b9ee301bb6a7a4a98fe37fb568e36ee1"
+        }
+      },
+      "canonical": "official HDR-VDP 2.2.2 / frozen Octave runner and named resize overlay",
+      "order": [
+        "default",
+        "native"
+      ],
+      "arms": {
+        "native": {
+          "returncode": 0,
+          "complete": true,
+          "score": 61.701629129628834,
+          "score_bits": "404ed9cefbbad6a1",
+          "max_rss_kib": 323900,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/native/control-memory.txt",
+            "sha256": "bc3f02e30cce7ee240ed10bd038cdb2890db126f7ca774c74cafca87969615d5"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/native/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-current40-plans-v1/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40-native.json"
+          ],
+          "completed_warm_rounds": 10,
+          "round_means_ns": [
+            1005374138.0,
+            1004118440.0,
+            1001310209.0,
+            1020757586.0,
+            1018473154.0,
+            1006071778.0,
+            1026957864.0,
+            1022323912.0,
+            1064931182.0,
+            1024860770.0
+          ],
+          "resource_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "scalar_scope": "initialization/warmup result; timed CPU returns not individually observed"
+        },
+        "default": {
+          "returncode": 0,
+          "complete": true,
+          "score": 61.710980980742185,
+          "score_bits": "404edb016cbe2ecf",
+          "max_rss_kib": 596052,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/default/control-memory.txt",
+            "sha256": "8a02f7b6ef80a3a6bc466d6e3002fd9ab9afd45c6810c52284e6aa0ac68bfb19"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/default/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/usr/bin/octave-cli",
+            "--no-gui",
+            "--no-window-system",
+            "--no-init-file",
+            "--no-history",
+            "--quiet",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/variants/resize2201/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40-default.m"
+          ],
+          "samples": [
+            {
+              "elapsed_ns": 6271605015.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 6354786873.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 6309676886.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 6268044949.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 6302952051.0,
+              "score": 61.710980980742185
+            }
+          ]
+        }
+      },
+      "observation_complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "retained_check": 0.005,
+      "retained_check_source": "crates/hdrvdp/tests/golden_srgb_display.rs:TOL_Q",
+      "retained_check_passed": false,
+      "native_parity_qualified": false,
+      "matched_scope": false,
+      "ratio": null,
+      "qualified_timing_cells": 0,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/result.json",
+        "sha256": "1b4c5a9e9a8eb2d8906280bc93445ef189229a8ba3e8150e3e31e418dd95d095"
+      },
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/dispatch/original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40/wrapper.log",
+        "sha256": "5aea9f36dba7494db5d9939b64b42784771df07e31178a1e1a3040ffd069ed30",
+        "receipt": "run-heavy: done rc=1 69s | peak-RSS 0.57GiB | min-avail 14711MiB | peak-load 3.46"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40",
+      "metric": "hdrvdp3",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "inputs": {
+        "reference": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+          "sha256": "a45dd16a564b88d5365b6439775c11241351da3a93a353616575a89fbd9bb608"
+        },
+        "distorted": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-distorted.rgb",
+          "sha256": "f5a00b4cec5f2cedb76f0c940897a6a0b9ee301bb6a7a4a98fe37fb568e36ee1"
+        }
+      },
+      "canonical": "official HDR-VDP 3.0.7 / frozen Octave runner and named resize overlay",
+      "order": [
+        "native",
+        "default"
+      ],
+      "arms": {
+        "native": {
+          "returncode": 0,
+          "complete": true,
+          "score": 8.431053192297762,
+          "score_bits": "4020dcb3010782b5",
+          "max_rss_kib": 595316,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/native/control-memory.txt",
+            "sha256": "2b727a7092667af36b16ff4c856de9eaf0792ebe3d42622c1e6d3ce8b1f76bf1"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/native/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-current40-plans-v1/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40-native.json"
+          ],
+          "completed_warm_rounds": 10,
+          "round_means_ns": [
+            1119713224.0,
+            1116029698.0,
+            1125467088.0,
+            1132772435.0,
+            1121388859.0,
+            1153070154.0,
+            1144664543.0,
+            1133664829.0,
+            1150658012.0,
+            1171614183.0
+          ],
+          "resource_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true
+          ],
+          "scalar_scope": "initialization/warmup result; timed CPU returns not individually observed"
+        },
+        "default": {
+          "returncode": 0,
+          "complete": true,
+          "score": 8.431053192297767,
+          "score_bits": "4020dcb3010782b8",
+          "max_rss_kib": 629976,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/default/control-memory.txt",
+            "sha256": "dc2f353525dd2f697a9035b98913e26d6f434e03efa239ccc97be242075ce175"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/default/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/usr/bin/octave-cli",
+            "--no-gui",
+            "--no-window-system",
+            "--no-init-file",
+            "--no-history",
+            "--quiet",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/variants/resize2201/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40-default.m"
+          ],
+          "samples": [
+            {
+              "elapsed_ns": 8605786800.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 8637655020.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 8685314894.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 8668198109.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 8864603996.0,
+              "score": 8.431053192297767
+            }
+          ]
+        }
+      },
+      "observation_complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "retained_check": null,
+      "retained_check_source": null,
+      "retained_check_passed": null,
+      "native_parity_qualified": false,
+      "matched_scope": false,
+      "ratio": null,
+      "qualified_timing_cells": 0,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/result.json",
+        "sha256": "694a5db4ed86b38b8a58189df5db65b9a7984d3091cb312228d0892f69676105"
+      },
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/dispatch/original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40/wrapper.log",
+        "sha256": "2d4fdf4a51910e25703605972b64797a0c8cc54f5b7836e1bd4b35818bb9c1e9",
+        "receipt": "run-heavy: done rc=0 85s | peak-RSS 0.60GiB | min-avail 14682MiB | peak-load 2.69"
+      }
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40",
+      "metric": "hdrvdp",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "inputs": {
+        "reference": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+          "sha256": "a45dd16a564b88d5365b6439775c11241351da3a93a353616575a89fbd9bb608"
+        },
+        "distorted": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-distorted.rgb",
+          "sha256": "f5a00b4cec5f2cedb76f0c940897a6a0b9ee301bb6a7a4a98fe37fb568e36ee1"
+        }
+      },
+      "canonical": "official HDR-VDP 2.2.2 / frozen Octave runner and named resize overlay",
+      "order": [
+        "default",
+        "native"
+      ],
+      "arms": {
+        "native": {
+          "returncode": 0,
+          "complete": true,
+          "score": 61.701629129628834,
+          "score_bits": "404ed9cefbbad6a1",
+          "max_rss_kib": 699060,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/native/control-memory.txt",
+            "sha256": "ad03ddfda218ab75ec8e19ddeb7dbd5680cef6a62d4b8cb33fed32935b343a3a"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/native/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-current40-plans-v1/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40-native.json"
+          ],
+          "completed_warm_rounds": 10,
+          "round_means_ns": [
+            377793223.0,
+            363678908.0,
+            372133186.0,
+            371064401.0,
+            369486954.0,
+            366883451.0,
+            379031022.0,
+            357256955.0,
+            374532967.0,
+            364412298.0
+          ],
+          "resource_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "scalar_scope": "initialization/warmup result; timed CPU returns not individually observed"
+        },
+        "default": {
+          "returncode": 0,
+          "complete": true,
+          "score": 61.710980980742185,
+          "score_bits": "404edb016cbe2ecf",
+          "max_rss_kib": 596672,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/default/control-memory.txt",
+            "sha256": "52fbcec28e2831b45f9023bcca6ad57016a5ff039969c5d800fed7e449081567"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/default/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/usr/bin/octave-cli",
+            "--no-gui",
+            "--no-window-system",
+            "--no-init-file",
+            "--no-history",
+            "--quiet",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/variants/resize2201/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40-default.m"
+          ],
+          "samples": [
+            {
+              "elapsed_ns": 5131623983.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 5113860846.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 5099102020.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 5131957054.0,
+              "score": 61.710980980742185
+            },
+            {
+              "elapsed_ns": 5146919012.0,
+              "score": 61.710980980742185
+            }
+          ]
+        }
+      },
+      "observation_complete": true,
+      "absolute_difference": 0.009351851113351017,
+      "retained_check": 0.005,
+      "retained_check_source": "crates/hdrvdp/tests/golden_srgb_display.rs:TOL_Q",
+      "retained_check_passed": false,
+      "native_parity_qualified": false,
+      "matched_scope": false,
+      "ratio": null,
+      "qualified_timing_cells": 0,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/result.json",
+        "sha256": "622c13c34db6ed4771e4f7e0a6c5919a1664210b45161e37bd9a6f216a760491"
+      },
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/dispatch/original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40/wrapper.log",
+        "sha256": "a5cf8a71dedb46f4d000ea90a1991e99bb957c014b9ebc628a9cecd93d12171c",
+        "receipt": "run-heavy: done rc=1 53s | peak-RSS 0.67GiB | min-avail 14640MiB | peak-load 1.25"
+      }
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40",
+      "metric": "hdrvdp3",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "inputs": {
+        "reference": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-reference.rgb",
+          "sha256": "a45dd16a564b88d5365b6439775c11241351da3a93a353616575a89fbd9bb608"
+        },
+        "distorted": {
+          "path": "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-1mp-distorted.rgb",
+          "sha256": "f5a00b4cec5f2cedb76f0c940897a6a0b9ee301bb6a7a4a98fe37fb568e36ee1"
+        }
+      },
+      "canonical": "official HDR-VDP 3.0.7 / frozen Octave runner and named resize overlay",
+      "order": [
+        "native",
+        "default"
+      ],
+      "arms": {
+        "native": {
+          "returncode": 0,
+          "complete": true,
+          "score": 8.431053192297762,
+          "score_bits": "4020dcb3010782b5",
+          "max_rss_kib": 1799548,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/native/control-memory.txt",
+            "sha256": "6da8e15ab35ffa4038d16dfd3679aeccc7f82c08300a7d5c3ae449132f6a22eb"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/native/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-srgb-current40-plans-v1/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40-native.json"
+          ],
+          "completed_warm_rounds": 10,
+          "round_means_ns": [
+            370950531.0,
+            386517846.0,
+            375965101.0,
+            374157821.0,
+            378406681.0,
+            403641441.0,
+            384868840.0,
+            379873542.0,
+            399409933.0,
+            376482905.0
+          ],
+          "resource_gate_clean": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "scalar_scope": "initialization/warmup result; timed CPU returns not individually observed"
+        },
+        "default": {
+          "returncode": 0,
+          "complete": true,
+          "score": 8.431053192297767,
+          "score_bits": "4020dcb3010782b8",
+          "max_rss_kib": 637664,
+          "memory": {
+            "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/default/control-memory.txt",
+            "sha256": "4915bb4918ad8e7297f6391b128bb17a2f9d08ef93eedbfb4710782c22978be0"
+          },
+          "command": [
+            "/usr/bin/time",
+            "-v",
+            "-o",
+            "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/default/control-memory.txt",
+            "/usr/bin/timeout",
+            "--kill-after=20s",
+            "1100s",
+            "/usr/bin/octave-cli",
+            "--no-gui",
+            "--no-window-system",
+            "--no-init-file",
+            "--no-history",
+            "--quiet",
+            "/home/lilith/tmp/handoff/canonical-first-boundaries-20261020/hdr-headless-warm-v1/variants/resize2201/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40-default.m"
+          ],
+          "samples": [
+            {
+              "elapsed_ns": 6267308950.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 6306687832.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 6439651966.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 6246487141.0,
+              "score": 8.431053192297767
+            },
+            {
+              "elapsed_ns": 6396759033.0,
+              "score": 8.431053192297767
+            }
+          ]
+        }
+      },
+      "observation_complete": true,
+      "absolute_difference": 5.329070518200751e-15,
+      "retained_check": null,
+      "retained_check_source": null,
+      "retained_check_passed": null,
+      "native_parity_qualified": false,
+      "matched_scope": false,
+      "ratio": null,
+      "qualified_timing_cells": 0,
+      "raw_result": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/cells/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/result.json",
+        "sha256": "b0d658a49b3627412721ef83e8ff7666bb522e765d24e5a0b452ae9c0d0335ef"
+      },
+      "resource_receipt": {
+        "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/source-bundle-v3/campaign-v3/dispatch/original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40/wrapper.log",
+        "sha256": "a832e5c6b81b7d73ac02be8c425c30b2a29d95862a512364f7b0398ff90a5d8c",
+        "receipt": "run-heavy: done rc=0 61s | peak-RSS 1.72GiB | min-avail 13227MiB | peak-load 3.52"
+      }
+    }
+  ]
+}

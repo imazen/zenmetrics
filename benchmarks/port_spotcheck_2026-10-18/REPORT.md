@@ -631,3 +631,13 @@ The [additional batch](../canonical_recheck_2026-10-19/acquired-cold-additions-2
 The [SSIMULACRA1 screen odd/t1 capture](../canonical_recheck_2026-10-19/cpu-first-profiles-screen-odd-2026-10-21/index.json) and [Butteraugli CUDA photo1MP/t28 capture](../canonical_recheck_2026-10-19/butteraugli1mp-t28-first-profile-v1.json) supply profiling evidence for the two newly observed cold flags. Fixed 20-block confirmations retain their original clocks and bounds; these full-process profiles do not qualify a timing exception.
 
 The [IW-SSIM CUDA-reference/t1 initial20 interval](../canonical_recheck_2026-10-19/iwssim-cuda-reference-t1-first-confirmation20.json) is 1.485914 [1.360269, 1.560884], missing the unchanged precision target. Its fixed additional40 stage is queued; every initial block remains retained. Runtime/causal qualification and accepted exceptions remain unassigned.
+
+### Original HDR numerical grid (2026-10-21)
+
+The [complete acquisition index](../canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/index.json) retains 48/48 warm grid cells and 96 native/reference role outcomes across both HDR names, four geometries, three content pairs and thread budgets 1/28. This is acquisition coverage; the existing incomplete gates remain incomplete. The family [summary.tsv](../canonical_recheck_2026-10-19/hdr-original-grid-2026-10-21/summary.tsv) and its metadata retain site-readable rows with intentionally blank ratios.
+
+hdrvdp: 24/24 complete observation pairs; maximum absolute raw-score difference 0.02003825875114984. Retained fixture checks: 12 pass and 12 miss.
+
+hdrvdp3: 21/24 complete observation pairs; maximum absolute raw-score difference 7.815970093361102e-14. Retained fixture checks: 0 pass and 0 miss.
+
+The v2 check is the unchanged fixture-derived 0.005 TOL_Q, not a universal parity bound. V3 has no assigned original-Octave bound for this grid. The reference is the frozen Octave runner with the named image-2.20.1 resize overlay; the separately retained official Octave 11.1 controls remain separate. Incomplete warm rounds and resource-gate findings are retained. Spectral preparation differs across clocks, so comparative ratios and native-parity/timing qualification remain withheld. Every row retains its source, raw outcome, measured arm maximum RSS and run-heavy receipt.

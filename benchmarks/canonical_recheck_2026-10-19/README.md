@@ -987,3 +987,13 @@ The [IW-SSIM CUDA-reference/t1 initial20 interval](iwssim-cuda-reference-t1-firs
 ### Completed build debug storage (2026-10-21)
 
 The [debug-sidecar pointer](build-debug-storage-pointer-2026-10-21.json) retains three completed build sidecars on the dataset volume with hash-verified original-path symlinks. Associated native ELF hashes and every observed score remain unchanged. This storage move does not establish debug completeness or new profiling evidence.
+
+### Original HDR numerical grid (2026-10-21)
+
+The [complete acquisition index](hdr-original-grid-2026-10-21/index.json) retains 48/48 warm grid cells and 96 native/reference role outcomes across both HDR names, four geometries, three content pairs and thread budgets 1/28. This is acquisition coverage; the existing incomplete gates remain incomplete. The family [summary.tsv](hdr-original-grid-2026-10-21/summary.tsv) and its metadata retain site-readable rows with intentionally blank ratios.
+
+hdrvdp: 24/24 complete observation pairs; maximum absolute raw-score difference 0.02003825875114984. Retained fixture checks: 12 pass and 12 miss.
+
+hdrvdp3: 21/24 complete observation pairs; maximum absolute raw-score difference 7.815970093361102e-14. Retained fixture checks: 0 pass and 0 miss.
+
+The v2 check is the unchanged fixture-derived 0.005 TOL_Q, not a universal parity bound. V3 has no assigned original-Octave bound for this grid. The reference is the frozen Octave runner with the named image-2.20.1 resize overlay; the separately retained official Octave 11.1 controls remain separate. Incomplete warm rounds and resource-gate findings are retained. Spectral preparation differs across clocks, so comparative ratios and native-parity/timing qualification remain withheld. Every row retains its source, raw outcome, measured arm maximum RSS and run-heavy receipt.

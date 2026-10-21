@@ -1,0 +1,12 @@
+{
+  "source_sha256": "a830fb26c00dafef107ae25145620ab850084d2fb64cac61ea01ac32f374bb8a",
+  "original_export_source_sha256": "94c46e68eedc0e88cb6e7f6f045c02f4714d4fdaefc81c3ea8fea3623c43e352",
+  "original_failure_log": {
+    "path": "/home/lilith/tmp/local-canonical-20261019T2330/publish-completed-hdr-grid-v1.log",
+    "sha256": "3cbfa1d00a77b69a26c2fe348fdb7430977ff0478ecfc1aed5b0479528c5db8f"
+  },
+  "change": "Register the retained TSV as cohort, the existing required classification for .tsv; JSON remains provenance.",
+  "retained_index_sha256": "dba7e8debeb3059e410e98229af77d76df0cda89cddd998ff8f14494285871c4",
+  "retained_table_sha256": "4b655b24bd3244cf04f89d2505c78e97d9697e3ce7fee15c4082793eb6619d28",
+  "qualification": "All 48 exported rows and original audited outcomes adopted unchanged. No scorer call, original data rewrite, numerical-gate change or completed benchmark repetition."
+}

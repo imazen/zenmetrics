@@ -1,0 +1,49 @@
+metric	case	width	height	threads	absolute_delta	retained_fixture_check	retained_check_passed	native_warm_median_ms	canonical_warm_median_ms	ratio	matched_scope	native_completed_rounds	observation_complete
+hdrvdp	original12-hdrvdp-grid-pairA-64x64-t1-warm-current40	64	64	1	1.596125044756036e-05	0.005	True	3.454971	52.673817		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-64x64-t1-warm-current40	64	64	1	7.105427357601002e-15			3.62239725	57.395935		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-64x64-t28-warm-current40	64	64	28	1.596125044756036e-05	0.005	True	35.5964605	68.036079		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-64x64-t28-warm-current40	64	64	28	7.105427357601002e-15			21.9640575	78.68886		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-255x257-t1-warm-current40	255	257	1	4.4966493675246966e-06	0.005	True	105.6955625	328.594923		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-255x257-t1-warm-current40	255	257	1	7.105427357601002e-15			146.626494	334.95307		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-255x257-t28-warm-current40	255	257	28	4.4966493675246966e-06	0.005	True	64.2188485	349.893093		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-255x257-t28-warm-current40	255	257	28	7.105427357601002e-15			70.2337005	319.987059		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40	1024	1024	1	0.009351851113351017	0.005	False	1019.61537	6302.952051		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40	1024	1024	1	5.329070518200751e-15			1133.218632	8668.198109		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-1024x1024-t28-warm-current40	1024	1024	28	0.009351851113351017	0.005	False	370.2756775	5131.623983		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-1024x1024-t28-warm-current40	1024	1024	28	5.329070518200751e-15			379.1401115	6306.687832		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairA-3840x2160-t1-warm-current40	3840	2160	1	0.014122660901634276	0.005	False	19435.8430755	72249.751091		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-3840x2160-t1-warm-current40	3840	2160	1					75955.975056		False		False
+hdrvdp	original12-hdrvdp-grid-pairA-3840x2160-t28-warm-current40	3840	2160	28	0.014122660901634276	0.005	False	3571.5501205	68240.629911		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairA-3840x2160-t28-warm-current40	3840	2160	28	7.815970093361102e-14			10020.7790165	64191.553831		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-64x64-t1-warm-current40	64	64	1	8.674560312726953e-06	0.005	True	3.3129035	54.885149		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-64x64-t1-warm-current40	64	64	1	0.0			3.55899775	56.365967		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-64x64-t28-warm-current40	64	64	28	8.674560312726953e-06	0.005	True	37.312608	67.520142		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-64x64-t28-warm-current40	64	64	28	0.0			19.5693975	78.310966		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-255x257-t1-warm-current40	255	257	1	7.340082724738295e-06	0.005	True	103.988712	332.342863		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-255x257-t1-warm-current40	255	257	1	1.7763568394002505e-15			145.6861665	336.946964		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-255x257-t28-warm-current40	255	257	28	7.340082724738295e-06	0.005	True	65.3550735	322.479963		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-255x257-t28-warm-current40	255	257	28	1.7763568394002505e-15			69.383657	304.1749		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-1024x1024-t1-warm-current40	1024	1024	1	0.012382754793129891	0.005	False	1026.4616935	6451.895952		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-1024x1024-t1-warm-current40	1024	1024	1	3.552713678800501e-15			1101.946432	8192.753792		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-1024x1024-t28-warm-current40	1024	1024	28	0.012382754793129891	0.005	False	361.612203	5284.199953		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-1024x1024-t28-warm-current40	1024	1024	28	3.552713678800501e-15			346.8696445	5081.18391		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairB-3840x2160-t1-warm-current40	3840	2160	1	0.02003825875114984	0.005	False	19679.873776	73696.819067		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-3840x2160-t1-warm-current40	3840	2160	1					76974.313974		False		False
+hdrvdp	original12-hdrvdp-grid-pairB-3840x2160-t28-warm-current40	3840	2160	28	0.02003825875114984	0.005	False	3230.6576245	66009.991884		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairB-3840x2160-t28-warm-current40	3840	2160	28	2.842170943040401e-14			10061.3816495	65860.65197		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-64x64-t1-warm-current40	64	64	1	9.674099707979167e-06	0.005	True	3.5195615	51.946878		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-64x64-t1-warm-current40	64	64	1	0.0			3.6952365	61.23209		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-64x64-t28-warm-current40	64	64	28	9.674099707979167e-06	0.005	True	38.4769775	68.410158		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-64x64-t28-warm-current40	64	64	28	0.0			25.7361145	81.841946		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-255x257-t1-warm-current40	255	257	1	3.837156889119342e-06	0.005	True	104.392206	342.26203		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-255x257-t1-warm-current40	255	257	1	5.329070518200751e-15			145.311779	324.687958		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-255x257-t28-warm-current40	255	257	28	3.837156889119342e-06	0.005	True	56.549944	324.697971		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-255x257-t28-warm-current40	255	257	28	5.329070518200751e-15			76.5840695	290.437937		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-1024x1024-t1-warm-current40	1024	1024	1	0.010065135754516064	0.005	False	1033.3683865	6474.462032		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-1024x1024-t1-warm-current40	1024	1024	1	2.4868995751603507e-14			1145.1187605	8963.507891		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-1024x1024-t28-warm-current40	1024	1024	28	0.010065135754516064	0.005	False	387.572938	5463.695049		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-1024x1024-t28-warm-current40	1024	1024	28	2.4868995751603507e-14			361.93366	6407.299995		False	10	True
+hdrvdp	original12-hdrvdp-grid-pairC-3840x2160-t1-warm-current40	3840	2160	1	0.015380630288248653	0.005	False	19143.3153215	71358.237982		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-3840x2160-t1-warm-current40	3840	2160	1					81149.036884		False		False
+hdrvdp	original12-hdrvdp-grid-pairC-3840x2160-t28-warm-current40	3840	2160	28	0.015380630288248653	0.005	False	3497.629546	67265.975952		False	10	True
+hdrvdp3	original12-hdrvdp3-grid-pairC-3840x2160-t28-warm-current40	3840	2160	28	2.6645352591003757e-14			10900.635644	67713.491917		False	10	True
