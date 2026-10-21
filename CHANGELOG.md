@@ -21,6 +21,7 @@ Workspace conventions per the global rules:
 - Require explicit numerical gates in the resident-model first-call confirmation
   successor (`c34646a7`), preserving the earlier active helper and acquired data.
 
+- Dashboard: Models tab with one card per implementation (paper, authors, BibTeX, licences, input contract, parity evidence, reproduce commands, browser workbench link) and the full card in the details panel (`4e835963`).
 - Dashboard: Mpx/s unit beside ns per pixel and ms per image; fixed ns/px displays show Mpx/s too (`7803ed0f`).
 - Dashboard: implementations link to their Rust source on GitHub (dispatch arm plus kernel, model module or crate, pinned to the built commit) from the details panel and the reproduction cards (`7ad9bbeb`).
 - Dashboard: each metric is judged against the published CSV column and against its reference implementation separately (exact / near-exact / cannot reproduce), with filters for where the two differ; the DVIFM column rows move to 'not reproduced' in the status doc (`61be660e`).
