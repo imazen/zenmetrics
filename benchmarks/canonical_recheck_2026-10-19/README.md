@@ -739,3 +739,20 @@ Octave 6.4/image 2.12 runtime carries two reviewed upstream resize M-file overla
 Native parity and every timing ratio remain withheld; this does not identify
 the cause of the v2 difference. Per-case resource receipts and raw artifact
 hashes are retained in both projections.
+
+The [ten-route constructor reference controls](classical-first-ten-reference-controls.json)
+retain 20 odd-size photo/screen cases and 80 fresh original/candidate processes.
+Every corresponding scalar bit pattern agrees. These controls cover BRISQUE,
+NIQE, both NLPD routes, both IW-SSIM routes, CVVDP, both libjxl Butteraugli
+routes and SSIMULACRA2; they supply no native timing or numerical acceptance.
+Each route retains its source and resource receipt. The IW-SSIM/PIQ control
+used peak-RSS 0.85 GiB, minimum available 14,571 MiB and peak load 3.43.
+
+ARNIQA's [one-thread fixed20 confirmation](arniqa-first-original-cid22-t1-first-confirmation20.json)
+reports first-evaluation Rust/canonical ratio 1.1343200009907863 with 95% interval
+[1.1228163255741586, 1.151777720297966]. Numerical parity passes and interval
+precision meets the three-percent criterion. Its [eight-thread initial20](arniqa-first-original-cid22-t8-first-confirmation20.json)
+reports 1.1764430166284257 [1.1123383245857097, 1.2463601494859644]; precision
+fails, so a fixed additional40 is queued and all60 will be retained. These are
+first evaluations after resident model construction; canonical runtime cleanliness
+is not independently qualified and neither interval is an accepted regression.

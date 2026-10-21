@@ -1,0 +1,634 @@
+{
+  "schema": 1,
+  "host": "Ryzen 9 7950X / WSL2",
+  "scope": "Original/candidate/candidate/original canonical-reference controls. No native comparison or speed ratio is supplied by this artifact.",
+  "cases": 20,
+  "reference_processes": 80,
+  "all_scalar_bits_identical": true,
+  "native_metric_calls": 0,
+  "control_plan": {
+    "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/original-call-controls.plan.json",
+    "sha256": "4337f92bc1ee6ee541b17d279a9be036c5e572b2bd2ba414cf8a7cf2e20333fb"
+  },
+  "source_identity": {
+    "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/source-identities-v1.json",
+    "sha256": "a79109bd1b91e84e09923c7b064c90e2bc57d446e110bdcb780560ab38ba7837"
+  },
+  "routes": [
+    {
+      "metric": "brisque",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/brisque/result.json",
+        "sha256": "8668c83674b84861488222cd22af9981bb62cd027dacd5ac73cc7138d3438313"
+      },
+      "family_plan_sha256": "9fa469af4cce7d13ef6b77307a2a2e96dc8b564c5705447f1e5a21600991f4d6",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/brisque.py.json",
+        "sha256": "c67b33ef15e3004cfd6d14cc2a60d36effed819f631457dd2549015c056b6e9c"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cpu_cell.py",
+        "brisque",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--weights",
+        "/home/lilith/tmp/clean-panel-20261019/sealed/brisque_svm_weights.pth",
+        "--extra-path",
+        "/home/lilith/tmp/local-canonical-20261019T2330/oracle-extras"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/brisque.py",
+        "brisque",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--weights",
+        "/home/lilith/tmp/clean-panel-20261019/sealed/brisque_svm_weights.pth",
+        "--extra-path",
+        "/home/lilith/tmp/local-canonical-20261019T2330/oracle-extras"
+      ],
+      "controls": [
+        {
+          "case": "brisque-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "405646e000000000",
+            "reference": "402ef73000000000"
+          },
+          "observations": 4
+        },
+        {
+          "case": "brisque-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "403d321800000000",
+            "reference": "4030dd8800000000"
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 20s | peak-RSS 0.33GiB | min-avail 14839MiB | peak-load 1.23"
+    },
+    {
+      "metric": "butteraugli",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/butteraugli/result.json",
+        "sha256": "1dd0094c9c5f4d7e25ad8b42fabab999029408858b8c2c5c4e5d3f5d11924e75"
+      },
+      "family_plan_sha256": "eef871b8f20c9846a40f9ef114198dfd8ddcfb292f8e36323b70294fe4ec10ca",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/libjxl-execution-receipt.json",
+        "sha256": "962b3b195a88ffbfd322464a311973265cd2cca9befcce08e38760892111b73e"
+      },
+      "original_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/jxl-rgb-build/iqa-jxl",
+        "butteraugli",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1",
+        "rgb-input"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/libjxl-first",
+        "butteraugli",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1",
+        "rgb-input"
+      ],
+      "controls": [
+        {
+          "case": "butteraugli-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "4005903ee0000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "butteraugli-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "401720c3c0000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 5s | peak-RSS 0.13GiB | min-avail 14865MiB | peak-load 1.23"
+    },
+    {
+      "metric": "cvvdp",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/cvvdp/result.json",
+        "sha256": "5f7282189cacd00449428d4243b59d4042e8ff9f87e02b84749316c0e6857b88"
+      },
+      "family_plan_sha256": "46ae772904e277075ae3eebde01fbb62c16c07e37a1e54d1fb270fe18db55680",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/cvvdp-resident-json.py.json",
+        "sha256": "a2288cc882a5ebf65bc686c3c8a78cd3d09d9b988dc13fdbfb483413eed914ef"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_cvvdp_cell.py",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/cvvdp-resident-json.py",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "controls": [
+        {
+          "case": "cvvdp-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "4022e536c0000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "cvvdp-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "4022548c60000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 23s | peak-RSS 0.41GiB | min-avail 14666MiB | peak-load 1.42"
+    },
+    {
+      "metric": "iwssim",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/iwssim/result.json",
+        "sha256": "ffa8383e150c2ae2174aad42027719bb7b7201172caa7b864efc7035f9ece1a1"
+      },
+      "family_plan_sha256": "43205b5248605113b71b6539b0dc28d9081e2108bff2cb5757727abb67b4f59c",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/iwssim.py.json",
+        "sha256": "88382b910a0a23ed3ce3a3a5c48e60a00a73732470f370807c18313b3a76d24f"
+      },
+      "original_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_iwssim_cell.py",
+        "/home/lilith/tmp/portcheck/sources/Python-IW-SSIM",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/iwssim.py",
+        "/home/lilith/tmp/portcheck/sources/Python-IW-SSIM",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "controls": [
+        {
+          "case": "iwssim-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "3fef5062a0000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "iwssim-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "3fef797cc0000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 21s | peak-RSS 0.70GiB | min-avail 14637MiB | peak-load 3.47"
+    },
+    {
+      "metric": "iwssim-piq",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/iwssim-piq/result.json",
+        "sha256": "9889727e75f9cf39739ac28cfbc366b144f14d8f26f7a86e16a9bf7aa8896292"
+      },
+      "family_plan_sha256": "da7382435e972734ae8fc1390c85923cc35c4c13a0da3d48a8fa2a17ac15aa7a",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/iwssim-piq.py.json",
+        "sha256": "d4ef7a15e9891f587efa008b3aa00bd7f5d1d11ca296b738d5a6ee833b5f03f2"
+      },
+      "original_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_iwssim_yiq_cell.py",
+        "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra",
+        "/home/lilith/tmp/portcheck/sources/Python-IW-SSIM",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/original-nn-env/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/iwssim-piq.py",
+        "/home/lilith/tmp/local-canonical-20261019T2330/iw-piq-extra",
+        "/home/lilith/tmp/portcheck/sources/Python-IW-SSIM",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1"
+      ],
+      "controls": [
+        {
+          "case": "iwssim-piq-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "3fef55bb00000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "iwssim-piq-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "3fef79d140000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 29s | peak-RSS 0.85GiB | min-avail 14571MiB | peak-load 3.43"
+    },
+    {
+      "metric": "niqe",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/niqe/result.json",
+        "sha256": "a93972f631dee87a3337388cb907992ce0b566866832986f2a864424916f063e"
+      },
+      "family_plan_sha256": "2c3f3862b212fc5fde71f15f88e0a83f61e5429680c615438eea701c80a38dc5",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/niqe.py.json",
+        "sha256": "aa065de0019f0223fafee1b8c9857e0e1bd521a41c8960c8f4ce5582d7f1512a"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_niqe_resident_cell.py",
+        "niqe",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--extra-path",
+        "/home/lilith/tmp/local-canonical-20261019T2330/oracle-extras"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/niqe.py",
+        "niqe",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--extra-path",
+        "/home/lilith/tmp/local-canonical-20261019T2330/oracle-extras"
+      ],
+      "controls": [
+        {
+          "case": "niqe-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "4032cc94ec0daf0e",
+            "reference": "4023e21f1419d6fc"
+          },
+          "observations": 4
+        },
+        {
+          "case": "niqe-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "4015eaa8a652f9f1",
+            "reference": "401aec76cc62fb96"
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 14s | peak-RSS 0.27GiB | min-avail 14799MiB | peak-load 2.62"
+    },
+    {
+      "metric": "nlpd",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/nlpd/result.json",
+        "sha256": "c265edf16a19453807e7e363d08e7c962040920d68b03c4cb6975fd085cbe29d"
+      },
+      "family_plan_sha256": "4c27b497068cfb6ba49154656b6367a3b6cd6f0b55ba01ac986eec639fc5b44b",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/nlpd.py.json",
+        "sha256": "ae776f46a74c40347775162dd4cee5447410a640fbb794773d9b5010c0963a91"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_classical_cell.py",
+        "nlpd",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--source",
+        "/home/lilith/tmp/portcheck/sources/NLPD_Pytorch"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/nlpd.py",
+        "nlpd",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--source",
+        "/home/lilith/tmp/portcheck/sources/NLPD_Pytorch"
+      ],
+      "controls": [
+        {
+          "case": "nlpd-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "3ff65a1640000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "nlpd-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "4013a53400000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 12s | peak-RSS 0.27GiB | min-avail 14732MiB | peak-load 2.26"
+    },
+    {
+      "metric": "nlpd-iqa",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/nlpd-iqa/result.json",
+        "sha256": "0b93dbfde186485fa1b1dad8049c7ff506a2c7f84bc4ee38919aa77e13a1654c"
+      },
+      "family_plan_sha256": "c3afc5319e90ca52f4cc892ba1b1c6382f3f4ba02d3e321f8fe765edec158505",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/nlpd-iqa.py.json",
+        "sha256": "1b563a9e43cce0e8413bb71fc7634c1f0b7fea818f6676860ac6408193fda32f"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/canonical_classical_cell.py",
+        "nlpd-iqa",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--source",
+        "/home/lilith/tmp/portcheck/sources/IQA-pytorch/IQA_pytorch"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/portcheck/python/bin/python",
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/adapters/nlpd-iqa.py",
+        "nlpd-iqa",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "1",
+        "--source",
+        "/home/lilith/tmp/portcheck/sources/IQA-pytorch/IQA_pytorch"
+      ],
+      "controls": [
+        {
+          "case": "nlpd-iqa-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "3fb4a509e0000000",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "nlpd-iqa-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "3fc6c08c80000000",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 12s | peak-RSS 0.26GiB | min-avail 14809MiB | peak-load 1.98"
+    },
+    {
+      "metric": "proposal-butteraugli",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/proposal-butteraugli/result.json",
+        "sha256": "1d2c52f91ee4b5c114e275a5d9f44ffdfd65e3d1a1f3f994914e23429e4bd446"
+      },
+      "family_plan_sha256": "c7508f1cfacf11aca2149aca21e09ebeb4f5641b535d118de25e42009e33e6b6",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/libjxl-execution-receipt.json",
+        "sha256": "962b3b195a88ffbfd322464a311973265cd2cca9befcce08e38760892111b73e"
+      },
+      "original_command": [
+        "/home/lilith/tmp/local-canonical-20261019T2330/jxl-rgb-build/iqa-jxl",
+        "proposal-butteraugli",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1",
+        "rgb-input"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/libjxl-first",
+        "proposal-butteraugli",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1",
+        "rgb-input"
+      ],
+      "controls": [
+        {
+          "case": "proposal-butteraugli-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "3ff93a7a962c40ed",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "proposal-butteraugli-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "401145667a2341c2",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 5s | peak-RSS 0.13GiB | min-avail 14830MiB | peak-load 1.68"
+    },
+    {
+      "metric": "ssim2",
+      "control_result": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/control-results/ssim2/result.json",
+        "sha256": "c9df7fe420d37baf2282a408ae42501221207baf91c54fbe613bea27864b6e0a"
+      },
+      "family_plan_sha256": "c21dd42ad291eb8efb4cb683bf3c2b5b8d2983fa23e59da7bd6157a8298a725c",
+      "candidate_receipt": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/ssim2-execution-receipt.json",
+        "sha256": "199440cfcc3c71afe0e026c5745b04fc7549c786f0b952f7d9e3b8c6603bdf3f"
+      },
+      "original_command": [
+        "/home/lilith/tmp/portcheck-primary-rgb-build-20261019T0948/build/iqa-ssim2-primary",
+        "ssim2",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1"
+      ],
+      "candidate_command": [
+        "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/build/ssim2-first",
+        "ssim2",
+        "255",
+        "257",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-reference.rgb",
+        "/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-odd-distorted.rgb",
+        "1",
+        "score",
+        "1"
+      ],
+      "controls": [
+        {
+          "case": "ssim2-grid-pairA-255x257-t1-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 1,
+          "scalar_bits": {
+            "headline": "405286b102cb6731",
+            "reference": null
+          },
+          "observations": 4
+        },
+        {
+          "case": "ssim2-grid-pairB-255x257-t28-constructor-control",
+          "width": 255,
+          "height": 257,
+          "threads": 28,
+          "scalar_bits": {
+            "headline": "40493aa369e2d116",
+            "reference": null
+          },
+          "observations": 4
+        }
+      ],
+      "resource_receipt": "run-heavy: done rc=0 5s | peak-RSS 0.13GiB | min-avail 14781MiB | peak-load 1.95"
+    }
+  ],
+  "qualification": "Each route checks odd photo at one requested worker and odd screen at28. These controls verify adapter scalar preservation, not all-size numerical parity, effective thread counts, runtime cleanliness or native acquisition. Original numerical bounds are unchanged."
+}

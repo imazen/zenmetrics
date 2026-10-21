@@ -1679,3 +1679,6 @@ benchmarks/canonical_recheck_2026-10-19/arniqa-first-profile-debug-diagnostic.js
 benchmarks/canonical_recheck_2026-10-19/hdr-original-partial12.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/classical-first-initial-flags.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
 benchmarks/canonical_recheck_2026-10-19/cuda-first-reference-controls.json	ignored	Native reference comparison summary; separate from canonical multi-host timing and published-column agreement series.
+benchmarks/canonical_recheck_2026-10-19/classical-first-ten-reference-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-original-cid22-t1-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
+benchmarks/canonical_recheck_2026-10-19/arniqa-first-original-cid22-t8-first-confirmation20.json	ignored	Descriptive native reference block-ratio intervals with explicit qualification; separate from canonical multi-host timing series.
