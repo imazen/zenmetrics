@@ -1,0 +1,328 @@
+{
+  "rows": [
+    {
+      "case": "vmaf-4k-fullcall-pair-cid22-t1",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run/vmaf-4k-fullcall-pair-cid22-t1/summary.json",
+        "sha256": "a26af4e5070a594d868fa5aec9ca666d4401340f04d18ed879df3beca24d7634"
+      },
+      "original_plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "f05df9719682611eb433c67749ee8db489415e07b277aa22fdf8920116cdfee8",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        },
+        {
+          "block_sha256": "459ffbfcb95085045e36a180ffeda73fe9ba5673c232a6028ac4337749a3f557",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        },
+        {
+          "block_sha256": "e0e08ddd155afecf684db86c5416a4e11c50e130c70d1e0feb8466cb12fc83fc",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-4k-fullcall-pair-cid22-t8",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run/vmaf-4k-fullcall-pair-cid22-t8/summary.json",
+        "sha256": "8660ead29d72307316e17d69e2ef95046ae73914d67a9ff1e61272b7f0f5c5dc"
+      },
+      "original_plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "3979c7d246c2a3764a35395584db2d25a31fd305eca747ee790d427060fe43f6",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        },
+        {
+          "block_sha256": "9db425283185eeea25a8ca7a2f7c017f4018420fee0890860885e2a999259326",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        },
+        {
+          "block_sha256": "8fc7b14a3f9cd7f8382d5c92f687d84b504e3e5e3066a2c06cb8199939026bfb",
+          "native": 100.0,
+          "canonical_scores": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "max_abs_delta": 0.0,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-4k-grid-pairA-64x64-t1",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-4k-grid-pairA-64x64-t1/summary.json",
+        "sha256": "7c5e91e8c5df8b7ae6fd9a3684690386be0744a3206c0671d893d06f994760ca"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "06d747de349c1d206e09b59815f59fd2e022ae33b009d1b7d0ddc27bcc1e2eff",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "cd2ea63ecdf85f307c1a7726ae8e2d2d5facaa1f436b4f70b17f3faf79b0daab",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "9542144792eeea1e4f357fdfed7b81c802f0dcc06e14ab6f977ff16b70a8a2ae",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-4k-grid-pairA-64x64-t28",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-4k-grid-pairA-64x64-t28/summary.json",
+        "sha256": "ecc810f03030834c156cfcac8a27e2067085ccdb0aa7909641bae75d125207b8"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "d56c17712af5bd091a27471b89c96698719b71b67de91fa21533d975a3c34045",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "a32aea4d3f14629f90404f0122b176041ba292e649ead2b6b7491567310d0df9",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "c416b152eecb14a42e2feba1791f45088090ab31fa673b41328b57a93cd02d50",
+          "native": 82.70652875396569,
+          "canonical_scores": [
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315,
+            82.7065218693315
+          ],
+          "max_abs_delta": 6.884634188963901e-06,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-4k-grid-pairA-255x257-t1",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-4k-grid-pairA-255x257-t1/summary.json",
+        "sha256": "e089f026a4f5bdf96c42495b4397dd95319e2ef938c43210a273c07a351e4f18"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "3eeed2f0625e47a2edf91f88b0c2da86e7729045b96ec3a4fbc61d4d79f65d79",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "e0ac8cff51dcc04fa7396f9dc2906da8dd73620cff495b40362589a8169d2c81",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "b365530327a1dffd9444aa9539b008a37db8f2be4fa61fd8a658608341fe00b5",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-4k-grid-pairA-255x257-t28",
+      "metric": "vmaf-4k",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-4k-grid-pairA-255x257-t28/summary.json",
+        "sha256": "57ef0947cf62c3175eb27c8d1237f2cdd66f6b043808033ce5b0411e8452fc8c"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "563427690b8df14e66ee832817491cde01f94171d569d9f63b36732982d52d0a",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "3d5bf694627a298f893b1e03120f7320692f7d4c21204c28fe6339a32f86df73",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        },
+        {
+          "block_sha256": "7e78602383fd26701f8c1e0bfea6c9f5b1ca595892ae474a594e6986e7d2a0e7",
+          "native": 97.68664919386599,
+          "canonical_scores": [
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054,
+            97.68664428325054
+          ],
+          "max_abs_delta": 4.910615444941868e-06,
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

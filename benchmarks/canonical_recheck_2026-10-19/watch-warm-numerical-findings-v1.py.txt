@@ -1,0 +1,52 @@
+"""Read completed warm summaries once and surface assigned-bound misses."""
+import datetime
+import hashlib
+import json
+import math
+from pathlib import Path
+import time
+
+R = Path(__file__).parent
+H = Path.home()/'tmp/handoff/aic2026-portcheck-20261018'
+REPORT = H/'WARM_NUMERICAL_FINDINGS.md'
+QUEUES = ['full-classical-grid-v2/queue.json', 'full-gpu-grid-v2/queue.json',
+          'psnr-current-queue.json', 'dssim-author-queue.json',
+          'flip-wshv-current-grid-queue.json', 'vmaf-current-grid-queue.json',
+          'full-neural-grid/queue-v2.json']
+ROOTS = ['current40-remaining-comparative-run', 'vmaf-fullcall-current-grid-run',
+         'dssim-fullcall-current-grid-run', 'msssim-current-grid-run', 'daala-current-grid-run']
+if not REPORT.exists():
+    with REPORT.open('x') as stream:
+        stream.write('# Retained warm numerical findings\n\nAssigned-bound misses in completed warm summaries. Source revisions remain distinct. No changed bound, native fix or numerical waiver. Cold findings are recorded separately.\n\n')
+seen = set()
+for line in REPORT.read_text().splitlines():
+    if line.startswith('{'):
+        seen.add(json.loads(line)['summary'])
+while True:
+    roots = {R/name for name in ROOTS}
+    for name in QUEUES:
+        queue = json.loads((R/name).read_text())
+        roots.update(Path(job['output']) for job in queue['jobs'])
+    for root in sorted(roots):
+        for path in sorted(root.glob('*/summary.json')):
+            if str(path) in seen:
+                continue
+            value = json.loads(path.read_text())
+            bound = value.get('absolute_bound')
+            delta = value.get('max_abs_delta')
+            if bound is None or delta is None or not math.isfinite(delta) or value.get('passed') is not False:
+                seen.add(str(path))
+                continue
+            row = dict(observed_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                       phase='warm', case=value['case'], metric=value['metric'],
+                       width=value['width'], height=value['height'], threads=value['threads'],
+                       canonical=value['canonical'], rust_source=value['rust_source'],
+                       absolute_bound=bound, max_abs_delta=delta, passed=False,
+                       summary=str(path), summary_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                       plan_sha256=value['plan_sha256'])
+            line = json.dumps(row, allow_nan=False)+'\n'
+            with REPORT.open('a') as stream:
+                stream.write(line)
+            seen.add(str(path))
+            print(line, end='', flush=True)
+    time.sleep(30)

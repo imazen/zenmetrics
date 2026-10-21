@@ -1,0 +1,227 @@
+{
+  "rows": [
+    {
+      "case": "vmaf-studio601-grid-pairA-3840x2160-t1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_score": 92.69157899285845,
+      "retained_canonical_scores": [
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559
+      ],
+      "retained_canonical_source": "libvmaf 3.2.0 / named RGB ingress; original acquired arms",
+      "canonical_block_sha256": [
+        "95b33e6a2e51ee909644915dbc47ca2aa1883634ea5ca1bd1d7d3fada0f5172a",
+        "0abc5ed72fc713ec70d78afe1a573175d5d4b92198ad61210a60e159d8b49bae",
+        "9f0843d871a959da6259ef46dbceeff9b46676c2641eee3591861c2880d82df5"
+      ],
+      "absolute_bound": 0.02,
+      "max_abs_delta": 0.027456491697449792,
+      "passed": false,
+      "native_observation": {
+        "kind": "current-source accuracy-only native probe",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-studio601-grid-pairA-3840x2160-t1/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-studio601-grid-pairA-3840x2160-t1/config.json"
+        ],
+        "column": "vmaf_studio601",
+        "stdout_sha256": "fad6177645f37852c93dd7bd12e42f1008d7d54efb758a9c28e7f09c66bd43b2"
+      }
+    },
+    {
+      "case": "vmaf-studio601-grid-pairA-3840x2160-t28",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_score": 92.69157899285845,
+      "retained_canonical_scores": [
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559,
+        92.7190354845559
+      ],
+      "retained_canonical_source": "libvmaf 3.2.0 / named RGB ingress; original acquired arms",
+      "canonical_block_sha256": [
+        "327519fc5fcd326b2b80455b731946e43f94c0b0c66a3c7395e1e45af31b85a2",
+        "2a4314bb21add7cd9e136ebb64feb92f51e194942c62392832def08b955ba4d9",
+        "dcc3b7f907e6911f8eb728025ceb4b55e85b524f43d90d66ef2ec2cd33f65155"
+      ],
+      "absolute_bound": 0.02,
+      "max_abs_delta": 0.027456491697449792,
+      "passed": false,
+      "native_observation": {
+        "kind": "current-source accuracy-only native probe",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-studio601-grid-pairA-3840x2160-t28/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-studio601-grid-pairA-3840x2160-t28/config.json"
+        ],
+        "column": "vmaf_studio601",
+        "stdout_sha256": "470ec8279dc2021ea7bc375095b560d858bc5a06b51c35859680502d1cbba444"
+      }
+    },
+    {
+      "case": "vmaf-neg-studio601-grid-pairA-3840x2160-t1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_score": 90.70428370248945,
+      "retained_canonical_scores": [
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901
+      ],
+      "retained_canonical_source": "libvmaf 3.2.0 / named RGB ingress; original acquired arms",
+      "canonical_block_sha256": [
+        "e3064965c3d1a886e345a7c32769c201e26f5da14fb9da204371e38b48e651ae",
+        "a04aa3d9cc5f478bf620ed9b8f8cbced58edef6b445ef71f80580b3ea05947ee",
+        "2d21537fa7e9bcdb4d5f9c5d3485c3b54a572f662bff18f3c4f96ebcf3bec5a2"
+      ],
+      "absolute_bound": 0.02,
+      "max_abs_delta": 0.027561374639560654,
+      "passed": false,
+      "native_observation": {
+        "kind": "current-source accuracy-only native probe",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-neg-studio601-grid-pairA-3840x2160-t1/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-neg-studio601-grid-pairA-3840x2160-t1/config.json"
+        ],
+        "column": "vmaf_neg_studio601",
+        "stdout_sha256": "2629c45cb46419e26363249dbd8087e8cffcff7bd3dedff6cb72e02f2d81bffd"
+      }
+    },
+    {
+      "case": "vmaf-neg-studio601-grid-pairA-3840x2160-t28",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "native_score": 90.70428370248945,
+      "retained_canonical_scores": [
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901,
+        90.73184507712901
+      ],
+      "retained_canonical_source": "libvmaf 3.2.0 / named RGB ingress; original acquired arms",
+      "canonical_block_sha256": [
+        "cbb580ab6e22f79ca1bd9d1adc5faeb609ca2fd4851913163c0c19d1f26ec367",
+        "0a02a3c5bb55f91205a8b99d69cd94e1c39e2080e0089c4ff1b14ace8bd640cc",
+        "be915a875bf9d4cf3afeeecf5cc71c8fddda9ea0aa5ab3b0b783b87ef10974f6"
+      ],
+      "absolute_bound": 0.02,
+      "max_abs_delta": 0.027561374639560654,
+      "passed": false,
+      "native_observation": {
+        "kind": "current-source accuracy-only native probe",
+        "command": [
+          "/usr/bin/time",
+          "-v",
+          "-o",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-neg-studio601-grid-pairA-3840x2160-t28/native-memory.txt",
+          "timeout",
+          "--kill-after=20s",
+          "1100s",
+          "/home/lilith/tmp/local-canonical-20261019T2330/current40-classical-build/target/release/iqa-compete",
+          "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/vmaf-neg-studio601-grid-pairA-3840x2160-t28/config.json"
+        ],
+        "column": "vmaf_neg_studio601",
+        "stdout_sha256": "7453ed67be661a89922a35df0af9194839809b70409f4a060b7f6db9b03a260a"
+      }
+    }
+  ],
+  "current_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+  "historical_plan_sha256": "677235eac21a0fd44d96b8495d6ccf9e75e9e8c9efac24ff16a88d81a2f78585",
+  "controller_sha256": "85f9b410381c2acd4d079898bc37e16e3c7937df23cffc3d8f65e7574e73978c",
+  "qualification": "Current EA worker score controls against retained same-input libvmaf observations. Completed current-source arms are adopted if already available. Probes are accuracy-only, with no timing comparison, changed gate or repeated completed benchmark.",
+  "publication_source_check": {
+    "command": [
+      "git",
+      "diff",
+      "--name-only",
+      "ea767ba1a4029963bc56a74fb824e64455e4599e..origin/master",
+      "--",
+      "crates/vmaf",
+      "crates/zenmetrics-cli/src/metrics/vmaf.rs",
+      "crates/zenmetrics-cli/src/metrics/classical.rs",
+      "crates/zenmetrics-cli/Cargo.toml",
+      "crates/zenmetrics-math",
+      "Cargo.toml",
+      "Cargo.lock",
+      "benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml"
+    ],
+    "differing_paths": [],
+    "origin_master": "4b374eb4933edf2fb828c42fd8458089b9a85c36",
+    "qualification": "These metric, RGB ingress, math, manifest and dependency paths are unchanged from the EA worker source. Scheduling-table changes are separate from its explicitly selected metric calls."
+  },
+  "publication_resources": {
+    "raw_result": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1/result.json",
+      "sha256": "31e076b842eb0016039a8d64bac42463640bce2f2e7d5802992f6a419469adce"
+    },
+    "resource_log": {
+      "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-studio4k-current-score-controls-v1.log",
+      "sha256": "fc2c704955e9700989a1b063610ddf555c77e7bf68703356a421d33c1855948a"
+    },
+    "receipt": "run-heavy: done rc=0 4s | peak-RSS 0.60GiB | min-avail 13610MiB | peak-load 1.53"
+  }
+}

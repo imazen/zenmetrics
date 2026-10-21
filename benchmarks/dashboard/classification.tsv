@@ -1841,3 +1841,8 @@ benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10
 benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/hyperiqa-first-original-cid22-t8.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/neural-first-profiles-additional-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/butteraugli1mp-t1-first-profile-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-studio4k-current-score-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-linked-oracle-version-controls.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-existing-score-contracts-2026-10-21/vmaf-4k.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-existing-score-contracts-2026-10-21/vmaf-v1.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/canonical_recheck_2026-10-19/vmaf-existing-score-contracts-2026-10-21/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.

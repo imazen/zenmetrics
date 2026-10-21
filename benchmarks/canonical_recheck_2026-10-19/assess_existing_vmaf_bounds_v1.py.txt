@@ -1,0 +1,88 @@
+"""Apply existing full-pixel FFI score assertions to retained boundless cohorts."""
+import json
+from pathlib import Path
+import sys
+
+R = Path(__file__).parent
+B = Path('benchmarks/iqa_compete_2026-10-16')
+sys.path.insert(0, str(B.resolve()))
+from compare_canonical import compare, sha
+from reference_publication import register_outputs
+
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19/vmaf-existing-score-contracts-2026-10-21')
+PUBLIC.mkdir()
+test = Path('crates/vmaf/tests/ffi_fusion.rs')
+text = test.read_text()
+assert 'fn full_v0_pixel_scores_match_v321()' in text
+assert '("score", ours.score, *oracle, 0.02)' in text
+assert '(ours.score - oracle_score).abs() <= 0.02' in text
+assert 'fn full_v1_pixel_scores_match_v321()' in text
+assert 'ModelVariant::Standard1080p' in text
+rows = []
+declared = {'vmaf-4k':0, 'vmaf-v1':0}
+for name in ['vmaf-fullcall-current40-run', 'vmaf-fullcall-current-grid-run']:
+    root = R/name
+    plan_path = root/'plan.json'
+    plan = json.loads(plan_path.read_text())
+    for metric in declared:
+        declared[metric] += sum(case['metric'] == metric for case in plan['cases'])
+    for case in plan['cases']:
+        if case['metric'] not in ['vmaf-4k', 'vmaf-v1']:
+            continue
+        summary_path = root/case['id']/'summary.json'
+        if not summary_path.exists():
+            continue
+        summary = json.loads(summary_path.read_text())
+        assert summary['plan_sha256'] == sha(plan_path)
+        assert case['absolute_bound'] is None
+        observations = []
+        paths = sorted((root/case['id']).glob('block-*/result.json'))
+        assert len(paths) == 3
+        for path in paths:
+            block = json.loads(path.read_text())
+            if block['errors'] or set(block['arms']) != {'rust', 'canonical'}:
+                assert block['errors'], 'Missing arm without explicit failure'
+                observations.append(dict(block_sha256=sha(path), errors=block['errors'],
+                    available_scores={role:arm.get('score') for role,arm in block['arms'].items()}, passed=None,
+                    qualification='Retained process/input-contract finding; no score-contract pass assigned.'))
+                continue
+            native = block['arms']['rust']['score']
+            arm = block['arms']['canonical']
+            scores = arm.get('extra', {}).get('sample_scores', [arm['score']])
+            assert scores
+            comparisons = [compare(native, score, 0.02, 0) for score in scores]
+            observations.append(dict(block_sha256=sha(path), native=native,
+                                     canonical_scores=scores,
+                                     max_abs_delta=max(delta for delta, passed in comparisons),
+                                     passed=all(passed is True for delta, passed in comparisons)))
+        rows.append(dict(case=case['id'], metric=case['metric'], native_source=plan['rust_source'],
+                         original_plan_bound=None, original_summary=dict(path=str(summary_path), sha256=sha(summary_path)),
+                         original_plan_sha256=sha(plan_path), existing_full_pixel_score_bound=0.02,
+                         observations=observations, passed=None if any(row['passed'] is None for row in observations) else all(row['passed'] for row in observations)))
+assert rows and len({(row['case'], row['original_plan_sha256']) for row in rows}) == len(rows)
+outputs = []
+index = []
+for metric in ['vmaf-4k', 'vmaf-v1']:
+    selected = [row for row in rows if row['metric'] == metric]
+    assert selected
+    path = PUBLIC/(metric+'.json')
+    data = (json.dumps(dict(rows=selected), indent=2, allow_nan=False)+'\n').encode()
+    assert len(data) <= 30000
+    with path.open('xb') as stream:
+        stream.write(data)
+    outputs.append((path, 'provenance'))
+    index.append(dict(metric=metric, file=path.name, sha256=sha(path), acquired_cases=len(selected), declared_cases=declared[metric],
+                      passed=sum(row['passed'] is True for row in selected), unscored=sum(row['passed'] is None for row in selected)))
+path = PUBLIC/'index.json'
+data = dict(metrics=index, existing_assertion=dict(path=str(test), sha256=sha(test),
+            v0_function='full_v0_pixel_scores_match_v321',
+            v1_function='full_v1_pixel_scores_match_v321'),
+            source_sha256=sha(__file__),
+            qualification='Additional score-only assessment of already-acquired current EA cohorts under existing full-pixel FFI score assertions. Original boundless plans, summaries and timing qualification are unchanged. Cases are acquired cohorts, not unique images or complete grids; every retained canonical sample is checked. No native execution, new tolerance, runtime acceptance or replacement of an original result.')
+assert all(row['native_source'] == 'ea767ba1a4029963bc56a74fb824e64455e4599e' for row in rows)
+with path.open('x') as stream:
+    json.dump(data, stream, indent=2, allow_nan=False)
+    stream.write('\n')
+outputs.append((path, 'provenance'))
+register_outputs(outputs)
+print(json.dumps(dict(existing_score_contracts=index)), flush=True)

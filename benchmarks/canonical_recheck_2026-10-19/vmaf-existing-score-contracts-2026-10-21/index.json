@@ -1,0 +1,30 @@
+{
+  "metrics": [
+    {
+      "metric": "vmaf-4k",
+      "file": "vmaf-4k.json",
+      "sha256": "261e33ae46f5796c328841ab627a96eeca4137eaf02bc368ecf1024f7564b076",
+      "acquired_cases": 6,
+      "declared_cases": 26,
+      "passed": 6,
+      "unscored": 0
+    },
+    {
+      "metric": "vmaf-v1",
+      "file": "vmaf-v1.json",
+      "sha256": "be2d2dea7f069adcb0fc22b05ec14465ee50088eee5546af04801d464deeb113",
+      "acquired_cases": 6,
+      "declared_cases": 26,
+      "passed": 4,
+      "unscored": 2
+    }
+  ],
+  "existing_assertion": {
+    "path": "crates/vmaf/tests/ffi_fusion.rs",
+    "sha256": "3fa81d6e594dc27a87b6b901fe19e50c653812aa15ef89f5c906a602d8bbe444",
+    "v0_function": "full_v0_pixel_scores_match_v321",
+    "v1_function": "full_v1_pixel_scores_match_v321"
+  },
+  "source_sha256": "fc6ab52fea3fe99b206676fd931b91a2e371f479353f39ef5858712e76409f1a",
+  "qualification": "Additional score-only assessment of already-acquired current EA cohorts under existing full-pixel FFI score assertions. Original boundless plans, summaries and timing qualification are unchanged. Cases are acquired cohorts, not unique images or complete grids; every retained canonical sample is checked. No native execution, new tolerance, runtime acceptance or replacement of an original result."
+}

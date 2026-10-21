@@ -1,0 +1,38 @@
+{
+  "archive": {
+    "path": "/home/lilith/tmp/portcheck/sources/libvmaf/source.tar.gz",
+    "sha256": "efe6ac72bb84ea796280e198f1d81454f92974e3fb4d57b021fcd9b0ff640615"
+  },
+  "declared_dev_dependency": "vmaf-head-sys =0.2.0",
+  "matching_lockfile_checksum": "efe6ac72bb84ea796280e198f1d81454f92974e3fb4d57b021fcd9b0ff640615",
+  "package_vcs": {
+    "git": {
+      "sha1": "8d8b8a90c88d1ae9dd99df5fcfb3dfd310ccf6b0"
+    },
+    "path_in_vcs": ""
+  },
+  "source_meson": {
+    "path": "/home/lilith/tmp/portcheck/sources/libvmaf/vmaf-head-sys-0.2.0/vendored/vmaf/libvmaf/meson.build",
+    "sha256": "e8926699454889dfe4bd635282048695204e53326933cf61977c8ad8fb8a3a88"
+  },
+  "source_version": "3.2.0",
+  "build_project_info": {
+    "path": "/home/lilith/tmp/portcheck/native/vmaf/build/meson-info/intro-projectinfo.json",
+    "sha256": "3c48a90829681878db18b29163c4e52d15bd03148f0b8cc931b4936669126832"
+  },
+  "build_project": {
+    "version": "3.2.0",
+    "descriptive_name": "libvmaf",
+    "license": [
+      "unknown"
+    ],
+    "license_files": [],
+    "subproject_dir": "subprojects",
+    "subprojects": []
+  },
+  "generated_header": {
+    "path": "/home/lilith/tmp/portcheck/native/vmaf/build/include/libvmaf/version.h",
+    "sha256": "9657bb17c058714774b9913666669f719c3daa085337acbfdc97408e8bebd591"
+  },
+  "qualification": "Measured effective oracle identity. Both archived source and linked build metadata identify libvmaf 3.2.0. Existing native descriptions saying 3.2.1 are retained pending documentation correction; they do not establish a different linked oracle version."
+}

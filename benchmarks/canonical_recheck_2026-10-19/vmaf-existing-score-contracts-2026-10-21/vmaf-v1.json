@@ -1,0 +1,310 @@
+{
+  "rows": [
+    {
+      "case": "vmaf-v1-fullcall-pair-cid22-t1",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run/vmaf-v1-fullcall-pair-cid22-t1/summary.json",
+        "sha256": "1dc4889ee745aef8efb066d95bc10dd8dfd8293df090c59badd1e9a10185e6d2"
+      },
+      "original_plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "3fb1ef874d2401fb1d92bf5b112ac2fecc32565681f593296334671165df9f25",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        },
+        {
+          "block_sha256": "0b4a37e2b0f1abbfc880adf5d1ce0d897e0088a1cf782427d7cd566584a7621e",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        },
+        {
+          "block_sha256": "cbc456d7fe351e9ae0e5fa402d9197206690c08d895f50aeb6316ba9d0e768f3",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-v1-fullcall-pair-cid22-t8",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current40-run/vmaf-v1-fullcall-pair-cid22-t8/summary.json",
+        "sha256": "df8c5763d901302d6d22ebbc172f39cd456eb242fdadc59ce1adf3070c188c79"
+      },
+      "original_plan_sha256": "b8b85f3916f649345455a9a3c5125455b5bcd165c0a431d31c6767e0677bb1f4",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "f9b5d06569f9e7bac74daf8c614036e98977bb7a11a6274e71f8303833e9f915",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        },
+        {
+          "block_sha256": "5aa0e9446959f3aec3140ee3e2e05c59af1e7e95d0b3b9249867f1967b9641ed",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        },
+        {
+          "block_sha256": "bfb60a5fd0c52bef6b4dfee1c2f418e1dca0b4fef2d65be3009f777fb333c0e6",
+          "native": 98.65855853923055,
+          "canonical_scores": [
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421,
+            98.6587836962421
+          ],
+          "max_abs_delta": 0.00022515701154190992,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-v1-grid-pairA-64x64-t1",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t1/summary.json",
+        "sha256": "a046e7d4087283ae381cc57bc9431dbe70b00302cf434afbf7c6b301ae5321ee"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "f79216b2bc5523dbdfbc6716e098281bc31e4e27330154be5e01d260f43bfd40",
+          "errors": {
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t1/block-00/canonical/stderr.log",
+            "rust": "missing successful scalar row"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        },
+        {
+          "block_sha256": "e19bd1219c7d14983488423ce853378b7a003dda4c4a91f86a6b820edac9b7ab",
+          "errors": {
+            "rust": "missing successful scalar row",
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t1/block-01/canonical/stderr.log"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        },
+        {
+          "block_sha256": "b9dcaecdc82269690f0e4c0167640c46caee571422a468e6c96bdc82cd77edb7",
+          "errors": {
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t1/block-02/canonical/stderr.log",
+            "rust": "missing successful scalar row"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        }
+      ],
+      "passed": null
+    },
+    {
+      "case": "vmaf-v1-grid-pairA-64x64-t28",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t28/summary.json",
+        "sha256": "e30ecd454909a7a24b61a672742bf624ba7c63feb0a905c6fa74cbf99598c5bb"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "ccab2b4634cae86e78281de990243c9f9c0223e590ce70e8577b30bcc62c648d",
+          "errors": {
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t28/block-00/canonical/stderr.log",
+            "rust": "missing successful scalar row"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        },
+        {
+          "block_sha256": "829351049812a937a8cbc1499e6f60c183cfe2a0e65d35faf276b1563b3170cc",
+          "errors": {
+            "rust": "missing successful scalar row",
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t28/block-01/canonical/stderr.log"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        },
+        {
+          "block_sha256": "0e40d80eca7d8fa92ad29eb0d200ff4f73fffdb10adc1c3e48d2476372c161cf",
+          "errors": {
+            "canonical": "canonical process exit 1; /home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-64x64-t28/block-02/canonical/stderr.log",
+            "rust": "missing successful scalar row"
+          },
+          "available_scores": {},
+          "passed": null,
+          "qualification": "Retained process/input-contract finding; no score-contract pass assigned."
+        }
+      ],
+      "passed": null
+    },
+    {
+      "case": "vmaf-v1-grid-pairA-255x257-t1",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-255x257-t1/summary.json",
+        "sha256": "c5725328537257274899a52f1f68cc59bc4f6e9542691e815e40e7000d1cfbc3"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "85f8c90055310cec11779eeae0b7774db22e3412c5646f304e04cb79ee4743de",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        },
+        {
+          "block_sha256": "792993ae9912649d1b95f2e37f2e133b725c807878a113626bf785835c5208f0",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        },
+        {
+          "block_sha256": "eef33415e1b0d39197b0d1cd09b6f1ddbbf640b7bfbb3e72aed3f4214c066e3e",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "vmaf-v1-grid-pairA-255x257-t28",
+      "metric": "vmaf-v1",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "original_plan_bound": null,
+      "original_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/vmaf-fullcall-current-grid-run/vmaf-v1-grid-pairA-255x257-t28/summary.json",
+        "sha256": "ea56e9c707e7b47ac9dd0370906967f17df022a8f0f6395792c90483180fa4af"
+      },
+      "original_plan_sha256": "8db4085d8b63a90dc0fc7b89260df8d195e5af89ba0b495428df3888518c4618",
+      "existing_full_pixel_score_bound": 0.02,
+      "observations": [
+        {
+          "block_sha256": "0f3c96c934e3f45d8602bfa807e84df790f6f954a343d71a6d899ba6ba7d9818",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        },
+        {
+          "block_sha256": "7e12f1d02525a1551d716b6e02071ca815cf39f3fbabc74acabb9f2e36637799",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        },
+        {
+          "block_sha256": "74eade7e4ca47d4fc8f8fde486ec806d2d53623f763846eda46a885e8d16f86b",
+          "native": 91.523725715875,
+          "canonical_scores": [
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176,
+            91.52372552578176
+          ],
+          "max_abs_delta": 1.9009324603302957e-07,
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

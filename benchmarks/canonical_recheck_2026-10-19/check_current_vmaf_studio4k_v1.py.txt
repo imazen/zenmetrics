@@ -1,0 +1,88 @@
+import json
+import os
+from pathlib import Path
+import struct
+import sys
+
+R = Path(__file__).parent
+sys.path.insert(0, '/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16')
+from compare_canonical import compare, sha
+from haarpsi_primary import execute
+
+current = R/'vmaf-fullcall-current-grid-run'
+historical = R/'full-classical-grid-v2/group-00-run'
+plan = json.loads((current/'plan.json').read_text())
+old_plan = json.loads((historical/'plan.json').read_text())
+output = R/'vmaf-studio4k-current-score-controls-v1'
+output.mkdir()
+
+def verify():
+    for asset, expected in plan['bindings'].items():
+        if sha(asset) != expected:
+            raise ValueError('Current reference asset changed: '+asset)
+
+verify()
+rows = []
+for metric in ['vmaf-studio601', 'vmaf-neg-studio601']:
+    for threads in [1, 28]:
+        name = f'{metric}-grid-pairA-3840x2160-t{threads}'
+        case = next(c for c in plan['cases'] if c['id'] == name)
+        old_case = next(c for c in old_plan['cases'] if c['id'] == name)
+        for key in ['metric','width','height','threads','reference','distorted','absolute_bound']:
+            assert case[key] == old_case[key]
+        for asset in [case['reference'], case['distorted']]:
+            assert old_plan['bindings'][asset] == plan['bindings'][asset]
+        old_binary = old_case['canonical']['command'][0]
+        assert sha(old_binary) == old_plan['bindings'][old_binary]
+        old_blocks = sorted((historical/name).glob('block-*/result.json'))
+        assert len(old_blocks) == 3
+        reference_scores = []
+        for path in old_blocks:
+            arm = json.loads(path.read_text())['arms']['canonical']
+            reference_scores.extend(arm.get('extra', {}).get('sample_scores', [arm['score']]))
+        observed = []
+        for p in sorted((current/name).glob('block-*/result.json')):
+            value = json.loads(p.read_text())
+            if 'rust' in value.get('arms', {}):
+                observed.append(dict(score=value['arms']['rust']['score'], path=str(p), sha256=sha(p)))
+        directory = output/name
+        directory.mkdir()
+        if observed:
+            native_score = observed[0]['score']
+            origin = dict(kind='adopted current-source acquired arm; no scorer repeated', records=observed)
+        else:
+            config = {k:case[k] for k in ['width','height','reference','distorted','threads']}
+            config.update(metric_name=metric, probe_only=True, only_mode='score',
+                          timing_phase='warm', locked_process_accounting=True)
+            path = directory/'config.json'
+            path.write_text(json.dumps(config)+'\n')
+            env = dict(os.environ, TMPDIR=str(directory), LC_ALL='C', CUDA_VISIBLE_DEVICES='')
+            for key in ['RAYON_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS']:
+                env[key] = str(threads)
+            command = [plan['binary'], str(path)]
+            rc, wrapped = execute(command, env, directory, 'native', 1100)
+            assert rc == 0, 'Current native probe failed; retain all output'
+            probes = [json.loads(line.removeprefix('IQA_PROBE '))
+                      for line in (directory/'native-stdout.log').read_text().splitlines()
+                      if line.startswith('IQA_PROBE ')]
+            assert len(probes) == 1 and len(probes[0]['scores']) == 1
+            column, bits = probes[0]['scores'][0]
+            native_score = struct.unpack('>d', bytes.fromhex(bits))[0]
+            origin = dict(kind='current-source accuracy-only native probe', command=wrapped,
+                          column=column, stdout_sha256=sha(directory/'native-stdout.log'))
+        comparisons = [compare(native_score, score, case['absolute_bound'], case.get('relative_bound',0))
+                       for score in reference_scores]
+        row = dict(case=name, native_source=plan['rust_source'], native_score=native_score,
+                   retained_canonical_scores=reference_scores,
+                   retained_canonical_source='libvmaf 3.2.0 / named RGB ingress; original acquired arms',
+                   canonical_block_sha256=[sha(p) for p in old_blocks],
+                   absolute_bound=case['absolute_bound'], max_abs_delta=max(d for d,_ in comparisons),
+                   passed=all(ok is True for _,ok in comparisons), native_observation=origin)
+        rows.append(row)
+        print(json.dumps(row), flush=True)
+verify()
+with (output/'result.json').open('x') as stream:
+    json.dump(dict(rows=rows, current_plan_sha256=sha(current/'plan.json'),
+                   historical_plan_sha256=sha(historical/'plan.json'), controller_sha256=sha(__file__),
+                   qualification='Current EA worker score controls against retained same-input libvmaf observations. Completed current-source arms are adopted if already available. Probes are accuracy-only, with no timing comparison, changed gate or repeated completed benchmark.'),
+              stream, indent=2, allow_nan=False)

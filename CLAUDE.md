@@ -2304,3 +2304,23 @@ The [plane comparison](benchmarks/canonical_recheck_2026-10-19/niqe-native-origi
 | 2 | mu | 2043/9216 | 3.0517578125e-05 |
 | 2 | mu_sq | 3715/9216 | 0.0078125 |
 | 2 | norm | 5234/9216 | 0.0020902156829833984 |
+
+### VMAF Studio601 photo4K current-source score control (2026-10-21)
+
+The [current-source controls](benchmarks/canonical_recheck_2026-10-19/vmaf-studio4k-current-score-controls.json) compare the EA worker against every retained canonical sample for the same photo pixels and unchanged 0.02 absolute bound. Already-acquired current native arms are adopted where available; other native calls are accuracy-only probes. These are not new comparative timing results.
+
+| Case | Current native | Canonical first sample | Maximum absolute difference | Existing bound passes |
+| --- | ---: | ---: | ---: | --- |
+| vmaf-studio601-grid-pairA-3840x2160-t1 | 92.691578992858453 | 92.719035484555903 | 0.027456491697449792 | False |
+| vmaf-studio601-grid-pairA-3840x2160-t28 | 92.691578992858453 | 92.719035484555903 | 0.027456491697449792 | False |
+| vmaf-neg-studio601-grid-pairA-3840x2160-t1 | 90.704283702489448 | 90.731845077129009 | 0.027561374639560654 | False |
+| vmaf-neg-studio601-grid-pairA-3840x2160-t28 | 90.704283702489448 | 90.731845077129009 | 0.027561374639560654 | False |
+
+The [linked-oracle identity](benchmarks/canonical_recheck_2026-10-19/vmaf-linked-oracle-version-controls.json) verifies the source archive against the exact Cargo.lock checksum. The vmaf-head-sys 0.2.0 archive, Meson source and generated linked-build header all identify libvmaf 3.2.0. Existing 3.2.1 native descriptions are not evidence of a different effective FFI oracle. Older EFA observations remain retained and independently labeled; no bound or score was changed.
+
+A separate [existing-score-contract assessment](benchmarks/canonical_recheck_2026-10-19/vmaf-existing-score-contracts-2026-10-21/index.json) applies the already-present full-pixel FFI score assertion (absolute 0.02) to retained EA VMAF 4K/v1 samples. Their original boundless plans and summaries remain unchanged; this is an additional score-only audit, with no native calls or new tolerance.
+
+vmaf-4k: 6/26 declared cohorts are acquired; 6 pass that existing score assertion; 0 cohorts retain process/input findings without a scalar pass.
+
+vmaf-v1: 6/26 declared cohorts are acquired; 4 pass that existing score assertion; 2 cohorts retain process/input findings without a scalar pass.
+
