@@ -1,0 +1,96 @@
+{
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-t28-first-cap-adopt-v3/receipt.json",
+    "sha256": "af5ee0e1ecd00605b44463641d4aa5120a6f056e9c533ed7807d755a580e7879"
+  },
+  "receipt": {
+    "case": "gmsd-grid-pairA-64x64-t28",
+    "partial_capture": true,
+    "requested_repetitions": 100,
+    "completed_repetitions": 13,
+    "completed": [
+      {
+        "log": "worker-000.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-001.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-002.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-003.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-004.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-005.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-006.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-007.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-008.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-009.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-010.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-011.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-012.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      }
+    ],
+    "incomplete_worker_logs": [],
+    "native_metric_calls": 0,
+    "capture": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/gmsd-grid-pairA-64x64-t28",
+    "plan_sha256": "768b30a5840e6507cf8ca1206c2c6d60ff75f4b3cfe1692f0b8994a9a908f3b0",
+    "request_sha256": "a2327314a9e43635e1fd022ab8b6b8434063d54d829c534645b8070829652da8",
+    "config_sha256": "62271137f8c1a832b4104d0495ad7ea18b3d1d1cc961273f8a3c95355d98851b",
+    "perf_data_sha256": "24fc867a22e1187c53ed11cd70d0c8d370cebd79ff156ce5e7b1b82f0d95effe",
+    "worker_log_sha256": {
+      "worker-000.log": "11bb73af86eee50dec92fa6c6a7fef83755abab56454401d2a0aae79b772aaa9",
+      "worker-001.log": "9b1684b5bc3822bc0a8278eba0e539b726c814c95265797ebaa50b518f519449",
+      "worker-002.log": "5dc017873fe137f07dbfbb4469b9b668dda4b89f7297df98ad8ac652580c79f1",
+      "worker-003.log": "9da30dda319d405dfac03b5c43158ea551a8a5798db75797b9b7970976f59668",
+      "worker-004.log": "07ca9fa0ccb13789b8d1c55958af557864ca2a5e974d145a54bc2d1aeb994a97",
+      "worker-005.log": "9348cc2745fe66f0d7d382dd3edee03c5f2f019aa5d611ddfd4874b54b6f5456",
+      "worker-006.log": "d9bcaa4fea815722b87c6c481b8e1dc77f1a0a53957b868652a09f7baa4c4217",
+      "worker-007.log": "85799329da1d430dbe56acd679f2d59d20c765a30723a2ea6fa71a81109d9395",
+      "worker-008.log": "a472a0abd54195bd0134e0b92fd03c049902d412f4ec47d61fc7d0900f63e4f1",
+      "worker-009.log": "07e93608a40d3115ff91ebf7c28ee50f64c665c926b33aef324be2b373355270",
+      "worker-010.log": "3cb5b22e7c054d89ea462e30d1dce91c3934d85197eb9b70b42f5209fdf00be4",
+      "worker-011.log": "c221f077abae9a50940eed7cddc83cc0a166ec550fdb20fb7e8ecfdf0e94bb0c",
+      "worker-012.log": "7450cd13ee9b7ebf56607822087353589b087b73ae8257e6c83d359831a070e4"
+    },
+    "postprocessor_sha256": "df8db4c76761abe93cf459254a2a0fa3ccbccfb3838420dba34ceda9b6d1222b",
+    "perf_tool_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "output_sha256": {
+      "script.txt": "2e782aff57b6d879ca263ffd91ea7af95697efd188fbd4825a51f8f1cd70e2b8",
+      "report.txt": "9da7aef94f8055d4751c4379e0987c22d5d1d9507c28cdb9f21be10dc2f6b068",
+      "header.txt": "3e4f4c2241b2e394d407a86728f4106c380b6ab0662a67eaedc0b921913c25df"
+    },
+    "qualification": "Size-capped whole-process diagnostic, with every completed scalar revalidated and any interrupted final worker retained explicitly. No scorer rerun, complete requested capture, isolated cold clock, timing ratio, numerical parity acceptance or qualified regression is claimed."
+  }
+}

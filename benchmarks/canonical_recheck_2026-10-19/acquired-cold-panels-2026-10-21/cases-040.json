@@ -1,0 +1,400 @@
+{
+  "cases": [
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-1024x1024-t28",
+      "metric": "ms-ssim-pyiqa",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.03821559927597131,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.3733055066219606e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 42012586.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45756,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "2596f407b9d18e24bbae2d4e38d3cf64b854aff1a328a6d1bec8cb1a44dfc895"
+              }
+            },
+            "canonical": {
+              "ns": 1099356985.0,
+              "score": 0.9900258725874933,
+              "max_rss_kib": 1893856,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "9cef5655244ffdf088d652929a25ef00dcb501195ad6f411c6e2772b3de73aa9"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 4.3733055066219606e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 40616924.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45704,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "11b71ced5a6d16e2ddd5f94010dc39fdc6654d56fe563f97c93cf7f451ae3359"
+              }
+            },
+            "canonical": {
+              "ns": 1087370788.0,
+              "score": 0.9900258725874933,
+              "max_rss_kib": 1912348,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "3dc4133fe8882ab8efc762a350f43051d15a160623ca58ff51a0091c857023da"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.3733055066219606e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 42051048.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45772,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "dffe7fdc5c6278c7823dc7d8b4e13940dbcd580567c4f2c1339d24aec4141b1e"
+              }
+            },
+            "canonical": {
+              "ns": 1061340919.0,
+              "score": 0.9900258725874933,
+              "max_rss_kib": 1916584,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "ed0e2991de39ea8307e8fe3b1f27a831a56d0e23715f43147e25149dbf91323d"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "c3a74013a21ca24b604fcf3defd148fe3b9d713f099fd09036ff16aa085e841d"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "e0cde8a610e30d9f1ea07ff83c4da7c668185307461106fa96b4628afa9ba707",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.81GiB | min-avail 13310MiB | peak-load 1.05"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "872b6c229e78c805f25cfa613be70520a39d17f7b7a074a2e7778f4593a70e1b",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.82GiB | min-avail 13408MiB | peak-load 0.60"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "15e0b0c8ac279c89cee677416e8ba71648bad401e2557957b276169ded4d8a05",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 1.83GiB | min-avail 13222MiB | peak-load 2.62"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-3840x2160-t1",
+      "metric": "ms-ssim-pyiqa",
+      "width": 3840,
+      "height": 2160,
+      "threads": 1,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.010296256115825965,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.985452056211926e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 349048867.0,
+              "score": 0.9893061477129897,
+              "max_rss_kib": 328804,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-00/native/native-memory.txt",
+                "sha256": "25070f2012b53998805d3175f26e9ab3168d016ab3c8ac66e58eada1959aadeb"
+              }
+            },
+            "canonical": {
+              "ns": 33900561823.0,
+              "score": 0.9893060878584692,
+              "max_rss_kib": 10033404,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "ac4d88ac57d305054d24bb4b9bc43add64833e6057f1dc41771dea0c692aa45e"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 5.985452056211926e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 360934532.0,
+              "score": 0.9893061477129897,
+              "max_rss_kib": 328256,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-01/native/native-memory.txt",
+                "sha256": "20bd5fd5d1e5c003e7f0d357f980193b3c2ed6bbe38905ce7018ea58578a3f26"
+              }
+            },
+            "canonical": {
+              "ns": 33483068295.0,
+              "score": 0.9893060878584692,
+              "max_rss_kib": 10070300,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "a4392fa168c2c647c3a6ffd2fa8c38246c6adc0e73feeb28f48c77c6661956da"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.985452056211926e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 348908753.0,
+              "score": 0.9893061477129897,
+              "max_rss_kib": 328668,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-02/native/native-memory.txt",
+                "sha256": "03fa7c2fe3b65ed6d45bc1fcfb5bca90d1c2b102e90311e4a478b528de37a637"
+              }
+            },
+            "canonical": {
+              "ns": 35222442256.0,
+              "score": 0.9893060878584692,
+              "max_rss_kib": 10065416,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "43944db61d9b0ba99d1b731430926aa14238b1600596ad22997285d411803808"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/summary.json",
+        "sha256": "79cfa13b2a6345c647ef5f0e69dad99e029f1f8e650408ef539caeaf181771f4"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-00-wrapper.log",
+          "sha256": "2dfb853f51e4eb615051015ca33e4d34784ca6266990fc8dc09041ad3508a7f8",
+          "receipts": [
+            "run-heavy: done rc=0 73s | peak-RSS 9.57GiB | min-avail 5414MiB | peak-load 1.60"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-01-wrapper.log",
+          "sha256": "0ed4c3c08ef228195d102377d15e56041dffe60f73afc59d4459ff33ff586f82",
+          "receipts": [
+            "run-heavy: done rc=0 73s | peak-RSS 9.60GiB | min-avail 5443MiB | peak-load 1.59"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-3840x2160-t1/block-02-wrapper.log",
+          "sha256": "ad6350ca348bcb0327d928b3b419b490eeda2fddf5a71d478ee62fdbba81e0c1",
+          "receipts": [
+            "run-heavy: done rc=0 76s | peak-RSS 9.60GiB | min-avail 4952MiB | peak-load 1.14"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "ciede2000-grid-pairA-64x64-t1",
+      "metric": "ciede2000",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "canonical": "scikit-image CIEDE2000 / declared precise D65 Lab",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.46739248695238916,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.5543122344752192e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 686322.0,
+              "score": 0.9434530177660972,
+              "max_rss_kib": 17720,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-00/native/native-memory.txt",
+                "sha256": "d9b737c9236688c8b6da521197b0f97f79213e075eb5bd86723ef657582deac3"
+              }
+            },
+            "canonical": {
+              "ns": 1386834.0,
+              "score": 0.9434530177660957,
+              "max_rss_kib": 62868,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "05b89a99428255911a6b239553855819517525b8a7264fcbb676d59b48399342"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 1.5543122344752192e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 689412.0,
+              "score": 0.9434530177660972,
+              "max_rss_kib": 17716,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-01/native/native-memory.txt",
+                "sha256": "c800887cc637f7c5597d9d6f1e4c1f2f8903e5f2e2a967f26e7a3594c4c7ba02"
+              }
+            },
+            "canonical": {
+              "ns": 1757800.0,
+              "score": 0.9434530177660957,
+              "max_rss_kib": 63068,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "d0101db39955cffe9dcf9434a2ba982909e036e5b6df3f092a980485837cf428"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.5543122344752192e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 700232.0,
+              "score": 0.9434530177660972,
+              "max_rss_kib": 17700,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-02/native/native-memory.txt",
+                "sha256": "27a84e4cd619a90713d0cc237bb435b8155c6a16427cfa44f706d8dc27af961c"
+              }
+            },
+            "canonical": {
+              "ns": 1498167.0,
+              "score": 0.9434530177660957,
+              "max_rss_kib": 63160,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "5755134f631d38f17d4fa2ef6a67494fcd6de078f02bf85f80a6dd5b961333e4"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/summary.json",
+        "sha256": "d2308d4df721a19b08dfeaaa11e412b7c26cfb8665abd37c971cb2559f703238"
+      },
+      "plan_sha256": "aed7bb11a9a0e90f057baab2492042ddf874aaf850bf3338a3e4c2ab97652bdf",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-00-wrapper.log",
+          "sha256": "947364d0effd366c1ef6a99df4d14fdfa5a984b63ac0932e25a66e22746f1bfe",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 14619MiB | peak-load 1.30"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-01-wrapper.log",
+          "sha256": "e7a5dbca4dd892dbafe9d4925ebeb687b9b60da4e4f18a4c9ed1cbcba7b19b59",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 14659MiB | peak-load 1.29"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f/ciede2000-grid-pairA-64x64-t1/block-02-wrapper.log",
+          "sha256": "5d35b44c4f56363d247057a80d8b61df227af1f25b368d1c2d01233f1ff618dd",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 14796MiB | peak-load 1.58"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

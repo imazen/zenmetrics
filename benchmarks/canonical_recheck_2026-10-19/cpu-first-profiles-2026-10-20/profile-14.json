@@ -1,0 +1,150 @@
+{
+  "case": "ssim2-grid-pairA-255x257-t1",
+  "metric": "ssim2",
+  "width": 255,
+  "height": 257,
+  "threads": 1,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-odd1-first-profile-v1",
+  "receipt": {
+    "case": "ssim2-grid-pairA-255x257-t1",
+    "plan_sha256": "fd29463a0a6a3b200676b14d4d8d853d39d2fbc72b409146e975fa226f45e568",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-odd1-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-odd1-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-odd1-first-profile-v1/perf.data",
+    "perf_data_sha256": "fd92ed3f56bdfebfe411ba71d58677895dcab75ab0c6cfa07bdece3e86008370",
+    "config_sha256": "dbb52e862afdf73754573a41f13bd959bbcb31b10ff1f31436787bb87c7e45e4",
+    "repetitions": 30,
+    "worker_log_sha256": {
+      "worker-008.log": "dedb7365caf4aa25231250863ca9fbc0320aeb85e43a64dcebc4e510847c0a18",
+      "worker-018.log": "9cb44c2391b21080841b684494d3c72b2c31390d72df145d47d84bb22f6ee082",
+      "worker-004.log": "ce757b6a5323fa4bc3f55f8b6e03225cdc82e6cf0e21428962a431f1db12808f",
+      "worker-020.log": "19540a6b513a0cdee896c17a6a43363108eabea0b68fda35b72253525473a097",
+      "worker-010.log": "af66576e3e87d0c9445c2370bcc1ec9a5fd6ef5f93ae8037319a7f0bd323868c",
+      "worker-013.log": "38cc6ec1218eacbda4d402b0b44cc5deffa124ca84f18ebbec0c1a95dd69bb2f",
+      "worker-026.log": "cc51425094455c4ba5801ff81df4a9c317438780408656c52bd760d48b88560c",
+      "worker-000.log": "4baf463d964e7c83d5d39ddd396172408c60f7d6dd3a9de25eb71e40c33c4bf2",
+      "worker-014.log": "45724b20709f9dc3f13c31fbb598f6093cd8f1cd5c7eaba7c285cb4177d45bb9",
+      "worker-007.log": "1359d6d89e3b0fc4f5ecf23cb3606142cb3b9788a8e14f3d691b9b4dd4e25775",
+      "worker-006.log": "f1808b0a9910691656d9190f7981790776d76d2e464590f14763ae1ecaccfe02",
+      "worker-028.log": "135e0723ed06cce718f9c742a294e2dd81304cd2dd94dd4fbecb8caac8951a46",
+      "worker-017.log": "d418b2a9f6915b0c3cf6e17295dea54c436f39da64e79c7295671aa24b756bb1",
+      "worker-024.log": "ae9087c67afedb729a8f581f83c9d93b0fdeec130902550a11eefd92309eef5c",
+      "worker-015.log": "064dd5d0b5b26cc54717ee790f8f2f3a7cf6b2cccb7b56e10f34545f4fb4399f",
+      "worker-023.log": "187af442639b08db4e600b516cab99f05688c12a97cc799b92f2da3dc92271c0",
+      "worker-005.log": "41ac2b0fbb90eec84ca28372e4e66819491df65f56ed883b72e98c42f18a6694",
+      "worker-011.log": "7a1cde580070df618b37f2559225d8d2c182ea87c52426a109b22115f98dc7db",
+      "worker-016.log": "6583a655e1a209ad4390ddc4f4c52c5b27573f11e15b0f3c359387f548587210",
+      "worker-022.log": "9fcb503dc5b8d60cd56136a55db13dcb898ce20831b3de4b6a8dd05250a6d19e",
+      "worker-002.log": "d65c36bf3f94ffc1cc33ea39ac73291dfdb439560f6aa9fa9bcd592890b42b0e",
+      "worker-009.log": "6abc4e8afd1aace4d00c407af5732acf7cee9bf4e7ed6e54924a615586927ae7",
+      "worker-003.log": "adcd9104988ab93e221ccaa6319d84fe09452506840d49abb37c7588362391bd",
+      "worker-001.log": "8ebbe3220056e979beaacc43aaf14e87356825c1de6cb4f2a475998a02b5a3f1",
+      "worker-025.log": "6f46792a5fac3052bcca737f9d8e74340267473abbca063534b4e0dd5ac7c929",
+      "worker-029.log": "4b150975665346f3dfa7ea28c82789d55e38f75b3c5426163f1144e9d91772ff",
+      "worker-021.log": "58ddd0fc06b12e531cbd50356e6e4a2e6739c895cfb8612fe27fb57cfeda84c6",
+      "worker-027.log": "34ff3d93aa36ce4a4587ebf8e662f06eb8efcf3525c9abc193804dc542db0edb",
+      "worker-019.log": "8f972b5fbf22b3986c1051538255e3b4653f2b09d6be52cfbd121bc440c58526",
+      "worker-012.log": "bfb0970266ef621d9852d7c90a7b965c3f6036daf612347a3f5ef1e220150e16"
+    },
+    "score_bits": [
+      "405286b102cb6731"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "5635dfa85c5585dfb27b993bc10981ef0056c3c5fd7b1de188fd0a3c8948cb5d",
+  "request_sha256": "dbb6eb65feda567380d5b01b6c14771af064cc3b1df351e1d9f733146814fec2",
+  "report_sha256": "50b5acdaf90f7874e78185fc914213caaf26b62b0f52ec785e177ee3be90ccc9",
+  "script_sha256": "614272ace19a3500ce3aaef3afa61bd89c5293517711ce56cfdb77128459249b",
+  "top_self_symbols": [
+    {
+      "self_percent": 7.31,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "set_pte_range"
+    },
+    {
+      "self_percent": 6.48,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "srso_alias_safe_ret"
+    },
+    {
+      "self_percent": 6.38,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "copy_mc_enhanced_fast_string"
+    },
+    {
+      "self_percent": 6.36,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "clear_page_erms"
+    },
+    {
+      "self_percent": 6.32,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "asm_exc_page_fault"
+    },
+    {
+      "self_percent": 4.24,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "perf_event_mmap_output"
+    },
+    {
+      "self_percent": 3.94,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vma_alloc_folio_noprof"
+    },
+    {
+      "self_percent": 3.81,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "set_pte_range"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_and_postprocess",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim2-odd1-first-profile-v1.log",
+      "sha256": "62e49dfd3966a31183523844ae7b67c5c7899bf66a43a0d510017536552152f7",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 14065MiB | peak-load 2.10"
+      ]
+    }
+  ],
+  "source_note": "Thirty completed fresh native first-call workers; whole-process cycle samples, separate from comparison timing."
+}

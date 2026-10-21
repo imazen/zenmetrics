@@ -1,0 +1,121 @@
+{
+  "case": "flip-v17-grid-pairA-1024x1024-t28",
+  "metric": "flip-v17",
+  "width": 1024,
+  "height": 1024,
+  "threads": 28,
+  "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "native_invocation_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-1024x1024-t28",
+  "receipt": {
+    "case": "flip-v17-grid-pairA-1024x1024-t28",
+    "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-1024x1024-t28/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-1024x1024-t28"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-1024x1024-t28/perf.data",
+    "perf_data_sha256": "eeb8629319b6580667a06e5c19f927aef9aa6d5cc38c5f98cbdca8b688aa9b5e",
+    "config_sha256": "a7f316cb71a513f927c1135188e4f04b875582dd200739221bb2b66a17c6f819",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "ce1dc155684d43d95cd31b1660f8bed4a6c3267cdfb67b6120f53f0159721bcc"
+    },
+    "score_bits": [
+      "3fa6f8e340000000"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "0fba5c267612db48bcf582ca226dea5f909336781f55824738416bf6ff8e7fe1",
+  "request_sha256": "ae09bc6be51a549f459feb22bad2bf272214411899473c96cf0fa762198b24a8",
+  "report_sha256": "5b6a1ac6457478bd2eece4746b21350fd3469aec1d50cf6ed9883f24af6f05ca",
+  "script_sha256": "08c6a3ad02dcedfeef91ad3983621ee8ac68f5d3cab3e39aaf927df0a10ffe5d",
+  "top_self_symbols": [
+    {
+      "self_percent": 34.23,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "irqentry_exit_to_user_mode"
+    },
+    {
+      "self_percent": 10.48,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "srso_alias_safe_ret"
+    },
+    {
+      "self_percent": 9.69,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "do_anonymous_page"
+    },
+    {
+      "self_percent": 9.19,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip8convolveKj4_EB6_"
+    },
+    {
+      "self_percent": 6.45,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RINvYINtNtNtNtCs1D7iEf8vUdy_5rayon4iter7collect8consumer13CollectResultfEINtNtBa_8plumbing6FolderfE12consume_iterINtNtNtNtCsevLNFiNqfJP_4core4iter8adapters3map3MapINtNtNtB1W_3ops5range5RangejERRNCINvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip14error_map_implKb0_Es_0EEB3f_"
+    },
+    {
+      "self_percent": 5.15,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvNtNtCs92KQYrfCL2u_14zenmetrics_cli7metrics4flip24___attune_conv_band_t_v4x"
+    },
+    {
+      "self_percent": 4.0,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "pick_next_task_fair"
+    },
+    {
+      "self_percent": 3.75,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__irqentry_text_end"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_and_postprocess",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-1024x1024-t28.log",
+      "sha256": "e34909c6698984325635cdf455e1f65b8ebc42ab6733ee000d133154cc763b5c",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.16GiB | min-avail 13923MiB | peak-load 2.95"
+      ]
+    }
+  ],
+  "source_note": "Complete fresh-worker CPU recording; instrumented duration and cycle samples remain separate from comparative timing."
+}

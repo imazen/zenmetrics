@@ -1,0 +1,21 @@
+more off; pkg('local_list','/scratch/octave_packages'); pkg('prefix','/scratch/pkg','/scratch/pkg-arch'); pkg load image;
+assert(strcmp(version(),'11.1.0'));
+packages=pkg("list"); image_ok=false; for k=1:numel(packages); if strcmp(packages{k}.name,"image"); image_ok=strcmp(packages{k}.version,'2.20.1'); end; end; assert(image_ok);
+fprintf('RUNTIME octave=%s image=%s\n',version(),'2.20.1');
+addpath('/scratch/original-v3',"-begin"); addpath('/scratch/original-v3/matlabPyrTools',"-begin");
+addpath('/scratch/original-v3/utils',"-begin");
+addpath('/scratch/original-v3/data',"-begin");
+addpath('/scratch/statistics',"-begin");
+assert(strcmp(which("geomean"),'/scratch/statistics/geomean.m'));
+assert(strcmp(which('hdrvdp3'),'/scratch/original-v3/hdrvdp3.m'));
+for name={"imresize","imfilter","ifft2","interp1","corrDn","upConv"}; fprintf("RUNTIME_BIND %s %s\n",name{1},which(name{1})); end
+cd('/scratch/cwd');
+assert(strcmp(which("load_spectral_resp"),'/scratch/original-v3/utils/load_spectral_resp.m'));
+fprintf("RESIDENT_RUNTIME_BIND imresize=%s loader=%s\n",which("imresize"),which("load_spectral_resp"));fflush(stdout);
+f=fopen('/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-reference.rgb',"rb");assert(f>=0);[r,n]=fread(f,Inf,"*uint8");assert(n==12288);assert(fclose(f)==0);
+f=fopen('/home/lilith/tmp/portcheck-primary-grid-20261019T1020/inputs/pairA-64-distorted.rgb',"rb");assert(f>=0);[d,n]=fread(f,Inf,"*uint8");assert(n==12288);assert(fclose(f)==0);
+reference=double(permute(reshape(r,[3,64,64]),[3,2,1]))/255;
+distorted=double(permute(reshape(d,[3,64,64]),[3,2,1]))/255;
+result=hdrvdp3('quality',distorted,reference,'sRGB-display',30,{'use_gpu',false,'quiet',true,'age',24,'surround','none'});score=result.Q_JOD;
+clear reference distorted result;
+fprintf('NUMERICAL_DIAG real %.17g imag %.17g finite %d hex %s\n',real(score),imag(score),isfinite(score),num2hex(real(score))); fflush(stdout); assert(isreal(score)&&isfinite(score));

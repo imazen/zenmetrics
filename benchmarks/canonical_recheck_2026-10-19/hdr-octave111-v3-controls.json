@@ -1,0 +1,80 @@
+{
+  "passed_original_controls": true,
+  "rows": [
+    {
+      "case": "original12-hdrvdp3-grid-pairA-64x64-t1-warm-current40",
+      "metric": "hdrvdp3",
+      "width": 64,
+      "height": 64,
+      "threads": 1,
+      "original_score": 8.01066400284577,
+      "imaginary": 0.0,
+      "score_hex": "40200575c08eef1f",
+      "stdout_sha256": "99047415483111261e122deafb14cb1e10d27c56cf08cfe30c364ed5230a33cc",
+      "wrapper_sha256": "9f0acd08d85b90d10058fe05ea9bc6ffab13e18b9f982fc58df5da14a7e6cf87",
+      "memory_file": "hdrvdp3-64.m-v7-memory.txt",
+      "native_score": 8.01066400284578,
+      "legacy_original_score": 8.010664002845774,
+      "absolute_difference": 1.0658141036401503e-14,
+      "runtime_difference": 3.552713678800501e-15,
+      "original_max_rss_kib": 93924,
+      "memory_sha256": "599526981b52935fcfa00b9e311a76bb3d68f8003b4e11872db54a08de278251",
+      "ratio": null,
+      "absolute_bound": null,
+      "native_parity_qualified": false
+    },
+    {
+      "case": "original12-hdrvdp3-grid-pairA-1024x1024-t1-warm-current40",
+      "metric": "hdrvdp3",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "original_score": 8.431053192297766,
+      "imaginary": 0.0,
+      "score_hex": "4020dcb3010782b7",
+      "stdout_sha256": "9c0041e10d9a5a3e0ba89110b02812a0304ea96370e39899abeab24b055b80e5",
+      "wrapper_sha256": "4b7bd75bcbc44abbfcfdc55b8c6ca638bf51f7ed18933133f4eb3245728a0df6",
+      "memory_file": "hdrvdp3-1024.m-v7-memory.txt",
+      "native_score": 8.431053192297762,
+      "legacy_original_score": 8.431053192297767,
+      "absolute_difference": 3.552713678800501e-15,
+      "runtime_difference": 1.7763568394002505e-15,
+      "original_max_rss_kib": 667644,
+      "memory_sha256": "a9dc75fa593f74eb593ba0c6d5f216ae596c4cee73e1ebf622b9610e017b6199",
+      "ratio": null,
+      "absolute_bound": null,
+      "native_parity_qualified": false
+    }
+  ],
+  "maximum_difference": 1.0658141036401503e-14,
+  "native_metric_calls": 0,
+  "qualification": "Only original-v3 numerical diagnostics with restored original M-file dispatch. Existing native initialization scores retained. No assigned universal bound, every-timed-return qualification, timing ratio or accepted native parity.",
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v7/comparison-result.json",
+    "sha256": "28d376919f5d94932dcd087c30190cf7ec1ce2cfd7443773a7952a11d56878ba"
+  },
+  "original_receipt": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v7/result.json",
+    "sha256": "c5ed6af1bfa8572fb479d17e439692769a0087c439d1a5cc0a692f8d04a642a5"
+  },
+  "dispatch_correction": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v7/fixture-dispatch-correction.json",
+    "sha256": "da3f0a0389a88c193613fca715389cd845d42a279774aaec3529ad980f064c7c"
+  },
+  "resource_receipts": [
+    {
+      "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v7-controller.log",
+      "sha256": "c885534405ba4ab05596a0dbe84396d71268a0fd317fd692bf7efcb0063b3ac9",
+      "receipts": [
+        "run-heavy: done rc=0 13s | peak-RSS 0.09GiB | min-avail 13439MiB | peak-load 2.13"
+      ]
+    }
+  ],
+  "cleanup": {
+    "daemon_stopped": true,
+    "owned_containerd_stopped": true,
+    "mount_released": true,
+    "loop_detached": true,
+    "preserved_image": "/mnt/v/output/zenmetrics/runtime-validation/octave111-v1.img"
+  }
+}

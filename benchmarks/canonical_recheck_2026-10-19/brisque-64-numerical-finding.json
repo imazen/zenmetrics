@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "threads": 1,
+      "summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-64x64-t1/summary.json",
+        "sha256": "d91baae1ce57b71f59d8523a191a904ac5bb8830a2cd4eaf64fdacaa30b09a59"
+      },
+      "native_score": 75.64959716796875,
+      "canonical_score": 75.73614501953125,
+      "absolute_difference": 0.0865478515625,
+      "absolute_bound": 0.015138428,
+      "ratio": null,
+      "blocks": 3
+    },
+    {
+      "threads": 28,
+      "summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque/brisque-grid-pairA-64x64-t28/summary.json",
+        "sha256": "bb83e508833d13f5175fcd82309e01ce2fcf172dce0fd7cc030a8478a8c48271"
+      },
+      "native_score": 75.64959716796875,
+      "canonical_score": 75.73614501953125,
+      "absolute_difference": 0.0865478515625,
+      "absolute_bound": 0.015138428,
+      "ratio": null,
+      "blocks": 3
+    }
+  ],
+  "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "canonical": "PIQ0.8.0 / torch2.14.1+cpu / NumPy2.5.2",
+  "finding": "The 64-square photo exceeds the existing bound in all three blocks at both worker settings. The odd255x257 photo remains inside that bound. Existing BRISQUE validation records a different CUDA-enabled torch wheel running on CPU; runtime/ISA controls are separate pending diagnostics, not a waiver of this failure.",
+  "qualified_timing_cells": 0,
+  "qualification": "Measured numerical failure; existing bound unchanged. No accepted timing ratio, production-code fix or identified root cause is claimed."
+}

@@ -1,0 +1,131 @@
+import json, os, pathlib, shutil, signal, subprocess, time
+P = pathlib.Path
+root = P(__file__).parent / 'octave111-controls-v5'
+image = P('/mnt/v/output/zenmetrics/runtime-validation/octave111-v1.img')
+mount = P.home() / 'tmp/h111'
+loop = None
+daemon = None
+containerd = None
+mounted = False
+assert shutil.disk_usage('/mnt/v').free > 20 * 1024 ** 3 and shutil.disk_usage('/home/lilith').free > 1500 * 1024 ** 2
+root.mkdir()
+mount.mkdir(exist_ok=True)
+assert not os.path.ismount(mount)
+image.parent.mkdir(parents=True, exist_ok=True)
+
+def run(cmd, **kw):
+    print(json.dumps(cmd), flush=True)
+    return subprocess.run(cmd, check=True, **kw)
+
+def write(p, x):
+    with p.open('x') as f:
+        json.dump(x, f, indent=2)
+assert image.is_file() and image.stat().st_size == 16 * 1024 ** 3
+assert json.loads((P(__file__).parent / 'octave111-controls-v4/cleanup.json').read_text())['loop_detached'] is True
+write(root / 'storage.json', dict(image=str(image), bytes=16 * 1024 ** 3, scope='Reuse only the owned16GiB runtime image after verified unmount/detach. Separate namespace, explicit containerd/socket/state and shortened Unix socket paths. Default Docker daemon and its containerd are not used.'))
+try:
+    loop = subprocess.check_output(['sudo', '-n', 'losetup', '--find', '--show', str(image)], text=True).strip()
+    assert loop.startswith('/dev/loop')
+    write(root / 'loop.json', dict(device=loop, backing_file=str(image)))
+    run(['sudo', '-n', 'mount', '-o', 'nodev,nosuid', loop, str(mount)])
+    mounted = True
+    run(['sudo', '-n', 'chown', str(os.getuid()) + ':' + str(os.getgid()), str(mount)])
+    for name in ['scratch-v3', 'docker-v2', 'exec-v5', 'containerd-root-v2', 'containerd-state-v5']:
+        (mount / name).mkdir(exist_ok=name in ['scratch-v3', 'docker-v2', 'containerd-root-v2'])
+    (root / 'containerd.toml').write_text('version = 3\nimports = []\n')
+    cdcommand = ['sudo', '-n', 'sh', '-c', 'echo "$$" > "$1"; shift; exec "$@"', 'sh', str(root / 'containerd.pid'), '/usr/bin/env', 'TMPDIR=' + str(mount / 'scratch-v3'), '/usr/bin/containerd', '--config', str(root / 'containerd.toml'), '--root', str(mount / 'containerd-root-v2'), '--state', str(mount / 'containerd-state-v5'), '--address', str(mount / 'containerd-v5.sock')]
+    write(root / 'containerd-command.json', cdcommand)
+    cdf = (root / 'containerd.log').open('x')
+    containerd = subprocess.Popen(cdcommand, stdout=cdf, stderr=subprocess.STDOUT)
+    for attempt in range(60):
+        if containerd.poll() is not None:
+            raise RuntimeError('Owned containerd exited')
+        if (mount / 'containerd-v5.sock').exists():
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError('Owned containerd readiness timed out')
+    write(root / 'daemon.json', {})
+    command = ['sudo', '-n', 'env', 'TMPDIR=' + str(mount / 'scratch-v3'), 'dockerd', '--config-file', str(root / 'daemon.json'), '--data-root', str(mount / 'docker-v2'), '--exec-root', str(mount / 'exec-v5'), '--pidfile', str(root / 'dockerd.pid'), '--host', 'unix://' + str(root / 'docker.sock'), '--containerd', str(mount / 'containerd-v5.sock'), '--containerd-namespace', 'hdr111-v2', '--containerd-plugins-namespace', 'hdr111-v2-plugins', '--storage-driver', 'overlay2', '--feature', 'containerd-snapshotter=false', '--bridge', 'none', '--iptables=false', '--ip6tables=false', '--ip-forward=false', '--ip-masq=false', '--userland-proxy=false', '--max-concurrent-downloads', '1', '--max-download-attempts', '3', '--shutdown-timeout', '10']
+    write(root / 'daemon-command.json', command)
+    df = (root / 'daemon.log').open('x')
+    daemon = subprocess.Popen(command, stdout=df, stderr=subprocess.STDOUT)
+    client = ['sudo', '-n', 'docker', '--host', 'unix://' + str(root / 'docker.sock')]
+    for attempt in range(90):
+        if daemon.poll() is not None:
+            raise RuntimeError('Owned daemon exited; see daemon.log')
+        if subprocess.run([*client, 'info'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError('Owned daemon readiness timed out')
+    ref = 'gnuoctave/octave@sha256:922679c7ccbae712dec718daf33d07956a31ff33add3463ddcd14c5632768c3d'
+    assert json.loads((P(__file__).parent / 'octave111-isolated-v2/result.json').read_text())['image'] == ref
+    with (root / 'image-inspect.json').open('x') as f:
+        run([*client, 'image', 'inspect', ref], stdout=f, timeout=30)
+    payload = P(__file__).parent / 'octave111-controls-v3-payload'
+    spec = json.loads((payload / 'controls.json').read_text())
+    source_plan = P(spec['source_plan'])
+    assert __import__('hashlib').sha256(source_plan.read_bytes()).hexdigest() == spec['source_plan_sha256']
+    source = json.loads(source_plan.read_text())
+    for (path, expected) in source['bindings'].items():
+        assert __import__('hashlib').sha256(P(path).read_bytes()).hexdigest() == expected, path
+    scratch = mount / 'scratch-v3'
+    prior_root = P(__file__).parent / 'octave111-controls-v3'
+    assert not (prior_root / 'result.json').exists()
+    copies = json.loads((prior_root / 'copied-original-files.json').read_text())
+    for (name, expected) in copies.items():
+        assert __import__('hashlib').sha256((scratch / name).read_bytes()).hexdigest() == expected, name
+    write(root / 'copied-original-files.json', copies)
+    commands = ['set -eu', 'mkoctfile -p CFLAGS', 'mkoctfile -p CXXFLAGS', 'octave-cli --no-gui --no-window-system --no-init-file --no-history --quiet --eval \'pkg(\'"\'"\'local_list\'"\'"\',\'"\'"\'/scratch/octave_packages\'"\'"\'); pkg(\'"\'"\'prefix\'"\'"\',\'"\'"\'/scratch/pkg\'"\'"\',\'"\'"\'/scratch/pkg-arch\'"\'"\'); pkg load image; assert(strcmp(version(),\'"\'"\'11.1.0\'"\'"\')); packages=pkg(\'"\'"\'list\'"\'"\'); found=false; for k=1:numel(packages); if strcmp(packages{k}.name,\'"\'"\'image\'"\'"\'); assert(strcmp(packages{k}.version,\'"\'"\'2.20.1\'"\'"\')); found=true; end; end; assert(found); fprintf(\'"\'"\'RUNTIME octave=%s image=2.20.1\\n\'"\'"\',version());\'', "(cd /scratch/original-v2/matlabPyrTools_1.4_fixed/MEX && test ! -e ../corrDn.mex && env 'CFLAGS=-g -O2 -std=gnu89 -include string.h' mkoctfile --mex -o ../corrDn.mex corrDn.c convolve.c wrap.c edges.c)", "(cd /scratch/original-v2/matlabPyrTools_1.4_fixed/MEX && test ! -e ../upConv.mex && env 'CFLAGS=-g -O2 -std=gnu89 -include string.h' mkoctfile --mex -o ../upConv.mex upConv.c convolve.c wrap.c edges.c)", "(cd /scratch/original-v3/matlabPyrTools/MEX && test ! -e ../corrDn.mex && env 'CFLAGS=-g -O2 -std=gnu89 -include string.h' mkoctfile --mex -o ../corrDn.mex corrDn.c convolve.c wrap.c edges.c)", "(cd /scratch/original-v3/matlabPyrTools/MEX && test ! -e ../upConv.mex && env 'CFLAGS=-g -O2 -std=gnu89 -include string.h' mkoctfile --mex -o ../upConv.mex upConv.c convolve.c wrap.c edges.c)"]
+    script = scratch / 'setup-mex-v5.sh'
+    assert not script.exists()
+    script.write_text('\n'.join(commands) + '\n')
+    write(root / 'compiler-compatibility.json', dict(change='Compile original K&R C in GNU89 mode and force its standard string.h declaration; no original C/M/evaluator source or scoring arithmetic edits.', preserved_image_package='Full image2.20.1 already installed and runtime-probed successfully in v3. No completed package build or metric comparison repeated.', setup_script_sha256=__import__('hashlib').sha256(script.read_bytes()).hexdigest()))
+    input_dirs = {str(P(c['reference']['path']).parent) for c in spec['controls']} | {str(P(c['distorted']['path']).parent) for c in spec['controls']}
+    assert len(input_dirs) == 1
+    inputs = input_dirs.pop()
+    base = [*client, 'run', '--rm', '--network', 'none', '--ipc', 'none', '--memory', '10g', '--memory-swap', '10g', '--cpus', '1']
+    for (key, value) in [('TMPDIR', '/scratch'), ('OMP_NUM_THREADS', '1'), ('OPENBLAS_NUM_THREADS', '1'), ('MKL_NUM_THREADS', '1'), ('MAKEFLAGS', '-j1'), ('CMAKE_BUILD_PARALLEL_LEVEL', '1'), ('OCTAVE_HISTFILE', '/scratch/history')]:
+        base += ['--env', key + '=' + value]
+    base += ['--mount', 'type=bind,source=' + str(scratch) + ',target=/scratch', '--mount', 'type=bind,source=' + inputs + ',target=' + inputs + ',readonly', '--mount', 'type=bind,source=/usr/bin/time,target=/opt/oracle-time,readonly', '--entrypoint', '/opt/oracle-time', ref]
+    setup = [*base, '-v', '-o', '/scratch/setup-memory-v5.txt', '/bin/sh', '/scratch/setup-mex-v5.sh']
+    write(root / 'setup-command.json', setup)
+    with (root / 'setup.log').open('x') as f:
+        run(setup, stdout=f, stderr=subprocess.STDOUT, timeout=1800)
+    assert '-march=native' not in (root / 'setup.log').read_text() and '-mcpu=native' not in (root / 'setup.log').read_text()
+    shutil.copyfile(scratch / 'setup-memory-v5.txt', root / 'setup-memory.txt')
+    results = []
+    for c in spec['controls']:
+        name = P(c['wrapper']).name
+        output = root / (name + '.stdout')
+        command = [*base, '-v', '-o', '/scratch/' + name + '-memory.txt', '/usr/bin/octave-cli', '--no-gui', '--no-window-system', '--no-init-file', '--no-history', '--quiet', '/scratch/' + name]
+        write(root / (name + '.command.json'), command)
+        with output.open('x') as f:
+            run(command, stdout=f, stderr=subprocess.STDOUT, timeout=600)
+        lines = [s for s in output.read_text().splitlines() if s.startswith('NUMERICAL_DIAG ')]
+        assert len(lines) == 1
+        parts = lines[0].split()
+        real = float(parts[2])
+        imag = float(parts[4])
+        assert __import__('math').isfinite(real) and imag == 0 and (parts[6] == '1')
+        shutil.copyfile(scratch / (name + '-memory.txt'), root / (name + '-memory.txt'))
+        results.append(dict(case=c['case'], metric=c['metric'], width=c['width'], height=c['height'], threads=1, original_score=real, imaginary=imag, score_hex=parts[8], stdout_sha256=__import__('hashlib').sha256(output.read_bytes()).hexdigest(), wrapper_sha256=c['wrapper_sha256'], memory_file=name + '-memory.txt'))
+    write(root / 'result.json', dict(passed=True, image=ref, runtime='Octave11.1.0 / full image2.20.1 / rebuilt original MEX', cases=results, native_metric_calls=0, qualification='Original scalar numerical diagnostics only. Frozen evaluator body, raw inputs, original parameter files and compatibility helper remain unchanged. Package/runtime and rebuilt-MEX ABI changed. No comparable timing, universal gate or accepted native parity claim.'))
+finally:
+    if daemon is not None and daemon.poll() is None:
+        pid = int((root / 'dockerd.pid').read_text()) if (root / 'dockerd.pid').exists() else daemon.pid
+        run(['sudo', '-n', 'kill', '-TERM', str(pid)])
+        try:
+            daemon.wait(timeout=40)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError('Owned daemon did not exit; preserve mount for inspection')
+    if containerd is not None and containerd.poll() is None:
+        run(['sudo', '-n', 'kill', '-TERM', (root / 'containerd.pid').read_text().strip()])
+        containerd.wait(timeout=40)
+    if mounted:
+        run(['sudo', '-n', 'umount', str(mount)])
+        mounted = False
+    if loop is not None:
+        run(['sudo', '-n', 'losetup', '--detach', loop])
+    write(root / 'cleanup.json', dict(daemon_stopped=True, owned_containerd_stopped=True, mount_released=True, loop_detached=True, preserved_image=str(image)))

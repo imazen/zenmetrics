@@ -1,0 +1,65 @@
+{
+  "files": [
+    {
+      "file": "probe_octave111_isolated_v1.py.txt",
+      "sha256": "4937322a69273df642d331683e8856e4001d4c3644850e2ac71cebd2aab95067",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/probe_octave111_isolated_v1.py"
+    },
+    {
+      "file": "probe_octave111_isolated_v2.py.txt",
+      "sha256": "50543c2be50aa2869036a6e869801b53c233f81d069d9fc27fe25e178e495d1f",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/probe_octave111_isolated_v2.py"
+    },
+    {
+      "file": "run_octave111_controls_v3.py.txt",
+      "sha256": "58e52aec3bd6980d7058fd0d23c284398ba0de7f8b027a479fd42050bce213a3",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/run_octave111_controls_v3.py"
+    },
+    {
+      "file": "run_octave111_controls_v4.py.txt",
+      "sha256": "1ae7e834318006582535b2432b9f228b79c08d530fbbf50a4233a1a4f117df3e",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/run_octave111_controls_v4.py"
+    },
+    {
+      "file": "run_octave111_controls_v5.py.txt",
+      "sha256": "fc6cc936836ee5551dcd30ef0c49c06500a9880235c7fc9132b7e0e816bda02f",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/run_octave111_controls_v5.py"
+    },
+    {
+      "file": "run_octave111_controls_v6.py.txt",
+      "sha256": "adb90049c1b7bdf38a59294f82b52a84be09cb4f04ca7f5d388c2e8195eecedc",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/run_octave111_controls_v6.py"
+    },
+    {
+      "file": "run_octave111_controls_v7.py.txt",
+      "sha256": "a5a933228f077bd0a4e0ae8551ae030adfcec5b5c4b8f837ae2030dbd0f34711",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/run_octave111_controls_v7.py"
+    },
+    {
+      "file": "hdrvdp-1024.m.txt",
+      "sha256": "dcf4d7f49a506126e5072331ae33032fa251e8d60559a4a4c24b2c96e739275a",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v3-payload/hdrvdp-1024.m"
+    },
+    {
+      "file": "hdrvdp-64.m.txt",
+      "sha256": "11693e5ba4c741a930124bbbaed64b8b8d43a2e160bf6f6e0a87e1ae10ab8345",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v3-payload/hdrvdp-64.m"
+    },
+    {
+      "file": "hdrvdp3-1024.m.txt",
+      "sha256": "4b7bd75bcbc44abbfcfdc55b8c6ca638bf51f7ed18933133f4eb3245728a0df6",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v3-payload/hdrvdp3-1024.m"
+    },
+    {
+      "file": "hdrvdp3-64.m.txt",
+      "sha256": "9f0acd08d85b90d10058fe05ea9bc6ffab13e18b9f982fc58df5da14a7e6cf87",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v3-payload/hdrvdp3-64.m"
+    },
+    {
+      "file": "setup-image.m.txt",
+      "sha256": "2986f2640c3978cc22b06071194243322aa176bfbf3e5917561ee1cc370ad2b0",
+      "original": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v3-payload/setup-image.m"
+    }
+  ],
+  "qualification": "Exact historical setup and original-only control harness sources. Frozen local source/input paths and owned loop-image preconditions are retained; these snapshots are not a portable fresh-machine frontdoor. Failed setup attempts and successful controls remain distinguishable by their retained result/cleanup receipts. No third-party author implementation, binary image or package archive is copied here."
+}

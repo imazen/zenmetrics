@@ -1,0 +1,59 @@
+import json, pathlib, sys, shutil, re
+P=pathlib.Path
+R=P(__file__).parent; H=P.home()/'tmp/handoff'; K=H/'classical-gpu-first-boundary-20261020'; F=H/'classical-first-gmsd-flags-20261020'; O=H/'hdr-original-grid-numerical-20261020'; B=P('benchmarks/iqa_compete_2026-10-16'); public=P('benchmarks/canonical_recheck_2026-10-19')
+sys.path.insert(0,str(B.resolve()))
+from compare_canonical import sha
+from reference_publication import register_outputs
+from publish_classical_first_profiles import publish
+artifacts=[]
+def load(p):return json.loads(P(p).read_text())
+def bound(p):return dict(path=str(p),sha256=sha(p))
+def write(p,value):
+ data=(json.dumps(value,indent=2,allow_nan=False)+'\n').encode();assert len(data)<=30000
+ with p.open('xb') as f:f.write(data)
+ artifacts.append((p,'provenance'))
+def resource(p):
+ lines=[x for x in p.read_text().splitlines() if x.startswith('run-heavy: done ')];assert lines
+ return dict(**bound(p),receipts=lines)
+# Revalidate and export existing recordings; no native/canonical worker is executed.
+publish(R/'cold-profile-publication-ready-v4.json',public/'cpu-first-profiles-2026-10-20')
+for name in ['gmsd-t28-first-cap-adopt-v3','gmsd-t28-capped-adopt-v3']:
+ root=F/name;v=load(root/'receipt.json');assert v['partial_capture'] is True and v['native_metric_calls']==0
+ capture=P(v['capture']);assert sha(capture/'perf.data')==v['perf_data_sha256']
+ for filename,h in v['worker_log_sha256'].items():assert sha(capture/filename)==h
+ for filename,h in v['output_sha256'].items():assert sha(root/filename)==h
+ write(public/(name+'.json'),dict(raw_receipt=bound(root/'receipt.json'),receipt=v))
+D=K/'dssim-first-boundary-v1';control=load(D/'controls/result.json');assert control['passed'] and len(control['cases'])==2
+build=load(D/'build-receipt.json');rebuild=load(D/'public-reproduction-build-v1/build-receipt.json');assert build['output_sha256']==rebuild['output_sha256']==sha(build['output'])
+assert sha(B/'dssim_first_reference.c')==build['source_sha256']
+synthetic=load(D/'public-lifetime-sequence-control-v1/result.json');assert synthetic['passed'] and synthetic['real_reference_calls']==0
+write(public/'dssim-first-lifetime-controls.json',dict(original_controls=control,resource_receipts=[resource(K/'dssim-first-boundary-v1.log'),resource(D/'public-reproduction-build-v1.log'),resource(D/'public-lifetime-sequence-control-v1.log')],original_control_receipt=bound(D/'controls/result.json'),controlled_build=bound(D/'build-receipt.json'),public_build=bound(D/'public-reproduction-build-v1/build-receipt.json'),identical_elf_sha256=build['output_sha256'],synthetic_lifetime_control=synthetic,qualification='Two odd-size original-only pair/budget controls: eight fresh original/candidate processes; matching emitted COLD and SAMPLE scalar observations. The synthetic lifetime sequence is separate and supplies no numerical or comparative timing evidence. No native metric code, tolerance, or prior result changed.'))
+source=public/'gpu-first-profile-source.py.txt';assert not source.exists();shutil.copyfile(K/'profile_gpu_first_v1.py',source)
+for relative,filename,logname in [('iwssim-t1-first-flag-v1/profile-v1','iwssim-first-profile.json','iwssim-t1-first-flag-v1/profile-v1.log'),('iwssim-t28-first-profile-v1','iwssim-t28-first-profile.json','iwssim-t28-first-profile-v1.log'),('butteraugli64-t1-first-profile-v1','butteraugli64-first-profile.json','butteraugli64-t1-first-profile-v1.log')]:
+ root=K/relative;v=load(root/'receipt.json')
+ assert sha(K/'profile_gpu_first_v1.py')==v['source_sha256']
+ for row in v['profiles']:
+  for path,h in row['files'].items():assert sha(path)==h
+ write(public/filename,dict(receipt=v,resource_receipts=[resource(K/logname)],raw_receipt=bound(root/'receipt.json'),historical_source=dict(file=source.name,sha256=sha(source)),trace_counts=load(root/'nsys/cuda-trace-counts.json'),scope='Complete fresh native CUDA process. CPU-clock stacks and CUDA API/kernel traces are profiling diagnostics, not isolated cold-clock or comparative timing evidence.'))
+p=O/'octave111-controls-v6/partial-result.json';v=load(p);assert v['completed_original_controls']==2 and v['native_metric_calls']==0
+assert v['rows'][1]['absolute_difference']==abs(v['rows'][1]['original11_score']-v['rows'][1]['native_score'])
+write(public/'hdr-octave111-v2-controls.json',dict(**v,raw_receipt=bound(p),image='gnuoctave/octave@sha256:922679c7ccbae712dec718daf33d07956a31ff33add3463ddcd14c5632768c3d',full_image_package=dict(version='2.20.1',source_url='https://downloads.sourceforge.net/project/octave/Octave%20Forge%20Packages/Individual%20Package%20Releases/image-2.20.1.tar.gz',sha256='b4b6865e7f65ee5b9c254a69128bf10e93b38bc27f5bc5b973fef300217fc725'),finding='The 1MP native-v2 difference persists with the supported original runtime. The original v2 scalar agrees with the legacy runtime to 7.11e-15 in these two retained controls. This rules out that legacy runtime as the explanation for this case; no universal gate or timing ratio is assigned.'))
+v3path=O/'octave111-controls-v7/comparison-result.json'; v3=load(v3path);assert v3['passed_original_controls'] and v3['native_metric_calls']==0
+write(public/'hdr-octave111-v3-controls.json',dict(**v3,raw_receipt=bound(v3path),original_receipt=bound(O/'octave111-controls-v7/result.json'),dispatch_correction=bound(O/'octave111-controls-v7/fixture-dispatch-correction.json'),resource_receipts=[resource(O/'octave111-controls-v7-controller.log')],cleanup=load(O/'octave111-controls-v7/cleanup.json')))
+archive=public/'supported-hdr-runtime-sources-2026-10-20';archive.mkdir();source_rows=[]
+for original in sorted(O.glob('*.py')):
+ target=archive/(original.name+'.txt');shutil.copyfile(original,target);source_rows.append(dict(file=target.name,sha256=sha(target),original=str(original)))
+payload=O/'octave111-controls-v3-payload'
+for original in sorted(payload.glob('*.m')):
+ target=archive/(original.name+'.txt');shutil.copyfile(original,target);source_rows.append(dict(file=target.name,sha256=sha(target),original=str(original)))
+write(archive/'index.json',dict(files=source_rows,qualification='Exact historical setup and original-only control harness sources. Frozen local source/input paths and owned loop-image preconditions are retained; these snapshots are not a portable fresh-machine frontdoor. Failed setup attempts and successful controls remain distinguishable by their retained result/cleanup receipts. No third-party author implementation, binary image or package archive is copied here.'))
+(archive/'README.md').write_text('Historical harness sources for the supported Octave controls. [The index](index.json) binds every exact source snapshot. These are audit snapshots with frozen local assets and owned-storage preconditions, not a new portable command. Original author source and binary package/image data remain outside git. The source URLs and links in each snapshot are preserved.\n')
+J=H/'classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque';failed=[]
+for threads in [1,28]:
+ path=J/('brisque-grid-pairA-64x64-t'+str(threads))/'summary.json';row=load(path)
+ assert row['ratio'] is None and row['absolute_bound']==0.015138428
+ assert all(b['passed'] is False and b['delta']==0.0865478515625 for b in row['blocks'])
+ failed.append(dict(threads=threads,summary=bound(path),native_score=row['blocks'][0]['arms']['native']['score'],canonical_score=row['blocks'][0]['arms']['canonical']['score'],absolute_difference=0.0865478515625,absolute_bound=row['absolute_bound'],ratio=None,blocks=len(row['blocks'])))
+write(public/'brisque-64-numerical-finding.json',dict(cases=failed,native_source='efae6b8fed9e57346157d92dffc3cdb57c44560e',canonical='PIQ0.8.0 / torch2.14.1+cpu / NumPy2.5.2',finding='The 64-square photo exceeds the existing bound in all three blocks at both worker settings. The odd255x257 photo remains inside that bound. Existing BRISQUE validation records a different CUDA-enabled torch wheel running on CPU; runtime/ISA controls are separate pending diagnostics, not a waiver of this failure.',qualified_timing_cells=0,qualification='Measured numerical failure; existing bound unchanged. No accepted timing ratio, production-code fix or identified root cause is claimed.'))
+register_outputs(artifacts)
+print(json.dumps(dict(published=len(artifacts),native_calls=0)))

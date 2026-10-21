@@ -1,0 +1,42 @@
+import argparse,json,os,pathlib,shutil,sys
+from compare_canonical import sha
+from haarpsi_primary import execute
+from native_gpu_first_cell import parse_native
+P=pathlib.Path
+ap=argparse.ArgumentParser();ap.add_argument('plan',type=P);ap.add_argument('case');ap.add_argument('output',type=P);ap.add_argument('scratch',type=P);a=ap.parse_args();plan=json.loads(a.plan.read_text());case=next(c for c in plan['cases'] if c['id']==a.case)
+assert plan['phase']=='scorer_construct_first_eval' and case.get('gpu_runtime')=='cuda' and case['metric'].endswith('-gpu') and case['first_call_scope']['matched'] is True
+bindings=dict(plan['bindings']);bindings[str(a.plan.resolve())]=sha(a.plan);bindings[str(P(__file__).resolve())]=sha(__file__)
+def verify():
+ for p,h in bindings.items():
+  if sha(p)!=h:raise ValueError('Changed profile artifact '+p)
+def write(p,x):
+ with p.open('x') as f:json.dump(x,f,indent=2,allow_nan=False);f.write('\n')
+verify();assert shutil.disk_usage(a.output.parent).free>=1500*1024**2;a.output.mkdir();a.scratch.mkdir();rows=[]
+config=dict(width=case['width'],height=case['height'],reference=case['reference'],distorted=case['distorted'],metric_name=case['metric'],threads=case['threads'],only_mode='score',timing_phase='cold',probe_only=False,required_samples=1,locked_process_accounting=True,gpu_runtime='cuda')
+env=dict(os.environ,TMPDIR=str(a.scratch),NSYS_TMPDIR=str(a.scratch),CUDA_VISIBLE_DEVICES='0',PYTHONDONTWRITEBYTECODE='1')
+for key in ['RAYON_NUM_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','RTEN_NUM_THREADS']:env[key]=str(case['threads'])
+for tool in ['perf','nsys']:
+ verify();root=a.output/tool;root.mkdir();cfg=root/'config.json';write(cfg,config);binary=str(P(shutil.which(tool)).resolve())
+ if tool=='perf':command=[binary,'record','-e','cpu-clock','-F','99','--max-size','32M','--call-graph','dwarf,8192','-o',str(root/'perf.data'),'--',case['binary'],str(cfg)]
+ else:command=[binary,'profile','--trace=cuda,nvtx,osrt','--sample=none','--cpuctxsw=none','--force-overwrite=false','--stats=false','--cuda-memory-usage=false','--output='+str(root/'trace'),case['binary'],str(cfg)]
+ write(root/'command.json',command);rc,wrapped=execute(command,env,root,'profile',300);write(root/'wrapped-command.json',wrapped)
+ if rc:raise RuntimeError(tool+' capture failed; retained all output; rc='+str(rc))
+ observed=parse_native((root/'profile-stdout.log').read_text(),case);write(root/'native-observation.json',observed)
+ if tool=='perf':
+  import subprocess
+  with (root/'report.txt').open('x') as f:subprocess.run([binary,'report','--stdio','--no-children','-i',str(root/'perf.data')],env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+  files=[root/'perf.data',root/'report.txt']
+ else:
+  report=root/'trace.nsys-rep';assert report.is_file();stats=[binary,'stats','--report','cuda_api_sum,cuda_gpu_kern_sum,osrt_sum','--format','csv','--output','-',str(report)];write(root/'stats-command.json',stats);rc,wrapped=execute(stats,env,root,'stats',300);write(root/'stats-wrapped-command.json',wrapped)
+  if rc:raise RuntimeError('Nsight statistics failed; capture retained; rc='+str(rc))
+  import sqlite3
+  database=root/'trace.sqlite';assert database.is_file()
+  with sqlite3.connect(database) as connection:
+   tables={r[0] for r in connection.execute('SELECT name FROM sqlite_master WHERE type=\"table\"')};counts={name:connection.execute('SELECT COUNT(*) FROM '+name).fetchone()[0] for name in ['CUPTI_ACTIVITY_KIND_KERNEL','CUPTI_ACTIVITY_KIND_DRIVER','CUPTI_ACTIVITY_KIND_RUNTIME'] if name in tables}
+  assert counts.get('CUPTI_ACTIVITY_KIND_KERNEL',0)>0 and counts.get('CUPTI_ACTIVITY_KIND_DRIVER',0)+counts.get('CUPTI_ACTIVITY_KIND_RUNTIME',0)>0,'CUDA kernel/API trace rows missing; retain original report'
+  write(root/'cuda-trace-counts.json',counts)
+  files=[report,root/'stats-stdout.log',root/'trace.sqlite']
+ verify();rows.append(dict(tool=tool,tool_path=binary,tool_sha256=sha(binary),config_sha256=sha(cfg),score_bits=observed.get('score_bits'),native_observation_sha256=sha(root/'native-observation.json'),files={str(p):sha(p) for p in files},scope='Complete fresh native CUDA worker only; instrumented duration is not comparative timing. CPU samples and whole-process CUDA API/kernel traces do not isolate the internal cold clock or qualify a causal share of the measured gap.'))
+ write(root/'receipt.json',rows[-1])
+write(a.output/'receipt.json',dict(case=case['id'],plan_sha256=sha(a.plan),source_sha256=sha(__file__),native_profile_processes=2,profiles=rows,qualification='Profiling diagnostics only; existing constructor/first-call contract and all numerical gates retained. No canonical timing or accepted regression claim.'))
+print(json.dumps(dict(case=case['id'],profiles=2)),flush=True)

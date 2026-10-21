@@ -1,0 +1,194 @@
+{
+  "original_controls": {
+    "schema": 1,
+    "passed": true,
+    "cases": [
+      {
+        "case": "dssim-grid-pairA-255x257-t1-first-lifetime-control",
+        "metric": "dssim",
+        "observations": [
+          {
+            "role": "original",
+            "iteration": 0,
+            "bits": {
+              "headline": "3f56590319be1800",
+              "reference": null
+            },
+            "stdout_sha256": "3c65d4ca6f649d7f7141e57dda10930c62d6e49d8713d34cfd115c7f6f93ad83",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "candidate",
+            "iteration": 0,
+            "bits": {
+              "headline": "3f56590319be1800",
+              "reference": null
+            },
+            "stdout_sha256": "d34afe0ee93ba422128ec7a02cfb1dec17e8d4394590ffdec5e040253a71cba1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "candidate",
+            "iteration": 1,
+            "bits": {
+              "headline": "3f56590319be1800",
+              "reference": null
+            },
+            "stdout_sha256": "7304b0e678558ab2744d09742db4bdac92c11a75b30c4b99ce2d5005ec8400ec",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "original",
+            "iteration": 1,
+            "bits": {
+              "headline": "3f56590319be1800",
+              "reference": null
+            },
+            "stdout_sha256": "6fac81424eec9cc0e07a5dba5cf993d1df7a7795dd582d565162318eafc7abce",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "errors": [],
+        "passed": true
+      },
+      {
+        "case": "dssim-grid-pairB-255x257-t28-first-lifetime-control",
+        "metric": "dssim",
+        "observations": [
+          {
+            "role": "original",
+            "iteration": 0,
+            "bits": {
+              "headline": "3f7a534171527400",
+              "reference": null
+            },
+            "stdout_sha256": "610a54b814298d1f8fe3961424c8aee81a2f649ba939333e29194fbe108e2711",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "candidate",
+            "iteration": 0,
+            "bits": {
+              "headline": "3f7a534171527400",
+              "reference": null
+            },
+            "stdout_sha256": "239a4fbfa16b3ee198bb4f34dcd77b863adf12ad08f538cf6def537735c79273",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "candidate",
+            "iteration": 1,
+            "bits": {
+              "headline": "3f7a534171527400",
+              "reference": null
+            },
+            "stdout_sha256": "45294cbd5f8a420e9a970fefea6adb91720e59318b28acdf2c7e4473dae073a8",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "role": "original",
+            "iteration": 1,
+            "bits": {
+              "headline": "3f7a534171527400",
+              "reference": null
+            },
+            "stdout_sha256": "4dac1600145f28b6964a364565a1d96469e8055a164063b1a6dbab59d2dd6bc1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "errors": [],
+        "passed": true
+      }
+    ],
+    "plan_sha256": "46ad5215574520eb90cfb414510b8a0e1a3c6d70eaa4bdc7f0b7140b2f7400f5",
+    "controller_sha256": "2604de291f6dc1fce97b7f1eae5af489f5e5ae8359b0969812f40175b9987817",
+    "qualified_timing_cells": 0,
+    "qualification": "Original-call bit identity only; no native numerical or timing qualification"
+  },
+  "resource_receipts": [
+    {
+      "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1.log",
+      "sha256": "9b87ccac3ba9f23b7e0c52e1ba4790e8f44429fc472c500a062fe5f2a09aad66",
+      "receipts": [
+        "run-heavy: done rc=0 27s | peak-RSS 0.15GiB | min-avail 14690MiB | peak-load 1.37"
+      ]
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-reproduction-build-v1.log",
+      "sha256": "0a565f5ae087cfc9c239d500b9028edd153dcadadf722b3d366beaf55c19ad5d",
+      "receipts": [
+        "run-heavy: done rc=0 0s | peak-RSS 0.03GiB | min-avail 14686MiB | peak-load 1.16"
+      ]
+    },
+    {
+      "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1.log",
+      "sha256": "d16523030a6c4b33ce20a20055302b201ca466e38e267c1ea48da2f06c7ee537",
+      "receipts": [
+        "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14877MiB | peak-load 1.08"
+      ]
+    }
+  ],
+  "original_control_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/controls/result.json",
+    "sha256": "cb0c62708ae7d366fb67a31dff84608e4d7d46436a53dd6f45618bc69d30a8ca"
+  },
+  "controlled_build": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/build-receipt.json",
+    "sha256": "8d26bf648c34a72479559ca4fae8b72d047bba5bbe1a61b0ad284b93249e6663"
+  },
+  "public_build": {
+    "path": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-reproduction-build-v1/build-receipt.json",
+    "sha256": "7159134f0c5a4d4d8438d9fc78a805f4553a74d811aedaad053d2046aa64192b"
+  },
+  "identical_elf_sha256": "31cd989bea478c5cdfeaf61c0d5989ccac688255e2753937c3702cb35b6148ec",
+  "synthetic_lifetime_control": {
+    "passed": true,
+    "synthetic_lifetime_control": true,
+    "real_reference_calls": 0,
+    "native_metric_calls": 0,
+    "compiler_sha256": "821af3c74506283c179ca413bb33e6b528805a4dd8a5c09df125e5ad560a9e89",
+    "source_sha256": "2b072cf34998026cd9c518312d9755bdafa9bb098b0137e24a17247eaf2aba2c",
+    "controls": [
+      {
+        "source": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_first_reference.c",
+        "source_sha256": "869f1481a7a54d6a98df416dcc630cc226799e49ed11b26b883c42715b3fb2c3",
+        "command": [
+          "/usr/bin/x86_64-linux-gnu-gcc-11",
+          "-O2",
+          "-std=c11",
+          "-D_POSIX_C_SOURCE=200809L",
+          "-I",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1",
+          "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_first_reference.c",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1/stub.c",
+          "-o",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1/control-0"
+        ],
+        "returncode": 0,
+        "stdout_sha256": "7fcab612f5662df7d2445c6dad41ff03574473aea62666c8a3ceba1af29be1d4",
+        "stderr_sha256": "b82219d3f5e228e550de51cfb750f5d927e70739cb2703ff8e9bab05e592484f"
+      },
+      {
+        "source": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_fullcall_reference.c",
+        "source_sha256": "cfb84e402ceb50a4bd48cc2c91e258b26b4b4cadd09667687d8807b43402f32d",
+        "command": [
+          "/usr/bin/x86_64-linux-gnu-gcc-11",
+          "-O2",
+          "-std=c11",
+          "-D_POSIX_C_SOURCE=200809L",
+          "-I",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1",
+          "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/dssim_fullcall_reference.c",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1/stub.c",
+          "-o",
+          "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/dssim-first-boundary-v1/public-lifetime-sequence-control-v1/control-1"
+        ],
+        "returncode": 42,
+        "stdout_sha256": "17a5ccad0a3c19457fc412260f6fa0d55eb805b5563a3b21a632567a9c44e59f",
+        "stderr_sha256": "81c1e97774c166a5e347389893ec80d0252ebc88627f0d27aabb98ae244d05b6"
+      }
+    ],
+    "qualification": "Synthetic call/clock ordering only. The actual first-call adapter must retain context/images at COLD stop and free them before SAMPLE stop; the unchanged full-call adapter is rejected by that distinct contract. This is not an accuracy or timing observation."
+  },
+  "qualification": "Two odd-size original-only pair/budget controls: eight fresh original/candidate processes; matching emitted COLD and SAMPLE scalar observations. The synthetic lifetime sequence is separate and supplies no numerical or comparative timing evidence. No native metric code, tolerance, or prior result changed."
+}

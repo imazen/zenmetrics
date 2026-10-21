@@ -1,0 +1,42 @@
+import json,os,pathlib,shutil,signal,subprocess,time
+P=pathlib.Path;root=P(__file__).parent/'octave111-isolated-v1';image=P('/mnt/v/output/zenmetrics/runtime-validation/octave111-v1.img');mount=root/'mount';loop=None;daemon=None;mounted=False
+assert shutil.disk_usage('/mnt/v').free>20*1024**3 and shutil.disk_usage('/home/lilith').free>1500*1024**2
+root.mkdir();mount.mkdir();image.parent.mkdir(parents=True,exist_ok=True)
+def run(cmd,**kw):
+ print(json.dumps(cmd),flush=True);return subprocess.run(cmd,check=True,**kw)
+def write(p,x):
+ with p.open('x') as f:json.dump(x,f,indent=2)
+with image.open('xb') as f:f.truncate(16*1024**3)
+write(root/'storage.json',dict(image=str(image),bytes=16*1024**3,scope='Owned empty regular file only; no existing filesystem or Docker daemon is modified.'))
+try:
+ run(['/usr/sbin/mkfs.ext4','-F','-m','0','-E','lazy_itable_init=1,lazy_journal_init=1',str(image)])
+ loop=subprocess.check_output(['sudo','-n','losetup','--find','--show',str(image)],text=True).strip();assert loop.startswith('/dev/loop')
+ write(root/'loop.json',dict(device=loop,backing_file=str(image)))
+ run(['sudo','-n','mount','-o','nodev,nosuid',loop,str(mount)]);mounted=True
+ run(['sudo','-n','chown',str(os.getuid())+':'+str(os.getgid()),str(mount)])
+ for name in ['scratch','docker','exec']:(mount/name).mkdir()
+ write(root/'daemon.json',{})
+ command=['sudo','-n','env','TMPDIR='+str(mount/'scratch'),'dockerd','--config-file',str(root/'daemon.json'),'--data-root',str(mount/'docker'),'--exec-root',str(mount/'exec'),'--pidfile',str(root/'dockerd.pid'),'--host','unix://'+str(root/'docker.sock'),'--storage-driver','overlay2','--feature','containerd-snapshotter=false','--bridge','none','--iptables=false','--ip6tables=false','--ip-forward=false','--ip-masq=false','--userland-proxy=false','--max-concurrent-downloads','1','--max-download-attempts','3','--shutdown-timeout','10']
+ write(root/'daemon-command.json',command);df=(root/'daemon.log').open('x');daemon=subprocess.Popen(command,stdout=df,stderr=subprocess.STDOUT)
+ client=['sudo','-n','docker','--host','unix://'+str(root/'docker.sock')]
+ for attempt in range(90):
+  if daemon.poll() is not None:raise RuntimeError('Owned daemon exited; see daemon.log')
+  if subprocess.run([*client,'info'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:break
+  time.sleep(1)
+ else:raise RuntimeError('Owned daemon readiness timed out')
+ ref='gnuoctave/octave@sha256:922679c7ccbae712dec718daf33d07956a31ff33add3463ddcd14c5632768c3d'
+ with (root/'pull.log').open('x') as f:run([*client,'pull',ref],stdout=f,stderr=subprocess.STDOUT,timeout=1800)
+ with (root/'image-inspect.json').open('x') as f:run([*client,'image','inspect',ref],stdout=f,timeout=30)
+ probe=[*client,'run','--rm','--network','none','--ipc','none','--memory','10g','--memory-swap','10g','--cpus','1','--env','TMPDIR=/scratch','--env','OMP_NUM_THREADS=1','--env','OPENBLAS_NUM_THREADS=1','--env','OCTAVE_HISTFILE=/scratch/history','--mount','type=bind,source='+str(mount/'scratch')+',target=/scratch','--entrypoint','/bin/sh',ref,'-c','command -v octave-cli; octave-cli --version; octave-cli --quiet --eval "pkg list"; command -v mkoctfile']
+ write(root/'probe-command.json',probe)
+ with (root/'probe.log').open('x') as f:run(probe,stdout=f,stderr=subprocess.STDOUT,timeout=120)
+ write(root/'result.json',dict(passed=True,image=ref,qualification='Runtime/package discovery only; no HDR metric execution, numerical acceptance or timing claim.'))
+finally:
+ if daemon is not None and daemon.poll() is None:
+  pid=int((root/'dockerd.pid').read_text()) if (root/'dockerd.pid').exists() else daemon.pid
+  run(['sudo','-n','kill','-TERM',str(pid)])
+  try:daemon.wait(timeout=40)
+  except subprocess.TimeoutExpired:raise RuntimeError('Owned daemon did not exit; preserve mount for inspection')
+ if mounted:run(['sudo','-n','umount',str(mount)]);mounted=False
+ if loop is not None:run(['sudo','-n','losetup','--detach',loop])
+ write(root/'cleanup.json',dict(daemon_stopped=True,mount_released=True,loop_detached=True,preserved_image=str(image)))

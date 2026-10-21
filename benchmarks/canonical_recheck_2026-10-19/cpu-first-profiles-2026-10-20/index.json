@@ -1,0 +1,83 @@
+{
+  "source_index": "/home/lilith/tmp/local-canonical-20261019T2330/cold-profile-publication-ready-v4.json",
+  "source_index_sha256": "cdcdd4bda0b17083c630b6eec38d2b3f07e90d2a8031f4e50e1d8e5be0542c64",
+  "exporter_sha256": "df7e977f26cd124a16a7036542c168767a04af21092149a9bc9fe3c800420224",
+  "profiles": [
+    {
+      "file": "profile-00.json",
+      "case": "gmsd-grid-pairA-64x64-t1",
+      "sha256": "8ce5da3e2cad4ac4394919c5f577ae39f9274289ab7dc0cdf43d405473fa9e97"
+    },
+    {
+      "file": "profile-01.json",
+      "case": "flip-grid-pairA-1024x1024-t28",
+      "sha256": "6bdaa1a14c686a0908542cd4e2ea1d4fe6a9d6cb779ce43ca8b0810198aca3d8"
+    },
+    {
+      "file": "profile-02.json",
+      "case": "flip-grid-pairA-3840x2160-t28",
+      "sha256": "027412299069b15edbe830beb185b9b7ad674d3ca7f9d595e568ce207c64f666"
+    },
+    {
+      "file": "profile-03.json",
+      "case": "flip-grid-pairB-1024x1024-t28",
+      "sha256": "58402abf020652cd7d6b7dd6678f60170cbf811c4567066f75bba342693860be"
+    },
+    {
+      "file": "profile-04.json",
+      "case": "flip-grid-pairB-3840x2160-t28",
+      "sha256": "591da4a4e748952c6c1e273eec91418936cd087c75259a647c165b9ebd997152"
+    },
+    {
+      "file": "profile-05.json",
+      "case": "flip-v17-grid-pairA-1024x1024-t28",
+      "sha256": "6d324fda2d0adcf3e453419507901edbe302fa0bd8b9c50e4ea5ec88518c5a07"
+    },
+    {
+      "file": "profile-06.json",
+      "case": "flip-v17-grid-pairA-255x257-t28",
+      "sha256": "047f4697d7f1e938a53aaa82f45f26b4c407ae9f7043e60611d6c97773a47eeb"
+    },
+    {
+      "file": "profile-07.json",
+      "case": "flip-v17-grid-pairA-3840x2160-t28",
+      "sha256": "8a52aedfb70ec5228c7998c876ef02eecb39a919e5ea7e18b37f7f127d00647c"
+    },
+    {
+      "file": "profile-08.json",
+      "case": "flip-v17-grid-pairB-1024x1024-t28",
+      "sha256": "846f3c48a064b514f7c4c49ea2f78ed7d0de5d70cd542b57e53682efc639e940"
+    },
+    {
+      "file": "profile-09.json",
+      "case": "flip-v17-grid-pairB-3840x2160-t28",
+      "sha256": "9afa1dbcd9a3175fee191accd7220fe128df027e5ece7b36a191a852ce620669"
+    },
+    {
+      "file": "profile-10.json",
+      "case": "ssimulacra1-grid-pairA-255x257-t1",
+      "sha256": "60c91732ae30dbf1b0ced130edacb5e936145eafac656b1c00ae99ce0996f992"
+    },
+    {
+      "file": "profile-11.json",
+      "case": "ssimulacra1-grid-pairA-64x64-t28",
+      "sha256": "3735da327895ada5f775a531e8c2c1ef42e5fca637456cec2973c4a5b66c5c85"
+    },
+    {
+      "file": "profile-12.json",
+      "case": "flip-v17-grid-pairB-255x257-t28",
+      "sha256": "cf82fb759e8a6c635184baeab4180ae2bfb8c887a5f6ea840b2d59b99d2ab968"
+    },
+    {
+      "file": "profile-13.json",
+      "case": "ssimulacra1-grid-pairA-255x257-t28",
+      "sha256": "998fa2ee62f7179e9bff37c168fab7dcdaa8f1867cea430da096c73d9e2ef07f"
+    },
+    {
+      "file": "profile-14.json",
+      "case": "ssim2-grid-pairA-255x257-t1",
+      "sha256": "0a6aef5afce249fdc3c8117a5d89d59fc5f59cf14d9b39f4e2dbf6bf1473d4aa"
+    }
+  ],
+  "qualification": "Whole fresh CPU worker processes, including startup, RGB file loading and teardown. Each worker performs only its first scorer evaluation; all completed scalar observations are revalidated. CPU cycle samples do not isolate the internal clock or worker-thread spans, measure GPU kernels, establish a causal share of a timing gap, or qualify a regression. Instrumented durations are not comparison evidence."
+}

@@ -1,0 +1,121 @@
+{
+  "case": "ssimulacra1-grid-pairA-255x257-t28",
+  "metric": "ssimulacra1",
+  "width": 255,
+  "height": 257,
+  "threads": 28,
+  "rust_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+  "native_invocation_sha256": "7859f91207fceeb45243dff3955ef4b276a885e35d5e1ca93ca49bd983a02cc0",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-odd28-first-profile-v1",
+  "receipt": {
+    "case": "ssimulacra1-grid-pairA-255x257-t28",
+    "plan_sha256": "bfe30f9179eaf8e80d12177e0bd25d801070ccc00c13c9ee51bc6d818f8ab3a9",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-odd28-first-profile-v1/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-odd28-first-profile-v1"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-odd28-first-profile-v1/perf.data",
+    "perf_data_sha256": "177894263d3180c8ad9a2bfff328b7ff7203a085a589d781e68ed5be13f8f08c",
+    "config_sha256": "f789b8a3ed4e9bbd4ee48c0fe6611d0c1435ccb41fcc16b18f31802b2e6b1c82",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "1537f5803b9a992c073552a5de3c9af9539c4a1bfc938d528b769e341f1a1159"
+    },
+    "score_bits": [
+      "3f9daba8a53f70c0"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "ed3dcdaa5ee6be077a27dd7712760508246f69cc9489024e6fcc6d7364cc707b",
+  "request_sha256": "5007345ef8d04a2b08276056a45a5adfc63f61ba12270834ab4b6fe9ef606ca3",
+  "report_sha256": "f27e1495532b212283118692ceaffdda016934264e89d6b66a7ea54a765455d7",
+  "script_sha256": "a8713e22ea0f14f9e6d53afc48bb644a46236ed4812921564f56f6b87e0f143a",
+  "top_self_symbols": [
+    {
+      "self_percent": 27.49,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__pv_queued_spin_lock_slowpath"
+    },
+    {
+      "self_percent": 21.13,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rmqueue_pcplist"
+    },
+    {
+      "self_percent": 18.66,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rcu_read_lock"
+    },
+    {
+      "self_percent": 14.38,
+      "process": "python3",
+      "object": "ld-linux-x86-64.so.2",
+      "domain": ".",
+      "symbol": "strcmp"
+    },
+    {
+      "self_percent": 14.09,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "copy_mc_enhanced_fast_string"
+    },
+    {
+      "self_percent": 1.82,
+      "process": "iqa-compete",
+      "object": "iqa-compete",
+      "domain": ".",
+      "symbol": "_RNvMs5_NtCsa4RVMa8CRQJ_15crossbeam_epoch8internalNtB5_6Global11try_advance.llvm.2053859810789543049"
+    },
+    {
+      "self_percent": 1.63,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 0.11,
+      "process": "iqa-compete",
+      "object": "libc.so.6",
+      "domain": ".",
+      "symbol": "clone3"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_and_postprocess",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/ssim1-odd28-first-profile-v1.log",
+      "sha256": "1efa9fec8f60edcb8a76788c97623d6ace0916ef7ef15a5c4e4352efe8f78c33",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 13726MiB | peak-load 1.07"
+      ]
+    }
+  ],
+  "source_note": null
+}

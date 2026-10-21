@@ -1,0 +1,21 @@
+{
+  "reason": "Second campaign bound a frozen controller path, while exporter loaded the live controller. Verification refused before any further campaign projection. Preserve every initial partial shard; no scorers rerun.",
+  "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/cold-panel-export-failed-v1",
+  "files": {
+    "cases-003.json": "fa5c2ad28eb8b423dced14a2cf3e8705067bdb03eba05241be7bd07e21d4150b",
+    "cases-008.json": "4417bd5bb28b36f74986cacc29e5d5ec2d1dd3095db9818cba5f573cce0d16a8",
+    "cases-011.json": "c1ec7dc0e39d3cfeffb1c84ddccdb5486ddb59a0aed13d8f96fb2fabd5d4a8f0",
+    "cases-012.json": "1ec46864508312b15383faaa6493fc29e408519a6d82d42c206789e335759402",
+    "cases-006.json": "7cb3c812b39089ad88b51c98dc5a957130f4a3a64a635d66ef85200afe2aeffd",
+    "cases-000.json": "4ec6cc209323be63a9eb999b3ab3e2493c23720ff0cb02a62bf76937902ef3bd",
+    "cases-001.json": "2666f375e76d629852e93bfe0a305a705f2ff9f258f1893a3fa348c137f70047",
+    "cases-004.json": "109121e40e294e16bc995616343f648859543d9d24eab48a73eec41571ad0e99",
+    "cases-013.json": "7da952c7241ec4b4712656686ff049b9ea094ce903dea702f5a3255941bc6689",
+    "cases-002.json": "59728a155ad95b36071858e4e292cc199aed26b4fa514af4940da0f8a18b76df",
+    "cases-010.json": "e6f85984e17a2eb786ff749024b83a6cbc50c2ed006a7177af80ff502160943c",
+    "cases-007.json": "d34d39ce80ff3e39791a21b0dd0ff164d7266d72e9b1406b6b262f679864edbe",
+    "cases-005.json": "a96ac02459a5ba1b35b9b47e470999a005456b1f67a249646e06ba3ce7205192",
+    "cases-009.json": "7370c2941f0f10659116939d2f1a25e65c89d8b0077c20b935e7c38b6bf9a20e",
+    "cases-014.json": "b435d684451c5bcb8cd445afa190235852d8cda1c729fa0f3bcf0cf9b5d94bd5"
+  }
+}

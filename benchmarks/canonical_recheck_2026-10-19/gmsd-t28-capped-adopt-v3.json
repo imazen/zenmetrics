@@ -1,0 +1,126 @@
+{
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-t28-capped-adopt-v3/receipt.json",
+    "sha256": "5ee4bacd509709bde6ced85d35a734aa3ad94b29eec1ab3949ce5d0af313d2f2"
+  },
+  "receipt": {
+    "case": "gmsd-grid-pairA-64x64-t28",
+    "partial_capture": true,
+    "requested_repetitions": 30,
+    "completed_repetitions": 19,
+    "completed": [
+      {
+        "log": "worker-000.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-001.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-002.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-003.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-004.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-005.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-006.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-007.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-008.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-009.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-010.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-011.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-012.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-013.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-014.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-015.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-016.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-017.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      },
+      {
+        "log": "worker-018.log",
+        "score_bits": "3f801f8fbcb60d1b"
+      }
+    ],
+    "incomplete_worker_logs": [],
+    "native_metric_calls": 0,
+    "capture": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/gmsd-t28-budgeted-profile-v2",
+    "plan_sha256": "768b30a5840e6507cf8ca1206c2c6d60ff75f4b3cfe1692f0b8994a9a908f3b0",
+    "request_sha256": "985584901b0b9f618470cef3e5397cacbbc306803c57c5b6d8b95393b438a807",
+    "config_sha256": "62271137f8c1a832b4104d0495ad7ea18b3d1d1cc961273f8a3c95355d98851b",
+    "perf_data_sha256": "c370ba272e84d285124907e85d53fd261558c41ab34779def2c26461871ace8b",
+    "worker_log_sha256": {
+      "worker-000.log": "008253cc639ab569d3ade1954948adf3b3dca34f342f8dc1ccc4ce824b4bafa3",
+      "worker-001.log": "293cf640c65ceab51a4a2eb7241c6f55ea198942ef1d2aa3c5e17c9fb7197d6d",
+      "worker-002.log": "273099ea867cebde063ffe0192038fe23bc67ab58d63fc40ae452f37fd0df2ce",
+      "worker-003.log": "102423c0d10db89a55dd0bdc4f3a93a8ac61aa5fbece5688106fc9f5d8db05fb",
+      "worker-004.log": "da295af101a65adcce78c11fb6fd990d321d33db5d54e48904b70c1fb2ee7d4a",
+      "worker-005.log": "9b702f303004539e40f30f2a28c6d093f705f61af4eed095c0a58307b7444efd",
+      "worker-006.log": "c0d6f6d4dcf8ef7485cb3b9f9d12fee96277881863c43b747cd4e91858c023ec",
+      "worker-007.log": "692de9eec315fb6a84a85053553db27336e332a6fa284cf6b4caf7e2cf4dfb7b",
+      "worker-008.log": "29cabb8a229d38a4786f1c9e75251f38824716bb9f1dadacf3035d50c6321f54",
+      "worker-009.log": "a35048a80b541bcae780c033891d7b63f4a46152a0f4fee4b9beaf3c33d7947f",
+      "worker-010.log": "646c605478811147542033ffc1151dde34a85d6a0deae2544c601bac3cdf2154",
+      "worker-011.log": "cde0b1875305f12f76075c4e1532a7ebd7a4c7bbf54bd1d10852308927eb2236",
+      "worker-012.log": "7bd0f836a0609607da4a39d4989f3f7d1f71034e115e795711bbcb4723ae43f3",
+      "worker-013.log": "e7d6c8f7df6309e282a8623d7ab67760a9090a00efe70b03b5fbd31c3e558fae",
+      "worker-014.log": "633f0f1b83d8e85bbbde0f3ee2041f31f54c9806dba306be40fddd3b56d72a57",
+      "worker-015.log": "55a7885eee75a0c8f5ae7f73f2708b16fc9214ee151b45567c1e76bb9a1c2007",
+      "worker-016.log": "928ccfa73be0283c7ba07e8aa49032878864af14c7da9f3c778d9c0e7e3cc9a3",
+      "worker-017.log": "ee0c2dd5d8077520d7dbfa616516d48e81f6ecb79734e4e820de33c3b1d9086b",
+      "worker-018.log": "23b28f6ecb704dc044bcecaed5b43cf6e9880acb28d4e89dcd769fe9ecd9fae6"
+    },
+    "postprocessor_sha256": "df8db4c76761abe93cf459254a2a0fa3ccbccfb3838420dba34ceda9b6d1222b",
+    "perf_tool_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "output_sha256": {
+      "script.txt": "2235b6d7d9e07875af1a0cf353f8d0b8ad9b51d54094f35676c41b87a320c375",
+      "report.txt": "67dfc31d43acb0cce3e498383f5b2e4452c55833a3fc0c0af7f21034cfd722f2",
+      "header.txt": "71a7b1c55074f8b9b433e0d04334c3ac72e03784daf81c9de32d83082569fd1f"
+    },
+    "qualification": "Size-capped whole-process diagnostic, with every completed scalar revalidated and any interrupted final worker retained explicitly. No scorer rerun, complete requested capture, isolated cold clock, timing ratio, numerical parity acceptance or qualified regression is claimed."
+  }
+}

@@ -1,0 +1,9 @@
+more off;
+assert(strcmp(version(),'11.1.0'));
+pkg('local_list','/scratch/octave_packages');
+pkg('prefix','/scratch/pkg','/scratch/pkg-arch');
+pkg('install','-local','/scratch/image-2.20.1.tar.gz');
+pkg load image;
+packages=pkg('list'); found=false; for k=1:numel(packages); if strcmp(packages{k}.name,'image'); assert(strcmp(packages{k}.version,'2.20.1')); found=true; end; end; assert(found);
+fprintf('RUNTIME octave=%s image=2.20.1\n',version());
+fprintf('IMAGE_BIND imresize=%s imfilter=%s\n',which('imresize'),which('imfilter')); fflush(stdout);

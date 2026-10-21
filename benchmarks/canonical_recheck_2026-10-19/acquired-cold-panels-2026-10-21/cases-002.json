@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "case": "flip-grid-pairA-1024x1024-t1",
+      "metric": "flip",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.26804266282603606,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 278854705.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 167220,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "760672f8f9ecf758372acfd45c3bbb488e66e6f075eb0423c32deb5560f5d427"
+              }
+            },
+            "canonical": {
+              "ns": 1073550401.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 197732,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "e43c01961985d37a8a38302d70ae11e0e3a83d5bc35af141ee66d061ff36a22c"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 304153157.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 167092,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "e6150e6580ced3b76b70fb6fc4c1e9fa3110bdf308659d7495d8b65b10f5c671"
+              }
+            },
+            "canonical": {
+              "ns": 1134719204.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 197764,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "b3a762da79472e1578c570edccf2d4174a0c6c7f55d6917b77800a04e83d2107"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 280880800.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 167412,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "be3f60eadb0c18d6c010f715464c727dc92c245040454d776680234d432c6470"
+              }
+            },
+            "canonical": {
+              "ns": 1041667873.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 197980,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "56d25a60a89cc8c4938b0931d38e139adcce935bd74b3651dad27646dd42655e"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "a3fd3cb461b98e0aed4de9daaf5a1e340a671b70631482709830087776f0d3ac"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "7786481145e833ca04c1ca88f27d44ea72133ef6299edc63fb000a287d89596a",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.19GiB | min-avail 15103MiB | peak-load 3.25"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "8b9e1d28350e20757be05612379ae3d40f3c4d7a8c48393d4ec277940db088ab",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.19GiB | min-avail 15278MiB | peak-load 1.57"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "41e2179ab0242903a4a2dfd710d13203b8a23950ef76f901f88b9f8cfdefa98a",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.19GiB | min-avail 15376MiB | peak-load 1.51"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "flip-grid-pairA-1024x1024-t28",
+      "metric": "flip",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "NVIDIA FLIP 1.7 / f64 map mean",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 1.4618080126220188,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 226717725.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 165256,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "002276917e83ef3b253a8190abe5810e9ed5ea69cf2debecab14be3361a77872"
+              }
+            },
+            "canonical": {
+              "ns": 155094050.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 192036,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "6b1892986ec7e7226097959d182522841e75ab41168d533e983a65e7e5e9eace"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 215179119.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 164972,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "819b922597fa59d78ccf895696ca27b877d002dcd0902f0dd9596d3bb9aa0aa2"
+              }
+            },
+            "canonical": {
+              "ns": 145297007.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 191876,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "789a52c055225bd9cad187116f6741eb24755da67ee3ad1d41f2c006017378e8"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 213397526.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 166312,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "253684d185ff1d274897452fac5ceada96e2d2e955ff55975a9cd19ac6aa8a24"
+              }
+            },
+            "canonical": {
+              "ns": 179207863.0,
+              "score": 0.04486686988953595,
+              "max_rss_kib": 191824,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "6656621e29029c2a3863cbb420c53aff33ef9232d7d0121ec11fce13445522ce"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "7fc4acf02d21e37e3598063a47f26b42bce35197a4388bd6fbb0ec64e9ce7bd4"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "7e47b7d828396aca0c46bf1a7b862a7f8079fa32227d360a360535ac4c8c6e48",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.18GiB | min-avail 15342MiB | peak-load 1.71"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "f367e48163499596cf18ac32fdcd526dda7429b818cbe4d7cec4ad3d7cb36ee2",
+          "receipts": [
+            "run-heavy: done rc=0 2s | peak-RSS 0.18GiB | min-avail 15309MiB | peak-load 1.66"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "6d46dd48eef31d22174350c342f4b315ba8c7b09cf0fe5bda497344296f55571",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.18GiB | min-avail 15227MiB | peak-load 1.51"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "flip-v17-grid-pairA-1024x1024-t1",
+      "metric": "flip-v17",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "NVIDIA FLIP 1.7",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.26179720526548667,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 281645201.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 168348,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "db707678d5261704874a842fa463fb9285b4db4b5f4e48ba01c032b1b4b5a262"
+              }
+            },
+            "canonical": {
+              "ns": 1058742667.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 392972,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "735520d03d9ecd9137378c515c4a8c94e8b24b382770882ad12bd56a9397ef80"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 278831659.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 167456,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "4686183d4cb9bc2d1f9058b10387c5a1262d9b02e33f6ffb3163d95a6c18b7f1"
+              }
+            },
+            "canonical": {
+              "ns": 1115756531.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 391820,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "407fea8c3bb966cea6f226af8e3543e9e5a8be27b750372938153054a5fe8642"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 284500494.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 166876,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "7924aabea5a4ba046eda47bf10fbfd3eb3b4fa03acb7008b8f0d9c606dff6a58"
+              }
+            },
+            "canonical": {
+              "ns": 1086720898.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 392260,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "2ce3bec3346ab80700b8e1d70a4e4c3106c18c2a88debe241610fd465cbfdaf8"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "e3d03cc2a6408801d15111da3b2f45e8ccf41da9d509d8558341a38fd2bfc5c0"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "9615ee552b06f337ed5e08ab81aceef13632c08faa90500d944d76bffbcd6f18",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.37GiB | min-avail 15270MiB | peak-load 1.87"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "b7ff0897f72ab947f8df4f31c029ca90683beb08304db09d1e658084a11d95fb",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.37GiB | min-avail 15244MiB | peak-load 2.44"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "ac3a047133cff8cbea4668d47ebd0a1a9fd11fb6938bfb367583f68b46f4b52d",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.37GiB | min-avail 14387MiB | peak-load 4.18"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "flip-v17-grid-pairA-1024x1024-t28",
+      "metric": "flip-v17",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "NVIDIA FLIP 1.7",
+      "native_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 1.3636713886265537,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 217444685.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 164984,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "d8d76691b2d132ff55c8d80286374bfaf7c802dd4c2680c6c509d8cb78e54ac8"
+              }
+            },
+            "canonical": {
+              "ns": 292947443.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 387244,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "78f5f184205342a49e2b351bfb3ce306e8d70b1f151788878ca0fbdbf644359b"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 241254251.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 164916,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "f8d7ff55959df4f28c41fd8ffe5a1e2a04cfa9e75c180d66cd033db2d333da66"
+              }
+            },
+            "canonical": {
+              "ns": 176915240.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 388240,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "427984df1fd33c9c50cccc1ee4ded677ef1929185c3abd4e8a2f2ba310e4efcd"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 214890617.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 166336,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "7885f1456b01cd07c7c5aab2493dbea7560ddc39a51fb591b60d6144eead853d"
+              }
+            },
+            "canonical": {
+              "ns": 140918513.0,
+              "score": 0.044867612421512604,
+              "max_rss_kib": 389008,
+              "memory_file": {
+                "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "839e87bd06b1a01047953b7ed1b4bdd9ac8cc103044e372eff1ce58fbc9ce3e4"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "07e882cc845104bd15c0b72cfc0ffb1dda605edcc27fd97aea5d09dda531116b"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "333b41e02277ba313dde0438310dd9753570dc7f99adf38503767fd9ce8eff85",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.37GiB | min-avail 14077MiB | peak-load 4.46"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "303f8596e4ba6a582793fd108e201001d33e9e826a5f747b61df659bbc049723",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.37GiB | min-avail 15479MiB | peak-load 1.64"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2/flip-v17-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "7e6016ad9de84029762a20477b0c72a3afdf649530ebf140a67f4cb097443b79",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.37GiB | min-avail 14783MiB | peak-load 1.64"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

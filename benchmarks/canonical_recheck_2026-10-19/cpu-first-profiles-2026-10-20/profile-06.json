@@ -1,0 +1,100 @@
+{
+  "case": "flip-v17-grid-pairA-255x257-t28",
+  "metric": "flip-v17",
+  "width": 255,
+  "height": 257,
+  "threads": 28,
+  "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "native_invocation_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-255x257-t28",
+  "receipt": {
+    "case": "flip-v17-grid-pairA-255x257-t28",
+    "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-255x257-t28/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-255x257-t28"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-255x257-t28/perf.data",
+    "perf_data_sha256": "e945edf203011cd2887a48fd6f5bcf820102c6fc3772c863a7fddd0a075f6c15",
+    "config_sha256": "490936eba66974377d26746ac75615253e2b2d70adcb77d4bf79015baa12b84c",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "3b1c7a49d2f31a8dc085826a743a96c45fb4f6db2fa79d35554e5c90b11b5de7"
+    },
+    "score_bits": [
+      "3fa46bda00000000"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "a2fdb5d094b0b4e8f18cacd16571b8206b420c377ebdd9443033e758ad28c631",
+  "request_sha256": "c6455cc7e23187cad2be08675733c32023e4d0e95d0df42aacab8ac1511f19cb",
+  "report_sha256": "0b1f45e0bf0fe87c64596fa918d2300ca18f1c1eb486e0ac81c01de237b5f899",
+  "script_sha256": "b978b15262e594db5fa0493339d2993055d8c2956ceb93b41602c83da195b31c",
+  "top_self_symbols": [
+    {
+      "self_percent": 81.1,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "memcg1_check_events"
+    },
+    {
+      "self_percent": 18.48,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "vma_interval_tree_remove"
+    },
+    {
+      "self_percent": 0.28,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "perf_event_exec"
+    },
+    {
+      "self_percent": 0.13,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 0.0,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_and_postprocess",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairA-255x257-t28.log",
+      "sha256": "30263b80ba35eed66ebed4599fed4a40c353e2ddf3431426fb2e2925ba845a09",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.03GiB | min-avail 13940MiB | peak-load 1.63"
+      ]
+    }
+  ],
+  "source_note": "Complete fresh-worker CPU recording; instrumented duration and cycle samples remain separate from comparative timing."
+}

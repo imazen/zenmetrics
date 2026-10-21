@@ -1,0 +1,487 @@
+{
+  "cases": [
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-64x64-t28",
+      "metric": "ms-ssim-pyiqa",
+      "width": 64,
+      "height": 64,
+      "threads": 28,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": null,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "canonical": "canonical exit 1; see retained stderr",
+            "native": "native exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "native": "native exit 1; see retained stderr",
+            "canonical": "canonical exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": null,
+          "passed": false,
+          "errors": {
+            "canonical": "canonical exit 1; see retained stderr",
+            "native": "native exit 1; see retained stderr",
+            "wrapper": "exit 1"
+          },
+          "arms": {}
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-64x64-t28/summary.json",
+        "sha256": "ea09d2b1720396165b1dfc41571388441e5bdbb59b8d623ee1805d137fe4a903"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-64x64-t28/block-00-wrapper.log",
+          "sha256": "30c6d0494ab6a912eb72fc3714327502589ce89d542d24d87f15669922ecee42",
+          "receipts": [
+            "run-heavy: done rc=1 5s | peak-RSS 0.79GiB | min-avail 14739MiB | peak-load 0.96"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-64x64-t28/block-01-wrapper.log",
+          "sha256": "88d03fbcc794723437fe5fee2fddf726cad8b48ed6ffd7dc3a11fd1b033bd3aa",
+          "receipts": [
+            "run-heavy: done rc=1 4s | peak-RSS 0.81GiB | min-avail 14985MiB | peak-load 0.55"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-64x64-t28/block-02-wrapper.log",
+          "sha256": "41fb9dc97a560486979baa4eddbd703a417ca45d7d1a215f52e74be2c7e556df",
+          "receipts": [
+            "run-heavy: done rc=1 5s | peak-RSS 0.78GiB | min-avail 14920MiB | peak-load 3.52"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-255x257-t1",
+      "metric": "ms-ssim-pyiqa",
+      "width": 255,
+      "height": 257,
+      "threads": 1,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.015288594046575222,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2751257.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17656,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-00/native/native-memory.txt",
+                "sha256": "a47f01c55ebc9e33dbf1e03bd1dbaaf9fbe6fa2451168bd10794479471216c24"
+              }
+            },
+            "canonical": {
+              "ns": 179954873.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 829944,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "a18f9dd54189c9d10075b128cfa2d784649228803139a7880f17b68047058182"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2958568.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17704,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-01/native/native-memory.txt",
+                "sha256": "3a38eaf43c72da3324a57ea7a746a508602c374b716022d9e67af2f7a5b5ad21"
+              }
+            },
+            "canonical": {
+              "ns": 181729802.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 833956,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "b20753625c9d74fc84037845eac8a8cffa86e382b43b0926d232cd823e1b0afb"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2693465.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17944,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-02/native/native-memory.txt",
+                "sha256": "33b5e229d78a30b1d4d9e72c44be9fe92115abc450e526249267da50374b4859"
+              }
+            },
+            "canonical": {
+              "ns": 200331207.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 825680,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "695b046674e91bde2c1a3e081bd13fceb35fd0fb5977cea4ac9263ce068de5fe"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/summary.json",
+        "sha256": "e990c569731248f996359c5e3997a182f595eda445edb98f07a0e63d58d8abc7"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-00-wrapper.log",
+          "sha256": "f6f6bf3ad15ce8df876d3f401be8dbbba08ee945b19d11ac9c5c3a642dfe795d",
+          "receipts": [
+            "run-heavy: done rc=0 4s | peak-RSS 0.79GiB | min-avail 14766MiB | peak-load 0.74"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-01-wrapper.log",
+          "sha256": "a44a1b8c0e361182d5fd330080c1a6fe9fcc4993584daa2d3fa6988f7cad8fe4",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.80GiB | min-avail 14817MiB | peak-load 0.50"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t1/block-02-wrapper.log",
+          "sha256": "2375a502dbcaab2db8ebf1bb0bd0e21a1557a0c2979862242200dd3b7cd208b8",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.79GiB | min-avail 14545MiB | peak-load 0.70"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-255x257-t28",
+      "metric": "ms-ssim-pyiqa",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.03316024595685423,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2787222.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17440,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "e8c60e472b0b838f415e05bdeb98ab1953977dd75629fab351a97a23a6f6d1f6"
+              }
+            },
+            "canonical": {
+              "ns": 84053116.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 865052,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "2780f87d56931fca18dbe06d37666e4b4ff322da043d9584ba2999dcaa81cb57"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2479583.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17700,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "2024e0c4ed824a8a2e0a6c02dd5fd48c1bba7d37b978d3435839edb98c6a6fe5"
+              }
+            },
+            "canonical": {
+              "ns": 85848517.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 852976,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "b84a39453a3ecefedd521a06230c280a7d15354cd94a31b6d98f9fb0c6aac9b9"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 3.985530450112407e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2737807.0,
+              "score": 0.9909158812062802,
+              "max_rss_kib": 17732,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "5d93bd8a32cdb155ff3cac973a734afe9ae90226ddc21473f401e34b544eb8a8"
+              }
+            },
+            "canonical": {
+              "ns": 77963830.0,
+              "score": 0.9909159210615847,
+              "max_rss_kib": 832300,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "8b39f877df7101a0aa87c435188472c1e05a5a4612df5e3afa0b921ec3e974ec"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/summary.json",
+        "sha256": "ff7969fee9889d111c0aff8a5677832843bb06f68245d860c3b8fd0883551ac9"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-00-wrapper.log",
+          "sha256": "7ea600eee40b1a04c64a0dd13a4b290226ae8a553506bde933858b374f70753b",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.82GiB | min-avail 14372MiB | peak-load 1.22"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-01-wrapper.log",
+          "sha256": "51de4489cba21c0ada123d2d9d6b2ecdbbfad8d5e26fd246760ed96a9ab85dc4",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.81GiB | min-avail 14494MiB | peak-load 0.67"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-255x257-t28/block-02-wrapper.log",
+          "sha256": "c685a7f1caa950baf7cee4e8e785955f2116d1bb7aa71ec76880df662b496514",
+          "receipts": [
+            "run-heavy: done rc=0 5s | peak-RSS 0.79GiB | min-avail 14516MiB | peak-load 1.21"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "ms-ssim-pyiqa-grid-pairA-1024x1024-t1",
+      "metric": "ms-ssim-pyiqa",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "PyIQA 0.1.16 / named convention",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.01142051598167343,
+      "absolute_bound": 5e-05,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.3733054955197304e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 41843619.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45780,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "55bbe99fab492d8f7c1ef3403ee2fe64aebd04ad79166a73c959d66a39509fa1"
+              }
+            },
+            "canonical": {
+              "ns": 3595966209.0,
+              "score": 0.9900258725874932,
+              "max_rss_kib": 1905652,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "4c6aac74c5f1cb9ed9c45691d0c9d39dfa9369a73abc7221bcb87f6bc2eebe1b"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 4.3733054955197304e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 39762535.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45788,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "06118b18eb3a7a7b0c241534437896653b459ff2dedee6ebdb34684970e02363"
+              }
+            },
+            "canonical": {
+              "ns": 3721447367.0,
+              "score": 0.9900258725874932,
+              "max_rss_kib": 1907496,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "e92f658b25f80403a6352dea7485304a2b9930aa78b6befcf62011054871b643"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.3733054955197304e-08,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 42797705.0,
+              "score": 0.9900258288544382,
+              "max_rss_kib": 45780,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "f458c1f0389bf8be6bd3665c5cda758d57559f2cb00f4b682dd654e1ebcfe284"
+              }
+            },
+            "canonical": {
+              "ns": 3747440577.0,
+              "score": 0.9900258725874932,
+              "max_rss_kib": 1924664,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "c0908171ab070258facef3ceabc20d202130c6a7a6fd0a0693fd01b67fb70f1d"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "1eae071010eb3bc8f55d5ee8eb7a9a6f1428fc9aac039dab144cff35825cc7ca"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "b5f7e1f8e662044d64a2a252a7c31232786461f31becdaa96f3a471f709af246",
+          "receipts": [
+            "run-heavy: done rc=0 11s | peak-RSS 1.82GiB | min-avail 14241MiB | peak-load 2.85"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "c2ca15a94aa5d0509928647960ef2671f61598cf03d86327c577eafcbb28af65",
+          "receipts": [
+            "run-heavy: done rc=0 11s | peak-RSS 1.82GiB | min-avail 13288MiB | peak-load 0.71"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f/ms-ssim-pyiqa-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "85856739521a4bd847aa9b525d25ea4e833dab81cbaccf95df2d81c3edb70b81",
+          "receipts": [
+            "run-heavy: done rc=0 12s | peak-RSS 1.84GiB | min-avail 14022MiB | peak-load 0.80"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

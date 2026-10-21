@@ -1,0 +1,114 @@
+{
+  "case": "flip-v17-grid-pairB-255x257-t28",
+  "metric": "flip-v17",
+  "width": 255,
+  "height": 257,
+  "threads": 28,
+  "rust_source": "e6e8d2eef411e9cbd9c5aec7d01a75a2e5c7d50d",
+  "native_invocation_sha256": "5d2703efd9098d0474a62815a80bbc1f50828867c71d0e6bef05c805297e6de9",
+  "raw_directory": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairB-255x257-t28",
+  "receipt": {
+    "case": "flip-v17-grid-pairB-255x257-t28",
+    "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+    "controller_sha256": "512dab48b56f4a49c1e0dc13b8836f9ecdc0fb7427350034e8e0e81815826f8f",
+    "perf_sha256": "4f9fdea857d4e2db55de32de30595964c4e3a895e34e85aaa9a2ad4fead2b809",
+    "command": [
+      "/home/lilith/bin/perf",
+      "record",
+      "-F",
+      "99",
+      "--max-size",
+      "32M",
+      "-e",
+      "cycles:P",
+      "--call-graph",
+      "dwarf,8192",
+      "-o",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairB-255x257-t28/perf.data",
+      "--",
+      "/usr/bin/python3",
+      "-B",
+      "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/profile_classical_first.py",
+      "--worker",
+      "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairB-255x257-t28"
+    ],
+    "adopted_from": null,
+    "perf_data": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairB-255x257-t28/perf.data",
+    "perf_data_sha256": "d586cc1ce107cfca4314586d0d360e1f30e6b8bbf084876949caa419230cbf6d",
+    "config_sha256": "e51c71d14f95e7e29a2165263f11634761084eedcf6ae0ce4f00509e315f40d0",
+    "repetitions": 1,
+    "worker_log_sha256": {
+      "worker-000.log": "6ee5e89b8c6b80672f6d9b2bc67b236f5e78cd66dd15c2184fa220420bc6b458"
+    },
+    "score_bits": [
+      "3fbdb2f840000000"
+    ],
+    "scope": "Complete fresh cold-worker processes, including startup, input loading and teardown; no warm scorer evaluations. Sampled shares do not isolate the internal cold clock or worker-thread spans. Instrumented wall times are not comparison evidence; no CPU placement is inferred."
+  },
+  "receipt_sha256": "46642a96cb86aad7079b49ba77c9b16f0d9bdadaf10a9375be586e350e3a5b52",
+  "request_sha256": "cef52fd8ad2cf735c38288ea18226ab3465dfd8ae89089009071bd2c0a4d3c5d",
+  "report_sha256": "aa1c49f0a6edd0b8186f1c28b28ce226c5110020e974af21371211a6b13685c4",
+  "script_sha256": "82940b05cb6fea434e282c1559ab72ccbf147398d46cb63a08e042074c603698",
+  "top_self_symbols": [
+    {
+      "self_percent": 38.53,
+      "process": "iqa-compete",
+      "object": "libc.so.6",
+      "domain": ".",
+      "symbol": "__memmove_avx512_unaligned_erms"
+    },
+    {
+      "self_percent": 33.08,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__rcu_read_unlock"
+    },
+    {
+      "self_percent": 27.94,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "set_pte_range"
+    },
+    {
+      "self_percent": 0.19,
+      "process": "iqa-compete",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 0.14,
+      "process": "python3",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "__amd_pmu_enable_all"
+    },
+    {
+      "self_percent": 0.11,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "_raw_spin_unlock"
+    },
+    {
+      "self_percent": 0.0,
+      "process": "perf-exec",
+      "object": "[kernel.kallsyms]",
+      "domain": "k",
+      "symbol": "amd_pmu_enable_all"
+    }
+  ],
+  "resource_receipts": [
+    {
+      "role": "capture_or_adoption",
+      "path": "/home/lilith/tmp/handoff/classical-first-gmsd-flags-20261020/profiles-public-v1/flip-v17-grid-pairB-255x257-t28.log",
+      "sha256": "676e604919318d1781a9ad0b8896c8cd96ba3a08fea5525360f92149c67d1524",
+      "receipts": [
+        "run-heavy: done rc=0 2s | peak-RSS 0.04GiB | min-avail 13144MiB | peak-load 1.64"
+      ]
+    }
+  ],
+  "source_note": "Complete retained fresh-worker recording or adoption. No isolated cold-clock attribution."
+}

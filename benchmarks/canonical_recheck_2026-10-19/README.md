@@ -756,3 +756,49 @@ reports 1.1764430166284257 [1.1123383245857097, 1.2463601494859644]; precision
 fails, so a fixed additional40 is queued and all60 will be retained. These are
 first evaluations after resident model construction; canonical runtime cleanliness
 is not independently qualified and neither interval is an accepted regression.
+
+## Cold-call and supported-runtime update, 2026-10-21
+
+The [acquired cold-call panels](acquired-cold-panels-2026-10-21/index.json) retain
+completed CPU and CUDA cases with per-arm maximum RSS and wrapper receipts.
+These initial three-block ratios remain separate from warm results and fixed
+confirmation stages. Unassigned numerical bounds remain unqualified.
+
+[Completed CPU recordings](cpu-first-profiles-2026-10-20/index.json) and
+[IW-SSIM CUDA t1](iwssim-first-profile.json),
+[IW-SSIM CUDA t28](iwssim-t28-first-profile.json) and
+[Butteraugli CUDA 64²](butteraugli64-first-profile.json) retain source and
+recording hashes. Whole-process stacks and CUDA traces do not isolate the cold
+clock or establish a causal share of a comparison gap. Two capped GMSD captures
+retain [13/100](gmsd-t28-first-cap-adopt-v3.json) and
+[19/30](gmsd-t28-capped-adopt-v3.json) completed workers as partial diagnostics.
+[DSSIM lifetime controls](dssim-first-lifetime-controls.json) separate actual
+original-only bit checks from synthetic clock-order controls; no timing ratio
+is inferred from either control.
+
+The [supported Octave 11.1/image 2.20.1 HDR-v2 controls](hdr-octave111-v2-controls.json)
+reproduce the 1 MP photo difference: original 61.71098098074218, retained native
+61.701629129628834, absolute difference 0.009351851113343912. The original agrees
+with its legacy-runtime result to 7.105427357601002e-15 on both retained controls.
+The legacy runtime therefore does not explain this case. The existing 0.005
+golden-fixture level remains a fixture check; no universal bound or HDR timing
+ratio is assigned. The original 1 MP process recorded maximum RSS 628,252 KiB.
+The two-control wrapper used 14 s / 0.09 GiB peak RSS / minimum available
+14,118 MiB / peak load 2.40 and exited 1 because its separate newly built v3 MEX
+fixture failed. Completed v2 controls are retained; v3-only followups restore
+the original M-file dispatch without changing author sources.
+
+The [two completed v3 controls](hdr-octave111-v3-controls.json) use that original
+M-file dispatch on the same modern runtime. The largest difference from retained
+native initialization scores is 1.0658141036401503e-14 across the 64² and 1 MP
+photos. The 1 MP original maximum RSS is 667,644 KiB. The successful wrapper
+recorded 13 s / 0.09 GiB peak RSS / minimum available 13,439 MiB / peak load 2.13.
+No universal v3 bound or timing ratio is assigned.
+
+The [BRISQUE 64² photo finding](brisque-64-numerical-finding.json) repeats a
+0.0865478515625 difference against PIQ 0.8.0/torch 2.14.1+cpu at both one and
+28 workers, above the unchanged 0.015138428 bound. Both timing ratios remain
+withheld. Separate existing-wheel/CPU-dispatch diagnostics are pending; the
+cause is not assigned and no oracle environment exception is accepted.
+[Historical runtime/control harness sources](supported-hdr-runtime-sources-2026-10-20/index.json)
+retain each exact setup and wrapper snapshot; frozen assets remain outside git.

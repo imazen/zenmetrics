@@ -876,3 +876,25 @@ into the f64 pipeline is the candidate explanation; the f64 correction is
 being evaluated on unmerged `fix/vif-rgb-luma-precision`. It is not yet a
 verified fix. The primary source and every original numerical gate remain
 unchanged; `vifvec` behavior is a separate required before/after control.
+
+### Supported-runtime followup for the local HDR-v2 diagnostic (2026-10-21)
+
+The [two original-only controls](benchmarks/canonical_recheck_2026-10-19/hdr-octave111-v2-controls.json)
+use Octave 11.1.0 with the full upstream image 2.20.1 package. The 1024² photo
+original is 61.71098098074218 versus retained native 61.701629129628834, a
+0.009351851113343912 difference. The original's legacy-runtime difference is
+7.105427357601002e-15. This rules out that legacy runtime as the explanation
+for this cell; the cause of the native difference remains unresolved. The
+0.005 existing golden-fixture level is unchanged and is not a universal bound.
+These controls provide no comparable timing ratio or native parity acceptance.
+The earlier partial grid and its runtime qualifications remain retained.
+
+### Local BRISQUE 64² numerical failure (2026-10-21)
+
+The [64² photo comparison](benchmarks/canonical_recheck_2026-10-19/brisque-64-numerical-finding.json)
+returns native 75.64959716796875 versus PIQ 0.8.0/torch 2.14.1+cpu
+75.73614501953125. Absolute difference 0.0865478515625 exceeds the unchanged
+0.015138428 bound in all three blocks at both one and 28 workers. Ratios are
+withheld. The 255×257 photo remains within that bound. Existing BRISQUE
+validation uses a different torch wheel on CPU; controlled runtime/ISA
+diagnostics are pending and do not waive this measured failure. Cause unresolved.

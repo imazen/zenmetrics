@@ -2211,3 +2211,19 @@ not the author-repository checkout. Retain those observations as alternative
 comparisons; author DSSIM 3.5.1 at `0e44c9b7` is being acquired separately.
 See `benchmarks/canonical_recheck_2026-10-19/dssim-reference-lineage.json`.
 No native code, numerical bound or expected value changes for this correction.
+
+### Known Bugs: supported-runtime HDR-v2 followup (2026-10-21)
+
+The [Octave 11.1/full image 2.20.1 controls](benchmarks/canonical_recheck_2026-10-19/hdr-octave111-v2-controls.json)
+reproduce the retained native-v2 1 MP photo gap, 0.009351851113343912. The
+original's difference from the legacy runtime is only 7.105427357601002e-15.
+The legacy runtime does not explain this case. Cause unresolved; no numerical
+bound, metric path or existing result changed. HDR timing remains withheld.
+
+### Known Bugs: local BRISQUE 64² reference difference (2026-10-21)
+
+The [retained photo finding](benchmarks/canonical_recheck_2026-10-19/brisque-64-numerical-finding.json)
+has an observed absolute difference of 0.0865478515625, exceeding the unchanged
+0.015138428 bound against PIQ0.8.0/torch2.14.1+cpu, repeating at both worker
+settings. Timing ratios remain withheld and the bound is unchanged. Original-only
+wheel/dispatch controls are pending; no root cause or exception is accepted.

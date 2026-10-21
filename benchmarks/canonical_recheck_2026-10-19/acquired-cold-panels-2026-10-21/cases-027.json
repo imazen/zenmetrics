@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "case": "psnrhvs-daala-grid-pairA-255x257-t28",
+      "metric": "psnrhvs-daala",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / original Daala psnr_hvs / YUV444",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.2140813365954864,
+      "absolute_bound": 0.0002,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2861949.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 17980,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "7658fc884922717485b8106fec307e341cddafc404f4aa81b7fc352f1ba3dc6d"
+              }
+            },
+            "canonical": {
+              "ns": 13109516.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 16820,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "e04d1c5e36358f1b1ea27be7ccbcaed2e852c6551d9042690e02dd63a5169b01"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2863209.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 17680,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "1bc315cb39d1429ad626a9a1ac711654841c1ea2599ed7179b9317dbd8daaaed"
+              }
+            },
+            "canonical": {
+              "ns": 13374398.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 16792,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "2a93870d531a3d63e904e75e4bc63035a3443fe8fe5620fec0fca36b9ac820fb"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 2530756.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 17744,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "8804f7c81bde9755fb10bbaa241ad18fee53c464bdafad9a4bb662e0a259b4ee"
+              }
+            },
+            "canonical": {
+              "ns": 12741323.0,
+              "score": 42.52343495309123,
+              "max_rss_kib": 16620,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "dfdca1f0ca9115f06a5f0e33a0f0f46e0ac01e503a615cb76e42b0c7bab79971"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/summary.json",
+        "sha256": "11509b32120e6008d8420bf5ebcf279abcf93b7580b5de104b7b8db55fc81a30"
+      },
+      "plan_sha256": "97597d4c9d8dd4a973e02d1ba409e6b5bb46e89b76bc9606d7998e250ffdb9e7",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-00-wrapper.log",
+          "sha256": "c80cf5c8c60cf4cb0a1dc13f29e1854422fa3aa07c040384296021b8f6250b87",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14715MiB | peak-load 1.46"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-01-wrapper.log",
+          "sha256": "789f5993c98671786dd7a335b7fe1da7086e1e50a44354bf4fa990caf6626053",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14528MiB | peak-load 1.53"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-255x257-t28/block-02-wrapper.log",
+          "sha256": "29a44ff5cbe38d8162a9aaa09a82a989ceed80b0e9bd8dfdf3f62775c45a5754",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14918MiB | peak-load 1.94"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "psnrhvs-daala-grid-pairA-1024x1024-t1",
+      "metric": "psnrhvs-daala",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "libvmaf 3.2.0 / original Daala psnr_hvs / YUV444",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.5722433793102826,
+      "absolute_bound": 0.0002,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 32628445.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17732,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "0cc7208961ed7eabec1d4b530b0b6a268ebecfea6fa21fb19faac8d89e4aaac7"
+              }
+            },
+            "canonical": {
+              "ns": 56717604.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 29232,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "8de7212e3966250a7f2ff00ca1c367db6cb5ad878baaf59c45b222701816438a"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 32681366.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17620,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "3cdb6a642323508f936ee1ff708911d4555e464ff2d2c250184471c59d3f448b"
+              }
+            },
+            "canonical": {
+              "ns": 58077279.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 29232,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "3d72b2a8e8eaa01c387084d7ed1f11c920ba194d2f915676e45f33ad9b0ca363"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 32994173.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17736,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "5a265d9faa88f42f0b680eced88cd7362f7ee05a8a993945ea0be5fdc7cb7e41"
+              }
+            },
+            "canonical": {
+              "ns": 57657588.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 29588,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "0df2c736cec2427e5ff5064be9e9cb574eccda4630d1b774875aca9c40f2bd93"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/summary.json",
+        "sha256": "03585b9f647c35f04901326af6ccafe7fb13d2acdb4df5ac591ff842093310c6"
+      },
+      "plan_sha256": "97597d4c9d8dd4a973e02d1ba409e6b5bb46e89b76bc9606d7998e250ffdb9e7",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "363f0669eddbe06df141d0db36abeeecc574ba96739be1cfac151bca440c9112",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14758MiB | peak-load 2.25"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "c346b5fac561dae6b79800cca2493c3af5eeb3166a135e9a57b83ea0ff75d960",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14588MiB | peak-load 1.79"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "10fd127df2615bb7235dc2774e6cad8959049e812fee6368949de1931cabf550",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14682MiB | peak-load 1.49"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "psnrhvs-daala-grid-pairA-1024x1024-t28",
+      "metric": "psnrhvs-daala",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / original Daala psnr_hvs / YUV444",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.09527411026135132,
+      "absolute_bound": 0.0002,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 12656975.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17660,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "ea17e1d56df7621df06090cb3f9d3846c73936f6e9b32e8cfd7de3b23c42ca77"
+              }
+            },
+            "canonical": {
+              "ns": 132848000.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 195112,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "88a4b81d3bcd9f23c3d6abb8f9b4d75544db2f74f902305fe5283ca93b2c554d"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 13916942.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17956,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "04ccc3254077531a6514ef0eebbf0405fd5df225f9c203d7ff236026fe8e34b6"
+              }
+            },
+            "canonical": {
+              "ns": 135537861.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 195264,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "3bd825faae5803c8e22b23588450904c4066c3049f4039bf91c26bcb2da2d511"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.888840337002875e-07,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 12765896.0,
+              "score": 41.89531403904751,
+              "max_rss_kib": 17684,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "b6c116a0fe18537cd449a89cf63ad651d3fbed7d86982b4e1d1b4b7b3012435e"
+              }
+            },
+            "canonical": {
+              "ns": 183302939.0,
+              "score": 41.89531355016348,
+              "max_rss_kib": 195032,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "2e78163f3891e16ea1ab30122461e14c2ad6af547e7c5bcd21aced1d2b50e95c"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/summary.json",
+        "sha256": "673f6b8cc5b8e6a42654fc4a75f201f304718469e43ba2ea906e4208e9271a4b"
+      },
+      "plan_sha256": "97597d4c9d8dd4a973e02d1ba409e6b5bb46e89b76bc9606d7998e250ffdb9e7",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "337ddc3f2aa269c775363138ba3e53a7d75c59bfdefec3a05799b080b67cddb1",
+          "receipts": [
+            "run-heavy: done rc=0 2s | peak-RSS 0.19GiB | min-avail 14623MiB | peak-load 1.90"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "86eaac5062a10b0972a9a5fd24dc36027bedfd11092c77e4c922ce5c5f90dfce",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 14135MiB | peak-load 1.01"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "8e6f4fe265bc91df7113a4d39671dc6c9b083281e48cb3e0f688fbb467c21dd1",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 13820MiB | peak-load 1.29"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "psnrhvs-daala-grid-pairA-3840x2160-t1",
+      "metric": "psnrhvs-daala",
+      "width": 3840,
+      "height": 2160,
+      "threads": 1,
+      "canonical": "libvmaf 3.2.0 / original Daala psnr_hvs / YUV444",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.5745412606782077,
+      "absolute_bound": 0.0002,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 254742527.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 101540,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-00/native/native-memory.txt",
+                "sha256": "bb5c01810d8da5f1ac1f6db56faa90f7c98bbc2cbf32a8dee5f005d84f0f32df"
+              }
+            },
+            "canonical": {
+              "ns": 443384217.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 198980,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "44e9411ddde8dc4aaf74a2e8c09acf7cc871931012e9d97de227a03b8b48d345"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 257433018.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 101792,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-01/native/native-memory.txt",
+                "sha256": "f3183f53f8d17309e2040c3b776c1984f8b664998677a8c12a0d413687bc68a6"
+              }
+            },
+            "canonical": {
+              "ns": 442693718.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 199108,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "f787f471b5e85df3eaba401cb08ea523fb6c7f5af26b9f21a47e14ff9041282d"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": true,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 246595534.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 101848,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-02/native/native-memory.txt",
+                "sha256": "380bd4c1ecf19c5efa70319576d88f25232afe173afa74f25271e9f9e3a61f35"
+              }
+            },
+            "canonical": {
+              "ns": 437119854.0,
+              "score": 41.572636635825084,
+              "max_rss_kib": 199112,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "79b23dacc73cc4155b4b05f05804cc00640a47c51bdc45dc25a8c65f26a3c3d2"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/summary.json",
+        "sha256": "54cff758abd2f9f55b468f1789c1e1df4c60d3fbc90e2207d46e1d7cc32a1871"
+      },
+      "plan_sha256": "97597d4c9d8dd4a973e02d1ba409e6b5bb46e89b76bc9606d7998e250ffdb9e7",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-00-wrapper.log",
+          "sha256": "b304c79e0bbcd47d6df1d82c61f4bfefdfe799355c59d6f6efdd29c93915dcc0",
+          "receipts": [
+            "run-heavy: done rc=0 2s | peak-RSS 0.19GiB | min-avail 14141MiB | peak-load 1.44"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-01-wrapper.log",
+          "sha256": "978127870fa421c881a48e44926bc7de65a3a52ef9c0cf5ebbb29c48a125b2c0",
+          "receipts": [
+            "run-heavy: done rc=0 2s | peak-RSS 0.19GiB | min-avail 14353MiB | peak-load 1.36"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1/psnrhvs-daala-grid-pairA-3840x2160-t1/block-02-wrapper.log",
+          "sha256": "784e71d54e182966c9acf31fc45e5f49955d55715c8f2f2d790bb33afd15f287",
+          "receipts": [
+            "run-heavy: done rc=0 3s | peak-RSS 0.19GiB | min-avail 14090MiB | peak-load 1.75"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Historical harness sources for the supported Octave controls. [The index](index.json) binds every exact source snapshot. These are audit snapshots with frozen local assets and owned-storage preconditions, not a new portable command. Original author source and binary package/image data remain outside git. The source URLs and links in each snapshot are preserved.

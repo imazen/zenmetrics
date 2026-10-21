@@ -1,0 +1,557 @@
+{
+  "observed_at_utc": "2026-10-21T02:43:23.697017+00:00",
+  "publication_source_sha256": "62c4549fb3d4817aba900cd6a6beb80bc37e37cbd36c7d7a69cf25000f9577e7",
+  "campaigns": [
+    {
+      "raw_directory": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-revised-grid-run-v2",
+      "controller": {
+        "path": "/home/lilith/tmp/local-canonical-20261019T2330/classical-first-harness-review/compare_classical_first.py",
+        "sha256": "fc3533936d46acc60526c3c599f89509d3a9cc648f748002894e6f822bbc1b32"
+      },
+      "plan_sha256": "a6a8fe85cdb58a913b65f04ae3b15af211699baeb1f974947092b35a46d3c253",
+      "expected": 240,
+      "completed": 38,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/brisque",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "d2132a7bf236dabdc3cbccab4211096ade7e1915cd8735b2e8f9bda0c80c612f",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/butteraugli",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "8f56c8a6a82c2d1793e026a8c0ecbc254d4c2e91067d7893766ece433f97fe59",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/cvvdp",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "c8aff99e4b08adf6c376276fd74d02afe6fcbd95203b0f5b00b7802710e157b1",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/iwssim",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "a85030dada3eec472a59c6ad51e27871f8078df20b10b8661387e57c7ce7621a",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/iwssim-piq",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "ff998a270c0db3aa60deb2a39cab60ad8b443c8c6443590a50e402740bbfed14",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/niqe",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "c6c850c0a8857f5e0b8c062d5ebef40f65aed0e6755a624084790f6c3dff6317",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "d8a062fde594d377cefac91474ed634cdd7ea6fdb1005b1bd841bcfcc8fb5b3e",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/nlpd-iqa",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "ceed2168b4b25c8d4a0d714b86c50324562f5a59c1e375650bdac8cdb9456e61",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/proposal-butteraugli",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "8736c2ece71015f033f441aea0acdb58f8d0b9311456bbe43e0def3266dfd378",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-final-ten-20261020/first-grids-v2/acquisition/ssim2",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "fd29463a0a6a3b200676b14d4d8d853d39d2fbc72b409146e975fa226f45e568",
+      "expected": 24,
+      "completed": 4,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-cold-remaining-candidates-20261020/prepared-v2/acquisition/gmsd-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-cold-remaining-candidates-20261020/source-bundle-v2/compare_classical_first.py",
+        "sha256": "fc3533936d46acc60526c3c599f89509d3a9cc648f748002894e6f822bbc1b32"
+      },
+      "plan_sha256": "768b30a5840e6507cf8ca1206c2c6d60ff75f4b3cfe1692f0b8994a9a908f3b0",
+      "expected": 24,
+      "completed": 10,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/dssim",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "0cc73c98feb16661e38a72f7e8dd2821a69ec3a7297dc571801d394ccef5f6ce",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-fullcall-seven-20261020/prepared-v1/acquisition/vmaf",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "49ff0650714a1cf548d06e11df69fd79f3d82f89fbf4331f1cdf73d157f237ee",
+      "expected": 144,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/classical-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "322ee1358327ec166fcee2cfcdb0534e0eca7775f7d5317aee676fd53f63e645",
+      "expected": 48,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/daala-ea767ba1",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "97597d4c9d8dd4a973e02d1ba409e6b5bb46e89b76bc9606d7998e250ffdb9e7",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "7212c8ab91450d426e7ca0e7ec34a47ca05ffb428a5b69d7934314ff438e5dd0",
+      "expected": 48,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "d86d431d89fd5c34663dd2ad831ccbf7ff25fbd3bcbe6955d09b71f06cc35b9d",
+      "expected": 48,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "95e00bf440ca36c28d3bf38cac6575795daac16bd93bdd0e7db17dc8a8b7ecc1",
+      "expected": 120,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/mdctpsnr-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "85f05b74d6af1e1b0a637cf0376fd760d29cd2f4a08824351a00e63f4d971e70",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/octave-ea767ba1",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "f5666dde1099412a32bec7c864558d6c8e631893bee8777303cacf39e1ee824a",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/octave-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "fe5b62fa96cb07af726eb8a6d80307fd0b454fd6a3a74442e1e00ee1d3511403",
+      "expected": 360,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/python_cpu-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "6e23d483fc6beb0dfd362a4755468e31fca1e7897518be860ab54a4f083ad223",
+      "expected": 504,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/rgb_variants-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "aed7bb11a9a0e90f057baab2492042ddf874aaf850bf3338a3e4c2ab97652bdf",
+      "expected": 48,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/ssim1-efae6b8f",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "bfe30f9179eaf8e80d12177e0bd25d801070ccc00c13c9ee51bc6d818f8ab3a9",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-first-google-supported-20261020/prepared-v1/acquisition",
+      "controller": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/source-bundle-v1/compare_classical_first_verified.py",
+        "sha256": "5e755f55b6efa77dfece508ee32eec0333aae647c17065eda251f78a8e61bb16"
+      },
+      "plan_sha256": "5906ae87141c27c6e5dbd9e690ff4409ac95ab9ae550cbdfaea29d8f5aa8d842",
+      "expected": 24,
+      "completed": 7,
+      "device": "cpu"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/first-four-acquisition-v1",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_gpu_first_verified.py",
+        "sha256": "816b47ef8d65abaa0b78c5fd9d2542eacf45f5954c64a4a0e114fc38c3fc706d"
+      },
+      "plan_sha256": "a3024394c9ff0546a78d33f1fae2a12a358c906a9bb7a5b124ac2b871994be63",
+      "expected": 4,
+      "completed": 4,
+      "device": "cuda"
+    },
+    {
+      "raw_directory": "/home/lilith/tmp/handoff/classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2",
+      "controller": {
+        "path": "/home/lilith/work/zen/zenmetrics/benchmarks/iqa_compete_2026-10-16/compare_gpu_first_verified.py",
+        "sha256": "816b47ef8d65abaa0b78c5fd9d2542eacf45f5954c64a4a0e114fc38c3fc706d"
+      },
+      "plan_sha256": "41850d593ac7ccf8797c0dc8eb3c41ef8fb92bbd552f64a1d6ecc317694b9f96",
+      "expected": 120,
+      "completed": 2,
+      "device": "cuda"
+    }
+  ],
+  "shards": [
+    {
+      "file": "cases-000.json",
+      "cases": 4,
+      "sha256": "4ec6cc209323be63a9eb999b3ab3e2493c23720ff0cb02a62bf76937902ef3bd"
+    },
+    {
+      "file": "cases-001.json",
+      "cases": 4,
+      "sha256": "2666f375e76d629852e93bfe0a305a705f2ff9f258f1893a3fa348c137f70047"
+    },
+    {
+      "file": "cases-002.json",
+      "cases": 4,
+      "sha256": "59728a155ad95b36071858e4e292cc199aed26b4fa514af4940da0f8a18b76df"
+    },
+    {
+      "file": "cases-003.json",
+      "cases": 4,
+      "sha256": "fa5c2ad28eb8b423dced14a2cf3e8705067bdb03eba05241be7bd07e21d4150b"
+    },
+    {
+      "file": "cases-004.json",
+      "cases": 4,
+      "sha256": "109121e40e294e16bc995616343f648859543d9d24eab48a73eec41571ad0e99"
+    },
+    {
+      "file": "cases-005.json",
+      "cases": 4,
+      "sha256": "a96ac02459a5ba1b35b9b47e470999a005456b1f67a249646e06ba3ce7205192"
+    },
+    {
+      "file": "cases-006.json",
+      "cases": 4,
+      "sha256": "7cb3c812b39089ad88b51c98dc5a957130f4a3a64a635d66ef85200afe2aeffd"
+    },
+    {
+      "file": "cases-007.json",
+      "cases": 4,
+      "sha256": "d34d39ce80ff3e39791a21b0dd0ff164d7266d72e9b1406b6b262f679864edbe"
+    },
+    {
+      "file": "cases-008.json",
+      "cases": 4,
+      "sha256": "4417bd5bb28b36f74986cacc29e5d5ec2d1dd3095db9818cba5f573cce0d16a8"
+    },
+    {
+      "file": "cases-009.json",
+      "cases": 4,
+      "sha256": "8056f712dd5eafdb28ed869d8d230941539aa077cafdad253343b2e49b6f84c6"
+    },
+    {
+      "file": "cases-010.json",
+      "cases": 4,
+      "sha256": "99da263d52973f1d18c3178994af0e3e6a7d2efc1a906937a784205433b238c4"
+    },
+    {
+      "file": "cases-011.json",
+      "cases": 4,
+      "sha256": "b4f373ba6864ee360580b8207261ca697331215a5bce382400d9f450a7758eb7"
+    },
+    {
+      "file": "cases-012.json",
+      "cases": 5,
+      "sha256": "5303adea1f5d27589b930243a7c1b56ecb23fae9a50b6f6758b72b89623cd6e4"
+    },
+    {
+      "file": "cases-013.json",
+      "cases": 5,
+      "sha256": "9733b2a7e254a1cc800ec3614da32a89dd1ff101f3d4355ab271e973f0c99b1e"
+    },
+    {
+      "file": "cases-014.json",
+      "cases": 5,
+      "sha256": "c92d53c6e21e6e94ed6caa29618a2bc44d0b0b85d187550feff3ad25a20cf017"
+    },
+    {
+      "file": "cases-015.json",
+      "cases": 5,
+      "sha256": "2d236cd5376d2e3f1bafc8b20cc3cb2a2fab05ad1a33db77cef263f1d9d1db0c"
+    },
+    {
+      "file": "cases-016.json",
+      "cases": 4,
+      "sha256": "523333962b238bc1977b3a53f3d15b675934e7701095bc241563c7cd29202312"
+    },
+    {
+      "file": "cases-017.json",
+      "cases": 4,
+      "sha256": "7f55f5804ef654e2d045bda229a2d6095d04a105a298945c0144f248df3a343c"
+    },
+    {
+      "file": "cases-018.json",
+      "cases": 4,
+      "sha256": "a57666b4482eb83aacba451d631a1b193b8e777f67ff4c50b74b0ecc1ac38aea"
+    },
+    {
+      "file": "cases-019.json",
+      "cases": 4,
+      "sha256": "eb0ed23e22f85441429c8d895c349df86cce36a50d004a8d1fe2062f3bd24942"
+    },
+    {
+      "file": "cases-020.json",
+      "cases": 4,
+      "sha256": "3c209422be242b8511ffdc055e9fd0db9650ed37c715668fcbcba0fcb56a2364"
+    },
+    {
+      "file": "cases-021.json",
+      "cases": 4,
+      "sha256": "028004cec0087f4b1e7700bcb5d8e3aa152e37ceb4062e3778ac64fc2268626d"
+    },
+    {
+      "file": "cases-022.json",
+      "cases": 4,
+      "sha256": "ec0c7c39b1b3d94ba033faeb8497aea2cae8175869bc8541463a4e18f03049ca"
+    },
+    {
+      "file": "cases-023.json",
+      "cases": 4,
+      "sha256": "ba0ddd0dde8b03e4460564d78e8aeea9aa204a0b43de8ceb669ca891bbc38adb"
+    },
+    {
+      "file": "cases-024.json",
+      "cases": 4,
+      "sha256": "f7d5a22d92d5bf73ddba0b83b1c3a0d289529d3c927efb4cc1ddd1d311b281c5"
+    },
+    {
+      "file": "cases-025.json",
+      "cases": 4,
+      "sha256": "28554bf881206a6e012a9d766aaed17a1fc7c88de6f3faeea3a472eb836335f9"
+    },
+    {
+      "file": "cases-026.json",
+      "cases": 4,
+      "sha256": "589e2aaa4dcd17fae70124e2d37f50237b94efee5748db7a4487b3c744c16aac"
+    },
+    {
+      "file": "cases-027.json",
+      "cases": 4,
+      "sha256": "2ef88d5730eae189232c44a7127516090387cac420f8b6af791cd94d4e037dcb"
+    },
+    {
+      "file": "cases-028.json",
+      "cases": 4,
+      "sha256": "ff9767abb9905941a9028dfc16d188b431000a917b1d15e9afae9c3f642ebeff"
+    },
+    {
+      "file": "cases-029.json",
+      "cases": 4,
+      "sha256": "0b86bf5472012763691172d3388c7eb4e84d31dc4b85b0bbe633ec1d1debb063"
+    },
+    {
+      "file": "cases-030.json",
+      "cases": 4,
+      "sha256": "e7336a44578a190b0ac681cd9b2be6dc40f412a98559de4f52575b961a3192ee"
+    },
+    {
+      "file": "cases-031.json",
+      "cases": 4,
+      "sha256": "36160979c5e23cb18fb24740a3889b7529cddb17e838f37c80dafec83abf7975"
+    },
+    {
+      "file": "cases-032.json",
+      "cases": 3,
+      "sha256": "378e6d1efd9849c1825af6c83f6fcb187debce20b0ea3372a293192e8400b043"
+    },
+    {
+      "file": "cases-033.json",
+      "cases": 4,
+      "sha256": "313a134606c3969c197414fb7c1fa2ee4bc4c22c6d7d9dd1c3e04d00798b2d64"
+    },
+    {
+      "file": "cases-034.json",
+      "cases": 4,
+      "sha256": "85e5482d537a23381aba2edf09b9eef0f1ccb53f28976ec1158831f4e00e0c80"
+    },
+    {
+      "file": "cases-035.json",
+      "cases": 4,
+      "sha256": "aaf9897b36cc084347860f7429c766993e6f15d63626e0f2a857362aa64a70ee"
+    },
+    {
+      "file": "cases-036.json",
+      "cases": 4,
+      "sha256": "7fc09237ecd28a1af3dec4cb69343eb2c2594ff52bd614218344e19d9e791600"
+    },
+    {
+      "file": "cases-037.json",
+      "cases": 4,
+      "sha256": "b5e8ad4ca49af1244c469c71c44257ed4bac30cf8b787a09a5a962dd033b57a1"
+    },
+    {
+      "file": "cases-038.json",
+      "cases": 4,
+      "sha256": "796cf0830a9b81fb8ada2d6dcc5cbc786588580855aa14b897804af8d946cb79"
+    },
+    {
+      "file": "cases-039.json",
+      "cases": 4,
+      "sha256": "452e200eeee0bf65553b595d292bbd41f97364c36160acb6d62fefd3593edfc3"
+    },
+    {
+      "file": "cases-040.json",
+      "cases": 3,
+      "sha256": "2a1c6e103d44712978e0709319eb11e64cefeb212ff7138c66b91afd1e009c3e"
+    },
+    {
+      "file": "cases-041.json",
+      "cases": 3,
+      "sha256": "c40e63719abfc9e939c3165674b23e0abb489f451d17190f0e63a0f1e153e446"
+    },
+    {
+      "file": "cases-042.json",
+      "cases": 3,
+      "sha256": "e39a69c8729017b1635e4d86dd57d56bf32567e6a69993f7c44660f4d2a66ef4"
+    },
+    {
+      "file": "cases-043.json",
+      "cases": 4,
+      "sha256": "0322b532df37bb24f03e061bc5e1ce2b5b88b43a2e8428f6c8bc01406646b0c3"
+    },
+    {
+      "file": "cases-044.json",
+      "cases": 4,
+      "sha256": "d296c11fcf65c1ee116f9334dce21308c0b5e48f775bc0e28c39c1d6b3fcddee"
+    },
+    {
+      "file": "cases-045.json",
+      "cases": 4,
+      "sha256": "4c9fca27b7e6058720154197ab62e1d61aac426db45e978697f0515bb65c5e7a"
+    },
+    {
+      "file": "cases-046.json",
+      "cases": 4,
+      "sha256": "1fed871633851cede90e2c27ac9f81bc5502afc3a63e51515fc481835dd5e968"
+    },
+    {
+      "file": "cases-047.json",
+      "cases": 4,
+      "sha256": "fa685766396283862033722c768d002de427bffacd2281d3f58443ac0765707e"
+    }
+  ],
+  "qualification": "Partial acquired constructor/first-evaluation panels. Every completed three-block summary, numerical gate, arm maximum RSS, resource log and immutable source/input binding revalidated. CUDA-vs-CPU references remain labeled per case. Null numerical bounds remain unqualified. These are descriptive initial ratios, separate from warm results, fixed-stage confidence intervals and runtime-qualified regression acceptance."
+}

@@ -437,3 +437,32 @@ Reproduce this projection under shared heavy admission with
 The output refuses existing paths and changed evidence. The emitted input
 manifests bind every input table and the exporter source. The publication wrapper
 reports rc=0, 0s, peak-RSS 0.02GiB, minimum available 15322MiB, peak load 0.90.
+
+## Local canonical followup, 2026-10-21
+
+MISSING: complete multi-size warm/cold grids, remaining fixed-stage confidence
+intervals and runtime qualification, and remaining map comparisons. Acquired
+cold summaries are 186/1968 CPU and
+6/124 CUDA; these counts include failures and
+refusals. [The panels](../canonical_recheck_2026-10-19/acquired-cold-panels-2026-10-21/index.json)
+retain every completed block and arm-memory receipt.
+
+[BRISQUE64](../canonical_recheck_2026-10-19/brisque-64-numerical-finding.json)
+exceeds its unchanged bound at both worker settings. [HDR-v2 modern-runtime
+controls](../canonical_recheck_2026-10-19/hdr-octave111-v2-controls.json) reproduce
+the 1 MP discrepancy, ruling out the legacy runtime as the explanation for that
+case. [The v3 controls](../canonical_recheck_2026-10-19/hdr-octave111-v3-controls.json)
+retain near-machine-precision scalar agreement in two cases without assigning a
+universal bound. HDR ratios remain withheld, including the incomplete 4K warm
+worker that reached its frozen chunk budget.
+
+[Completed CPU profiles](../canonical_recheck_2026-10-19/cpu-first-profiles-2026-10-20/index.json)
+and three CUDA profiles preserve recording and source hashes. The whole-process
+recordings do not isolate cold-clock or causal shares. Capped captures stay
+partial. [Repeat commands](../../docs/IQA_CANONICAL_COMMANDS.md) include the
+41-route comparative just recipe, with explicit source and output paths.
+
+Learnings: compiler/runtime controls and clock-lifetime controls are separate
+from numerical acceptance; missing bounds and failed stages supply no timing
+ratio. These followups change benchmark tooling, evidence and documentation, not
+production metric paths or existing numerical expectations.

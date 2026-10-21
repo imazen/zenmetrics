@@ -1,0 +1,52 @@
+{
+  "completed_original_controls": 2,
+  "declared": 4,
+  "rows": [
+    {
+      "case": "original12-hdrvdp-grid-pairA-64x64-t1-warm-current40",
+      "original11_score": 60.563081720537674,
+      "legacy6_score": 60.56308172053768,
+      "native_score": 60.56309768178813,
+      "absolute_difference": 1.5961250454665787e-05,
+      "original_runtime_difference": 7.105427357601002e-15,
+      "original11_score_hex": "404e48130fd357a5",
+      "reference_max_rss_kib": 88560,
+      "stdout_sha256": "4a6b92cc657d119a34ea2fd9f432b5a450582fd6f7f931b1560f919cf9aefcf7",
+      "memory_sha256": "9b54fc1beeaab5ee7e451301e1a24fff014a205de3af70543ed6c84a9a569ae8",
+      "golden_fixture_check_level": 0.005,
+      "native_parity_qualified": false,
+      "ratio": null
+    },
+    {
+      "case": "original12-hdrvdp-grid-pairA-1024x1024-t1-warm-current40",
+      "original11_score": 61.71098098074218,
+      "legacy6_score": 61.710980980742185,
+      "native_score": 61.701629129628834,
+      "absolute_difference": 0.009351851113343912,
+      "original_runtime_difference": 7.105427357601002e-15,
+      "original11_score_hex": "404edb016cbe2ece",
+      "reference_max_rss_kib": 628252,
+      "stdout_sha256": "a1b5a7575df1aab5b631df552d44ac5e6bd8277e66733b601165d379a5e9444a",
+      "memory_sha256": "756acfa4f1a461757c1cc307134d8f157b9d93a3d3f147d993e6ec1ee5b756e9",
+      "golden_fixture_check_level": 0.005,
+      "native_parity_qualified": false,
+      "ratio": null
+    }
+  ],
+  "failed_case": "hdrvdp3-64.m",
+  "failure": "Newly built v3 MEX dispatch returns no output in reconSpyrLevs; its original legacy source uses the M-file fallback. Correct the new fixture dispatch while preserving completed v2 controls.",
+  "native_metric_calls": 0,
+  "qualification": "Supported original-runtime numerical diagnostics only; native scores retained from the existing frozen EA worker. No timing promotion, universal bound or native parity acceptance.",
+  "resource_receipt": "run-heavy: done rc=1 14s | peak-RSS 0.09GiB | min-avail 14118MiB | peak-load 2.40",
+  "raw_receipt": {
+    "path": "/home/lilith/tmp/handoff/hdr-original-grid-numerical-20261020/octave111-controls-v6/partial-result.json",
+    "sha256": "072e799b210d9b0181d3190c6630dd2b74228f2efd6873674716b34154795f15"
+  },
+  "image": "gnuoctave/octave@sha256:922679c7ccbae712dec718daf33d07956a31ff33add3463ddcd14c5632768c3d",
+  "full_image_package": {
+    "version": "2.20.1",
+    "source_url": "https://downloads.sourceforge.net/project/octave/Octave%20Forge%20Packages/Individual%20Package%20Releases/image-2.20.1.tar.gz",
+    "sha256": "b4b6865e7f65ee5b9c254a69128bf10e93b38bc27f5bc5b973fef300217fc725"
+  },
+  "finding": "The 1MP native-v2 difference persists with the supported original runtime. The original v2 scalar agrees with the legacy runtime to 7.11e-15 in these two retained controls. This rules out that legacy runtime as the explanation for this case; no universal gate or timing ratio is assigned."
+}
