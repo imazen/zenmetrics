@@ -1,0 +1,400 @@
+{
+  "cases": [
+    {
+      "case": "cw-ssim-grid-pairB-255x257-t28",
+      "metric": "cw-ssim",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "author CW-SSIM / original pointOp MEX",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.07637514348727872,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.551115123125783e-16,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 22202852.0,
+              "score": 0.9994506721050422,
+              "max_rss_kib": 17708,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "d00a152b01bd76e6049021358211f55e73902fbcf3338fbe9b46c67346068051"
+              }
+            },
+            "canonical": {
+              "ns": 290707827.0,
+              "score": 0.9994506721050417,
+              "max_rss_kib": 107552,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "e502872fbddb35e98c332208948182a5278c4b5842b52cad722a46f2ec106446"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 5.551115123125783e-16,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 22313045.0,
+              "score": 0.9994506721050422,
+              "max_rss_kib": 17648,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "5d01c2fc741a9834e4005bacca61e115329b39d928d4676591f088f3c8f792a3"
+              }
+            },
+            "canonical": {
+              "ns": 290854931.0,
+              "score": 0.9994506721050417,
+              "max_rss_kib": 107136,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "6018f0bff0b92170b45588a5eb8e14179b007ed51d1591677795e77ea15db289"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 5.551115123125783e-16,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 21863603.0,
+              "score": 0.9994506721050422,
+              "max_rss_kib": 17668,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "f327bad5f08e30cb9fe278665246d5806dbebbf361757e870a33e3e6e833fd54"
+              }
+            },
+            "canonical": {
+              "ns": 296206951.0,
+              "score": 0.9994506721050417,
+              "max_rss_kib": 106484,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "d7cd66d4e806787b7b02673571decb262aa6b450e8b4103feca4b5f4fb6675ea"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/summary.json",
+        "sha256": "cda3282561a94ac5af040b591ca53da8c2554d9d37e94052cdd66b92aae6f706"
+      },
+      "plan_sha256": "95e00bf440ca36c28d3bf38cac6575795daac16bd93bdd0e7db17dc8a8b7ecc1",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-00-wrapper.log",
+          "sha256": "29f1e447020e2f39278d2525077b0a17fb19a0426031fa8aa8542239c5ff38c2",
+          "receipts": [
+            "run-heavy: done rc=0 69s | peak-RSS 0.10GiB | min-avail 13742MiB | peak-load 1.73"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-01-wrapper.log",
+          "sha256": "0e376faacbae46cab28b49235f1fd6fc493dea8b51884ba14132d083887f1203",
+          "receipts": [
+            "run-heavy: done rc=0 85s | peak-RSS 0.10GiB | min-avail 14069MiB | peak-load 3.02"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-255x257-t28/block-02-wrapper.log",
+          "sha256": "278b40dcd5d8be8d8068721f4b713525e39c60b38ca9ac535415f508adb8ca41",
+          "receipts": [
+            "run-heavy: done rc=0 85s | peak-RSS 0.10GiB | min-avail 13816MiB | peak-load 2.43"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "cw-ssim-grid-pairB-1024x1024-t1",
+      "metric": "cw-ssim",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "author CW-SSIM / original pointOp MEX",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.0674682901562112,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 155932292.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 64580,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "6825c32429422bc2db36bea89e5f170bbc72234b95abfeb2dbdf5e9624037360"
+              }
+            },
+            "canonical": {
+              "ns": 2606626987.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 817944,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "337ab0edc20722aea3cbb70bb6dccc1d6662723ab3db371c57da1acfd0314454"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 177920543.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 63936,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "843b7b0d28d5e0b9e8d092cc4c39c84ed6afe234e8a84a4deb9f3efaf6254bb4"
+              }
+            },
+            "canonical": {
+              "ns": 2422126055.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 811528,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "7628488319fcf0d56af9cf87f7b8d36aae33bbcec926ca7b2f85c47102c2e4c8"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 170131419.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 64256,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "bde2f1563f090c4c773d5bb718444bb83b8d919d0c3b54677bde557142f79902"
+              }
+            },
+            "canonical": {
+              "ns": 2521650076.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 817724,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "6a18fa0d478f6883d459db57e06a973d2fa879684af632445462bc81ace7ef6c"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/summary.json",
+        "sha256": "59f86614d683bf28923f81b705f085d13d647c7b70cb43fe7ece4159187f6f95"
+      },
+      "plan_sha256": "95e00bf440ca36c28d3bf38cac6575795daac16bd93bdd0e7db17dc8a8b7ecc1",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "c0830fb33205bc7e37595460312254973239462acce16d4a9eca3382f6dad3b3",
+          "receipts": [
+            "run-heavy: done rc=0 104s | peak-RSS 0.78GiB | min-avail 13544MiB | peak-load 1.34"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "a255f9baae674404d6e56f949f44298616b9b74711932d9c82e95b2ca312302b",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.77GiB | min-avail 13679MiB | peak-load 2.21"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "688f0e79a20b8b7350331159e0f22b7bf0e2a5fdc4e4bbb51e4df9452f06dfcf",
+          "receipts": [
+            "run-heavy: done rc=0 62s | peak-RSS 0.78GiB | min-avail 13508MiB | peak-load 1.29"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "cw-ssim-grid-pairB-1024x1024-t28",
+      "metric": "cw-ssim",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "author CW-SSIM / original pointOp MEX",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.10931054723538636,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 161128331.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 64344,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "caf6f882b02765bb87d02c94edf152fc78ba3e5fffd5e7156f57d5f729085307"
+              }
+            },
+            "canonical": {
+              "ns": 1474041939.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 825192,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "abb46b824390da97241eb6e3146dc4a4e6c522cd663debc162c0118e87081099"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 153321783.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 64344,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "83a037f652816376cfed57b3de27ad5c4bd50868a93ea478f0d5593da5ea7818"
+              }
+            },
+            "canonical": {
+              "ns": 1550353050.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 818456,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "537864c121849b21d707af922c6cf8519ef7a31a76e186f891a91cb51909d15b"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 1.3322676295501878e-15,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 169894035.0,
+              "score": 0.9992875226988982,
+              "max_rss_kib": 64368,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "7f03cba707328bedecc28ac13b17bc6e17fa90d918c5e353ffbb9859d1c48078"
+              }
+            },
+            "canonical": {
+              "ns": 1465389013.0,
+              "score": 0.9992875226988969,
+              "max_rss_kib": 818644,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "1a26dbb6c11d588d9fc9d5e2c660bb995678d3e362d3bc36549cbf4d1e228a99"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/summary.json",
+        "sha256": "ecc65160cfce7009e5f2ba7f7d5aa7d4effc1f9609f7f15d885f97a2773be2fb"
+      },
+      "plan_sha256": "95e00bf440ca36c28d3bf38cac6575795daac16bd93bdd0e7db17dc8a8b7ecc1",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "d05b1facb954f9aefb9eb5fb348e5bbf426f286eacd6cdcf4e67e3108b5d17ec",
+          "receipts": [
+            "run-heavy: done rc=0 69s | peak-RSS 0.79GiB | min-avail 13043MiB | peak-load 1.69"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "e3d48cb463b0368fd259673225b008247bb8a3f81e4ac96f264614ab012db50e",
+          "receipts": [
+            "run-heavy: done rc=0 94s | peak-RSS 0.78GiB | min-avail 13517MiB | peak-load 2.09"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/matlab_extra-efae6b8f/cw-ssim-grid-pairB-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "9540333602088c8d2507922aaefa9d07eadf65dde9c61e5d746be4de50f7e1cc",
+          "receipts": [
+            "run-heavy: done rc=0 86s | peak-RSS 0.78GiB | min-avail 13932MiB | peak-load 1.47"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}

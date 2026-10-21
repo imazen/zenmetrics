@@ -1,0 +1,56 @@
+import datetime
+import json
+import shutil
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+R = Path(__file__).parent
+H = Path.home()/'tmp/handoff'
+F = H/'classical-first-gmsd-flags-20261020'
+K = H/'classical-gpu-first-boundary-20261020'
+PUBLIC = Path('benchmarks/canonical_recheck_2026-10-19')
+
+def latest(folder):
+    return json.loads(max(folder.glob('*.json'),key=lambda path:path.stat().st_mtime).read_text())
+
+if len(sys.argv) == 1:
+    while True:
+        previous = (R/'publish-screen-odd28-profile-after-hdr-v3.log').read_text()
+        acquired = len(latest(F/'flag-snapshots-v3')['completed_summaries'])
+        acquired += len(latest(K/'full-five-first-flag-snapshots-v3')['completed_summaries'])+4
+        if ('SCREEN_ODD28_PROFILE_VERIFIED' in previous and 'run-heavy: done rc=0 ' in previous and acquired >= 366):
+            break
+        if 'run-heavy: done rc=' in previous and 'run-heavy: done rc=0 ' not in previous:
+            raise SystemExit('Prior publication failed; preserve all acquired cold observations')
+        time.sleep(20)
+    command = ['flock',str(Path.home()/'tmp/lilith-heavy.lock'),'flock',str(Path.home()/'tmp/lilith-wsl-heavy.lock'),
+               str(Path.home()/'work/claudehints/scripts/run-heavy'),'--mem','12G','--jobs','1','--',
+               'env','TMPDIR='+str(Path.home()/'tmp'),sys.executable,'-B',__file__,'--admitted']
+    raise SystemExit(subprocess.run(command).returncode)
+
+assert sys.argv[1:] == ['--admitted']
+def run(*command):
+    subprocess.run(command,check=True)
+
+assert not subprocess.check_output(['jj','diff','--name-only'],text=True).strip()
+run('jj','new','master@origin','-m','investigate: retain next acquired cold observation batch')
+Path('.workongoing').write_text(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')+
+                              ' codex-root-canonical publishing the next immutable cold batch\n')
+run(sys.executable,'-B',str(R/'publish-acquired-cold-additions-v5.py'))
+source_target = PUBLIC/'publish-next-cold-batch-after-intervals-v2.py.txt'
+assert not source_target.exists()
+shutil.copyfile(__file__,source_target)
+index = json.loads((PUBLIC/'acquired-cold-additions-2026-10-21-v3/index.json').read_text())
+total = index['previously_published_cases']+index['published_additions']
+for path,relative in [(PUBLIC/'README.md',''),(Path('benchmarks/port_spotcheck_2026-10-18/REPORT.md'),'../canonical_recheck_2026-10-19/')]:
+    with path.open('a') as stream:
+        stream.write(f'\n### Further acquired cold cases (2026-10-21)\n\nThe [next immutable batch]({relative}acquired-cold-additions-2026-10-21-v3/index.json) adds {index["published_additions"]} observations and brings the published acquisition cut to {total}/2092 candidates. All previously published records, source/input bindings, numerical classifications and measured arm maximum RSS values are revalidated. This is partial acquired coverage, separate from fixed-stage confidence intervals, runtime qualification and warm headline ratios.\n')
+python = str(Path.home()/'tmp/portcheck/python/bin/python')
+run('just','model-cards-refresh',python)
+run('just','model-cards-check',python)
+run('just','bench-iqa-canonical-check')
+run('jj','describe','-m','investigate: retain next acquired cold observation batch')
+run(sys.executable,'-B',str(R/'push-owned-stack.py'),'@')
+print('NEXT_COLD_BATCH_V3_VERIFIED',flush=True)

@@ -128,7 +128,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 14/30 pass | ≈0.051× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 4 process errors | ≈0.36× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 4/4 pass | ≈0.58× R |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 2 cold misses | ≈0.18× |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 3 cold misses | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.051× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.063× |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | original Paq2piq / 40… | 5/5 pass | ≈1.3× R ! |

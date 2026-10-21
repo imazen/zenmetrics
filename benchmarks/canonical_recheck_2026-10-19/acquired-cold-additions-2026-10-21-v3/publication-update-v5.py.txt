@@ -1,0 +1,102 @@
+import datetime,hashlib,json,math,pathlib,re,statistics,sys
+P=pathlib.Path;R=P(__file__).parent;H=P.home()/'tmp/handoff';B=P('benchmarks/iqa_compete_2026-10-16');public=P('benchmarks/canonical_recheck_2026-10-19')
+sys.path.insert(0,str(B.resolve()))
+# Verification executes in a fresh process with the exact plan-bound module closure.
+if len(sys.argv)>1:
+ import importlib.util
+ controller=P(sys.argv[1]).resolve(strict=True);planpath=P(sys.argv[2]);expected=sys.argv[3]
+ sys.path.insert(0,str(controller.parent))
+ spec=importlib.util.spec_from_file_location('retained_first_controller',controller);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ module.verify(planpath,expected)
+ print(json.dumps(dict(verified_plan=str(planpath),controller=str(controller))))
+ raise SystemExit(0)
+import subprocess
+import compare_classical_first_verified as cpu
+import compare_classical_first as original
+import compare_gpu_first_verified as gpu
+from compare_classical_first import summarize
+from compare_canonical import compare,sha
+from reference_publication import register_outputs
+roots=[R/'classical-first-revised-grid-run-v2',H/'classical-first-final-ten-20261020/first-grids-v2/acquisition',H/'classical-cold-remaining-candidates-20261020/prepared-v2/acquisition/gmsd-efae6b8f',H/'classical-first-fullcall-seven-20261020/prepared-v1/acquisition',H/'classical-first-verification-cache-20261020/prepared-successor-v3/acquisition',H/'classical-first-google-supported-20261020/prepared-v1/acquisition',H/'classical-gpu-first-boundary-20261020/first-four-acquisition-v1',H/'classical-gpu-first-boundary-20261020/full-five-first-acquisition-v2']
+plans=[]
+for root in roots:
+ candidates=[root/'plan.json'] if (root/'plan.json').exists() else sorted(root.glob('*/plan.json'))
+ plans.extend(candidates)
+if len(set(plans))!=len(plans):raise ValueError('duplicate campaign')
+manifest=public/'cold-panel-publications.json';prior_manifest_bytes=manifest.read_bytes();prior=json.loads(prior_manifest_bytes);old={};observed_old=set();additions=0;omitted=0
+for batch in prior['batches']:
+ index_path=public/batch['file'];assert index_path.resolve().is_relative_to(public.resolve());assert sha(index_path)==batch['sha256']
+ for shard in json.loads(index_path.read_text())['shards']:
+  shard_path=index_path.parent/shard['file'];assert shard_path.resolve().parent==index_path.resolve().parent;assert sha(shard_path)==shard['sha256']
+  prior_rows=json.loads(shard_path.read_text())['cases'];assert len(prior_rows)==shard['cases']
+  for row in prior_rows:
+   key=(row['case'],row['native_source']);assert key not in old;old[key]=row
+folder=public/'acquired-cold-additions-2026-10-21-v3';folder.mkdir();artifacts=[];shards=[];campaigns=[];rows=[]
+def write(path,value,kind='summary'):
+ data=(json.dumps(value,indent=2,allow_nan=False)+'\n').encode()
+ if len(data)>30000:raise ValueError('generated artifact exceeds cap')
+ with path.open('xb') as f:f.write(data)
+ artifacts.append((path,kind))
+def flush():
+ if not rows:return
+ path=folder/('cases-%03d.json'%len(shards));write(path,dict(cases=list(rows)))
+ shards.append(dict(file=path.name,cases=len(rows),sha256=sha(path)));rows.clear()
+for plan_path in plans:
+ digest=sha(plan_path);declared=json.loads(plan_path.read_text());is_gpu=any(c['metric'].endswith('-gpu') for c in declared['cases']);helper=gpu if is_gpu else (cpu if str((B/"compare_classical_first_verified.py").resolve()) in declared["bindings"] else original)
+ names=['compare_gpu_first_verified.py'] if is_gpu else ['compare_classical_first_verified.py','compare_classical_first.py']
+ candidates=[P(name) for basename in names for name in declared['bindings'] if P(name).name==basename]
+ if not candidates:raise ValueError('plan-bound controller missing')
+ controller=candidates[0]
+ def retained_verify():
+  subprocess.run([sys.executable,'-B',str(P(__file__).resolve()),str(controller),str(plan_path),digest],check=True)
+ retained_verify();plan=declared
+ completed=0
+ for c in plan['cases']:
+  path=plan_path.parent/c['id']/'summary.json'
+  if not path.exists():continue
+  try:v=json.loads(path.read_text())
+  except json.JSONDecodeError:continue
+  if v['plan_sha256']!=digest or v['rust_source']!=c['rust_source'] or len(v['blocks'])!=3 or v['case']!=c['id']:raise ValueError('summary identity differs')
+  if v['ratio']!=summarize(v['blocks'],v['scope_reasons'],3):raise ValueError('ratio differs')
+  blocks=[]
+  for n,b in enumerate(v['blocks']):
+   if set(b.get('arms',{}))=={'native','canonical'}:
+    delta,passed=compare(b['arms']['native']['score'],b['arms']['canonical']['score'],c['absolute_bound'],c.get('relative_bound',0))
+    if delta!=b['delta'] or passed!=b['passed']:raise ValueError('numerical record differs')
+   else:
+    if not b.get('errors'):raise ValueError('missing arm without retained failure')
+    delta,passed=b.get('delta'),b.get('passed')
+   block=dict(order=b['order'],delta=delta,passed=passed,errors=b['errors'],arms={})
+   for role in ['native','canonical']:
+    if role not in b['arms']:continue
+    arm=dict(ns=b['arms'][role]['ns'],score=b['arms'][role]['score']);memory=path.parent/('block-%02d'%n)/role/(role+'-memory.txt')
+    matches=re.findall(r'Maximum resident set size \(kbytes\):\s*(\d+)',memory.read_text())
+    if len(matches)!=1:raise ValueError('actual arm maximum RSS missing')
+    arm['max_rss_kib']=int(matches[0]);arm['memory_file']=dict(path=str(memory),sha256=sha(memory));block['arms'][role]=arm
+   blocks.append(block)
+  resource=[]
+  for logfile in sorted(path.parent.glob('*wrapper.log')):
+   receipts=[x for x in logfile.read_text().splitlines() if x.startswith('run-heavy: done ')]
+   if not receipts:raise ValueError('missing resource receipt')
+   resource.append(dict(path=str(logfile),sha256=sha(logfile),receipts=receipts))
+  row=dict(case=c['id'],metric=c['metric'],width=c['width'],height=c['height'],threads=c['threads'],canonical=c['canonical']['label'],native_source=c['rust_source'],phase=v['phase'],ratio=v['ratio'],absolute_bound=c['absolute_bound'],relative_bound=c.get('relative_bound',0),scope_reasons=v['scope_reasons'],blocks=blocks,raw_summary=dict(path=str(path),sha256=sha(path)),plan_sha256=digest,resource_receipts=resource,regression_qualified=False)
+  key=(row['case'],row['native_source'])
+  if key in old:
+   if old[key]!=row:raise ValueError('previously published cold observation changed: '+row['case'])
+   observed_old.add(key)
+  elif additions<150:
+   if rows and len(json.dumps(dict(cases=rows+[row]),indent=2).encode())>24000:flush()
+   rows.append(row);additions+=1
+  else:omitted+=1
+  completed+=1
+ # Full immutable bindings are checked again after projecting this campaign.
+ retained_verify()
+ campaigns.append(dict(raw_directory=str(plan_path.parent),controller=dict(path=str(controller),sha256=sha(controller)),plan_sha256=digest,expected=len(plan['cases']),completed=completed,device='cuda' if is_gpu else 'cpu'))
+assert observed_old==set(old),'Previously published cases missing from retained campaigns'
+assert additions>0,'No new acquired cases'
+flush();write(folder/'index.json',dict(published_additions=additions,previously_published_cases=len(old),omitted_new_cases_by_batch_cap=omitted,previous_manifest_sha256=sha(manifest),observed_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),publication_source_sha256=sha(__file__),campaigns=campaigns,shards=shards,qualification='Partial acquired constructor/first-evaluation panels. Every completed three-block summary, numerical gate, arm maximum RSS, resource log and immutable source/input binding revalidated. CUDA-vs-CPU references remain labeled per case. Null numerical bounds remain unqualified. These are descriptive initial ratios, separate from warm results, fixed-stage confidence intervals and runtime-qualified regression acceptance.'))
+source=folder/'publication-update-v5.py.txt';source.write_bytes(P(__file__).read_bytes())
+assert manifest.read_bytes()==prior_manifest_bytes
+prior['batches'].append(dict(file=str((folder/'index.json').relative_to(public)),sha256=sha(folder/'index.json')))
+manifest_data=(json.dumps(prior,indent=2)+'\n').encode();assert len(manifest_data)<=30000;manifest.write_bytes(manifest_data);artifacts.append((manifest,'provenance'))
+register_outputs(artifacts);print(json.dumps(dict(campaigns=len(campaigns),observed_acquired=sum(c['completed'] for c in campaigns),published_additions=additions,published_cumulative=len(old)+additions,omitted_by_batch_cap=omitted,expected=sum(c['expected'] for c in campaigns),source_sha256=sha(source))))

@@ -657,3 +657,7 @@ Further initial20 stages retain all original blocks and numerical contracts:
 | butteraugli-gpu-grid-pairA-64x64-t1 | 433.818280 | [416.617869, 450.459627] | False |
 
 IW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages queued after precision misses. The Butteraugli reference is the original CPU implementation. SSIMULACRA2 photo odd/t1 meets the precision target. These cold intervals remain separate from warm headline ratios and accepted runtime exceptions.
+
+### Further acquired cold cases (2026-10-21)
+
+The [next immutable batch](../canonical_recheck_2026-10-19/acquired-cold-additions-2026-10-21-v3/index.json) adds 60 observations and brings the published acquisition cut to 376/2092 candidates. All previously published records, source/input bindings, numerical classifications and measured arm maximum RSS values are revalidated. This is partial acquired coverage, separate from fixed-stage confidence intervals, runtime qualification and warm headline ratios.

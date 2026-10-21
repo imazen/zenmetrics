@@ -1017,3 +1017,7 @@ IW-SSIM CUDA/t28 and Butteraugli CUDA/photo64/t1 have fixed additional40 stages 
 ### Completed build debug storage (2026-10-21)
 
 The [debug-sidecar pointer](build-debug-storage-pointer-2026-10-21-v2.json) retains two additional Cargo debug aliases on the dataset volume with hash-verified original-path symlinks. Associated native ELF hashes and every observed score remain unchanged. This storage move does not establish debug completeness or new profiling evidence.
+
+### Further acquired cold cases (2026-10-21)
+
+The [next immutable batch](acquired-cold-additions-2026-10-21-v3/index.json) adds 60 observations and brings the published acquisition cut to 376/2092 candidates. All previously published records, source/input bindings, numerical classifications and measured arm maximum RSS values are revalidated. This is partial acquired coverage, separate from fixed-stage confidence intervals, runtime qualification and warm headline ratios.

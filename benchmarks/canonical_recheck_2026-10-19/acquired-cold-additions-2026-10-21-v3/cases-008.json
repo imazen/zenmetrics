@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "case": "msssim-libvmaf-grid-pairB-1024x1024-t28",
+      "metric": "msssim-libvmaf",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / named RGB ingress",
+      "native_source": "ea767ba1a4029963bc56a74fb824e64455e4599e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.3041232114269475,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.863125013798708e-09,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 53337415.0,
+              "score": 0.9885224438796987,
+              "max_rss_kib": 60232,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "546ebb90604b99ff72628817bc410ddbc5b070547ab2ae84b70f6c3074e73b73"
+              }
+            },
+            "canonical": {
+              "ns": 175380941.0,
+              "score": 0.9885224390165737,
+              "max_rss_kib": 118016,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "7889385ab083b282b158693a2c8e922c128efd3bf6e8ea2754a82fd9661f2ec2"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 4.863125013798708e-09,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 52770772.0,
+              "score": 0.9885224438796987,
+              "max_rss_kib": 59664,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "c4f0fb5b78bc9f5106eff1bd8917793816279358a5d77129c79f819c64e1b522"
+              }
+            },
+            "canonical": {
+              "ns": 173634868.0,
+              "score": 0.9885224390165737,
+              "max_rss_kib": 118048,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "28ac687832aa8b04fe5c616c5b59f77b957ad946d38c918426b4b3d12fdbf0f0"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 4.863125013798708e-09,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 54996646.0,
+              "score": 0.9885224438796987,
+              "max_rss_kib": 60492,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "0d455ea7914d12088d16ec90b7c7334d4982d24d75a24cca0ae42c616a9392e2"
+              }
+            },
+            "canonical": {
+              "ns": 179633098.0,
+              "score": 0.9885224390165737,
+              "max_rss_kib": 117836,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "40028673133df734a88929c8e3d94384bd1e5c53e6b2a8f73b564eedc691980e"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/summary.json",
+        "sha256": "d43becf08de5f0edfda58f1e80461c413179308f91ab6507317fee3ed3cb510e"
+      },
+      "plan_sha256": "7212c8ab91450d426e7ca0e7ec34a47ca05ffb428a5b69d7934314ff438e5dd0",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "81cdf4c907e75d4aecadb203b0b7edb898964b866b675790d0f846e425e6b892",
+          "receipts": [
+            "run-heavy: done rc=0 7s | peak-RSS 0.11GiB | min-avail 13956MiB | peak-load 2.53"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "bc4ea91322efa239dd6fdf8f9a696d91d5c71c529b94809f47e782873f952405",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.11GiB | min-avail 14183MiB | peak-load 1.85"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-ea767ba1/msssim-libvmaf-grid-pairB-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "903def5721c355e1f2cad36e1b1f7c3a59fdea8ae7971f570660d683f72c7d35",
+          "receipts": [
+            "run-heavy: done rc=0 6s | peak-RSS 0.11GiB | min-avail 14189MiB | peak-load 1.75"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "cambi-grid-pairB-255x257-t28",
+      "metric": "cambi",
+      "width": 255,
+      "height": 257,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / named RGB ingress",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.21180095556611936,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1184320.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 17660,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-00/native/native-memory.txt",
+                "sha256": "4f9556976b2747755d057876061669b3cd7041329a309e553be77e7c58b5d4d5"
+              }
+            },
+            "canonical": {
+              "ns": 5939413.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 10636,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "0d3384992504016510d96cbea996db5722bbc8471a2db0eee4620ce3c5e895cb"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1223352.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 17636,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-01/native/native-memory.txt",
+                "sha256": "855f2b7052142dca3da07fc4f4e8922e74d0e4aa55089c1d547bfe674892037a"
+              }
+            },
+            "canonical": {
+              "ns": 5305252.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 10624,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "e267dbbcb6f54348f20e73f161a92c1bd579eec72d5ca41cf6b6b94191ee5542"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 1133029.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 17668,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-02/native/native-memory.txt",
+                "sha256": "3c581866ddfd12a09d93ec9a2eabc0d4df9e35651d64ede041cebcd9016ed77b"
+              }
+            },
+            "canonical": {
+              "ns": 5349499.0,
+              "score": 0.10671163188545857,
+              "max_rss_kib": 10500,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "1ab5e56055d31779425e8da7908fc79fb82dbe299eb2989c108174bdcd0e23d1"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/summary.json",
+        "sha256": "84895205c716b0d9ff5567fe73aac15847ab312f70579d7b792a4230e239eab7"
+      },
+      "plan_sha256": "d86d431d89fd5c34663dd2ad831ccbf7ff25fbd3bcbe6955d09b71f06cc35b9d",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-00-wrapper.log",
+          "sha256": "6af6e1435440f5750328d4ce2ebc3648938953678df4a90cfb38eb30db5395ac",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 13484MiB | peak-load 2.33"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-01-wrapper.log",
+          "sha256": "5caa8d2f4dc36aa6d6353f7dfdb7fbddb9c8a29bc88fba2eb175845ce56d8f75",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 14158MiB | peak-load 1.61"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-255x257-t28/block-02-wrapper.log",
+          "sha256": "0c11a1c5b7e780c1e4fcb9bb90a9cc47715d412fc32e0a819edb1914461900a5",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.02GiB | min-avail 13828MiB | peak-load 2.46"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "cambi-grid-pairB-1024x1024-t1",
+      "metric": "cambi",
+      "width": 1024,
+      "height": 1024,
+      "threads": 1,
+      "canonical": "libvmaf 3.2.0 / named RGB ingress",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.975418760638642,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 15892691.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 22840,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-00/native/native-memory.txt",
+                "sha256": "0167804732146242a5fc1a43bdddbfd702c0a77aa47bdcc3d9bd7f32d1d93e46"
+              }
+            },
+            "canonical": {
+              "ns": 16293198.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 27544,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-00/canonical/canonical-memory.txt",
+                "sha256": "3f990437c1988b1a7da914ca25fe852d4f0ed22fcd01a7007ab987cdf8d3b972"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 16605739.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 22868,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-01/native/native-memory.txt",
+                "sha256": "be226458798dc3990c57923cf1ad926f9a1edb70b780b17cd3dd688d099ddf56"
+              }
+            },
+            "canonical": {
+              "ns": 16848793.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 27520,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-01/canonical/canonical-memory.txt",
+                "sha256": "d465e4de1f8bb44060e30fb7e85dcf369c0431eea75f9fff68964dbbe32941c5"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 15732653.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 22488,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-02/native/native-memory.txt",
+                "sha256": "bcce7a9d01d3ed62ffe891e3af2adaed4c3b38b96851e71861c1af21bc97bf63"
+              }
+            },
+            "canonical": {
+              "ns": 16837349.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 27464,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-02/canonical/canonical-memory.txt",
+                "sha256": "110d579f208a97bd0cf30e5dd6083d1cba94a0caba51ccb9f4a202368103bbf4"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/summary.json",
+        "sha256": "eab8f050e8d69c13831f1d9ceb54806103b0c9fef4f12045e930e57e8d3d8eca"
+      },
+      "plan_sha256": "d86d431d89fd5c34663dd2ad831ccbf7ff25fbd3bcbe6955d09b71f06cc35b9d",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-00-wrapper.log",
+          "sha256": "9efcfebf61b674ac076cdc4730ba60d8aabb77038682c61596f526a2d417ed3e",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14200MiB | peak-load 1.58"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-01-wrapper.log",
+          "sha256": "24a298087a350ada31906349ce2f27e9ca51b8c70f2120a844b6777a5e71c023",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14206MiB | peak-load 3.34"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t1/block-02-wrapper.log",
+          "sha256": "03fd7dbbcef9470156172a85785756a53a1349135ad4ad189877a5775dba8335",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.03GiB | min-avail 14026MiB | peak-load 1.58"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    },
+    {
+      "case": "cambi-grid-pairB-1024x1024-t28",
+      "metric": "cambi",
+      "width": 1024,
+      "height": 1024,
+      "threads": 28,
+      "canonical": "libvmaf 3.2.0 / named RGB ingress",
+      "native_source": "efae6b8fed9e57346157d92dffc3cdb57c44560e",
+      "phase": "scorer_construct_first_eval",
+      "ratio": 0.44562067751088763,
+      "absolute_bound": null,
+      "relative_bound": 0,
+      "scope_reasons": [],
+      "blocks": [
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 19454072.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 21868,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-00/native/native-memory.txt",
+                "sha256": "b5275f4eb8b6ad52f4ef73c0dc788e5b47424f7300c3d7fe01d095f0cb388895"
+              }
+            },
+            "canonical": {
+              "ns": 43656125.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 82848,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-00/canonical/canonical-memory.txt",
+                "sha256": "3474659c74f1b8b16d02e2232b3226dffdd2172ad891d7f213b254931c301faa"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "native",
+            "canonical"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 19926127.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 22276,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-01/native/native-memory.txt",
+                "sha256": "99205a5b3625e8da0af4a206c6eee223a516ac327773c05f80d9384a8d6fe9e1"
+              }
+            },
+            "canonical": {
+              "ns": 52126301.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 82960,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-01/canonical/canonical-memory.txt",
+                "sha256": "2065002d196dc5c7a414ff4201513a696cda45867b4c0daa20799f86b04f4768"
+              }
+            }
+          }
+        },
+        {
+          "order": [
+            "canonical",
+            "native"
+          ],
+          "delta": 0.0,
+          "passed": null,
+          "errors": {},
+          "arms": {
+            "native": {
+              "ns": 20609448.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 22244,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-02/native/native-memory.txt",
+                "sha256": "1b2e8523a50019aff2e88ab21ca12219507eee64fcd95534032173a081b9da98"
+              }
+            },
+            "canonical": {
+              "ns": 43823940.0,
+              "score": 0.0067759384412924015,
+              "max_rss_kib": 82864,
+              "memory_file": {
+                "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-02/canonical/canonical-memory.txt",
+                "sha256": "d398c9c67230ae2cec792c2b8967519fbed29534156cf068a2432aac3fa29846"
+              }
+            }
+          }
+        }
+      ],
+      "raw_summary": {
+        "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/summary.json",
+        "sha256": "065e92a82e4b6509c63584ca873b418bd0ed06ebcd554ec6eb82067c0028069b"
+      },
+      "plan_sha256": "d86d431d89fd5c34663dd2ad831ccbf7ff25fbd3bcbe6955d09b71f06cc35b9d",
+      "resource_receipts": [
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-00-wrapper.log",
+          "sha256": "852546fc962151d3ef3e8257e2500d77538f3a4b8a2a5c3c4a1af9394bc13b6f",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.08GiB | min-avail 14174MiB | peak-load 1.96"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-01-wrapper.log",
+          "sha256": "e6e5bb9c3e6cd9a7ba50c9415ca4214edf16efa0959a91d933453a3d28172e97",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.08GiB | min-avail 14019MiB | peak-load 2.28"
+          ]
+        },
+        {
+          "path": "/home/lilith/tmp/handoff/classical-first-verification-cache-20261020/prepared-successor-v3/acquisition/libvmaf-efae6b8f/cambi-grid-pairB-1024x1024-t28/block-02-wrapper.log",
+          "sha256": "a2e188892d28111765da9d727c59c287403da2165e44ac14181fb6da79fa8540",
+          "receipts": [
+            "run-heavy: done rc=0 1s | peak-RSS 0.08GiB | min-avail 14223MiB | peak-load 1.52"
+          ]
+        }
+      ],
+      "regression_qualified": false
+    }
+  ]
+}
