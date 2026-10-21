@@ -62,7 +62,7 @@ drivers and fleet executors with pinned build identities.
 
 Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. Code and model terms, paper citations and full reference identities remain in the linked cards.
 
-**Rust/C** is Rust time divided by canonical time (lower is faster), using a representative warm cohort, preferring one thread. Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. ! flags any observed case above 1.08; R/O identifies RTEN/ORT CPU for neural ratios. See the ledger for confirmation status.
+**Rust/C** is Rust time divided by canonical time (lower is faster), using a representative warm cohort, preferring one thread. Approximate local comparisons are descriptive, with their input size, thread budget and source pins in the [comparison ledger](benchmarks/canonical_recheck_2026-10-19/README.md). A dash means no comparable measurement. “Prior” means older recorded evidence; “gate” means a declared bound, not a measured pass. Δ is the measured difference without an assigned bound. Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. ! flags any observed case above 1.08; R/O identifies RTEN/ORT CPU for neural ratios. Cold numerical misses are shown separately from the retained warm evidence; See the ledger for confirmation status.
 
 | Metric | Type | Canonical | Check | Rust/C |
 | --- | --- | --- | --- | ---: |
@@ -70,7 +70,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`ahiq`](docs/MODEL_CARDS.md#ahiq) | FR/NN | original AHIQ / pinne… | 2/2 pass | ≈0.55× R |
 | [`ahiq-pyiqa`](docs/MODEL_CARDS.md#ahiq-pyiqa) | FR/NN | PyIQA 0.1.16 / native… | 2/2 pass | ≈0.45× O |
 | [`arniqa`](docs/MODEL_CARDS.md#arniqa) | NR/NN | original ARNIQA / kad… | 5/5 pass | ≈1.15× R ! |
-| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 170/170 pass | ≈0.12× |
+| [`brisque`](docs/MODEL_CARDS.md#brisque) | NR | PIQ 0.8.0 | 2 cold misses | ≈0.12× |
 | [`butteraugli`](docs/MODEL_CARDS.md#butteraugli) | FR | libjxl 0.12.0 origina… | Δ 5e-05 | ≈0.41× |
 | [`butteraugli-gpu`](docs/MODEL_CARDS.md#butteraugli-gpu) | FR | libjxl 0.12.0 origina… | Δ 0.0083 | ≈0.022× |
 | [`butteraugli-original`](docs/MODEL_CARDS.md#butteraugli-original) | FR | original google/butte… | Δ 0 | ≈0.7× |
@@ -128,7 +128,7 @@ Every CLI name is listed below. FR/NR indicates reference requirements; NN marks
 | [`msssim`](docs/MODEL_CARDS.md#msssim) | FR | original msssim / Oct… | 13/30 pass | ≈0.051× |
 | [`msssim-libvmaf`](docs/MODEL_CARDS.md#msssim-libvmaf) | FR | libvmaf 3.2.0 / named… | 4 process errors | ≈0.36× |
 | [`musiq`](docs/MODEL_CARDS.md#musiq) | NR/NN | Google MUSIQ 3ef5211… | 4/4 pass | ≈0.58× R |
-| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 170/170 pass | ≈0.18× |
+| [`niqe`](docs/MODEL_CARDS.md#niqe) | NR | BasicSR 1.4.2 / resid… | 2 cold misses | ≈0.18× |
 | [`nlpd`](docs/MODEL_CARDS.md#nlpd) | FR | NLPD_Pytorch / origin… | Δ 6.5e-07 | ≈0.051× |
 | [`nlpd-iqa`](docs/MODEL_CARDS.md#nlpd-iqa) | FR | IQA_pytorch NLPD / qu… | Δ 7.1e-08 | ≈0.063× |
 | [`paq2piq`](docs/MODEL_CARDS.md#paq2piq) | NR/NN | original Paq2piq / 40… | 5/5 pass | ≈1.3× R ! |

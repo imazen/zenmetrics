@@ -275,10 +275,44 @@ def readme_variant_tables(items, comparisons):
     return '\n'.join(lines)
 
 
+def cold_numerical_misses(path):
+    """Count source-bound cold cases that exceed an assigned numerical gate."""
+    import hashlib
+    import math
+    index=json.loads(path.read_text())
+    misses={};seen=set()
+    for shard in index['shards']:
+        source=path.parent/shard['file']
+        if source.resolve().parent!=path.parent.resolve():
+            raise ValueError('cold shard must be adjacent to its index')
+        content=source.read_bytes()
+        if hashlib.sha256(content).hexdigest()!=shard['sha256']:
+            raise ValueError('cold shard hash mismatch')
+        rows=json.loads(content)['cases']
+        if len(rows)!=shard['cases']:
+            raise ValueError('cold shard count mismatch')
+        for row in rows:
+            key=(row['case'],row['native_source'])
+            if key in seen:raise ValueError('duplicate cold case')
+            seen.add(key)
+            bound=row['absolute_bound']
+            if bound is None:continue
+            for block in row['blocks']:
+                delta=block['delta']
+                canonical=block.get('arms',{}).get('canonical',{}).get('score')
+                if delta is None or canonical is None:continue
+                if (math.isfinite(delta) and math.isfinite(canonical)
+                        and delta>bound+row['relative_bound']*abs(canonical)):
+                    misses[row['metric']]=misses.get(row['metric'],0)+1
+                    break
+    return misses
+
+
 def readme_section(items):
     comparison_path=ROOT/'benchmarks/canonical_recheck_2026-10-19/results.json'
     comparisons=comparison_results(comparison_path)
     statuses=json.loads(comparison_path.with_name('unmeasured.json').read_text())
+    cold_misses=cold_numerical_misses(comparison_path.parent/'acquired-cold-panels-2026-10-21/index.json')
     lines=['## Metrics','','[Models & metrics explorer]('+SITE+'#models) · [Full cards, papers and terms](docs/MODEL_CARDS.md)',
            '', 'Every CLI name is listed below. FR/NR indicates reference requirements; NN marks neural models. '
            'Code and model terms, paper citations and full reference identities remain in the linked cards.',
@@ -291,6 +325,7 @@ def readme_section(items):
            'Pass counts include retained follow-up cohorts; they are not counts of distinct inputs. '
            '! flags any observed case above 1.08; '
            'R/O identifies RTEN/ORT CPU for neural ratios. '
+           'Cold numerical misses are shown separately from the retained warm evidence; '
            'See the ledger for confirmation status.',
            '', '| Metric | Type | Canonical | Check | Rust/C |', '| --- | --- | --- | --- | ---: |']
     for c in items:
@@ -305,6 +340,8 @@ def readme_section(items):
         if len(ref)>24:ref=ref[:21].rstrip()+'…'
         check=observation.get('check',{'Reported results':'prior','Declared gate':'gate','Partial canonical parity':'partial'}.get(c['parity_status'],'unchecked'))
         if observation and c['parity_status']=='Partial canonical parity':check='partial; '+check
+        if c['metric'] in cold_misses:
+            check=str(cold_misses[c['metric']])+' cold misses'
         ratio=observation.get('ratio')
         # Keep values near the 1.08 flag distinguishable in the compact table.
         digits=3 if ratio is not None and .8<=ratio<=1.3 else 2
