@@ -2512,3 +2512,13 @@ bench-iqa-canonical-dssim-first-boundary-check output compiler:
 bench-iqa-canonical-first-boundary-control plan output:
     mkdir -p "$HOME/tmp"
     flock "$HOME/tmp/lilith-heavy.lock" flock "$HOME/tmp/lilith-wsl-heavy.lock" "$HOME/work/claudehints/scripts/run-heavy" --mem 12G --jobs 28 -- env TMPDIR="$HOME/tmp" python3 -B benchmarks/iqa_compete_2026-10-16/first_boundary_control.py '{{plan}}' '{{output}}'
+
+# Retains the frozen plan and every completed original three-block outcome.
+bench-iqa-canonical-block-resume plan output *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/resume_canonical_campaign.py '{{plan}}' '{{output}}' {{options}}
+
+bench-iqa-canonical-queue-resume manifest *options:
+    python3 -B benchmarks/iqa_compete_2026-10-16/resume_canonical_queue.py '{{manifest}}' {{options}}
+
+bench-iqa-canonical-recovery-check:
+    PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_resume_canonical_campaign

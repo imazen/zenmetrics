@@ -399,3 +399,29 @@ those guarantees and preservation of numerical bounds. The earlier
 `frozen_grid_scope_20261020.py` preserves the exact source used to prepare the
 active seven-route VMAF/CAMBI campaign. Its known future-use limits do not change
 that inspected campaign, whose 168 cases retained all six model-route caveats.
+
+### Recovering original canonical comparisons
+
+`just bench-iqa-canonical-block-resume PLAN EXISTING_OUTPUT` resumes original
+three-block, five-warm-sample campaigns. Add `--mode first` only for the original
+three-block first-evaluation campaign. Fixed 20/40-block confirmation campaigns
+keep their separate controllers. `bench-iqa-canonical-queue-resume MANIFEST`
+handles a stopped original warm queue; `--after-queue MANIFEST` retains its
+classical-before-neural prerequisite.
+
+Recovery validates completed numerical classifications, retains failed outcomes,
+and acquires only missing blocks using the original helper and budgets. An
+interrupted attempt stays in place; the new attempt gets a distinct directory.
+Original plans, completed block data and case summaries are never replaced.
+Recovery journals identify each reused/new block by path and SHA256. Root TSV
+rows are appended after validating existing rows, with the old TSV retained in
+the journal. These descriptive measurements do not establish runtime acceptance.
+
+If the original plan did not bind the block helper, supply both
+`--original-helper /absolute/compare_canonical_budgeted.py` and
+`--original-helper-sha256 SHA256`, after checking the old controller's command
+and the retained source. Recovery records this explicit identity separately;
+it does not add a binding retroactively to the frozen plan. Each original block
+still performs its own asset checks and uses shared resource admission.
+Use `--flags DIRECTORY --regression-log FILE` on queue recovery to audit every
+newly completed case. Check recovery with `just bench-iqa-canonical-recovery-check`.
