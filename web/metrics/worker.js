@@ -51,8 +51,38 @@ async function full(announce=true) {
   })();
   try { return await fullLoading; } catch(error) { fullLoading=null; throw error; }
 }
-const forMetric = async metric => modules.core.metrics.includes(metric) ? modules.core : full();
-const forMap = async metric => modules.core.maps.includes(metric) ? modules.core : full();
+// Extra modules (extra-modules.json beside the page, absent on the public
+// site): each lists its metrics and their maps, is imported the first time
+// one of them is used, and answers the same calls as core and full. They
+// may be single-threaded (no Rayon pool) and use unshared memory.
+let extras=[];
+const extraLoading={};
+async function loadExtras() {
+  const response=await fetch(new URL('extra-modules.json', import.meta.url),{cache:'no-store'}).catch(()=>null);
+  if(!response||!response.ok)return [];
+  const manifest=await response.json();
+  return (manifest.modules||[]).filter(m=>m&&m.name&&m.url&&Array.isArray(m.metrics));
+}
+const extraFor = metric => extras.find(e=>e.metrics.some(m=>m.name===metric));
+async function extra(entry) {
+  if(modules[entry.name])return modules[entry.name];
+  postMessage({type:'progress',message:`Loading the ${entry.label||entry.name} module…`});
+  extraLoading[entry.name]??=(async()=>{
+    const api=await import(new URL(entry.url, import.meta.url));
+    if(api.initThreadPool)return startModule(entry.name,api,api.default);
+    const start=performance.now();
+    const wasm=await api.default();
+    const module={name:entry.name,api,wasm,metrics:JSON.parse(api.available_metrics()),maps:JSON.parse(api.available_spatial_maps()),
+      startup:{wasmMilliseconds:performance.now()-start,poolMilliseconds:0}};
+    if(api.module_name()!==entry.name)throw new Error(`Module ${entry.name} reports ${api.module_name()}`);
+    modules[entry.name]=module;
+    postMessage({type:'module',name:entry.name,startup:module.startup,metrics:module.metrics,maps:module.maps});
+    return module;
+  })();
+  try { return await extraLoading[entry.name]; } catch(error) { delete extraLoading[entry.name]; throw error; }
+}
+const forMetric = async metric => modules.core.metrics.includes(metric) ? modules.core : extraFor(metric) ? extra(extraFor(metric)) : full();
+const forMap = async metric => modules.core.maps.includes(metric) ? modules.core : extraFor(metric) ? extra(extraFor(metric)) : full();
 function mapMessage(spatial) {
   const out = {map:spatial.values,mapWidth:spatial.width,mapHeight:spatial.height,similarity:spatial.similarity,geometry:JSON.parse(spatial.geometry),
     mapName:spatial.name,mapNames:JSON.parse(spatial.names),mapPolarity:spatial.polarity};
@@ -71,8 +101,10 @@ self.onmessage = async ({data}) => {
       threads=data.threads;
       postMessage({type:'progress', message:'Starting Rayon workers…'});
       const core=await startModule('core',coreApi,initCore);
+      extras=await loadExtras();
       postMessage({type: 'ready', threads: coreApi.thread_count(), module:'core', metrics: core.metrics, maps:core.maps, allMetrics:JSON.parse(coreApi.all_metric_names()),
-        loopDefaults:JSON.parse(coreApi.loop_map_defaults()), startup:core.startup});
+        loopDefaults:JSON.parse(coreApi.loop_map_defaults()), startup:core.startup,
+        extras:extras.map(({name,label,metrics,loopDefaults})=>({name,label:label||name,metrics,loopDefaults:loopDefaults||[]}))});
       return;
     }
     if (!modules.core) throw new Error('WASM worker has not initialized');
@@ -108,7 +140,10 @@ self.onmessage = async ({data}) => {
     const control=module=>{
       if(!controls.has(module.name)){
         const c=new module.api.JobControl();controls.set(module.name,c);
-        postMessage({type:'control',id:data.id,module:module.name,buffer:module.wasm.memory.buffer,offset:c.state_ptr()});
+        // Only shared memory can carry cancellation into a running call;
+        // an extra module's unshared memory would only be copied.
+        if(module.wasm.memory.buffer instanceof SharedArrayBuffer)
+          postMessage({type:'control',id:data.id,module:module.name,buffer:module.wasm.memory.buffer,offset:c.state_ptr()});
       }
       return controls.get(module.name);
     };

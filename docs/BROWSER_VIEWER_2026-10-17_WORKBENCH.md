@@ -86,6 +86,29 @@ Localhost runs are bimodal on this host (about 190 ms and 350–390 ms, in
 both builds), so the medians are coarse. The emulated network rate uses
 uncompressed transfer; Cloudflare's own compression is not measured here.
 
+### Extra modules (2026-10-21)
+
+A deployment can add wasm-bindgen modules without rebuilding the site. An
+`extra-modules.json` beside `worker.js` (absent on the public site, where the
+worker's fetch of it fails quietly) lists them; each is imported the first
+time one of its metrics is scored or mapped:
+
+```json
+{"modules": [{"name": "m", "label": "Menu group", "url": "pkg-m/m.js",
+  "metrics": [{"name": "m-metric", "maps": ["diffmap"], "cli": "m score {reference} {distorted}"}],
+  "loopDefaults": [{"metric": "m-metric", "map": "diffmap", "scale": 1, "exponent": 1, "r": 1}]}]}
+```
+
+A module answers the calls the worker makes on core and full
+(`module_name`, `available_metrics`, `available_spatial_maps`, `JobControl`,
+`score_rgba`, `spatial_map`, `cached_spatial_map`, `loop_map`); `url` is
+relative to `worker.js`, and `module_name()` must return `name`. A module
+with `initThreadPool` starts like core and full; one without runs
+single-threaded on its own unshared memory, so no cancellation words are
+posted for it and a running call finishes before the next. Its metrics form
+their own menu group and get no dashboard links; `cli`, when present,
+replaces the CLI snippet, and `loopDefaults` join the loop's defaults.
+
 ## JPEG XL impact
 
 The loop player (2026-10-15) remains the step-by-step view of how a metric's

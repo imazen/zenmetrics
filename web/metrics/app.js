@@ -28,8 +28,16 @@ function applyCoverage(coverage,error){
   const group=(label,list)=>{const g=document.createElement('optgroup');g.label=label;
     g.append(...list.map(e=>{const o=new Option(e.status==='score+map'?e.name:`${e.name} (${statusLabel[e.status]})`,e.name);
       if(e.status==='unavailable'){o.disabled=true;o.title=e.reason;}return o;}));return g;};
+  // Metrics of extra modules: scored with maps by their own module.
+  const extraGroups=(S.extras||[]).map(x=>{
+    const list=x.metrics.map(m=>({name:m.name,status:'score+map',module:x.name,maps:m.maps,reason:null,extra:x.label,cli:m.cli}));
+    for(const e of list)S.coverage.set(e.name,e);
+    S.metrics.push(...list.map(e=>e.name));S.catalog=[...new Set([...S.catalog,...list.map(e=>e.name)])];
+    return group(x.label,list);
+  });
   const selected=$('metric').value;
   $('metric').replaceChildren(group('Scored in this page',entries.filter(e=>e.status==='score+map'||e.status==='score-only')),
+    ...extraGroups,
     group('Learned (downloads weights)',entries.filter(e=>e.status.startsWith('nn-'))),
     group('Not runnable in the browser',entries.filter(e=>e.status==='unavailable')));
   $('metric').value=S.metrics.includes(selected)?selected:'zensim';
@@ -74,8 +82,9 @@ function metricLinks(){
   const metric=$('metric').value,e=S.coverage.get(metric),q=encodeURIComponent(metric);
   const node=$('metric-links');node.replaceChildren();
   const link=(text,href)=>{const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener';a.textContent=text;node.append(a);};
-  link('Model card ↗',`${dashboard}#models?metric=${q}`);link('Speed ↗',`${dashboard}#speed?metric=${q}`);link('Agreement ↗',`${dashboard}#agreement?metric=${q}`);
-  link('Coverage',new URL('coverage.json',document.baseURI).href);
+  // Extra-module metrics have no public dashboard pages.
+  if(!e?.extra){link('Model card ↗',`${dashboard}#models?metric=${q}`);link('Speed ↗',`${dashboard}#speed?metric=${q}`);link('Agreement ↗',`${dashboard}#agreement?metric=${q}`);
+    link('Coverage',new URL('coverage.json',document.baseURI).href);}
   const note=document.createElement('span');note.id='metric-status';
   note.textContent=e?`${metric}: ${statusLabel[e.status]}${e.module?` · ${e.module} module`:''}${e.reason?` · ${e.reason}`:''}`:'';node.append(note);
   if(S.urlErrors){const errors=document.createElement('span');errors.id='link-errors';errors.className='error';errors.textContent=` Link parameters refused: ${S.urlErrors.join('; ')}`;node.append(errors);}
@@ -129,6 +138,8 @@ function startWorker() {
       const startupMilliseconds=performance.now()-startupStart;
       $('startup-timing').textContent=`Worker startup ${startupMilliseconds.toFixed(1)} ms · WASM load/init ${data.startup.wasmMilliseconds.toFixed(1)} ms · Rayon pool ${data.startup.poolMilliseconds.toFixed(1)} ms`;
       S.ready=true;S.loopDefaults=data.loopDefaults;S.allMetrics=data.allMetrics;S.coreMetrics=data.metrics;S.catalog=[...data.maps];S.metrics=[...data.metrics];
+      // Extra modules (extra-modules.json): their metrics join the catalog, links and loop defaults.
+      S.extras=data.extras||[];for(const e of S.extras){S.loopDefaults.push(...e.loopDefaults);S.allMetrics.push(...e.metrics.map(m=>m.name));}
       $('compare').disabled=false;
       status(`Ready: ${data.threads} Rayon workers, SIMD128 + relaxed SIMD`);
       document.body.dataset.modules='core';S.modules={};
@@ -403,6 +414,9 @@ function snippet(){const metric=$('metric').value;
   $('zensim-model-row').hidden=metric!=='zensim';
   $('zensim-model-note').hidden=$('zensim-model-row').hidden||$('zensim-model').value!=='c';
   const learned=S.coverage.get(metric)?.status?.startsWith('nn-');
+  // An extra module names its own command ({reference}, {distorted}).
+  const cli=S.coverage.get(metric)?.cli;
+  if(cli){$('cli-snippet').textContent=cli.replace('{reference}','reference.png').replace('{distorted}',`distorted.${codecInfo[S.encodedCodec||'jpeg'].ext}`);return;}
   $('cli-snippet').textContent=`${learned?'ZENMETRICS_NN_MODEL_DIR=<exported models> ':''}zenmetrics${metric==='zensim'?` --zensim-profile ${$('zensim-model').value}`:''} score --metric ${metric} --reference reference.png --distorted distorted.${codecInfo[S.encodedCodec||'jpeg'].ext}${metric==='cvvdp'?` --display-model ${$('display').value}`:''}`+(learned?'   # zenmetrics-cli built with --features nn':'');
 }
 $('copy-cli').onclick=async()=>{try{await navigator.clipboard.writeText($('cli-snippet').textContent);status('CLI command copied.');}catch(error){status(error.message,true);}};
