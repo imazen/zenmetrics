@@ -59,9 +59,11 @@ let extras=[];
 const extraLoading={};
 async function loadExtras() {
   const response=await fetch(new URL('extra-modules.json', import.meta.url),{cache:'no-store'}).catch(()=>null);
-  if(!response||!response.ok)return [];
-  const manifest=await response.json();
-  return (manifest.modules||[]).filter(m=>m&&m.name&&m.url&&Array.isArray(m.metrics));
+  // Pages answers a missing file with the index page (200, text/html), so
+  // only a JSON response is a manifest; anything unreadable means none.
+  if(!response||!response.ok||!(response.headers.get('content-type')||'').includes('json'))return [];
+  const manifest=await response.json().catch(()=>null);
+  return (manifest?.modules||[]).filter(m=>m&&m.name&&m.url&&Array.isArray(m.metrics));
 }
 const extraFor = metric => extras.find(e=>e.metrics.some(m=>m.name===metric));
 async function extra(entry) {
