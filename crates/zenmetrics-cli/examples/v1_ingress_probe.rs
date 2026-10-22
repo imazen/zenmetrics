@@ -22,11 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("distorted\tpublished\tv1_601\tv1_709");
     for line in std::fs::read_to_string(&args[1])?.lines() {
         let mut f = line.split('\t');
-        let (r, d, p) = (
-            f.next().unwrap(),
-            f.next().unwrap(),
-            f.next().unwrap_or(""),
-        );
+        let (r, d, p) = (f.next().unwrap(), f.next().unwrap(), f.next().unwrap_or(""));
         let ri = decode_image_to_rgb8(&dir.join(r))?;
         let di = decode_image_to_rgb8(&dir.join(d))?;
         let s601 = vmaf::score(&ri, &di, Model::V1, Ingress::Studio601)?;

@@ -62,7 +62,9 @@ fn fullrange601_420(img: &zenmetrics_cli::decode::Rgb8Image) -> (Vec<u16>, Vec<u
                         f64::from(img.pixels[p + 1]),
                         f64::from(img.pixels[p + 2]),
                     );
-                    y[row * w + col] = (0.299 * r + 0.587 * g + 0.114 * b).round().clamp(0.0, 255.0) as u8;
+                    y[row * w + col] = (0.299 * r + 0.587 * g + 0.114 * b)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
                     u_sum += -0.168736 * r - 0.331264 * g + 0.5 * b;
                     v_sum += 0.5 * r - 0.418688 * g - 0.081312 * b;
                 }
@@ -98,7 +100,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     print!("distorted\tpublished");
     for (name, _) in &variants {
         if *name == "3d0h" {
-            print!("\t3d0h\tcambi\tspeed_uv\tadm3\tmotion3\t3d0h_neutraluv\tneutral_speed_uv\t3d0h_fullrange\t3d0h_bd10\t3d0h_m2f1\t3d0h_m2mean\t3d0h_m2dd\t3d0h_sub_adm2");
+            print!(
+                "\t3d0h\tcambi\tspeed_uv\tadm3\tmotion3\t3d0h_neutraluv\tneutral_speed_uv\t3d0h_fullrange\t3d0h_bd10\t3d0h_m2f1\t3d0h_m2mean\t3d0h_m2dd\t3d0h_sub_adm2"
+            );
         } else {
             print!("\t{name}");
         }
@@ -115,53 +119,132 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let model3d0h = vmaf::VmafModel::new(ModelVariant::Standard1080p).unwrap();
         let (fy, fu, fv) = fullrange601_420(&ri);
         let (gy, gu, gv) = fullrange601_420(&di);
-        let (ry10, ru10, rv10) = (ry.iter().map(|v| v << 2).collect::<Vec<u16>>(), ru.iter().map(|v| v << 2).collect::<Vec<u16>>(), rv.iter().map(|v| v << 2).collect::<Vec<u16>>());
-        let (dy10, du10, dv10) = (dy.iter().map(|v| v << 2).collect::<Vec<u16>>(), du.iter().map(|v| v << 2).collect::<Vec<u16>>(), dv.iter().map(|v| v << 2).collect::<Vec<u16>>());
+        let (ry10, ru10, rv10) = (
+            ry.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+            ru.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+            rv.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+        );
+        let (dy10, du10, dv10) = (
+            dy.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+            du.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+            dv.iter().map(|v| v << 2).collect::<Vec<u16>>(),
+        );
         let (w, h) = (ri.width as usize & !1, ri.height as usize & !1);
         let adm2v = vmaf::adm2_v0_from_luma(&ry, &dy, w, h, 8, vmaf::VmafV0Variant::Standard)?;
         print!("{d}\t{p}");
         for (name, v) in &variants {
             let scorer = VmafV1Scorer::new(w, h, 8, *v)?;
-            let rr = [Yuv420Frame { y: &ry, u: &ru, v: &rv }];
-            let dd = [Yuv420Frame { y: &dy, u: &du, v: &dv }];
+            let rr = [Yuv420Frame {
+                y: &ry,
+                u: &ru,
+                v: &rv,
+            }];
+            let dd = [Yuv420Frame {
+                y: &dy,
+                u: &du,
+                v: &dv,
+            }];
             let res = &scorer.score(&rr, &dd)?[0];
             if name == &"3d0h" {
                 let (nres, nfeat) = {
-                    let rr = [Yuv420Frame { y: &ry, u: &neutral, v: &neutral }];
-                    let dd = [Yuv420Frame { y: &dy, u: &neutral, v: &neutral }];
+                    let rr = [Yuv420Frame {
+                        y: &ry,
+                        u: &neutral,
+                        v: &neutral,
+                    }];
+                    let dd = [Yuv420Frame {
+                        y: &dy,
+                        u: &neutral,
+                        v: &neutral,
+                    }];
                     let r0 = &scorer.score(&rr, &dd)?[0];
                     (r0.score, r0.features.speed_chroma_uv)
                 };
                 let fr_score = {
-                    let rr = [Yuv420Frame { y: &fy, u: &fu, v: &fv }];
-                    let dd = [Yuv420Frame { y: &gy, u: &gu, v: &gv }];
+                    let rr = [Yuv420Frame {
+                        y: &fy,
+                        u: &fu,
+                        v: &fv,
+                    }];
+                    let dd = [Yuv420Frame {
+                        y: &gy,
+                        u: &gu,
+                        v: &gv,
+                    }];
                     scorer.score(&rr, &dd)?[0].score
                 };
                 let bd10_score = {
                     let s10 = VmafV1Scorer::new(w, h, 10, ModelVariant::Standard1080p)?;
-                    let rr = [Yuv420Frame { y: &ry10, u: &ru10, v: &rv10 }];
-                    let dd = [Yuv420Frame { y: &dy10, u: &du10, v: &dv10 }];
+                    let rr = [Yuv420Frame {
+                        y: &ry10,
+                        u: &ru10,
+                        v: &rv10,
+                    }];
+                    let dd = [Yuv420Frame {
+                        y: &dy10,
+                        u: &du10,
+                        v: &dv10,
+                    }];
                     s10.score(&rr, &dd)?[0].score
                 };
                 // 2-frame sequences: ref=[r,r], dist=[r,d] — frame1 gets
                 // real motion = SAD(dist,ref); also try dist=[d,d].
                 let (m_f1, m_mean, m2) = {
-                    let rr = [Yuv420Frame { y: &ry, u: &ru, v: &rv }, Yuv420Frame { y: &ry, u: &ru, v: &rv }];
-                    let dd = [Yuv420Frame { y: &ry, u: &ru, v: &rv }, Yuv420Frame { y: &dy, u: &du, v: &dv }];
+                    let rr = [
+                        Yuv420Frame {
+                            y: &ry,
+                            u: &ru,
+                            v: &rv,
+                        },
+                        Yuv420Frame {
+                            y: &ry,
+                            u: &ru,
+                            v: &rv,
+                        },
+                    ];
+                    let dd = [
+                        Yuv420Frame {
+                            y: &ry,
+                            u: &ru,
+                            v: &rv,
+                        },
+                        Yuv420Frame {
+                            y: &dy,
+                            u: &du,
+                            v: &dv,
+                        },
+                    ];
                     let s = scorer.score(&rr, &dd)?;
-                    let dd2 = [Yuv420Frame { y: &dy, u: &du, v: &dv }, Yuv420Frame { y: &dy, u: &du, v: &dv }];
+                    let dd2 = [
+                        Yuv420Frame {
+                            y: &dy,
+                            u: &du,
+                            v: &dv,
+                        },
+                        Yuv420Frame {
+                            y: &dy,
+                            u: &du,
+                            v: &dv,
+                        },
+                    ];
                     let s2 = scorer.score(&rr, &dd2)?;
                     (s[1].score, (s[0].score + s[1].score) / 2.0, s2[0].score)
                 };
                 let f = &res.features;
-                print!("\t{}\t{}\t{}\t{}", res.score, f.cambi, f.speed_chroma_uv, f.adm3);
+                print!(
+                    "\t{}\t{}\t{}\t{}",
+                    res.score, f.cambi, f.speed_chroma_uv, f.adm3
+                );
                 let sub_adm2 = model3d0h.predict(vmaf::VmafFeatures {
                     cambi: f.cambi,
                     speed_chroma_uv: f.speed_chroma_uv,
                     adm3: adm2v,
                     motion3: 0.0,
                 })?;
-                print!("\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", f.motion3, nres, nfeat, fr_score, bd10_score, m_f1, m_mean, m2, sub_adm2);
+                print!(
+                    "\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    f.motion3, nres, nfeat, fr_score, bd10_score, m_f1, m_mean, m2, sub_adm2
+                );
             } else {
                 print!("\t{}", res.score);
             }
