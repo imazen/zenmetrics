@@ -1399,7 +1399,12 @@ pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
     let src_w = img.width as usize;
     let mut pixels = vec![0u8; w * h * 3];
     let fill = |orow: &mut [u8], srow: &[u8]| {
-        for (o, px) in orow.chunks_exact_mut(3).zip(srow.chunks_exact(3)) {
+        for (o, px) in orow
+            .as_chunks_mut::<3>()
+            .0
+            .iter_mut()
+            .zip(srow.as_chunks::<3>().0)
+        {
             let yv = (16.0
                 + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
                 .round()

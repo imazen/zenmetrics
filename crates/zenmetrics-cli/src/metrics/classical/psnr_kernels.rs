@@ -225,7 +225,7 @@ fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
             .clamp(lo, hi)
             .to_i32();
         let d = ca - cbv;
-        block = block + d * d;
+        block += d * d;
         iters += 1;
         px += 16;
         if iters == 16384 {
@@ -255,7 +255,7 @@ fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
 pub(crate) fn studio601_y_sse(a: &[u8], b: &[u8]) -> u64 {
     if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
-        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        let chunk = (a.len() / (rayon::current_num_threads() * 4)).div_ceil(48) * 48;
         return a
             .par_chunks(chunk)
             .zip(b.par_chunks(chunk))
@@ -319,7 +319,7 @@ fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
         };
         let code = |l: f64x8| (off + scale * l + half).floor().clamp(lo, hi);
         let d = code(luma(a)) - code(luma(b));
-        acc = acc + d * d;
+        acc += d * d;
         px += 8;
     }
     let mut sum = acc.reduce_add();
@@ -338,7 +338,7 @@ fn libvmaf_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> f64 {
 pub(crate) fn libvmaf_y_sse(a: &[u8], b: &[u8]) -> f64 {
     if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
-        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        let chunk = (a.len() / (rayon::current_num_threads() * 4)).div_ceil(48) * 48;
         return a
             .par_chunks(chunk)
             .zip(b.par_chunks(chunk))
@@ -414,7 +414,7 @@ fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> 
         };
         let code = |l: f64x8| (voff + l + half).floor().clamp(lo, hi);
         let d = code(lin(a)) - code(lin(b));
-        acc = acc + d * d;
+        acc += d * d;
         px += 8;
     }
     let mut sum = acc.reduce_add();
@@ -433,7 +433,7 @@ fn studio601_plane_sse_inner(token: Token, a: &[u8], b: &[u8], plane: usize) -> 
 pub(crate) fn studio601_chroma_sse(a: &[u8], b: &[u8], plane: usize) -> f64 {
     if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
-        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        let chunk = (a.len() / (rayon::current_num_threads() * 4)).div_ceil(48) * 48;
         return a
             .par_chunks(chunk)
             .zip(b.par_chunks(chunk))
@@ -508,9 +508,9 @@ fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) 
             - code(off_c, (ccb[0] * rb + ccb[1] * gb + ccb[2] * bb) / inv255);
         let dcr = code(off_c, (ccr[0] * ra + ccr[1] * ga + ccr[2] * ba) / inv255)
             - code(off_c, (ccr[0] * rb + ccr[1] * gb + ccr[2] * bb) / inv255);
-        acc_y = acc_y + dy * dy;
-        acc_cb = acc_cb + dcb * dcb;
-        acc_cr = acc_cr + dcr * dcr;
+        acc_y += dy * dy;
+        acc_cb += dcb * dcb;
+        acc_cr += dcr * dcr;
         px += 8;
     }
     let mut sy = acc_y.reduce_add();
@@ -562,7 +562,7 @@ fn studio601_yuv_sse_inner(token: Token, a: &[u8], b: &[u8]) -> (f64, f64, f64) 
 pub(crate) fn studio601_yuv_sse(a: &[u8], b: &[u8]) -> (f64, f64, f64) {
     if a.len() / 3 >= PAR_MIN_PX && rayon::current_num_threads() > 1 {
         use rayon::prelude::*;
-        let chunk = ((a.len() / (rayon::current_num_threads() * 4)) + 47) / 48 * 48;
+        let chunk = (a.len() / (rayon::current_num_threads() * 4)).div_ceil(48) * 48;
         return a
             .par_chunks(chunk)
             .zip(b.par_chunks(chunk))

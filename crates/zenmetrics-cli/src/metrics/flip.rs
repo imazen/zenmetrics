@@ -255,12 +255,11 @@ fn conv_band_t(
                 let mut acc = f32x16::splat_t(token, 0.0);
                 for (k, &t) in taps.iter().enumerate() {
                     let yy = (y + k).saturating_sub(r).min(h - 1);
-                    acc = acc
-                        + f32x16::splat_t(token, t)
-                            * f32x16::load_t(
-                                token,
-                                src[yy * w + x..yy * w + x + 16].try_into().unwrap(),
-                            );
+                    acc += f32x16::splat_t(token, t)
+                        * f32x16::load_t(
+                            token,
+                            src[yy * w + x..yy * w + x + 16].try_into().unwrap(),
+                        );
                 }
                 dst[(y - y0) * w + x..(y - y0) * w + x + 16].copy_from_slice(&acc.to_array());
                 x += 16;
@@ -295,12 +294,11 @@ fn conv_band_t(
             while x + 16 <= hi {
                 let mut acc = f32x16::splat_t(token, 0.0);
                 for (k, &t) in taps.iter().enumerate() {
-                    acc = acc
-                        + f32x16::splat_t(token, t)
-                            * f32x16::load_t(
-                                token,
-                                srow[x + k - r..x + k - r + 16].try_into().unwrap(),
-                            );
+                    acc += f32x16::splat_t(token, t)
+                        * f32x16::load_t(
+                            token,
+                            srow[x + k - r..x + k - r + 16].try_into().unwrap(),
+                        );
                 }
                 drow[x..x + 16].copy_from_slice(&acc.to_array());
                 x += 16;
