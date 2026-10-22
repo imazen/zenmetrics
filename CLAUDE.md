@@ -573,6 +573,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **Workbench worker stopped on the live site (2026-10-22, fixed).** The
+  optional `extra-modules.json` hook (`7b95afe7`) parsed Cloudflare Pages'
+  answer to the missing file, the index page with 200 and `text/html`, as
+  JSON, so the worker's startup failed on the live site while the local
+  pre-deploy check, whose server answered 404, passed. `cb50c2ea` accepts only
+  a JSON response; `check-pages.py`'s server now answers missing files as
+  Pages does (the old worker fails it at startup, the fixed one passes).
+
 - **SSIMULACRA2 GPU small-input scalar discrepancy (2026-10-20).** Three
   retained 64×64 photo blocks each return GPU 84.8498333349087 versus primary
   C++ v2.1 90.86388011956463, absolute delta 6.014046784655932. The same

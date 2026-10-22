@@ -5,6 +5,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import math
 import json
+import os
 import gzip
 from pathlib import Path
 import threading
@@ -30,6 +31,15 @@ args = parser.parse_args()
 
 class Handler(SimpleHTTPRequestHandler):
     isolated = True
+
+    def translate_path(self, path):
+        # Cloudflare Pages answers a missing file with the site's index page
+        # (200, text/html), not a 404; serve the same, so a page that
+        # mistakes that answer for a file fails here before it deploys.
+        local = super().translate_path(path)
+        if os.path.exists(local):
+            return local
+        return super().translate_path('/index.html')
 
     def end_headers(self):
         if self.isolated:
