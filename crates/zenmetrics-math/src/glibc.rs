@@ -145,6 +145,8 @@ const EXP2_POLY: [f64; 3] = [
 const SHIFT_SCALED: f64 = f64::from_bits(0x42e8000000000000);
 
 /// e_powf's `log2_inline` (POWF_SCALE_BITS = 0 → no output scaling).
+// `x = a * b + x` lines are transcribed verbatim from e_powf.c.
+#[allow(clippy::assign_op_pattern)]
 fn log2_inline(ix: u32) -> f64 {
     let tmp = ix.wrapping_sub(OFF);
     let i = ((tmp >> 19) % 16) as usize;
@@ -167,6 +169,8 @@ fn log2_inline(ix: u32) -> f64 {
 
 /// e_powf's `exp2_inline` (non-TOINT_INTRINSICS branch; sign_bias != 0 only
 /// on slow paths this module delegates, kept for transcription fidelity).
+// `x = a * b + x` lines are transcribed verbatim from e_powf.c.
+#[allow(clippy::assign_op_pattern)]
 fn exp2_inline(xd: f64, sign_bias: u32) -> f64 {
     let kd = xd + SHIFT_SCALED;
     let ki = kd.to_bits();
