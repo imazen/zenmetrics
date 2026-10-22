@@ -427,8 +427,10 @@ jobs:
         # `deprecated` is allowed pending the magetypes 0.10 tokenless-API
         # migration — 0.9.30 deprecates the token-first forwarders it still
         # ships, so every call site warns (thousands) without it.
+        # `--no-deps` lints only this workspace's crates; the sibling path
+        # deps cloned above have their own CI.
         run: >
-          cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings
+          cargo clippy --workspace --no-deps --no-default-features --features wgpu,all-metrics -- -D warnings
           -A deprecated
           -A clippy::excessive_precision -A clippy::approx_constant
           -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments
