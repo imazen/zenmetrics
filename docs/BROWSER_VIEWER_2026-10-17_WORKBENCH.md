@@ -108,6 +108,9 @@ single-threaded on its own unshared memory, so no cancellation words are
 posted for it and a running call finishes before the next. Its metrics form
 their own menu group and get no dashboard links; `cli`, when present,
 replaces the CLI snippet, and `loopDefaults` join the loop's defaults.
+`loop_norm_calibrate --save-pairs DIR` writes the calibration encodes and
+butteraugli's block distances, so such a module's maps can be fitted to the
+loop on the same pairs as the built-in metrics.
 
 ## JPEG XL impact
 

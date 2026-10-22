@@ -20,6 +20,13 @@
 //! fitted values on the held-out images.
 //!
 //! Prints the `DEFAULTS` table for `src/loop_map.rs` to stdout.
+//!
+//! `--save-pairs DIR` (before `--fit`) instead writes the encoded pairs and
+//! butteraugli's block distances to `DIR` and stops, so maps of modules
+//! built outside this workspace can be fitted against the same encodes:
+//! `pairs.tsv` (index, set, image, distance, width, height) and per pair
+//! `NNN.ref.rgba`, `NNN.dist.rgba` (packed RGBA8) and `NNN.butter.f32`
+//! (little-endian per-block distances, `ceil(w/8) × ceil(h/8)` row-major).
 
 use rayon::prelude::*;
 use std::fmt::Write as _;
@@ -34,6 +41,8 @@ const EXPONENTS: [f64; 22] = [
 const FLOOR: f64 = 0.05;
 
 struct Pair {
+    image: String,
+    distance: f32,
     width: u32,
     height: u32,
     reference: Vec<u8>,
@@ -94,6 +103,8 @@ fn pairs(images: &[String]) -> Vec<Pair> {
             let butter =
                 zenmetrics_browser::loop_tile_norms(&errors, width as usize, height as usize);
             Pair {
+                image: path.clone(),
+                distance: *distance,
                 width,
                 height,
                 reference,
@@ -175,11 +186,39 @@ fn quality(rows: &[(f64, f64)], scale: f64) -> (f64, f64, usize) {
     (rmse, cov / (vb * vm).sqrt(), used.len())
 }
 
+/// Write `--save-pairs` output (see the module docs).
+fn save_pairs(dir: &str, sets: [(&str, &[Pair]); 2]) {
+    std::fs::create_dir_all(dir).expect("pairs directory");
+    let mut index = String::from("index\tset\timage\tdistance\twidth\theight\n");
+    let mut i = 0;
+    for (set, pairs) in sets {
+        for p in pairs {
+            let file = |ext: &str| format!("{dir}/{i:03}.{ext}");
+            std::fs::write(file("ref.rgba"), &p.reference).expect("write");
+            std::fs::write(file("dist.rgba"), &p.distorted).expect("write");
+            let butter: Vec<u8> = p.butter.iter().flat_map(|v| v.to_le_bytes()).collect();
+            std::fs::write(file("butter.f32"), butter).expect("write");
+            writeln!(
+                index,
+                "{i:03}\t{set}\t{}\t{}\t{}\t{}",
+                p.image, p.distance, p.width, p.height
+            )
+            .unwrap();
+            i += 1;
+        }
+    }
+    std::fs::write(format!("{dir}/pairs.tsv"), index).expect("write pairs.tsv");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let out = args
         .first()
-        .expect("usage: out.tsv --fit <images…> --hold <images…>");
+        .expect("usage: out.tsv [--save-pairs DIR] --fit <images…> --hold <images…>");
+    let save_dir = args
+        .iter()
+        .position(|a| a == "--save-pairs")
+        .map(|i| args.get(i + 1).expect("--save-pairs DIR").clone());
     let fit_at = args.iter().position(|a| a == "--fit").expect("--fit");
     let hold_at = args.iter().position(|a| a == "--hold").expect("--hold");
     let fit_images = &args[fit_at + 1..hold_at];
@@ -194,6 +233,11 @@ fn main() {
         hold_pairs.len(),
         started.elapsed().as_secs_f64()
     );
+    if let Some(dir) = save_dir {
+        save_pairs(&dir, [("fit", &fit_pairs), ("hold", &hold_pairs)]);
+        eprintln!("pairs written to {dir}");
+        return;
+    }
     let catalog: Vec<String> =
         serde_json::from_str(&zenmetrics_browser::available_spatial_maps()).unwrap();
     let p0 = &fit_pairs[0];
