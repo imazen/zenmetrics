@@ -177,6 +177,7 @@ list with it, and use the paired tests above to say whether neighbours differ.
 | raw forced-choice agreement | `forced_choice::agreement` | zensim `panel --pairwise` (its own copy until it moves to this one) |
 | forced-choice log-likelihood, observer slope, cross-fitted ceilings | `forced_choice` | not yet |
 | Holm | `multiple` | not yet |
+| consensus ranking across criteria (median rank, mean-rank tie-break) | `consensus` | not yet |
 
 The evaluation CLI that applies all of this to every metric is the next step:
 today zensim's `panel evaluate` (`zensim/docs/METRIC_EVALUATION_CLI.md`) is

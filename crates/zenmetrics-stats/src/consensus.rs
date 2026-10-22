@@ -37,6 +37,8 @@ pub enum ConsensusError {
     Ragged { index: usize },
     /// A score or rank is not finite (criterion, item).
     NonFinite { criterion: usize, item: usize },
+    /// A score passed to [`ranks_best_first`] is not finite (item).
+    NonFiniteScore { item: usize },
 }
 
 impl core::fmt::Display for ConsensusError {
@@ -49,6 +51,7 @@ impl core::fmt::Display for ConsensusError {
             Self::NonFinite { criterion, item } => {
                 write!(f, "criterion {criterion}, item {item} is not finite")
             }
+            Self::NonFiniteScore { item } => write!(f, "score {item} is not finite"),
         }
     }
 }
@@ -56,21 +59,23 @@ impl core::fmt::Display for ConsensusError {
 impl std::error::Error for ConsensusError {}
 
 /// Best-first ranks of `scores`: 1 for the best item, average ranks for ties
-/// (the [`ranks`] convention, shifted to start at 1). `None` when a score is
-/// not finite; drop or impute it explicitly before ranking.
-pub fn ranks_best_first(scores: &[f64], better: Better) -> Option<Vec<f64>> {
-    if !scores.iter().all(|v| v.is_finite()) {
-        return None;
+/// (the [`ranks`] convention, shifted to start at 1). Refuses a score that is
+/// not finite ([`ConsensusError::NonFiniteScore`]); drop or impute it
+/// explicitly before ranking.
+pub fn ranks_best_first(scores: &[f64], better: Better) -> Result<Vec<f64>, ConsensusError> {
+    if let Some(item) = scores.iter().position(|v| !v.is_finite()) {
+        return Err(ConsensusError::NonFiniteScore { item });
     }
     let oriented: Vec<f64> = match better {
         Better::Higher => scores.iter().map(|v| -v).collect(),
         Better::Lower => scores.to_vec(),
     };
-    Some(ranks(&oriented).into_iter().map(|r| r + 1.0).collect())
+    Ok(ranks(&oriented).into_iter().map(|r| r + 1.0).collect())
 }
 
 /// Consensus of per-criterion ranks.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Consensus {
     /// Median of each item's per-criterion ranks (mean of the two middle
     /// ranks for an even number of criteria).
@@ -167,7 +172,10 @@ mod tests {
             ranks_best_first(&s, Better::Lower).unwrap(),
             vec![3.5, 2.0, 3.5, 1.0]
         );
-        assert!(ranks_best_first(&[0.1, f64::NAN], Better::Higher).is_none());
+        assert_eq!(
+            ranks_best_first(&[0.1, f64::NAN], Better::Higher),
+            Err(ConsensusError::NonFiniteScore { item: 1 })
+        );
     }
 
     /// Even criterion count: the median is the mean of the two middle ranks;
