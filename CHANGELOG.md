@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Workbench: optional extra modules listed in an `extra-modules.json` beside `worker.js` (absent on the public site) are imported on first use, with their own menu group, loop defaults and CLI snippet (`7b95afe7`). `loop_norm_calibrate --save-pairs DIR` writes the calibration encodes and butteraugli's block distances for fitting such modules' maps (`f8baf144`).
+
 - Select all 40 revised CPU benchmark routes in measured local order and honor
   requested size subsets (`d660bb58`); retain original 27- and 38-route tables.
   The common 1152×1152 scheduling study uses the explicit native-arm harness
