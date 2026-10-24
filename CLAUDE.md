@@ -2232,6 +2232,18 @@ example's pinned archmage 0.9.30 is renamed `archmage-zensim`. A wasm32 check
 of the full module fails on the unfixed tree and passes with the fix. Any new
 SIMD module under `zenmetrics-cli/src/metrics/` needs its dependencies here too.
 
+### Known Bugs: PSNR SIMD SSE block overflow (2026-10-24, fixed)
+
+`psnr_kernels::rgb_sse_inner` (from `07972529`, 2026-10-20) added two
+`madd_adjacent` results per step, up to 260100 per i32 lane, but drained the
+block every 16384 steps. A lane overflows after 8256 steps (528 KB) when the
+mean per-byte |difference| is about 181 or more. Debug builds panic; release
+builds sign-extend the wrapped lane and return a wrong `psnr` score. Only the
+serial path and parallel chunks above 528 KB were exposed. The block now drains
+every 8192 steps. `full_error_over_one_block_does_not_overflow` (black vs white
+600x600, every tier called directly) fails before the fix and passes after. The
+studio-601 Y kernel's identical interval is safe (219² per lane per step).
+
 ### Known Bugs: supported-runtime HDR-v2 followup (2026-10-21)
 
 The [Octave 11.1/full image 2.20.1 controls](benchmarks/canonical_recheck_2026-10-19/hdr-octave111-v2-controls.json)

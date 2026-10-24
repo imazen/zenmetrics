@@ -47,8 +47,10 @@ fn rgb_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
     debug_assert_eq!(n, b.len());
     let mut total = 0u64;
     let mut i = 0usize;
-    // Bounded i32 accumulator: each madd lane adds at most 2·255² = 130050,
-    // so 16384 iterations stay under i32::MAX (≈2.13e9 / 130050 ≈ 16512).
+    // Bounded i32 accumulator: each step adds two madd results per lane,
+    // each at most 2·255² = 130050, so a lane grows by up to 260100 per
+    // step. 8192 steps reach 2_130_739_200, under i32::MAX (2_147_483_647);
+    // 8257 would not.
     let mut block = i32x16::zero_t(token);
     let mut iters = 0usize;
     while i + 64 <= n {
@@ -60,7 +62,7 @@ fn rgb_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
         block = block + dlo.madd_adjacent(dlo) + dhi.madd_adjacent(dhi);
         iters += 1;
         i += 64;
-        if iters == 16384 {
+        if iters == 8192 {
             for v in block.to_array() {
                 total += v as u64;
             }
@@ -225,6 +227,8 @@ fn studio601_y_sse_inner(token: Token, a: &[u8], b: &[u8]) -> u64 {
             .clamp(lo, hi)
             .to_i32();
         let d = ca - cbv;
+        // Codes lie in [16, 235], so d² ≤ 219² = 47961 per lane per step;
+        // 16384 steps reach 785_793_024, well under i32::MAX.
         block += d * d;
         iters += 1;
         px += 16;
@@ -851,6 +855,71 @@ mod tests {
             let black = vec![0u8; n];
             let white = vec![255u8; n];
             assert_eq!(rgb_sse(&black, &white), 65025 * n as u64);
+        }
+    }
+
+    /// Maximal error over enough bytes to fill the i32 lane blocks: a
+    /// 64-byte step adds up to 4·255² to each lane, so a block must drain
+    /// before 2^31 / 260100 ≈ 8256 steps (528 KB). 600×600 RGB is 1.08 MB,
+    /// below `PAR_MIN_PX`, so a single kernel call sees all of it. Every
+    /// tier is called directly so the scalar/NEON/WASM polyfills are
+    /// covered on any host.
+    #[test]
+    fn full_error_over_one_block_does_not_overflow() {
+        let n = 600 * 600 * 3;
+        let black = vec![0u8; n];
+        let white = vec![255u8; n];
+        let want_rgb = 65025 * n as u64;
+        // Studio-601 codes are 16 and 235: 219² per pixel.
+        let want_y = 219 * 219 * (n / 3) as u64;
+        assert_eq!(rgb_sse(&black, &white), want_rgb, "rgb_sse dispatch");
+        assert_eq!(
+            studio601_y_sse(&black, &white),
+            want_y,
+            "studio601y dispatch"
+        );
+        macro_rules! tier {
+            ($label:literal, $rgb:ident, $y:ident, $t:expr) => {
+                assert_eq!(
+                    $rgb($t, &black, &white),
+                    want_rgb,
+                    concat!("rgb_sse ", $label)
+                );
+                assert_eq!(
+                    $y($t, &black, &white),
+                    want_y,
+                    concat!("studio601y ", $label)
+                );
+            };
+        }
+        tier!(
+            "scalar",
+            rgb_sse_inner_scalar_t,
+            studio601_y_sse_inner_scalar_t,
+            archmage::ScalarToken
+        );
+        #[cfg(target_arch = "x86_64")]
+        {
+            use archmage::SimdToken;
+            if let Some(t) = archmage::X64V3Token::summon() {
+                tier!("v3", rgb_sse_inner_v3_t, studio601_y_sse_inner_v3_t, t);
+            }
+            #[cfg(feature = "avx512")]
+            if let Some(t) = archmage::X64V4xToken::summon() {
+                tier!("v4x", rgb_sse_inner_v4x_t, studio601_y_sse_inner_v4x_t, t);
+            }
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            use archmage::SimdToken;
+            if let Some(t) = archmage::NeonToken::summon() {
+                tier!(
+                    "neon",
+                    rgb_sse_inner_neon_t,
+                    studio601_y_sse_inner_neon_t,
+                    t
+                );
+            }
         }
     }
 }
