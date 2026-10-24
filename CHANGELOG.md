@@ -74,6 +74,7 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- `psnr` SIMD SSE kernel drains its i32 lane blocks every 8192 steps instead of 16384; each step adds up to 260100 per lane, so the old interval overflowed once more than ~528 KB of bytes differed by ~181 or more (from `07972529`). The studio-601 Y kernel's 16384 interval is safe (codes stay in 16–235) and is unchanged (`9c76fb9f`).
 - Fixed-factor MS-SSIM pools each scoring view independently of its twofold pyramid; unsuffixed variants retain their existing path (from `970ea199`).
 
 ### Added
