@@ -94,6 +94,24 @@ fn serve(input: &mut impl Read, out: &mut impl Write) -> Result<(), Box<dyn Erro
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    if CANDIDATE != "simd-row-malta"
+        || cfg!(any(
+            feature = "coarse-gaussian",
+            feature = "native-gaussian",
+            feature = "native-mask",
+            feature = "phase-rows",
+            feature = "tiles",
+            feature = "compact",
+            feature = "sparse",
+            feature = "pooled",
+            feature = "perceptual",
+            feature = "physical",
+            feature = "simd-opsin",
+            feature = "wide-malta"
+        ))
+    {
+        return Err("native-linear steering requires the selected row-Malta kernels without additional approximation features".into());
+    }
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--server"] {
         return serve(
