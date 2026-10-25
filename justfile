@@ -2562,3 +2562,6 @@ margarine-loop-replay pairs output:
 
 margarine-linear-calibrate pairs replay binary output:
     python3 crates/margarine/linear_calibrate.py "{{pairs}}" "{{replay}}" "{{binary}}" "{{output}}"
+
+margarine-replay-oracle pairs replay output:
+    python3 crates/margarine/oracle_replay.py "{{pairs}}" "{{replay}}" "{{output}}"

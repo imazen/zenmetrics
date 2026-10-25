@@ -106,6 +106,16 @@ Replay receipt: `rc=0 36s | peak-RSS 0.10GiB | min-avail 30602MiB | peak-load 3.
 Native calibration: `rc=0 4s | peak-RSS 0.16GiB | min-avail 36118MiB | peak-load 2.33`.
 Selected calibration: `rc=0 30s | peak-RSS 0.80GiB | min-avail 35084MiB | peak-load 1.51`.
 
+Independent readback (`just margarine-replay-oracle PAIRS_DIR REPLAY_DIR
+NEW_OUTPUT.json`) decoded all 324 retained bitstreams with djxl v0.11.1 as
+RGB8 at the expected dimensions. It records decoder/JXL/pixel hashes and
+diagnostic differences from the calibration pixels. Those pixels are loop
+iteration zero; the final bitstream uses the updated quantization field, so
+that diagnostic is not a reconstruction-parity check. The calibrated replay's
+iteration-zero RGBA reproduction is checked separately by `loop-replay/`.
+Native debug/release tests, clippy, release build and readback completed with
+`rc=0 14s | peak-RSS 0.33GiB | min-avail 43719MiB | peak-load 2.70`.
+
 ## Existing source-verification failure
 
 The dedicated CI lint job fails `verify_sources.py` on the untouched base
