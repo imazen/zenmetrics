@@ -2546,3 +2546,19 @@ margarine-reference-maps pairs output:
 
 margarine-reference-summary pairs maps output:
     python3 crates/margarine/reference_maps.py "{{pairs}}" "{{maps}}" "{{output}}"
+
+margarine-linear-check:
+    cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine --check
+    cargo test --locked --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering
+    cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering
+    cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering --all-targets -- -D warnings
+    cargo build --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering --bin margarine-steer
+
+margarine-loop-replay-build:
+    cargo build --release --locked --manifest-path crates/margarine/loop-replay/Cargo.toml
+
+margarine-loop-replay pairs output:
+    crates/margarine/loop-replay/target/release/margarine-loop-replay "{{pairs}}" "{{output}}"
+
+margarine-linear-calibrate pairs replay binary output:
+    python3 crates/margarine/linear_calibrate.py "{{pairs}}" "{{replay}}" "{{binary}}" "{{output}}"

@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Margarine: add a separate native-linear f32 steering command without changing the selected command (`a3237b6a`); compare historical teacher and encoder-loop Butteraugli maps on identical pixels (`77fc41d4`). Calibration and remaining steering qualification are recorded in `crates/margarine/STEERING_REFERENCE.md`.
+
 - Workbench: optional extra modules listed in an `extra-modules.json` beside `worker.js` (absent on the public site) are imported on first use, with their own menu group, loop defaults and CLI snippet (`7b95afe7`). `loop_norm_calibrate --save-pairs DIR` writes the calibration encodes and butteraugli's block distances for fitting such modules' maps (`f8baf144`).
 
 - Select all 40 revised CPU benchmark routes in measured local order and honor

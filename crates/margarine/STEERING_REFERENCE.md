@@ -67,3 +67,41 @@ min-avail 35287MiB | peak-load 1.62`. Summary/clippy receipt:
 `rc=0 6s | peak-RSS 0.40GiB | min-avail 35342MiB | peak-load 0.81`.
 No labels were read. No runtime or RSS comparison between implementations was
 measured by this audit; these receipts describe only the audit processes.
+
+## Native-linear candidate
+
+`linear-steering` enables the separate `margarine-steer` binary. It retains the
+selected row-Malta kernels and geometry. `--server` advertises
+`input: linear-rgb-f32` in the JSON header, then accepts R/D messages containing
+u32 width/height and tightly packed interleaved linear-sRGB RGB f32le values.
+The reply is max score f64le plus a tightly packed native-resolution f32le map.
+Finite values outside [0,1] are preserved. Partial messages and nonfinite samples
+are errors. `--linear W H REF.f32 DIST.f32 --diffmap NEW.f32` scores saved native
+pixels without an image-codec conversion. This command is unselected.
+
+`loop-replay/` re-encodes the frozen calibration references at each recorded
+distance. The JXL bitstreams and linear reconstructions are retained. All 324
+RGBA8 reconstructions reproduce byte for byte. Native maps reduce to the saved
+block targets within 6.584309018009549e-7 using the Python reduction. The replay
+requires the read-only jxl-encoder sibling at `19f165bb`; it does not modify it.
+
+| Selected RGBA8 / native-linear | Photo bulk bias | Screenshot bulk bias | Screenshot worst-block log r |
+|---|---:|---:|---:|
+| Selected, original calibration instrument | -0.1627384826 | -0.8549528266 | 0.9902534190 |
+| Native-linear, same kernels | -0.0068962510 | +0.0207127390 | 0.9992006773 |
+
+Native-linear screenshot bulk log r is 0.9941449365; worst-block log bias is
+-0.0208095328. All 120 screenshot maxima are positive; the original calibration
+uses 111/120 positive pairs. No power/scale/weight was fitted. This meets the
+calibration target, but does not establish steering RD or quality/resource
+acceptance. Native maps still differ from native Butteraugli by up to
+2.3433563709259033 at an individual pixel: this remains an approximation.
+
+Artifacts on dev under the same root: `linear-replay/` (pixels, bitstreams,
+native Butteraugli maps), `linear-calibration/` (candidate maps and summary),
+`selected-calibration.json`. No human labels were read. Frozen rank/encoder-choice
+records are not new native-ingress qualification; no expectation is relaxed.
+
+Replay receipt: `rc=0 36s | peak-RSS 0.10GiB | min-avail 30602MiB | peak-load 3.55`.
+Native calibration: `rc=0 4s | peak-RSS 0.16GiB | min-avail 36118MiB | peak-load 2.33`.
+Selected calibration: `rc=0 30s | peak-RSS 0.80GiB | min-avail 35084MiB | peak-load 1.51`.

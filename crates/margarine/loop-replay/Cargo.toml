@@ -1,0 +1,19 @@
+[package]
+name = "margarine-loop-replay"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "BSD-3-Clause"
+
+[workspace]
+
+[dependencies]
+jxl-encoder = { path = "../../../../jxl-encoder/jxl-encoder", default-features = false, features = ["std", "butteraugli-loop", "__external_metric"] }
+butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "d2466a4eaad67f8008838c0caa452484300214ca" }
+
+[patch.crates-io]
+butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "d2466a4eaad67f8008838c0caa452484300214ca" }
+
+[profile.release]
+lto = "thin"
+
