@@ -26,6 +26,10 @@ byc-fit-check:
 byc-fit-data root score_root label out:
     python3 scripts/jobsys/pack_fit_data_v2.py --byc-root "{{root}}" --byc-score-root "{{score_root}}" --byc-label "{{label}}" --out "{{out}}"
 
+# Frozen multi-GB root compression uses the shared local admission lock.
+byc-fit-data-admitted root score_root label out:
+    TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- just byc-fit-data "{{root}}" "{{score_root}}" "{{label}}" "{{out}}"
+
 byc-fit-spec program data label folds seeds cells out *flags:
     python3 scripts/jobsys/build_fit_spec.py --grid byc --program-sha "{{program}}" --data-sha "{{data}}" --byc-label "{{label}}" --byc-folds "{{folds}}" --byc-seeds "{{seeds}}" --existing-root "{{cells}}" --out "{{out}}" {{flags}}
 
