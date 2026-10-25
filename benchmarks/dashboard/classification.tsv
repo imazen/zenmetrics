@@ -1,4 +1,5 @@
 path	classification	reason
+benchmarks/byc_fleet_2026-10-25.pointer.md	ignored	FitCell replay and external-artifact provenance; no standalone metric timing or agreement table.
 benchmarks/afine_aic_2026-10-16/bench_ort_postfix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/afine_aic_2026-10-16/bench_ort_prefix.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
 benchmarks/afine_aic_2026-10-16/candidates.tsv	ignored	Historical experiment schema outside the registered review panel; retained for a separate adapter review.
