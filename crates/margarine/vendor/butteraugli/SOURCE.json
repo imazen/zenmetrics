@@ -11,5 +11,17 @@
     "mask.rs": "e469a4f31b777c58a83c336ba193c729e79c9956275caf869204ab467c0cdbd2",
     "opsin.rs": "b5db4474e89b75f05f03f1f0bc517217d7be996b86b1396a58e7fb60f531f3ab",
     "psycho.rs": "7ababd4f157986da76eccc5822c0647ae923e1c2200f6edafac5c3a8f3038e24"
+  },
+  "local_patches": {
+    "blur.rs": {
+      "kind": "avx512-v4-to-v4x",
+      "commit": "45e46e9986056a0175a92be3d830e56afa6bcc42",
+      "sha256": "ca7b37405832792da51d536d153a3cf9f428c0bb4ca7c51f21a85156362b932f"
+    },
+    "malta.rs": {
+      "kind": "avx512-v4-to-v4x",
+      "commit": "45e46e9986056a0175a92be3d830e56afa6bcc42",
+      "sha256": "92865df9343f5625e6f67ec01b5d46653354a4ef3e8316270b7fa54b9a9314fb"
+    }
   }
 }
