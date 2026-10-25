@@ -27,6 +27,7 @@ FIT_ROOT = Path("/var/tmp/rev4-featpot")
 # Approved fit programs: (output root under FIT_ROOT, outer-fold importance script or None).
 # The importance step is the local runners' second step (run_mlp_baseline.sh / run_p2_mlp.sh).
 SCRIPTS = {
+    "byc_cells.py": ("byc/cells", None),
     "steer_exact_smoke.py": ("steer-smoke/cells", None),
     "subjective_cell.py": ("registered/cells", None),
     "mlp_probe.py": ("fits", "mlp_importance.py"),
@@ -121,6 +122,8 @@ def registered_wall_cap(argv: list, data_sha: str, program: Path = PROGRAM):
 
 
 def measure_resources(argv: list, program: Path) -> bool:
+    if argv[0] == "byc_cells.py":
+        return True
     if argv[0] == 'steer_exact_smoke.py' or '--local-smoke-budget' in argv:
         return True
     path = program / 'build_meta.json'
@@ -335,6 +338,11 @@ def run_fit(job: dict) -> bytes:
     name = Path(job["cell"]["image_path"])
     if name.is_absolute() or ".." in name.parts or len(name.parts) != 2:
         raise ValueError("unsafe fit destination")
+    if argv[0] == "byc_cells.py":
+        from byc_fit_contract import identity
+        label, fold, seed = identity(argv)
+        if str(name) != f"{label}/without_{fold}_s{seed}":
+            raise ValueError("byc argv and destination differ")
     importance_script = SCRIPTS[argv[0]][1]
     dest = FIT_ROOT / cell_root(argv) / name
     if "--dest" in argv and Path(argv[argv.index("--dest") + 1]) != dest:
@@ -369,6 +377,9 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    if argv[0] == "byc_cells.py":
+        from byc_fit_contract import environment
+        env.update(environment(argv, ROOT / kind["data_sha"], PROGRAM, FIT_ROOT, ensure_link))
     if (PROGRAM / 'benchmarks/e36_fit_contract_2026-10-17.json').is_file():
         from e36_fit_contract import execution_environment
         env.update(execution_environment(kind,PROGRAM))
@@ -409,6 +420,9 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if not result_path.is_file():
         raise ValueError("fit returned successfully without result.json")
     value = json.loads(result_path.read_text())
+    if argv[0] == "byc_cells.py":
+        from byc_fit_contract import verify_output
+        verify_output(dest, argv, digest)
     selected = Path(value["selected_bake"])
     if selected != dest / "refit" / selected.name or digest(selected) != value["selected_bake_sha256"]:
         raise ValueError("selected checkpoint receipt mismatch")

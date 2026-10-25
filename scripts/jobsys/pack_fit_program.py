@@ -222,6 +222,26 @@ def registered_sources(path, pin):
     return files
 
 
+def byc_sources(path, pin):
+    if path is None or pin is None or digest(path) != pin:
+        raise ValueError("frozen byc source pins required")
+    record = json.loads(path.read_text())
+    files = record["files"]
+    required = {"scripts/rev4_featpot/" + n for n in
+                ("byc_cells.py", "v2_lodo_mlp.py", "v2_confirm_fit.py", "v2_common.py",
+                 "v2_teacher.py", "subjective_training_leg.py", "e33_fx1_declaration.json")}
+    if (record.get("schema") != "byc-fit-program-v1" or not required <= files.keys()
+            or not record.get("source_commit")):
+        raise ValueError("byc source import closure or commit missing")
+    for name, pin in files.items():
+        p = Path(name)
+        if (p.is_absolute() or ".." in p.parts or p.parts[0] != "scripts"
+                or p.suffix not in (".py", ".json", ".tsv")
+                or len(pin) != 64 or any(c not in "0123456789abcdef" for c in pin)):
+            raise ValueError("unsafe byc source pin")
+    return files
+
+
 def e36_sources(path, pin):
     if path is None or pin is None or digest(path) != pin:
         raise ValueError("E36 source inventory/hash required")
@@ -279,14 +299,15 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered", "bounded-smoke", "steer", "e36"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1", "v2e29", "v40", "e33", "registered", "bounded-smoke", "steer", "e36", "byc"), default="p0")
     p.add_argument("--source-pins", type=Path)
     p.add_argument("--source-pins-sha256")
+    p.add_argument("--byc-columns", type=Path)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    pins = e36_sources(args.source_pins,args.source_pins_sha256) if args.profile == "e36" else scientific_steer_sources(args.source_pins,args.source_pins_sha256) if args.profile == "steer" else bounded_smoke_sources(args.source_pins,args.source_pins_sha256) if args.profile == "bounded-smoke" else registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
+    pins = byc_sources(args.source_pins,args.source_pins_sha256) if args.profile == "byc" else e36_sources(args.source_pins,args.source_pins_sha256) if args.profile == "e36" else scientific_steer_sources(args.source_pins,args.source_pins_sha256) if args.profile == "steer" else bounded_smoke_sources(args.source_pins,args.source_pins_sha256) if args.profile == "bounded-smoke" else registered_sources(args.source_pins,args.source_pins_sha256) if args.profile == "registered" else {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS, "v2e29": E29_SCRIPTS, "v40": V40_PINS["files"], "e33": E33_PINS["files"]}[args.profile]
     for name, expected in pins.items():
         path = args.source / name
         if digest(path) != expected:
@@ -305,6 +326,13 @@ def main() -> None:
         files[name] = path
     files["fit_cell_exec.py"] = args.executor
     files["fit_paths.py"] = args.executor.with_name("fit_paths.py")
+    if args.profile == "byc":
+        if args.byc_columns is None:
+            raise ValueError("byc requires its frozen columns file")
+        files["byc_columns.txt"] = args.byc_columns
+        files["byc_fit_contract.py"] = args.executor.with_name("byc_fit_contract.py")
+        for name in ("byc_fsid", "byc_predict", "score_pair_with_bake"):
+            files[f"bin/{name}"] = args.bin_dir / name
     if args.profile == "registered":
         files["registered_fit_contract.py"] = args.executor.with_name("registered_fit_contract.py")
         files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"

@@ -70,7 +70,15 @@ def main() -> None:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--select", action="append", default=None, metavar="FAMILY/VARIANT",
                    help="pack only these variant directories (repeatable); default: all")
+    p.add_argument("--byc-root", type=Path, help="frozen by-construction TRAIN root")
+    p.add_argument("--byc-score-root", type=Path, help="frozen TRAIN new-group score root")
+    p.add_argument("--byc-label")
     args = p.parse_args()
+    if args.byc_root is not None:
+        if args.select is not None or args.byc_score_root is None or not args.byc_label:
+            p.error("byc needs both frozen roots and its arm label, without --select")
+        pack_byc(args)
+        return
     every = [(f, v) for f in FAMILIES for v in VARIANTS]
     chosen = every if args.select is None else [tuple(s.split("/", 1)) for s in args.select]
     unknown = [c for c in chosen if c not in every]
@@ -98,6 +106,57 @@ def main() -> None:
                 add_file(tar, path, name)
     print(json.dumps({"sha256": digest(args.out), "bytes": args.out.stat().st_size,
                       "members": len(members), "out": str(args.out)}))
+
+
+def pack_byc(args):
+    """Preserve frozen root bytes and original aliases; no labels are interpreted."""
+    import re
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", args.byc_label):
+        raise ValueError("unsafe byc label")
+    members, bindings = {}, {}
+    for role, root in (("fit", args.byc_root), ("score", args.byc_score_root)):
+        if not root.is_absolute() or not root.is_relative_to("/var/tmp") or ".." in root.parts:
+            raise ValueError("byc requires an absolute staged TRAIN root")
+        frozen = json.loads((root / "wide/frozen.json").read_text())
+        if (frozen["schema"] != "rev5-recipe-admission-freeze-v1"
+                or digest(root / "datasets/receipt.json") != frozen["dataset_legs_sha256"]):
+            raise ValueError("byc dataset root is not frozen")
+        prefix = f"rev4-featpot/byc/inputs/{role}"
+        bindings[str(root)] = prefix
+        packet = json.loads((root / "datasets/receipt.json").read_text())
+        # A staged root can retain its canonical alias in frozen group paths.
+        # Bind that alias to the same bytes, after checking each referenced file.
+        references = [(Path(g["path"]), g["table_sha256"]) for g in packet["groups"]]
+        references.append((Path(packet["family_guard_path"]), packet["family_guard_sha256"]))
+        for path, pin in references:
+            alias = path.parent.parent
+            if (path.parent.name != "datasets" or not alias.is_absolute() or ".." in alias.parts
+                    or not (alias.is_relative_to("/var/tmp") or alias.is_relative_to("/mnt/v/output"))
+                    or digest(root / "datasets" / path.name) != pin):
+                raise ValueError("byc frozen dataset alias differs from staged bytes")
+            if str(alias) in bindings and bindings[str(alias)] != prefix:
+                raise ValueError("byc roots require conflicting aliases")
+            bindings[str(alias)] = prefix
+        for path in sorted(root.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("byc frozen roots must contain regular files")
+            if path.is_file():
+                members[f"{prefix}/{path.relative_to(root)}"] = path
+    inventory = dict(schema="zenfleet-fit-data-v1", byc=dict(schema="byc-fit-input-v1",
+        label=args.byc_label, root=str(args.byc_root), score_root=str(args.byc_score_root), bindings=bindings),
+        files={name: digest(path) for name, path in sorted(members.items())})
+    inv = json.dumps(inventory, sort_keys=True, indent=2).encode() + b"\n"
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    with args.out.open("xb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0,
+                                                  compresslevel=1) as zipped:
+        with tarfile.open(fileobj=zipped, mode="w") as tar:
+            info = tarfile.TarInfo("input_inventory.json")
+            info.size = len(inv)
+            tar.addfile(info, io.BytesIO(inv))
+            for name, path in sorted(members.items()):
+                add_file(tar, path, name)
+    print(json.dumps(dict(sha256=digest(args.out), bytes=args.out.stat().st_size,
+                          members=len(members), out=str(args.out))))
 
 
 if __name__ == "__main__":

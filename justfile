@@ -19,6 +19,25 @@ GMSD_MDSI_TARGETS := env_var_or_default("GMSD_MDSI_TARGETS", "")
 default:
     @just --list
 
+# Canonical by-construction runner transport, archive/receipt negative controls.
+byc-fit-check:
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_byc_fit scripts.jobsys.test_fit_tools scripts.jobsys.test_registered_program
+
+byc-fit-data root score_root label out:
+    python3 scripts/jobsys/pack_fit_data_v2.py --byc-root "{{root}}" --byc-score-root "{{score_root}}" --byc-label "{{label}}" --out "{{out}}"
+
+# Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
+byc-fit-prepare source bin_dir metadata pins columns worker out image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TMPDIR="$HOME/tmp"
+    mkdir -p "$TMPDIR"
+    flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- bash -euo pipefail -c '
+      python3 scripts/jobsys/pack_fit_program.py --profile byc --source "$1" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "$2" --build-meta "$3" --source-pins "$4" --source-pins-sha256 "$(sha256sum "$4" | cut -d" " -f1)" --byc-columns "$5" --out "$7/program.tar.gz"
+      FIT_CELL_IMAGE=1 PUSH=1 ZEN_FIT_PROGRAM_TAR="$7/program.tar.gz" ZEN_FIT_PROGRAM_SHA="$(sha256sum "$7/program.tar.gz" | cut -d" " -f1)" ZEN_WORKER_BIN="$6" bash scripts/jobsys/build_executor_image.sh "$8"
+      just byc-fit-data /var/tmp/byc-mixes-20261025/Mw025/root /var/tmp/datalegs-20261025/rev7data/root Mw025 "$7/data-Mw025.tar.gz"
+    ' byc-prepare "{{source}}" "{{bin_dir}}" "{{metadata}}" "{{pins}}" "{{columns}}" "{{worker}}" "{{out}}" "{{image}}"
+
 # E29 local preparation; caller supplies frozen source, binaries and build metadata.
 fit-pack-e29 source bin_dir build_meta out:
     TMPDIR=$HOME/tmp/e29 ~/work/zen/scripts/run-heavy --mem 8G --jobs 1 -- python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{bin_dir}} --build-meta {{build_meta}} --profile v2e29 --out {{out}}

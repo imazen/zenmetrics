@@ -126,6 +126,25 @@ copy from another jobset must agree on the science fields or the install aborts.
 across jobsets equals the grid (960 P0 / 960 P2 / 210 D2) and lists every missing cell with its claim
 owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so it needs re-declaration or an eligible native retry after stopped-owner release). Its exit 0 is the precondition
 for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls for both scripts.
+### By-construction TRAIN cells
+
+The `byc` program profile pins the zensim script commit, source-file hashes,
+columns and six prebuilt binaries. `pack_fit_data_v2.py --byc-root ROOT
+--byc-score-root TRAIN_ROOT --byc-label ARM --out ARCHIVE` preserves both
+frozen roots and their original absolute aliases; it does not rewrite receipts.
+The regular FitCell executor calls `byc_cells.py run` with exactly one fold,
+seed and worker thread, caps the SIMD tier to v3, and retains `refit/`,
+`pred_*.tsv`, `byc_record.json`, `result.json`, label-read and exclusion ledgers.
+Receipt verification checks the prediction hashes and fixed epoch-119 budget.
+
+Before declaring scientific arms, replay a completed cell and compare prediction
+bytes and checkpoint bytes after removing only `zentrain.repro` with the pinned
+`bake_dial_refit strip` command. Harvest with `--byc-install-root STUDY/cells`;
+local cells are never replaced. A compatibility alias keeps worker-side result
+paths valid after installation. Assign cell ownership before declaring work,
+and check remaining work before any worker launch. `just byc-fit-check` runs
+the transport refusal controls and existing fit-tool regressions.
+
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
 `ScoreFile { hdr: true, hdr_transfer }` scores an HDR corpus through the job system instead of an

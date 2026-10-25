@@ -34,6 +34,7 @@ POT_ROOT = Path("/var/tmp/rev4-featpot")
 # fit_cell_exec.py archives members relative to /var/tmp/rev4-featpot, under <root>/<cell>/ where the
 # root depends on the fit program (must match SCRIPTS in fit_cell_exec.py).
 PROGRAM_ROOTS = {"steer_exact_smoke.py": "steer-smoke/cells", "subjective_cell.py": "registered/cells", "mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py": "p2/d2_mlp",
+                 "byc_cells.py": "byc/cells",
                  "v2_lodo_mlp.py": "v2/cells", "v2_confirm_fit.py": "v2/confirm/cells",
                  "e5_epochs.py": "e5/v2/cells"}
 # `--root /var/tmp/rev4-featpot/<name>` moves these scripts' cells to `<name>/<suffix>` (fit_cell_exec.ROOTED).
@@ -246,6 +247,9 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
     if listed != actual or listed["result.json"] != receipt["result_sha"]:
         raise ValueError(f"receipt file hash mismatch: {name}")
     result = json.loads((dest / "result.json").read_text())
+    if kind["argv"][0] == "byc_cells.py":
+        from byc_fit_contract import verify_output
+        verify_output(dest, kind["argv"], digest)
     selected = Path(result["selected_bake"])
     install_dir = POT_ROOT / blob_root(kind) / name
     if selected != install_dir / "refit" / selected.name:
@@ -372,6 +376,7 @@ def main() -> None:
     p.add_argument("--scratch", type=Path, default=Path("/var/tmp/fleet-fits/harvest"))
     p.add_argument("--rescue-root", type=Path, default=Path("/var/tmp/fleet-fits/original-era"))
     p.add_argument("--install", action="store_true")
+    p.add_argument("--byc-install-root", type=Path, help="study cells directory for byc outputs only")
     p.add_argument("--program-archive", type=Path, help="manifest-bound program archive; required for strict training-only")
     p.add_argument("--checkpoint-inspector", type=Path, help="canonical model loader matching program binary pin")
     p.add_argument("--allow-local-smoke", action="store_true", help="verification only, never installation")
@@ -379,6 +384,10 @@ def main() -> None:
     if args.install and args.allow_local_smoke:
         p.error("local smoke verification cannot install cells")
     manifest = json.loads(args.manifest.read_text())
+    if args.byc_install_root is not None:
+        if (not args.byc_install_root.is_absolute() or ".." in args.byc_install_root.parts
+                or not manifest or any(j["kind"]["argv"][0] != "byc_cells.py" for j in manifest)):
+            p.error("byc install root requires an absolute output directory and only byc cells")
     ids = read_ids(args.ids)
     if len(ids) != len(manifest):
         raise ValueError("manifest and zenfleet-ctl ids counts differ")
@@ -398,11 +407,20 @@ def main() -> None:
         receipt = verify_blob(blob, stage, name, job["kind"], program_archive=args.program_archive,
                               checkpoint_inspector=args.checkpoint_inspector, allow_local_smoke=args.allow_local_smoke)
         tiers[receipt["tier_status"]] = tiers.get(receipt["tier_status"], 0) + 1
-        stages.append((name, cell_dir(stage, name, job["kind"]), POT_ROOT / blob_root(job["kind"]) / name))
+        target = (args.byc_install_root if args.byc_install_root is not None else POT_ROOT / blob_root(job["kind"])) / name
+        if args.byc_install_root is not None and target.exists() and not (target / "fleet_receipt.json").is_file():
+            raise ValueError(f"byc local cell is owned elsewhere; refusing replacement: {target}")
+        stages.append((name, cell_dir(stage, name, job["kind"]), target))
     print(json.dumps({"verified": len(stages), "manifest": len(manifest), "install": args.install,
                       "tier_status": tiers, "duplicate_done_rows": duplicate_rows}))
     if not args.install:
         return
+    if args.byc_install_root is not None:
+        from fit_cell_exec import ensure_link
+        args.byc_install_root.mkdir(parents=True, exist_ok=True)
+        alias = POT_ROOT / "byc/cells"
+        alias.parent.mkdir(parents=True, exist_ok=True)
+        ensure_link(alias, args.byc_install_root, "byc installed outputs")
     print(json.dumps(install_stages(stages, args.rescue_root)))
 
 
