@@ -57,7 +57,8 @@ byc-fit-harvest ctl run out cells *flags:
     set -euo pipefail
     source scripts/lib/s3env.sh
     "{{ctl}}" compact --run "{{run}}" --endpoint "$EP" --out-dir "{{out}}"
-    python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "{{out}}/harvest" --byc-install-root "{{cells}}" {{flags}}
+    stage=$(realpath -m "{{cells}}/../fleet-harvest/{{run}}")
+    python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
 byc-fit-prepare source bin_dir metadata pins columns worker out image:

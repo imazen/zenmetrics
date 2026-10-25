@@ -141,7 +141,10 @@ Before declaring scientific arms, replay a completed cell and compare prediction
 bytes and checkpoint bytes after removing only `zentrain.repro` with the pinned
 `bake_dial_refit strip` command. Harvest with `--byc-install-root STUDY/cells`;
 local cells are never replaced. A compatibility alias keeps worker-side result
-paths valid after installation. Assign cell ownership before declaring work,
+paths valid after installation. The `byc-fit-harvest` recipe stages beside the
+study cells so the installer's atomic rename stays on the destination filesystem.
+Each container serves one fixed root/jobset; its shared verified input cache can
+be reused by other containers. Assign cell ownership before declaring work,
 and check remaining work before any worker launch. `just byc-fit-check` runs
 the transport refusal controls and existing fit-tool regressions.
 
