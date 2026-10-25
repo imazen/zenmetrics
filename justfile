@@ -52,6 +52,10 @@ byc-fit-status ctl run:
     source scripts/lib/s3env.sh
     "{{ctl}}" report --run "{{run}}" --endpoint "$EP"
 
+# Log/receipt progress only; uses the zensim owner and opens no target tables.
+byc-fit-local-progress source study arm folds:
+    BYC_CELLS="{{study}}/cells" python3 "{{source}}/scripts/rev4_featpot/byc_cells.py" progress --arm "{{arm}}" --folds "{{folds}}" | python3 -c 'import json,sys; d=json.load(sys.stdin); e=[r["latest_logged_epoch"] for r in d["cells"] if r["state"]=="training" and r["latest_logged_epoch"] is not None]; print(json.dumps(dict(arm=d["arm"],complete=d["complete"],requested=d["requested"],active_epoch_min=min(e) if e else None,active_epoch_max=max(e) if e else None)))'
+
 byc-fit-harvest ctl run out cells *flags:
     #!/usr/bin/env bash
     set -euo pipefail
