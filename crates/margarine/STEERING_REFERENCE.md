@@ -1,7 +1,8 @@
 # Steering reference audit (2026-10-25)
 
 The selected command and frozen teacher are unchanged. Native-linear steering
-qualification is in progress; no quality or resource acceptance is claimed.
+meets the calibration and JPEG XL steering bars below. Full rank,
+encoder-choice and resource acceptance remain unqualified.
 
 ## Identical pixels, historical implementations
 
@@ -115,6 +116,58 @@ that diagnostic is not a reconstruction-parity check. The calibrated replay's
 iteration-zero RGBA reproduction is checked separately by `loop-replay/`.
 Native debug/release tests, clippy, release build and readback completed with
 `rc=0 14s | peak-RSS 0.33GiB | min-avail 43719MiB | peak-load 2.70`.
+
+## Native-linear steering result
+
+The coordinator's zensim record `9cb02f1b`,
+`benchmarks/byconstruction_2026-10-22.md`, section "JPEG XL steering on the
+loop's float reconstruction", reports the native-linear `margarinelin` arm.
+The runtime is v2 SHA256
+`baf0500c1368eda12de21c6e13a29e3aea91e43d917d986f03829b13c275d89a`,
+one Rayon thread per steering worker, scale 1/exponent 1. R/D tags are unchanged;
+`input: linear-rgb-f32` negotiates the float pixel representation. A first
+attempt selected an uncommitted lowercase-tag experiment and failed before
+scoring; the results below use the calibrated R/D runtime.
+
+Same 78 TRAIN images, effort 7, four iterations, distances
+0.3/0.45/0.6/1/1.6/2.5/4/6.4/10. Positive values mean bytes saved at equal
+judged score: mean over images of each image's median saving, with 95%
+bootstrap intervals over images. The two steering judges are SSIMULACRA2 and
+CVVDP. The following paired results come directly from the retained tables.
+
+| Class (images) | Versus Butteraugli: SSIMULACRA2 % | Versus Butteraugli: CVVDP % |
+|---|---:|---:|
+| All (78) | +0.00 [-0.13, +0.13] | +0.16 [+0.04, +0.28] |
+| Photo (38) | -0.02 [-0.13, +0.09] | +0.15 [+0.08, +0.22] |
+| Illustration (22) | -0.16 [-0.54, +0.17] | +0.11 [-0.06, +0.30] |
+| Screen (18) | +0.26 [+0.03, +0.48] | +0.24 [-0.19, +0.68] |
+
+| Class | Versus selected RGBA8 arm: SSIMULACRA2 % | Versus selected RGBA8 arm: CVVDP % |
+|---|---:|---:|
+| All | +1.11 [+0.51, +1.82] | +1.31 [+0.73, +2.03] |
+| Photo | +0.37 [-0.00, +0.91] | +0.55 [+0.17, +1.19] |
+| Illustration | +0.68 [-0.27, +1.98] | +1.08 [+0.34, +1.99] |
+| Screen | +3.18 [+1.28, +5.31] | +3.16 [+1.26, +5.51] |
+
+The native-linear arm meets the brief's positive-or-tied bar under both judges
+in every class. Its earlier screen deficit against the Butteraugli loop is
+absent on the float inputs. Together with the unchanged kernels and identical
+historical RGBA8 reference maps, this identifies ingress rounding/clipping as
+the cause of that deficit in this study. No weight or content detector changed.
+This does not qualify unrelated rank-loss, harmful-choice, speed or RSS gates,
+or establish behavior beyond the measured TRAIN study.
+
+Independent controls: Bcheck2's 702 bitstream hashes match B exactly. All
+14,898 earlier rows reproduce under each of SSIMULACRA2, Butteraugli, zensim,
+CVVDP and DVIFM, excluding only DVIFM's row-number field. The coordinator also
+verified the six recorded 8-bit tail-fit rows before reading linear results.
+
+On dev, `steering-rd-9cb02f1b/` under the artifact root above retains the two
+paired tables, current/prior judge tables, loop controls, corpus/run metadata
+and all 702 native-arm JXL bitstreams with verified encoded SHA256s. Its
+`controls.json` and `MANIFEST.json` preserve the independent checks and hashes.
+No sibling source was modified by this lane. The selected command and vendor
+check remain unchanged.
 
 ## Existing source-verification failure
 

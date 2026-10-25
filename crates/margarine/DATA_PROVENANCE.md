@@ -22,9 +22,9 @@ fractions 0.189235/0.081399. Decode-inclusive speedups are only
 
 Full acceptance remains unproven. The newer control needs the remaining
 corpora and independent content/resource checks. CID22 lacks participant
-uncertainty; AIC4 lacks original bitrate information. Spatial steering inside
-an encoder has not been evaluated end to end. Preserved maps and the older
-peak-location diagnostics do not establish steering quality.
+uncertainty; AIC4 lacks original bitrate information. The separate native-linear command meets the JPEG XL steering bar in the
+78-image TRAIN study below. Preserved maps and the older peak-location
+diagnostics alone do not establish steering quality.
 
 ## Records and artifacts
 
@@ -75,7 +75,8 @@ The unselected `linear-steering` command (`a3237b6a`) keeps the selected kernels
 and receives unrounded linear-sRGB f32 reconstructions. The reference audit
 (`77fc41d4`) and replay (`31856c6c`) are recorded in
 [STEERING_REFERENCE.md](STEERING_REFERENCE.md). No human labels were read and no
-quality/resource gate was relaxed or newly qualified.
+quality/resource expectation was relaxed. Calibration alone does not
+qualify the full rank, encoder-choice or resource gates.
 
 Observed on dev: `/mnt/v/output/margarine/steering-2026-10-25/` retains the 324
 calibration pairs' historical reference maps, replayed JXL bytes, unrounded
@@ -89,3 +90,24 @@ The artifact root is mirrored at
 2026-10-25). `MANIFEST-final.json` records binary, summary and review-file
 hashes; `mirror-verify.json` records file-size checks and matching SHA256s
 for three randomly selected float files plus the listed binaries/summaries.
+
+## Native-linear JPEG XL steering (2026-10-25)
+
+The coordinator's zensim record `9cb02f1b`, section "JPEG XL steering on the
+loop's float reconstruction" in `benchmarks/byconstruction_2026-10-22.md`,
+reports `margarinelin` with candidate SHA256
+`baf0500c1368eda12de21c6e13a29e3aea91e43d917d986f03829b13c275d89a`,
+R/D tags, one Rayon thread per steering worker and native scale/exponent 1/1.
+The 78 TRAIN images (38 photos, 22 illustrations, 18 screens) use effort 7,
+four iterations and nine distances from 0.3 to 10. Both judges meet the
+positive-or-tied steering bar in every class. Full tables and limits are in
+[STEERING_REFERENCE.md](STEERING_REFERENCE.md).
+
+Observed on dev: `steering-rd-9cb02f1b/` under the artifact root above retains
+both paired tables, current/prior judge tables, loop controls, run metadata,
+the source corpus index and all 702 native-arm JXL bitstreams. Their encoded
+SHA256s match the loop rows. `controls.json` independently verifies all 702
+Bcheck2 hashes and all 14,898 earlier rows under each of five judges; only
+DVIFM's row-number field is excluded. `MANIFEST.json` records source and file
+hashes. This is an encoder-steering evaluation on TRAIN images, with no human
+label evaluation and no new rank/encoder-choice/speed/RSS qualification.

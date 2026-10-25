@@ -3,8 +3,8 @@
 Margarine is an unpublished Butteraugli-lineage approximation. It targets
 quality-rank loss of at most 0.01 and at most 1% statistically distinguishable
 harmful encoder choices, with 4× scoring speed and one-quarter total-process
-peak RAM on larger inputs. Full qualification is unfinished; spatial encoder
-steering has not been evaluated end to end.
+peak RAM on larger inputs. Full qualification is unfinished. A separate native-linear candidate meets
+the JPEG XL steering bar in the recorded 78-image TRAIN study.
 
 ## Build and use
 
@@ -33,7 +33,10 @@ are intended by the repository migration.
 ## Qualification and experiments
 
 The separate `linear-steering` experiment builds `margarine-steer`, which accepts
-native linear-sRGB f32 pixels for encoder steering. Its calibration result,
+native linear-sRGB f32 pixels for encoder steering. It meets the positive-or-tied
+steering bar against the built-in Butteraugli loop in every measured class
+under SSIMULACRA2 and CVVDP, saving 0.16% overall under CVVDP
+(95% interval +0.04% to +0.28%). Its calibration result,
 protocol, reproduction commands and remaining gates are in
 [the steering reference audit](STEERING_REFERENCE.md). It remains unselected.
 
