@@ -310,7 +310,7 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
         sets = result["predictions"]
         if not sets or any(len(v["pred"]) != v["rows"] for v in sets.values()):
             raise ValueError(f"per-set prediction count mismatch: {name}")
-    elif len(result["prediction"]) != result.get("test_rows", result.get("rows")):
+    elif kind["argv"][0] != "byc_cells.py" and len(result["prediction"]) != result.get("test_rows", result.get("rows")):
         raise ValueError(f"prediction count mismatch: {name}")
     if Path(name).name.startswith("o"):
         # Outer-fold cells must carry the permutation-importance receipt that
@@ -408,7 +408,7 @@ def main() -> None:
                               checkpoint_inspector=args.checkpoint_inspector, allow_local_smoke=args.allow_local_smoke)
         tiers[receipt["tier_status"]] = tiers.get(receipt["tier_status"], 0) + 1
         target = (args.byc_install_root if args.byc_install_root is not None else POT_ROOT / blob_root(job["kind"])) / name
-        if args.byc_install_root is not None and target.exists() and not (target / "fleet_receipt.json").is_file():
+        if args.install and args.byc_install_root is not None and target.exists() and not (target / "fleet_receipt.json").is_file():
             raise ValueError(f"byc local cell is owned elsewhere; refusing replacement: {target}")
         stages.append((name, cell_dir(stage, name, job["kind"]), target))
     print(json.dumps({"verified": len(stages), "manifest": len(manifest), "install": args.install,

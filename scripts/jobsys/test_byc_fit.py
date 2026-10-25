@@ -120,6 +120,57 @@ class BycTransport(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "scientific"):
                 c.verify_output(dest, ARGV, sha)
 
+    def test_archive_harvest_verifies_existing_control_without_replacing_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            name = "Mw100/without_kadid_s0"
+            pot = root / "pot"
+            dest = pot / "byc/cells" / name
+            (dest / "refit").mkdir(parents=True)
+            bake = dest / "refit/last.bin"
+            bake.write_bytes(b"synthetic checkpoint")
+            pred = dest / "pred_kadid.tsv"
+            pred.write_text("row_idx\tpred\n0\t1\n")
+            record = dict(fold="kadid", seed=0, tokens="mono:thr:mp32",
+                          last_bin_sha256=harvest.digest(bake), pred_sha256=harvest.digest(pred))
+            result = dict(epochs=120, pairs_per_epoch=50000, seed_index=0,
+                          selection=dict(selected_epoch=119), selected_bake=str(bake),
+                          selected_bake_sha256=harvest.digest(bake))
+            for filename, value in (("byc_record.json", record), ("result.json", result),
+                                    ("LABEL_READS.json", {}), ("DATASET_GROUP_SELECTION.json", {})):
+                (dest / filename).write_text(json.dumps(value))
+            kind = dict(kind="fit_cell", argv=ARGV, program_sha="a" * 64,
+                        data_sha="b" * 64, argv_sha="c" * 64)
+            files = {str(p.relative_to(dest)): harvest.digest(p) for p in dest.rglob("*") if p.is_file()}
+            receipt = dict(schema="zenfleet-fit-cell-receipt-v1", cell=name,
+                           program_sha=kind["program_sha"], data_sha=kind["data_sha"],
+                           argv_sha=kind["argv_sha"], result_sha=files["result.json"],
+                           selected_bake_sha=harvest.digest(bake), files=files,
+                           tier=dict(effective="v3"))
+            blob = root / "blob.tar.gz"
+            with patch.object(executor, "FIT_ROOT", pot):
+                blob.write_bytes(executor.output_bytes(dest, receipt))
+            cells = root / "originals"
+            original = cells / name
+            original.mkdir(parents=True)
+            marker = original / "keep.txt"
+            marker.write_text("local original")
+            manifest, ids = root / "manifest.json", root / "ids.tsv"
+            manifest.write_text(json.dumps([dict(cell=dict(image_path=name), kind=kind)]))
+            ids.write_text(f"0\tjob1\t{name}\n")
+            args = ["harvest_fit_cells.py", "--manifest", str(manifest), "--ids", str(ids),
+                    "--ledger", str(root / "ledger"), "--blobs-prefix", "unused", "--endpoint", "unused",
+                    "--scratch", str(root / "stage"), "--byc-install-root", str(cells)]
+            with patch.object(harvest, "POT_ROOT", pot), patch.object(sys, "argv", args), \
+                    patch.object(harvest, "rows_from_ledger", return_value={"job1": dict(output_sha="d" * 64)}), \
+                    patch.object(harvest, "duplicate_done_rows", return_value={}), \
+                    patch.object(harvest, "fetch_blob", return_value=blob), contextlib.redirect_stdout(io.StringIO()):
+                harvest.main()
+                self.assertEqual(marker.read_text(), "local original")
+                args.append("--install")
+                with self.assertRaisesRegex(ValueError, "refusing replacement"):
+                    harvest.main()
+
 
 if __name__ == "__main__":
     unittest.main()
