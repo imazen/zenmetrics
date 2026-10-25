@@ -95,7 +95,7 @@ if [ "${FIT_CELL_IMAGE:-0}" = "1" ]; then
   fi
   # shellcheck disable=SC2016 # The tool variable expands inside the container.
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /bin/bash "$IMAGE" -lc \
-    'for tool in aws s5cmd zenfleet-worker gunzip timeout findmnt; do command -v "$tool" >/dev/null || exit 1; done; aws --version >/dev/null; s5cmd version >/dev/null; python3 -c "import numpy, pandas, pyarrow, scipy"'
+    'for tool in aws s5cmd zenfleet-worker gunzip timeout findmnt nice ionice; do command -v "$tool" >/dev/null || exit 1; done; aws --version >/dev/null; s5cmd version >/dev/null; python3 -c "import numpy, pandas, pyarrow, scipy"'
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /usr/local/bin/fit-cell-exec "$IMAGE" capabilities | grep -qx fit-cell-v1
   if [ "${PUSH:-0}" = "1" ]; then "${FIT_DOCKER_CMD[@]}" push "$IMAGE"; fi
   exit 0

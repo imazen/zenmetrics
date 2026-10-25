@@ -393,6 +393,8 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
         # beside it, retaining failed-run timing separately, and export on success.
         resource = dest.parent / f".{name.name}.resources-{time.time_ns()}.txt"
         command = ["/usr/bin/time", "-v", "-o", str(resource), *command]
+    if argv[0] == "byc_cells.py":
+        command = ["nice", "-n", "19", "ionice", "-c", "3", *command]
     if cap is not None:
         stdout = run_capped(command, env, cap, dest, name)
     else:
