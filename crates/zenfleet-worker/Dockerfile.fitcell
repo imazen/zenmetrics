@@ -11,6 +11,8 @@
 FROM ghcr.io/imazen/zenfleet-worker:latest@sha256:3a7652755a81cfd623ed7d2c05ac778d4df7df57ee00c30c8443051f0d28c2c3 AS workerbase
 
 FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
+ENV TMPDIR=/var/tmp/fit-build
+RUN mkdir -p "$TMPDIR"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates coreutils gzip tar time util-linux python3 python3-venv && \
     rm -rf /var/lib/apt/lists/*
