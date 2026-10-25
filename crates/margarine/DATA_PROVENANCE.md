@@ -68,3 +68,18 @@ Both the selected command and native-UHF control reproduce all five scalar
 fields and native map bytes on all 300 AIC4 pairs on the migration host.
 This establishes relocation equivalence for that replay, not a new cross-arch
 quality or performance qualification. The original artifact stores remain intact.
+
+## Native-linear steering calibration (2026-10-25)
+
+The unselected `linear-steering` command (`a3237b6a`) keeps the selected kernels
+and receives unrounded linear-sRGB f32 reconstructions. The reference audit
+(`77fc41d4`) and replay (`31856c6c`) are recorded in
+[STEERING_REFERENCE.md](STEERING_REFERENCE.md). No human labels were read and no
+quality/resource gate was relaxed or newly qualified.
+
+Observed on dev: `/mnt/v/output/margarine/steering-2026-10-25/` retains the 324
+calibration pairs' historical reference maps, replayed JXL bytes, unrounded
+linear pixels, native candidate maps, binaries, summaries and logs. Sources:
+`/mnt/v/zenmetrics-private/aic4/loop-pairs/2026-10-24-hq/` (204 photo fit pairs,
+120 screenshot held-out pairs). This is a pixel-only calibration, not an IQA
+label evaluation or picker-training input. Original pairs are unchanged.

@@ -105,3 +105,28 @@ records are not new native-ingress qualification; no expectation is relaxed.
 Replay receipt: `rc=0 36s | peak-RSS 0.10GiB | min-avail 30602MiB | peak-load 3.55`.
 Native calibration: `rc=0 4s | peak-RSS 0.16GiB | min-avail 36118MiB | peak-load 2.33`.
 Selected calibration: `rc=0 30s | peak-RSS 0.80GiB | min-avail 35084MiB | peak-load 1.51`.
+
+## Existing source-verification failure
+
+The dedicated CI lint job fails `verify_sources.py` on the untouched base
+`8641dff3` as well as this work: [45e46e998](https://github.com/imazen/zenmetrics/commit/45e46e9986056a0175a92be3d830e56afa6bcc42)
+renamed v4 dispatch to v4x in the vendored `blur.rs` and `malta.rs` without
+updating the source record. Six modules still match their frozen hashes.
+Reversing only `v4x`/`V4x` to `v4`/`V4` reproduces the original hashes of both
+changed files exactly. The commit's purpose was to keep one AVX-512 tier:
+v4-only processors then fall back to AVX2. This is a dispatch-policy change,
+not a perceptual-weight change.
+
+The established check remains unchanged and failing, by coordinator direction.
+No source bytes were restored and no additional representation was accepted.
+Restoring the two original files from the migration commit passes the existing
+verifier in an isolated copy; it would also restore their older v4 dispatch
+policy, so that is a selected-behavior decision for the owner. Build, map and
+performance effects of that restoration have not been measured here.
+
+A proposed alternative preserves all eight upstream hashes, records the exact
+post-rename hashes of these two files, and checks both their exact patched
+bytes and the reconstructed upstream bytes. It would accept only those six
+unmodified files and those two exact declared dispatch patches; arithmetic
+changes or unknown patch kinds would still fail. That proposal has not been
+applied and requires owner approval.

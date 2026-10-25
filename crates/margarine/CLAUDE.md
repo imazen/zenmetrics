@@ -16,3 +16,13 @@ Historical zensim feature probes needed a 64-row minimum halo to handle the
 the verified x86 blur-tail correction. These probes do not define the selected
 Butteraugli-lineage candidate. Full detail and original links are preserved in
 [the original project notes](https://github.com/imazen/butteraugli/blob/13c49cbcab6e2b2bb65f60e3cb28344463bacbf7/CLAUDE.md).
+
+### Existing vendor-check failure (2026-10-25)
+
+`verify_sources.py` fails on `blur.rs` and `malta.rs`: `45e46e998` renamed their
+v4 dispatch to v4x, while SOURCE.json retains the original upstream hashes.
+The mismatch is present before the steering work. Keep the established check
+unchanged and failing pending owner approval. Exact-byte restoration and a
+strict declared-patch proposal are described in
+[STEERING_REFERENCE.md](STEERING_REFERENCE.md). No metric arithmetic was changed
+by that dispatch rename; its hardware-tier selection changed.

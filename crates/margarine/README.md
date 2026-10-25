@@ -32,6 +32,11 @@ are intended by the repository migration.
 
 ## Qualification and experiments
 
+The separate `linear-steering` experiment builds `margarine-steer`, which accepts
+native linear-sRGB f32 pixels for encoder steering. Its calibration result,
+protocol, reproduction commands and remaining gates are in
+[the steering reference audit](STEERING_REFERENCE.md). It remains unselected.
+
 [Data and evaluation index](DATA_PROVENANCE.md) records the selected candidate,
 the newer native-UHF control, artifact locations, and missing acceptance gates.
 [Measurement tables](../../benchmarks/margarine/) retain the historical build
