@@ -148,6 +148,11 @@ be reused by other containers. Assign cell ownership before declaring work,
 and check remaining work before any worker launch. `just byc-fit-check` runs
 the transport refusal controls and existing fit-tool regressions.
 
+Byc verification refuses an existing staging directory. A repeated verification
+uses a fresh `--scratch` directory, preserving the previous files. Keep every
+cell's `refit/` bakes for later evaluation; retain result blobs and staged
+outputs through verified installation, and retain installed cells.
+
 Fit subprocess bytecode caches are namespaced by program SHA. Program archives
 fix source mtimes, so a shared timestamp cache can execute an earlier script
 after an equal-length edit. The negative control reproduces that collision and

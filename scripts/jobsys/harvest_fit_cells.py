@@ -406,6 +406,8 @@ def main() -> None:
         blob = fetch_blob(row["output_sha"], args.blobs_prefix, args.scratch / "blobs", args.endpoint)
         stage = args.scratch / "staged" / job_id
         if stage.exists():
+            if args.byc_install_root is not None:
+                raise ValueError(f"preserve prior byc verification; use a fresh --scratch directory: {stage}")
             shutil.rmtree(stage)
         receipt = verify_blob(blob, stage, name, job["kind"], program_archive=args.program_archive,
                               checkpoint_inspector=args.checkpoint_inspector, allow_local_smoke=args.allow_local_smoke)

@@ -206,6 +206,10 @@ else:
                     patch.object(harvest, "fetch_blob", return_value=blob), contextlib.redirect_stdout(io.StringIO()):
                 harvest.main()
                 self.assertEqual(marker.read_text(), "local original")
+                with self.assertRaisesRegex(ValueError, "preserve prior byc verification"):
+                    harvest.main()
+                self.assertTrue((root / "stage/staged/job1/byc/cells" / name / "refit/last.bin").is_file())
+                args[args.index("--scratch") + 1] = str(root / "stage-install")
                 args.append("--install")
                 with self.assertRaisesRegex(ValueError, "refusing replacement"):
                     harvest.main()
