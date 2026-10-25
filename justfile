@@ -65,24 +65,19 @@ byc-fit-harvest ctl run out cells *flags:
     python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
-byc-fit-prepare source bin_dir metadata pins columns worker out image control_data="" extra_arms="":
+byc-fit-prepare source bin_dir metadata pins columns worker out image control_data="" extra_arms="" shared_lock="1":
     #!/usr/bin/env bash
     set -euo pipefail
     export TMPDIR="$HOME/tmp"
     export ZEN_FIT_BUILDER=byc-cells-20261025
     export ZEN_BUILD_CACHE_REF=ghcr.io/imazen/zenfleet-worker:buildcache-fit-byc
     mkdir -p "$TMPDIR"
-    flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- bash -euo pipefail -c '
-      python3 scripts/jobsys/pack_fit_program.py --profile byc --source "$1" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "$2" --build-meta "$3" --source-pins "$4" --source-pins-sha256 "$(sha256sum "$4" | cut -d" " -f1)" --byc-columns "$5" --out "$7/program.tar.gz"
-      FIT_CELL_IMAGE=1 PUSH=1 ZEN_FIT_PROGRAM_TAR="$7/program.tar.gz" ZEN_FIT_PROGRAM_SHA="$(sha256sum "$7/program.tar.gz" | cut -d" " -f1)" ZEN_WORKER_BIN="$6" bash scripts/jobsys/build_executor_image.sh "$8"
-      if [ -n "$9" ]; then cp --reflink=auto --no-clobber "$9" "$7/data-Mw025.tar.gz"; else
-        just byc-fit-data /var/tmp/byc-mixes-20261025/Mw025/root /var/tmp/datalegs-20261025/rev7data/root Mw025 "$7/data-Mw025.tar.gz"
-      fi
-      IFS=, read -ra arms <<< "${10}"
-      for label in "${arms[@]}"; do
-        just byc-fit-data "/var/tmp/byc-mixes-20261025/$label/root" /var/tmp/datalegs-20261025/rev7data/root "$label" "$7/data-$label.tar.gz"
-      done
-    ' byc-prepare "{{source}}" "{{bin_dir}}" "{{metadata}}" "{{pins}}" "{{columns}}" "{{worker}}" "{{out}}" "{{image}}" "{{control_data}}" "{{extra_arms}}"
+    admission=(flock "$HOME/tmp/heavy.lock")
+    if [ "{{shared_lock}}" = 0 ]; then
+      test -n "{{control_data}}" && test -z "{{extra_arms}}"
+      admission=()
+    fi
+    "${admission[@]}" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- bash scripts/jobsys/prepare_byc_fit.sh "{{source}}" "{{bin_dir}}" "{{metadata}}" "{{pins}}" "{{columns}}" "{{worker}}" "{{out}}" "{{image}}" "{{control_data}}" "{{extra_arms}}"
 
 # E29 local preparation; caller supplies frozen source, binaries and build metadata.
 fit-pack-e29 source bin_dir build_meta out:
