@@ -23,6 +23,45 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_input_staging_reuses_matching_objects_and_refuses_corruption(self):
+        script = Path(__file__).with_name("stage_fit_inputs.sh")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "input"
+            artifact.write_bytes(b"frozen input\n")
+            stub = root / "aws"
+            stub.write_text("""#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+root = Path(os.environ['STUB_ROOT'])
+mode = os.environ['STUB_MODE']
+if 'head-object' in sys.argv:
+    if mode == 'missing' and not (root/'uploaded').exists():
+        print('An error occurred (404): Not Found', file=sys.stderr)
+        sys.exit(1)
+    if mode == 'denied':
+        print('An error occurred (403): Forbidden', file=sys.stderr)
+        sys.exit(1)
+    pin = '0'*64 if mode == 'corrupt' else os.environ['STUB_PIN']
+    size = '1' if mode == 'wrong_size' else os.environ['STUB_BYTES']
+    print(pin + '\\t' + size)
+elif 'cp' in sys.argv:
+    (root/'uploaded').write_text('uploaded')
+else:
+    sys.exit(2)
+""")
+            stub.chmod(0o755)
+            env = dict(os.environ, PATH=f"{tmp}:{os.environ['PATH']}", EP="stub",
+                       STUB_ROOT=tmp, STUB_PIN=harvest.digest(artifact),
+                       STUB_BYTES=str(artifact.stat().st_size))
+            for mode in ("existing", "missing", "corrupt", "wrong_size", "denied"):
+                (root / "uploaded").unlink(missing_ok=True)
+                result = subprocess.run(["bash", str(script), "run", str(artifact)],
+                                        env=dict(env, STUB_MODE=mode), capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, mode in ("existing", "missing"),
+                                 (mode, result.stdout, result.stderr))
+                self.assertEqual((root / "uploaded").exists(), mode == "missing")
+
     def test_program_caches_refuse_equal_size_fixed_mtime_stale_code(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(executor, "ROOT", Path(tmp)):
             source = Path(tmp) / "cache_probe.py"

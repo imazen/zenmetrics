@@ -38,12 +38,7 @@ byc-fit-stage data program run:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/lib/s3env.sh
-    for artifact in "{{data}}" "{{program}}"; do
-      pin=$(sha256sum "$artifact" | cut -d' ' -f1)
-      aws --endpoint-url "$EP" s3 cp "$artifact" "s3://zentrain/jobs/{{run}}/inputs/$pin" --metadata "sha256=$pin" --only-show-errors
-      actual=$(aws --endpoint-url "$EP" s3api head-object --bucket zentrain --key "jobs/{{run}}/inputs/$pin" --query Metadata.sha256 --output text)
-      test "$actual" = "$pin"
-    done
+    bash scripts/jobsys/stage_fit_inputs.sh "{{run}}" "{{data}}" "{{program}}"
 
 byc-fit-enqueue ctl spec run data program out:
     #!/usr/bin/env bash
