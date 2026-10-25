@@ -83,3 +83,9 @@ linear pixels, native candidate maps, binaries, summaries and logs. Sources:
 `/mnt/v/zenmetrics-private/aic4/loop-pairs/2026-10-24-hq/` (204 photo fit pairs,
 120 screenshot held-out pairs). This is a pixel-only calibration, not an IQA
 label evaluation or picker-training input. Original pairs are unchanged.
+
+The artifact root is mirrored at
+`/mnt/tower/output/margarine/steering-2026-10-25/` (verified from dev on
+2026-10-25). `MANIFEST-final.json` records binary, summary and review-file
+hashes; `mirror-verify.json` records file-size checks and matching SHA256s
+for three randomly selected float files plus the listed binaries/summaries.
