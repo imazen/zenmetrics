@@ -9,6 +9,9 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) enum Samples<'a> {
     U8(&'a [u8]),
     U16(&'a [u16]),
+    /// Linear sRGB values, including finite values outside [0, 1].
+    #[cfg(feature = "linear-steering")]
+    Linear(&'a [f32]),
 }
 
 /// Borrowed encoded-sRGB rows; stride is measured in channel samples.
@@ -39,9 +42,22 @@ impl<'a> EncodedRows<'a> {
         let length = match samples {
             Samples::U8(v) => v.len(),
             Samples::U16(v) => v.len(),
+            #[cfg(feature = "linear-steering")]
+            Samples::Linear(v) => v.len(),
         };
         if stride < row || length < needed {
             return Err("encoded rows too short".into());
+        }
+        #[cfg(feature = "linear-steering")]
+        if let Samples::Linear(v) = samples {
+            for y in 0..height {
+                if v[y * stride..y * stride + row]
+                    .iter()
+                    .any(|v| !v.is_finite())
+                {
+                    return Err("nonfinite linear sample".into());
+                }
+            }
         }
         if channels == 4 {
             for y in 0..height {
@@ -50,6 +66,8 @@ impl<'a> EncodedRows<'a> {
                     let opaque = match samples {
                         Samples::U8(v) => v[i] == 255,
                         Samples::U16(v) => v[i] == 65535,
+                        #[cfg(feature = "linear-steering")]
+                        Samples::Linear(v) => v[i] == 1.0,
                     };
                     if !opaque {
                         return Err("non-opaque alpha requires a background".into());
@@ -78,6 +96,8 @@ impl<'a> EncodedRows<'a> {
         let samples = match self.samples {
             Samples::U8(v) => Samples::U8(&v[offset..]),
             Samples::U16(v) => Samples::U16(&v[offset..]),
+            #[cfg(feature = "linear-steering")]
+            Samples::Linear(v) => Samples::Linear(&v[offset..]),
         };
         EncodedRows {
             samples,
@@ -110,6 +130,15 @@ impl<'a> EncodedRows<'a> {
         match self.samples {
             Samples::U8(v) => std::array::from_fn(|c| f32::from(v[i + c]) / 255.0),
             Samples::U16(v) => std::array::from_fn(|c| f32::from(v[i + c]) / 65535.0),
+            #[cfg(feature = "linear-steering")]
+            Samples::Linear(v) => std::array::from_fn(|c| {
+                let p = v[i + c];
+                if p <= 0.003_130_8 {
+                    12.92 * p
+                } else {
+                    1.055 * p.powf(1.0 / 2.4) - 0.055
+                }
+            }),
         }
     }
 
@@ -153,6 +182,12 @@ impl<'a> EncodedRows<'a> {
                         butteraugli::RGB::new(linear16(p[0]), linear16(p[1]), linear16(p[2]))
                     }));
                 }
+                #[cfg(feature = "linear-steering")]
+                Samples::Linear(v) => out.extend(
+                    v[range]
+                        .chunks_exact(self.channels)
+                        .map(|p| butteraugli::RGB::new(p[0], p[1], p[2])),
+                ),
             }
         }
         out
@@ -186,6 +221,15 @@ impl<'a> EncodedRows<'a> {
                         dst.copy_from_slice(&[linear16(p[0]), linear16(p[1]), linear16(p[2])]);
                     }
                 }
+                #[cfg(feature = "linear-steering")]
+                Samples::Linear(v) => {
+                    for (p, dst) in v[range]
+                        .chunks_exact(self.channels)
+                        .zip(out.as_chunks_mut::<3>().0.iter_mut())
+                    {
+                        dst.copy_from_slice(&p[..3]);
+                    }
+                }
             }
         }
         result
@@ -214,6 +258,28 @@ impl<'a> EncodedRows<'a> {
         assert!(out.iter().all(|row| row.len() == width.div_ceil(factor)));
         let lut = linear8_table();
         match (&self.samples, self.channels) {
+            #[cfg(feature = "linear-steering")]
+            (Samples::Linear(v), 3) => planar_row::<_, 3>(
+                &v[x0 * self.channels..],
+                width,
+                self.height,
+                self.stride,
+                y,
+                factor,
+                out,
+                |v| v,
+            ),
+            #[cfg(feature = "linear-steering")]
+            (Samples::Linear(v), 4) => planar_row::<_, 4>(
+                &v[x0 * self.channels..],
+                width,
+                self.height,
+                self.stride,
+                y,
+                factor,
+                out,
+                |v| v,
+            ),
             (Samples::U8(v), 3) => planar_row::<_, 3>(
                 &v[x0 * self.channels..],
                 width,

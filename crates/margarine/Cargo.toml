@@ -26,6 +26,7 @@ native-mask = ["row-tiles", "phase-rows"]
 full-malta = ["row-tiles"]
 row-malta = ["full-malta"]
 native-uhf = ["row-malta", "simd-malta"]
+linear-steering = ["row-malta", "simd-malta"]
 wide-malta = ["full-malta"]
 simd-malta = ["full-malta"]
 simd-opsin = ["simd-malta"]
@@ -82,3 +83,8 @@ required-features = ["research"]
 name = "margarine"
 path = "margarine.rs"
 required-features = ["simd-malta", "row-malta"]
+
+[[bin]]
+name = "margarine-steer"
+path = "steer.rs"
+required-features = ["linear-steering"]

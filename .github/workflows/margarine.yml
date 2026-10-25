@@ -50,6 +50,7 @@ jobs:
           cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features simd-opsin --all-targets -- -D warnings
           cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features full-malta,coarse-gaussian --all-targets -- -D warnings
           cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features native-uhf --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering --all-targets -- -D warnings
   test:
     name: Margarine (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -84,6 +85,7 @@ jobs:
           cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features full-malta,coarse-gaussian
           cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-malta,coarse-gaussian
           cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features native-uhf
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering
   cross:
     name: Margarine (${{ matrix.target }})
     runs-on: ubuntu-latest
@@ -108,3 +110,4 @@ jobs:
           cross test --locked --manifest-path crates/margarine/Cargo.toml --features row-psycho --target ${{ matrix.target }}
           cross test --locked --manifest-path crates/margarine/Cargo.toml --features row-tiles,phase-rows --target ${{ matrix.target }}
           cross test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,simd-malta,row-malta --bin margarine --target ${{ matrix.target }}
+          cross test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,linear-steering --bin margarine-steer --target ${{ matrix.target }}
