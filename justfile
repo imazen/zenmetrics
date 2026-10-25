@@ -2536,3 +2536,13 @@ bench-iqa-canonical-nn-first-publish-recovered output receipt +cohorts:
 
 bench-iqa-canonical-nn-first-recovery-check:
     PYTHONPATH=benchmarks/iqa_compete_2026-10-16 python3 -B -m unittest test_nn_first_recovery_publication test_nn_first_publication
+
+# Historical Butteraugli maps on identical calibration pixels, with frozen Git pins.
+margarine-reference-build:
+    cargo build --release --locked --manifest-path crates/margarine/reference-audit/Cargo.toml
+
+margarine-reference-maps pairs output:
+    crates/margarine/reference-audit/target/release/margarine-reference-audit "{{pairs}}" "{{output}}"
+
+margarine-reference-summary pairs maps output:
+    python3 crates/margarine/reference_maps.py "{{pairs}}" "{{maps}}" "{{output}}"

@@ -1,0 +1,17 @@
+[package]
+name = "margarine-reference-audit"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "BSD-3-Clause"
+
+[workspace]
+
+[dependencies]
+loop-butter = { package = "butteraugli", git = "https://github.com/imazen/butteraugli", rev = "d2466a4eaad67f8008838c0caa452484300214ca" }
+teacher-butter = { package = "butteraugli", git = "https://github.com/imazen/butteraugli", rev = "13c49cbcab6e2b2bb65f60e3cb28344463bacbf7" }
+exact-butter = { package = "butteraugli", git = "https://github.com/imazen/butteraugli", rev = "554a42f832ceffe7a70303d43f3cddcd5a8cd275" }
+
+[profile.release]
+lto = "thin"
+
