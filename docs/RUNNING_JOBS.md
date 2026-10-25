@@ -154,6 +154,9 @@ after an equal-length edit. The negative control reproduces that collision and
 checks that a different program SHA executes the new source. Existing caches
 are retained.
 
+The dated by-construction replay evidence is indexed in
+[`benchmarks/byc_fleet_2026-10-25.pointer.md`](../benchmarks/byc_fleet_2026-10-25.pointer.md).
+
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
 `ScoreFile { hdr: true, hdr_transfer }` scores an HDR corpus through the job system instead of an
