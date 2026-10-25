@@ -258,7 +258,10 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if kind["argv"][0] == "steer_exact_smoke.py":
+    if kind["argv"][0] == "byc_cells.py":
+        # Its fixed scientific protocol and prediction inventory were checked above.
+        pass
+    elif kind["argv"][0] == "steer_exact_smoke.py":
         if not allow_local_smoke:
             raise ValueError("exact engineering smoke cannot install as a scientific cell")
         if program_archive is None or checkpoint_inspector is None or digest(program_archive) != kind["program_sha"]:
@@ -310,7 +313,7 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
         sets = result["predictions"]
         if not sets or any(len(v["pred"]) != v["rows"] for v in sets.values()):
             raise ValueError(f"per-set prediction count mismatch: {name}")
-    elif kind["argv"][0] != "byc_cells.py" and len(result["prediction"]) != result.get("test_rows", result.get("rows")):
+    elif len(result["prediction"]) != result.get("test_rows", result.get("rows")):
         raise ValueError(f"prediction count mismatch: {name}")
     if Path(name).name.startswith("o"):
         # Outer-fold cells must carry the permutation-importance receipt that

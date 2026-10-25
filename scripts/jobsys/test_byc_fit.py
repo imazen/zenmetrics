@@ -172,7 +172,7 @@ else:
             pred.write_text("row_idx\tpred\n0\t1\n")
             record = dict(fold="kadid", seed=0, tokens="mono:thr:mp32",
                           last_bin_sha256=harvest.digest(bake), pred_sha256=harvest.digest(pred))
-            result = dict(epochs=120, pairs_per_epoch=50000, seed_index=0,
+            result = dict(epochs=120, pairs_per_epoch=50000, seed_index=0, training_only=True,
                           selection=dict(selected_epoch=119), selected_bake=str(bake),
                           selected_bake_sha256=harvest.digest(bake))
             for filename, value in (("byc_record.json", record), ("result.json", result),
