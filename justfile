@@ -81,6 +81,9 @@ byc-fit-harvest ctl run out cells *flags:
     stage=$(realpath -m "{{cells}}/../fleet-harvest/{{run}}")
     python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
+byc-fit-receipt cells manifest ids ledger out:
+    python3 scripts/jobsys/byc_harvest_receipt.py --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
+
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
 byc-fit-prepare source bin_dir metadata pins columns worker out image control_data="" extra_arms="" shared_lock="1":
     #!/usr/bin/env bash

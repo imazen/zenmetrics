@@ -16,6 +16,7 @@ import byc_fit_contract as c
 import fit_cell_exec as executor
 import harvest_fit_cells as harvest
 import build_fit_spec as spec
+import byc_harvest_receipt as summary
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -197,6 +198,7 @@ else:
             manifest, ids = root / "manifest.json", root / "ids.tsv"
             manifest.write_text(json.dumps([dict(cell=dict(image_path=name), kind=kind)]))
             ids.write_text(f"0\tjob1\t{name}\n")
+            (root / "ledger").write_bytes(b"synthetic ledger")
             args = ["harvest_fit_cells.py", "--manifest", str(manifest), "--ids", str(ids),
                     "--ledger", str(root / "ledger"), "--blobs-prefix", "unused", "--endpoint", "unused",
                     "--scratch", str(root / "stage"), "--byc-install-root", str(cells)]
@@ -206,6 +208,22 @@ else:
                     patch.object(harvest, "fetch_blob", return_value=blob), contextlib.redirect_stdout(io.StringIO()):
                 harvest.main()
                 self.assertEqual(marker.read_text(), "local original")
+                summary_args = ["byc_harvest_receipt.py", "--cells", str(root / "stage/staged/job1/byc/cells"),
+                                "--manifest", str(manifest), "--ids", str(ids), "--ledger", str(root / "ledger"),
+                                "--out", str(root / "receipt.json")]
+                with patch.object(sys, "argv", summary_args), \
+                        patch.object(summary, "rows_from_ledger", return_value={"job1": dict(output_sha="d" * 64)}):
+                    summary.main()
+                    retained = json.loads((root / "receipt.json").read_text())
+                    self.assertEqual(retained["verified"], 1)
+                    self.assertEqual(retained["cells"][0]["refit_files"], {"refit/last.bin": receipt["selected_bake_sha"]})
+                    with self.assertRaisesRegex(ValueError, "preserve the previous harvest receipt"):
+                        summary.main()
+                    summary_args[-1] = str(root / "bad-receipt.json")
+                    (root / "stage/staged/job1/byc/cells" / name / "refit/last.bin").write_bytes(b"changed")
+                    with self.assertRaisesRegex(ValueError, "retained cell files differ"):
+                        summary.main()
+                    self.assertFalse((root / "bad-receipt.json").exists())
                 with self.assertRaisesRegex(ValueError, "preserve prior byc verification"):
                     harvest.main()
                 self.assertTrue((root / "stage/staged/job1/byc/cells" / name / "refit/last.bin").is_file())
