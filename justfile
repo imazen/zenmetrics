@@ -29,6 +29,36 @@ byc-fit-data root score_root label out:
 byc-fit-spec program data label folds seeds cells out *flags:
     python3 scripts/jobsys/build_fit_spec.py --grid byc --program-sha "{{program}}" --data-sha "{{data}}" --byc-label "{{label}}" --byc-folds "{{folds}}" --byc-seeds "{{seeds}}" --existing-root "{{cells}}" --out "{{out}}" {{flags}}
 
+byc-fit-enqueue ctl spec run data program out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/s3env.sh
+    mkdir -p "{{out}}"
+    "{{ctl}}" declare-fits --spec "{{spec}}" --out "{{out}}/manifest.json"
+    "{{ctl}}" ids --manifest "{{out}}/manifest.json" > "{{out}}/ids.tsv"
+    for artifact in "{{data}}" "{{program}}"; do
+      pin=$(sha256sum "$artifact" | cut -d' ' -f1)
+      aws --endpoint-url "$EP" s3 cp "$artifact" "s3://zentrain/jobs/{{run}}/inputs/$pin" --metadata "sha256=$pin" --only-show-errors
+      actual=$(aws --endpoint-url "$EP" s3api head-object --bucket zentrain --key "jobs/{{run}}/inputs/$pin" --query Metadata.sha256 --output text)
+      test "$actual" = "$pin"
+    done
+    printf '%s\n' '{"paused":false,"drain":false}' > "{{out}}/control.json"
+    aws --endpoint-url "$EP" s3 cp "{{out}}/manifest.json" "s3://zentrain/jobs/{{run}}/manifest.json" --only-show-errors
+    aws --endpoint-url "$EP" s3 cp "{{out}}/control.json" "s3://zentrain/jobs/{{run}}/control.json" --only-show-errors
+
+byc-fit-status ctl run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/s3env.sh
+    "{{ctl}}" report --run "{{run}}" --endpoint "$EP"
+
+byc-fit-harvest ctl run out cells *flags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/s3env.sh
+    "{{ctl}}" compact --run "{{run}}" --endpoint "$EP" --out-dir "{{out}}"
+    python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "{{out}}/harvest" --byc-install-root "{{cells}}" {{flags}}
+
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
 byc-fit-prepare source bin_dir metadata pins columns worker out image:
     #!/usr/bin/env bash
