@@ -211,6 +211,11 @@ def digest(path: Path) -> str:
     return h.hexdigest()
 
 
+def bytecode_cache(program_sha: str) -> Path:
+    """Tar members have fixed mtimes: equal-size source edits need separate caches per program."""
+    return ROOT / "pycache" / program_sha
+
+
 def fetch_data(sha: str) -> Path:
     ROOT.mkdir(parents=True, exist_ok=True)
     lock = ROOT / f"{sha}.lock"
@@ -372,7 +377,7 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
         env.pop(key,None)
     env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1",
                PYTHONHASHSEED="0", RAYON_NUM_THREADS=os.environ.get("ZEN_FIT_RAYON_THREADS", "4"),
-               PYTHONPYCACHEPREFIX="/scratch/pycache", ZEN_PANEL_BIN=str(PROGRAM / "bin/panel"),
+               PYTHONPYCACHEPREFIX=str(bytecode_cache(program_sha)), ZEN_PANEL_BIN=str(PROGRAM / "bin/panel"),
                TMPDIR="/scratch/tmp")
     if "--strict-admission" in argv:
         env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")

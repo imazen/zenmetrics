@@ -8,6 +8,8 @@ import unittest
 import contextlib
 import io
 import sys
+import os
+import subprocess
 from unittest.mock import Mock, patch
 
 import byc_fit_contract as c
@@ -21,6 +23,22 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_program_caches_refuse_equal_size_fixed_mtime_stale_code(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(executor, "ROOT", Path(tmp)):
+            source = Path(tmp) / "cache_probe.py"
+            code = f"import sys; sys.path.insert(0, {tmp!r}); import cache_probe; print(cache_probe.value)"
+            def run(program):
+                env = dict(os.environ, PYTHONPYCACHEPREFIX=str(executor.bytecode_cache(program)))
+                env.pop("PYTHONDONTWRITEBYTECODE", None)
+                return subprocess.check_output([sys.executable, "-c", code], env=env, text=True).strip()
+            source.write_text("value = 1\n")
+            os.utime(source, (0, 0))
+            self.assertEqual(run("a" * 64), "1")
+            source.write_text("value = 2\n")
+            os.utime(source, (0, 0))
+            self.assertEqual(run("a" * 64), "1", "negative control must expose the timestamp cache collision")
+            self.assertEqual(run("b" * 64), "2", "a new program must execute its own source bytes")
+
     def test_declaration_uses_canonical_cell_and_refuses_started_work(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

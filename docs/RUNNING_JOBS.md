@@ -148,6 +148,12 @@ be reused by other containers. Assign cell ownership before declaring work,
 and check remaining work before any worker launch. `just byc-fit-check` runs
 the transport refusal controls and existing fit-tool regressions.
 
+Fit subprocess bytecode caches are namespaced by program SHA. Program archives
+fix source mtimes, so a shared timestamp cache can execute an earlier script
+after an equal-length edit. The negative control reproduces that collision and
+checks that a different program SHA executes the new source. Existing caches
+are retained.
+
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
 `ScoreFile { hdr: true, hdr_transfer }` scores an HDR corpus through the job system instead of an
