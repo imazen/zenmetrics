@@ -84,7 +84,15 @@ if [ "${FIT_CELL_IMAGE:-0}" = "1" ]; then
   cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
   cp "$ROOT/crates/zenfleet-worker/tmpdir_discipline.sh" "$CTX/tmpdir_discipline.sh"
   cp "$ROOT/crates/zenfleet-worker/Dockerfile.fitcell" "$CTX/Dockerfile"
-  "${FIT_DOCKER_CMD[@]}" build --build-arg "FIT_PROGRAM_SHA=$ZEN_FIT_PROGRAM_SHA" -t "$IMAGE" "$CTX"
+  if [ -n "${ZEN_FIT_BUILDER:-}" ]; then
+    : "${ZEN_BUILD_CACHE_REF:?set a canonical registry buildcache tag}"
+    "${FIT_DOCKER_CMD[@]}" buildx build --builder "$ZEN_FIT_BUILDER" --load \
+      --cache-from "type=registry,ref=$ZEN_BUILD_CACHE_REF" \
+      --cache-to "type=registry,ref=$ZEN_BUILD_CACHE_REF,mode=max" \
+      --build-arg "FIT_PROGRAM_SHA=$ZEN_FIT_PROGRAM_SHA" -t "$IMAGE" "$CTX"
+  else
+    "${FIT_DOCKER_CMD[@]}" build --build-arg "FIT_PROGRAM_SHA=$ZEN_FIT_PROGRAM_SHA" -t "$IMAGE" "$CTX"
+  fi
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /bin/bash "$IMAGE" -lc \
     'for tool in aws s5cmd zenfleet-worker gunzip timeout findmnt; do command -v "$tool" >/dev/null || exit 1; done; aws --version >/dev/null; s5cmd version >/dev/null; python3 -c "import numpy, pandas, pyarrow, scipy"'
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /usr/local/bin/fit-cell-exec "$IMAGE" capabilities | grep -qx fit-cell-v1

@@ -31,6 +31,8 @@ byc-fit-prepare source bin_dir metadata pins columns worker out image:
     #!/usr/bin/env bash
     set -euo pipefail
     export TMPDIR="$HOME/tmp"
+    export ZEN_FIT_BUILDER=byc-cells-20261025
+    export ZEN_BUILD_CACHE_REF=ghcr.io/imazen/zenfleet-worker:buildcache-fit-byc
     mkdir -p "$TMPDIR"
     flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- bash -euo pipefail -c '
       python3 scripts/jobsys/pack_fit_program.py --profile byc --source "$1" --executor scripts/jobsys/fit_cell_exec.py --bin-dir "$2" --build-meta "$3" --source-pins "$4" --source-pins-sha256 "$(sha256sum "$4" | cut -d" " -f1)" --byc-columns "$5" --out "$7/program.tar.gz"

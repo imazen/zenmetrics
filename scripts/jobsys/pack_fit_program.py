@@ -230,8 +230,9 @@ def byc_sources(path, pin):
     required = {"scripts/rev4_featpot/" + n for n in
                 ("byc_cells.py", "v2_lodo_mlp.py", "v2_confirm_fit.py", "v2_common.py",
                  "v2_teacher.py", "subjective_training_leg.py", "e33_fx1_declaration.json")}
+    commit = record.get("source_commit", "")
     if (record.get("schema") != "byc-fit-program-v1" or not required <= files.keys()
-            or not record.get("source_commit")):
+            or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit)):
         raise ValueError("byc source import closure or commit missing")
     for name, pin in files.items():
         p = Path(name)
@@ -329,6 +330,8 @@ def main() -> None:
     if args.profile == "byc":
         if args.byc_columns is None:
             raise ValueError("byc requires its frozen columns file")
+        if digest(args.byc_columns) != json.loads(args.source_pins.read_text())["columns_sha256"]:
+            raise ValueError("byc columns changed after freezing")
         files["byc_columns.txt"] = args.byc_columns
         files["byc_fit_contract.py"] = args.executor.with_name("byc_fit_contract.py")
         for name in ("byc_fsid", "byc_predict", "score_pair_with_bake"):
@@ -354,6 +357,10 @@ def main() -> None:
     metadata = json.loads(args.build_meta.read_text())
     if metadata.get("schema") != "fleet-fits-build-v1":
         raise ValueError("build metadata missing or wrong schema")
+    if args.profile == "byc":
+        binaries = {name: digest(path) for name, path in files.items() if name.startswith("bin/")}
+        if binaries != metadata.get("binary_sha256"):
+            raise ValueError("byc binary set differs from its independently frozen manifest")
     if args.profile == 'steer' and metadata.get('steer_scientific') != {
             'schema': 'steer-scientific-fit-v1', 'epochs': 120, 'pairs_per_epoch': 50000}:
         raise ValueError('scientific STEER metadata must bind full registered budget')
