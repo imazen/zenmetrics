@@ -111,7 +111,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--program-sha", required=True)
     p.add_argument("--data-sha", required=True)
-    p.add_argument("--grid", choices=("p0", "p2", "d2", "v2", "registered"), default="p0")
+    p.add_argument("--grid", choices=("p0", "p2", "d2", "v2", "registered", "byc"), default="p0")
+    p.add_argument("--byc-label")
+    p.add_argument("--byc-folds")
+    p.add_argument("--byc-seeds", default="0,1,2")
     p.add_argument("--registered-grid", type=Path)
     p.add_argument("--registered-grid-sha256")
     p.add_argument("--v2-phase", choices=("calibration", "arms", "all"), default="calibration")
@@ -122,7 +125,24 @@ def main():
     for label, value in (("program", args.program_sha), ("data", args.data_sha)):
         if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
             p.error(f"{label} SHA-256 must be lowercase hex")
-    if args.grid == "registered":
+    if args.grid == "byc":
+        from byc_fit_contract import identity
+        if not args.byc_label or not args.byc_folds or args.existing_root is None:
+            p.error("byc needs its label, explicit folds and existing study cells root")
+        all_cells = []
+        for seed in args.byc_seeds.split(","):
+            for fold in args.byc_folds.split(","):
+                argv = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", args.byc_label,
+                        "--folds", fold, "--seeds", seed, "--jobs", "1"]
+                label, fold, seed_index = identity(argv)
+                all_cells.append(dict(name=f"{label}/without_{fold}_s{seed_index}", argv=argv))
+        if len({c["name"] for c in all_cells}) != len(all_cells):
+            raise ValueError("byc folds/seeds declare duplicate work")
+        for c in all_cells:
+            dest = args.existing_root / c["name"]
+            if dest.exists() and not all((dest / n).is_file() for n in ("byc_record.json", "result.json")):
+                raise ValueError(f"byc cell already started elsewhere: {dest}")
+    elif args.grid == "registered":
         all_cells = grid_registered(args.registered_grid,args.registered_grid_sha256)
     elif args.grid == "v2":
         all_cells = list(grid_v2(args.v2_phase))

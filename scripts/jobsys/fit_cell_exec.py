@@ -423,6 +423,7 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
     if argv[0] == "byc_cells.py":
         from byc_fit_contract import verify_output
         verify_output(dest, argv, digest)
+        shutil.copyfile(dest.parent / f"{dest.name}.wrapper.log", dest / "byc_wrapper.log")
     selected = Path(value["selected_bake"])
     if selected != dest / "refit" / selected.name or digest(selected) != value["selected_bake_sha256"]:
         raise ValueError("selected checkpoint receipt mismatch")

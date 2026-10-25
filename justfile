@@ -26,6 +26,9 @@ byc-fit-check:
 byc-fit-data root score_root label out:
     python3 scripts/jobsys/pack_fit_data_v2.py --byc-root "{{root}}" --byc-score-root "{{score_root}}" --byc-label "{{label}}" --out "{{out}}"
 
+byc-fit-spec program data label folds seeds cells out *flags:
+    python3 scripts/jobsys/build_fit_spec.py --grid byc --program-sha "{{program}}" --data-sha "{{data}}" --byc-label "{{label}}" --byc-folds "{{folds}}" --byc-seeds "{{seeds}}" --existing-root "{{cells}}" --out "{{out}}" {{flags}}
+
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
 byc-fit-prepare source bin_dir metadata pins columns worker out image:
     #!/usr/bin/env bash

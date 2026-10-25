@@ -93,6 +93,7 @@ if [ "${FIT_CELL_IMAGE:-0}" = "1" ]; then
   else
     "${FIT_DOCKER_CMD[@]}" build --build-arg "FIT_PROGRAM_SHA=$ZEN_FIT_PROGRAM_SHA" -t "$IMAGE" "$CTX"
   fi
+  # shellcheck disable=SC2016 # The tool variable expands inside the container.
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /bin/bash "$IMAGE" -lc \
     'for tool in aws s5cmd zenfleet-worker gunzip timeout findmnt; do command -v "$tool" >/dev/null || exit 1; done; aws --version >/dev/null; s5cmd version >/dev/null; python3 -c "import numpy, pandas, pyarrow, scipy"'
   "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /usr/local/bin/fit-cell-exec "$IMAGE" capabilities | grep -qx fit-cell-v1

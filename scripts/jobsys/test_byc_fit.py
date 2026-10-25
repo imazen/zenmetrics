@@ -5,11 +5,15 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import contextlib
+import io
+import sys
 from unittest.mock import Mock, patch
 
 import byc_fit_contract as c
 import fit_cell_exec as executor
 import harvest_fit_cells as harvest
+import build_fit_spec as spec
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -17,6 +21,22 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_declaration_uses_canonical_cell_and_refuses_started_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = ["build_fit_spec.py", "--grid", "byc", "--program-sha", "a" * 64,
+                    "--data-sha", "b" * 64, "--byc-label", "Mw100", "--byc-folds", "kadid,pairs",
+                    "--byc-seeds", "0,1,2", "--existing-root", str(root / "cells"),
+                    "--out", str(root / "spec.json")]
+            with patch.object(sys, "argv", args), contextlib.redirect_stdout(io.StringIO()):
+                spec.main()
+            cells = json.loads((root / "spec.json").read_text())["cells"]
+            self.assertEqual(len(cells), 6)
+            self.assertEqual(cells[0], dict(name="Mw100/without_kadid_s0", argv=ARGV))
+            (root / "cells/Mw100/without_pairs_s1").mkdir(parents=True)
+            with patch.object(sys, "argv", args), self.assertRaisesRegex(ValueError, "already started"):
+                spec.main()
+
     def test_bound_root_alias_and_thread_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
             data = Path(tmp)
