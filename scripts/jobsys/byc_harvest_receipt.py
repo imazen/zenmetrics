@@ -16,11 +16,15 @@ def main():
     p.add_argument("--ids", type=Path, required=True)
     p.add_argument("--ledger", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--byc-linked-root", type=Path)
+    p.add_argument("--byc-linked-root-sha")
     p.add_argument("--staged", action="store_true",
                    help="inventory only DONE cells under the native harvest's staged/ directory")
     p.add_argument("--done-only", action="store_true",
                    help="inventory installed DONE cells, keeping the full manifest denominator")
     args = p.parse_args()
+    if (args.byc_linked_root is None) != (args.byc_linked_root_sha is None):
+        p.error('linked root and independently registered SHA are required together')
     if args.out.exists():
         raise ValueError("preserve the previous harvest receipt")
     manifest = json.loads(args.manifest.read_text())
@@ -52,6 +56,10 @@ def main():
                           fleet_receipt_sha256=digest(path / "fleet_receipt.json"),
                           selected_bake_sha256=receipt["selected_bake_sha"], refit_files=refit,
                           dense_files={k: v for k, v in listed.items() if k.startswith("dense/")}))
+        if args.byc_linked_root is not None:
+            from byc_linked_receipt import check_linked_cell
+            cells[-1]['linked_subset_gate'] = check_linked_cell(
+                path,args.byc_linked_root,args.byc_linked_root_sha,digest)
     report = dict(schema="byc-harvest-retained-bakes-v1", observed_at=datetime.now(timezone.utc).isoformat(),
                   verified=len(cells), expected=len(manifest), manifest_sha256=digest(args.manifest),
                   complete=len(cells) == len(manifest), staging_only=args.staged,

@@ -7,6 +7,11 @@ shift 5
 export TMPDIR="$HOME/tmp"
 # shellcheck disable=SC1091
 source scripts/lib/s3env.sh
+linked_gate=()
+if [[ -n "${ZEN_BYC_LINKED_ROOT:-}" ]]; then
+  test -n "${ZEN_BYC_LINKED_ROOT_SHA:-}"
+  linked_gate=(--byc-linked-root "$ZEN_BYC_LINKED_ROOT" --byc-linked-root-sha "$ZEN_BYC_LINKED_ROOT_SHA")
+fi
 stage=$(realpath -m "$cells/../fleet-harvest/$run-$pass")
 cache=$(realpath -m "$cells/../fleet-harvest/$run/blobs")
 mkdir "$stage"
@@ -24,10 +29,10 @@ PYCACHE
 python3 scripts/jobsys/harvest_fit_cells.py --manifest "$output/manifest.json" \
   --ids "$output/ids.tsv" --ledger "$output/snap_$run.parquet" \
   --blobs-prefix "s3://zentrain/jobs/$run/blobs" --endpoint "$EP" --scratch "$stage" \
-  --byc-install-root "$cells" --done-only --install "$@"
+  --byc-install-root "$cells" --done-only --install "${linked_gate[@]}" "$@"
 python3 scripts/jobsys/byc_harvest_receipt.py --done-only --cells "$cells" \
   --manifest "$output/manifest.json" --ids "$output/ids.tsv" \
-  --ledger "$output/snap_$run.parquet" --out "$output/${pass}_VERIFIED_HARVEST.json"
+  --ledger "$output/snap_$run.parquet" --out "$output/${pass}_VERIFIED_HARVEST.json" "${linked_gate[@]}"
 python3 - "$cache" "$stage/blobs" <<'PYCACHE'
 from pathlib import Path
 import sys

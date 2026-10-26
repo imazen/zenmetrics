@@ -17,6 +17,7 @@ import fit_cell_exec as executor
 import harvest_fit_cells as harvest
 import build_fit_spec as spec
 import byc_harvest_receipt as summary
+from byc_linked_receipt import check_linked_cell
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -24,6 +25,30 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_linked_harvest_rejects_retained_family_and_wrong_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'root';dest=Path(tmp)/'cell'
+            (root/'datasets').mkdir(parents=True);(root/'wide').mkdir();dest.mkdir()
+            def write(path,value):path.write_text(json.dumps(value))
+            authority=root/'datasets/linked-subset-omissions.json'
+            write(authority,dict(labels_read=False,folds=dict(mos7=dict(heldout_collections=['mdid'],excluded_subset_collections=['cognitive']))))
+            pin=harvest.digest(authority)
+            packet=root/'datasets/receipt.json'
+            write(packet,dict(groups=[dict(collection=c) for c in ['pipal','mdid','cognitive','bapps']],linked_subset_omissions=dict(path='datasets/linked-subset-omissions.json',sha256=pin)))
+            packet_sha=harvest.digest(packet)
+            write(root/'wide/frozen.json',dict(dataset_legs_sha256=packet_sha,auxiliary_files={'datasets/linked-subset-omissions.json':pin}))
+            frozen=harvest.digest(root/'wide/frozen.json')
+            record=dict(fold='mos7',linked_subset_omission_sha256=pin,dataset_exclusions=['mdid','cognitive'])
+            selected=dict(root_sha256=frozen,receipt_sha256=packet_sha,requested_exclusions=['mdid','cognitive'],omitted_collections=['mdid','cognitive'],retained_collections=['pipal','bapps'])
+            write(dest/'byc_record.json',record);write(dest/'result.json',dict(frozen_sha256=frozen));write(dest/'DATASET_GROUP_SELECTION.json',selected)
+            self.assertEqual(check_linked_cell(dest,root,frozen,harvest.digest)['retained_groups'],2)
+            selected['retained_collections'].append('cognitive');write(dest/'DATASET_GROUP_SELECTION.json',selected)
+            with self.assertRaisesRegex(ValueError,'linked exclusions'):check_linked_cell(dest,root,frozen,harvest.digest)
+            selected['retained_collections'].pop();write(dest/'DATASET_GROUP_SELECTION.json',selected)
+            record['dataset_exclusions']=[];write(dest/'byc_record.json',record)
+            with self.assertRaisesRegex(ValueError,'linked exclusions'):check_linked_cell(dest,root,frozen,harvest.digest)
+            with self.assertRaisesRegex(ValueError,'registered pin'):check_linked_cell(dest,root,'f'*64,harvest.digest)
+
     def test_partial_blob_verification_and_installation_are_explicit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

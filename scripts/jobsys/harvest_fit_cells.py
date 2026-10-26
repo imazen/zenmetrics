@@ -381,12 +381,16 @@ def main() -> None:
     p.add_argument("--install", action="store_true")
     p.add_argument("--done-only", action="store_true", help="verify or install DONE cells while other manifest cells run")
     p.add_argument("--byc-install-root", type=Path, help="study cells directory for byc outputs only")
+    p.add_argument("--byc-linked-root", type=Path)
+    p.add_argument("--byc-linked-root-sha")
     p.add_argument("--no-runtime-alias", action="store_true",
                    help="install a separate byc study without changing the shared runtime output alias")
     p.add_argument("--program-archive", type=Path, help="manifest-bound program archive; required for strict training-only")
     p.add_argument("--checkpoint-inspector", type=Path, help="canonical model loader matching program binary pin")
     p.add_argument("--allow-local-smoke", action="store_true", help="verification only, never installation")
     args = p.parse_args()
+    if (args.byc_linked_root is None) != (args.byc_linked_root_sha is None):
+        p.error('linked root and independently registered SHA are required together')
     if args.install and args.allow_local_smoke:
         p.error("local smoke verification cannot install cells")
     if args.no_runtime_alias and (not args.install or args.byc_install_root is None):
@@ -423,6 +427,10 @@ def main() -> None:
             shutil.rmtree(stage)
         receipt = verify_blob(blob, stage, name, job["kind"], program_archive=args.program_archive,
                               checkpoint_inspector=args.checkpoint_inspector, allow_local_smoke=args.allow_local_smoke)
+        if args.byc_linked_root is not None:
+            from byc_linked_receipt import check_linked_cell
+            check_linked_cell(cell_dir(stage,name,job['kind']),args.byc_linked_root,
+                              args.byc_linked_root_sha,digest)
         tiers[receipt["tier_status"]] = tiers.get(receipt["tier_status"], 0) + 1
         target = (args.byc_install_root if args.byc_install_root is not None else POT_ROOT / blob_root(job["kind"])) / name
         if args.install and args.byc_install_root is not None and target.exists() and not (target / "fleet_receipt.json").is_file():
