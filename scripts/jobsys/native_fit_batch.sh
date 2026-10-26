@@ -5,6 +5,7 @@
 set -euo pipefail
 native_root=$(realpath "${1:?runtime directory}")
 native_repo=$(cd "$(dirname "$0")/../.." && pwd)
+python3 "$native_repo/scripts/jobsys/prepare_native_fit_program.py" --program "$native_root/program"
 # Bash may reread a script after a long foreground worker returns. Pin the
 # wrapper bytes before launching so later operator fixes cannot shift its offset.
 native_script=$(python3 - "$native_repo" "$native_root" <<'PYSNAPSHOT'

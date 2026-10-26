@@ -945,6 +945,10 @@ claims, outputs and ledgers. `native_fit_namespace.sh` preserves the canonical
 fit paths in private mount namespaces; host data aliases remain unchanged.
 The runtime holds the verified extracted program, native manifests, native-ID
 comparisons, disk-backed scratch, bounded worker plan and `slots` admission file.
+Before launching, the batch verifies the executor's hash against `build_meta.json`
+and sets its native mode to 0755, matching the image's executable entrypoint.
+An extracted archive may retain source mode 0644; permissions change, pinned
+program bytes do not. The namespace guard reports a missing executable explicitly.
 The batch currently caps aggregate scope memory at 42 GiB with swap disabled.
 `byc-fit-native-memory RUNTIME` reports cgroup current/peak/max/events; use those
 aggregate readings and live system headroom when changing admission. A trainer's

@@ -18,7 +18,11 @@ native_ns=$(realpath "${1:?namespace directory}")
 native_program=$(realpath "${2:?verified program directory}")
 native_scratch=$(realpath "${3:?disk scratch directory}")
 shift 3
-[[ -x "$native_program/fit_cell_exec.py" && -d "$native_scratch" && $# -gt 0 ]]
+if [[ ! -x "$native_program/fit_cell_exec.py" ]]; then
+  echo 'native executor is not executable; prepare the verified program before namespace admission' >&2
+  exit 1
+fi
+[[ -d "$native_scratch" && $# -gt 0 ]]
 mkdir -p "$native_ns/opt/fleet-fits/program" "$native_ns/var-tmp" "$native_ns/byconstruction"
 # A mountpoint only; no data is stored in the host's root filesystem.
 sudo -n mkdir -p /scratch

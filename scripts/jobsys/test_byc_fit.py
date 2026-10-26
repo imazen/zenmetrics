@@ -19,6 +19,7 @@ import build_fit_spec as spec
 import byc_harvest_receipt as summary
 from byc_linked_receipt import check_linked_cell
 from native_scope_limits import admission_budget, CELL_RESERVE_BYTES
+from prepare_native_fit_program import prepare as prepare_native_program
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -26,6 +27,20 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_native_archive_entrypoint_mode_preserves_pinned_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);entry=root/'fit_cell_exec.py'
+            entry.write_bytes(b'#!/usr/bin/env python3\n')
+            pin=hashlib.sha256(entry.read_bytes()).hexdigest()
+            (root/'build_meta.json').write_text(json.dumps(dict(files={'fit_cell_exec.py':pin})))
+            entry.chmod(0o644)
+            self.assertEqual(prepare_native_program(root)['executor_sha256'],pin)
+            self.assertEqual(entry.stat().st_mode & 0o777,0o755)
+            entry.chmod(0o644);entry.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError,'pinned program'):
+                prepare_native_program(root)
+            self.assertEqual(entry.stat().st_mode & 0o777,0o644)
+
     def test_postprocessor_budgets_reserve_future_science_peaks(self):
         gib = 1024**3
         self.assertTrue(admission_budget(4*gib, 6, True, 20*gib, 21*gib)[0])
