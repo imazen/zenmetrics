@@ -52,6 +52,6 @@ trap native_scope_receipt EXIT
   --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$native_worker.parquet" \
   --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
   --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
-  --claim-ttl-secs 600 --control-r2-key "$ZEN_RUN/control.json" --capability cpu_heavy \
+  --claim-ttl-secs "${ZEN_CLAIM_TTL_SECS:-86400}" --control-r2-key "$ZEN_RUN/control.json" --capability cpu_heavy \
   --r2-endpoint "$EP" --exec /opt/fleet-fits/program/fit_cell_exec.py \
   --worker "$native_worker" --provider local

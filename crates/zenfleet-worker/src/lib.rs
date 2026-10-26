@@ -2988,6 +2988,30 @@ fn flush_chunk_rows(
     }
 }
 
+// `WorkerConfig::now` is the pass-start timestamp, not a frozen lease clock.
+// A later claim in a multi-hour pass must not be born already older than its TTL.
+struct ClaimClock {
+    pass_start: u64,
+    started: std::time::Instant,
+}
+
+impl ClaimClock {
+    fn new(pass_start: u64) -> Self {
+        Self {
+            pass_start,
+            started: std::time::Instant::now(),
+        }
+    }
+
+    fn at_elapsed(&self, elapsed: std::time::Duration) -> u64 {
+        self.pass_start.saturating_add(elapsed.as_secs())
+    }
+
+    fn now(&self) -> u64 {
+        self.at_elapsed(self.started.elapsed())
+    }
+}
+
 fn run_chunked(
     cfg: &WorkerConfig,
     desired: &[DesiredJob],
@@ -2996,6 +3020,7 @@ fn run_chunked(
     ctx: WorkerCtx<'_>,
     endpoint: Option<&str>,
 ) -> Result<ExecOutcome, WorkerRunError> {
+    let claim_clock = ClaimClock::new(cfg.now);
     let params = default_chunk_params(cfg.chunk_wall_sec);
     eprintln!(
         "zenfleet-worker: resource-aware concurrent mode (LPT + can_admit, chunk target {:.0}s) \
@@ -3080,7 +3105,7 @@ fn run_chunked(
                             &cc.bucket,
                             &cc.prefix,
                             cid,
-                            cfg.now,
+                            claim_clock.now(),
                             cc.ttl_secs,
                             None,
                             &cfg.worker,
@@ -3445,6 +3470,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     let persistent = std::env::var("ZEN_PERSISTENT_EXEC")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let claim_clock = ClaimClock::new(cfg.now);
     let out = match &cfg.r2 {
         Some(t) => {
             let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
@@ -3475,7 +3501,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                                 &cc.bucket,
                                 &cc.prefix,
                                 id,
-                                cfg.now,
+                                claim_clock.now(),
                                 cc.ttl_secs,
                                 cc.spec_threshold_secs,
                                 &cfg.worker,
@@ -3540,6 +3566,30 @@ fn chunk_claim_order(chunk_ids: &[String], worker: &str, manifest_order: bool) -
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn later_claim_in_long_pass_is_fresh_before_first_heartbeat() {
+        let clock = super::ClaimClock::new(1_000);
+        let reader_now = 4_600;
+        let ttl = 600;
+        assert!(super::claim_is_stale(reader_now, 1_000, ttl));
+        let claim_time = clock.at_elapsed(std::time::Duration::from_secs(3_600));
+        assert_eq!(claim_time, reader_now);
+        assert!(!super::claim_is_stale(reader_now, claim_time, ttl));
+        assert!(!super::claim_is_stale(reader_now + 200, claim_time, ttl));
+        assert!(super::claim_is_stale(reader_now + ttl + 1, claim_time, ttl));
+    }
+
+    #[test]
+    fn lease_clock_preserves_supplied_epoch_and_saturates() {
+        let clock = super::ClaimClock::new(42);
+        assert_eq!(clock.at_elapsed(std::time::Duration::ZERO), 42);
+        assert_eq!(clock.at_elapsed(std::time::Duration::from_secs(7)), 49);
+        let clock = super::ClaimClock::new(u64::MAX - 1);
+        assert_eq!(
+            clock.at_elapsed(std::time::Duration::from_secs(7)),
+            u64::MAX
+        );
+    }
 
     #[test]
     fn chunk_claim_order_manifest_mode_is_manifest_order() {

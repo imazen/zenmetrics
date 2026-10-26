@@ -962,3 +962,16 @@ Each newly admitted native pass compacts the original jobset's ledger and reads
 that snapshot before claiming. Publish native snapshots during long runs with
 `byc-fit-compact CTL RUN OUT`: completed claim leases can expire, so a fresh
 ledger is essential for later passes to avoid repeating completed work.
+
+Lease timestamps advance during a worker pass using elapsed monotonic time from
+the supplied pass-start epoch. Reusing the start timestamp after a long FitCell
+made the next claim immediately stale before its first periodic heartbeat.
+Both the chunked and serial lease paths use the advancing clock. The regression
+reproduces a second claim after one hour and checks that another worker cannot
+steal it during the initial heartbeat interval.
+
+For the active by-construction transition, newly admitted native passes default
+to a one-day lease (`ZEN_CLAIM_TTL_SECS` overrides it). New LAN claimants must use
+the same window while old binaries finish. This prevents late admissions from
+stealing old-binary claims stamped at pass start. Signal-based release remains
+available for reclaimed hosts; all interrupted outputs remain protected.

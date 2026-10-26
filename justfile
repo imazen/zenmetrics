@@ -432,6 +432,12 @@ stopped-claim-release-check:
 stopped-claim-release-build:
     just snap-cargo @ build -p zenfleet-worker --example release_owned_claim
 
+# Run under the caller's heavy admission, including the shared native fit scope.
+claim-clock-check-build:
+    just snap-cargo @ test --release -p zenfleet-worker --lib
+    just snap-cargo @ clippy --release -p zenfleet-worker --bin zenfleet-worker -- -D warnings
+    just snap-cargo @ build --release -p zenfleet-worker --bin zenfleet-worker
+
 # CLI/NN feature-combination matrix: 14 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
 # `--no-default-features` build, the default build, and standalone NN WebGPU. Prints a PASS/FAIL

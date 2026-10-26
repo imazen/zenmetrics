@@ -11,6 +11,16 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+### Known Bugs: subsequent FitCell claim timestamp (2026-10-26)
+
+The worker used the pass-start epoch for every lease acquisition. A second
+long-running cell could therefore be born stale and stolen before the first
+periodic heartbeat. Five redundant native copies were stopped after ownership
+loss; their partial bakes and hash inventories were retained. Chunked and serial
+lease acquisition now advance the supplied epoch by monotonic elapsed time.
+The worker library's 67 tests pass, including the one-hour second-claim
+regression. See `docs/RUNNING_JOBS.md` for the old-binary transition lease window.
+
 ### Known Bugs: HDR-VDP v2 original-call diagnostic difference (2026-10-20)
 
 The partial [original HDR numerical grid](benchmarks/canonical_recheck_2026-10-19/hdr-original-partial12.json)
