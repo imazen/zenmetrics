@@ -18,6 +18,7 @@ import harvest_fit_cells as harvest
 import build_fit_spec as spec
 import byc_harvest_receipt as summary
 from byc_linked_receipt import check_linked_cell
+from native_scope_limits import admission_budget, CELL_RESERVE_BYTES
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -25,6 +26,17 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_postprocessor_budgets_reserve_future_science_peaks(self):
+        gib = 1024**3
+        self.assertTrue(admission_budget(4*gib, 6, True, 20*gib, 21*gib)[0])
+        self.assertTrue(admission_budget(8*gib, 6, True, 20*gib, 21*gib)[0])
+        self.assertEqual(admission_budget(12*gib, 6, True, 20*gib, 21*gib),
+                         (False, 6*CELL_RESERVE_BYTES))
+        self.assertTrue(admission_budget(12*gib, 6, False, 2*gib, 3*gib)[0])
+        self.assertFalse(admission_budget(4*gib, 6, True, 20*gib, 38*gib)[0])
+        with self.assertRaises(ValueError):
+            admission_budget(0, 6, True, 0, 0)
+
     def test_linked_harvest_rejects_retained_family_and_wrong_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'root';dest=Path(tmp)/'cell'

@@ -32,6 +32,10 @@ if [[ "$native_mode" == initial ]]; then
   cat /proc/self/cgroup > "$native_root/scope.cgroup"
   printf '%s\n' "$$" > "$native_root/batch.pid"
   date -u +%Y-%m-%dT%H:%M:%SZ > "$native_root/STARTED_AT"
+  native_unit=$(basename "$(cut -d: -f3 "$native_root/scope.cgroup")")
+  [[ "$(systemctl --user show "$native_unit" -p Delegate --value)" == yes ]]
+  [[ "$(systemctl --user show "$native_unit" -p OOMPolicy --value)" == continue ]]
+  sudo -n python3 "$native_repo/scripts/jobsys/native_scope_limits.py" --runtime "$native_root"
   native_slots="$native_root/slots"
   native_plan="$native_root/worker-plan.tsv"
   native_log="$native_root/native-passes.tsv"

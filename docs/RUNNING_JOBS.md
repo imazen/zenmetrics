@@ -952,6 +952,26 @@ single-process maximum RSS does not bound its whole prediction process tree.
 Native scheduling hints may reserve more RAM without changing job IDs; verify
 this using `zenfleet-ctl ids` before sharing an existing jobset's claims.
 
+The batch requests the resource runner's explicit `--delegate` mode and verifies
+`Delegate=yes` and `OOMPolicy=continue` before any worker starts. Direct members
+move into a `science/` leaf; the original 42 GiB/no-swap ancestor still accounts
+for every descendant. This prevents a child-limit OOM from systemd stopping the
+entire aggregate. The default resource runner behavior is unchanged.
+
+An owner-authorized postprocessor uses the checked join helper with
+`--memory-max-bytes 4294967296` (4 GiB), `8589934592` (8 GiB), or `12884901888`
+(12 GiB), before the command separator. The helper shares the live heavy-lock
+descriptor and puts the command in a child cgroup under that same ancestor,
+with its own hard memory limit and no swap. Postprocessors serialize through
+one runtime lock. Admission reserves 5.5 GiB per configured science slot and
+1 GiB additional headroom, as well as checking current aggregate usage.
+With six science slots, 4/8 GiB postprocessors can qualify; a 12 GiB postprocessor
+waits for the science batch to exit and sufficient charged memory to be released.
+The helper records both child and aggregate counters in its admission receipt.
+It does not create a sibling systemd scope or change science slots or caps.
+`just byc-fit-scope-check RUNTIME OUT` proves real nested memory enforcement
+with a small allocation, including survival of a deliberate child-only OOM.
+
 `byc-fit-harvest ... --done-only --scratch FRESH_DIRECTORY` verifies already
 returned blobs while the rest of an arm trains. It reports the verified subset
 against the full manifest. Add `--install` to install the verified DONE subset;

@@ -124,11 +124,15 @@ byc-fit-native namespace program scratch +command:
 
 # A bounded native batch shares one hard cap and the owner's global heavy lock.
 byc-fit-native-batch runtime:
-    TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 42G --jobs 12 -- bash scripts/jobsys/native_fit_batch.sh "{{runtime}}"
+    TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 42G --jobs 12 --delegate -- bash scripts/jobsys/native_fit_batch.sh "{{runtime}}"
 
 # Read aggregate cgroup accounting; single-process RSS cannot bound a fit tree.
 byc-fit-native-memory runtime:
     python3 -c 'from pathlib import Path; import json; r=Path("{{runtime}}"); p=Path("/sys/fs/cgroup")/r.joinpath("scope.cgroup").read_text().strip().split("::",1)[1].lstrip("/"); print(json.dumps(dict(scope=str(p), **{k:(p/k).read_text().strip() for k in ("memory.current","memory.peak","memory.max","memory.swap.max","memory.events")})))'
+
+# An isolated, short 32MiB child-allocation proof; no training or shared lock.
+byc-fit-scope-check runtime out:
+    TMPDIR="$HOME/tmp" "$HOME/work/zen/scripts/run-heavy" --mem 42G --jobs 1 --delegate -- python3 scripts/jobsys/verify_native_scope_limits.py --runtime '{{runtime}}' --out '{{out}}'
 
 # Add a bounded native launcher to the existing scope and share its original lock.
 byc-fit-native-join runtime lock_pid +command:
