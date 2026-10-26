@@ -44,6 +44,10 @@ native_snapshot="$native_root/$native_arm/snapshot-$native_index"
 native_manifest="$native_root/$native_arm/manifest.json"
 native_subset="$native_root/$native_arm/manifest-$native_index.json"
 native_ttl=${ZEN_CLAIM_TTL_SECS:-86400}
+if [[ -f "$native_root/claim-ttl-secs" ]]; then
+  IFS= read -r native_ttl < "$native_root/claim-ttl-secs"
+  [[ "$native_ttl" =~ ^[1-9][0-9]*$ && "$native_ttl" -ge 600 ]]
+fi
 if [[ -f "$native_subset" ]]; then
   python3 - "$native_manifest" "$native_subset" <<'PYSUBSET'
 import json, sys

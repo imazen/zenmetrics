@@ -1010,6 +1010,9 @@ For another pinned by-construction jobset, native runtimes may supply
 the manifest's program/input identities and claims the original jobset. Size
 the per-worker admission envelope to admit one declared cell; the enclosing
 run-heavy scope remains the aggregate hard limit.
+An optional `claim-ttl-secs` file binds the native cohort's lease window after
+namespace privilege changes. Use the same window as its live fleet claimants;
+this file requires at least 600 seconds. Per-subset retry settings take priority.
 
 The by-construction adapter accepts explicit `mono:thr:mp32` and
 `mono:thr:mp64` recipes. `byc-fit-spec ... --byc-arm mono:thr:mp64` binds the
