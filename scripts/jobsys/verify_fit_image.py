@@ -46,10 +46,13 @@ if json.loads((root/'build_meta.json').read_text()) != expected:
 for name,pin in expected['files'].items():
     if hashlib.sha256((root/name).read_bytes()).hexdigest() != pin:
         raise ValueError('image file differs: '+name)
+executor=Path('/usr/local/bin/fit-cell-exec')
+if executor.read_bytes() != (root/'fit_cell_exec.py').read_bytes() or not executor.stat().st_mode & 0o111:
+    raise ValueError('launched executor differs from pinned program or is not executable')
 worker=hashlib.sha256(Path('/usr/local/bin/zenfleet-worker').read_bytes()).hexdigest()
 if worker != expected['worker_sha256']:
     raise ValueError('image worker differs')
-print(json.dumps(dict(verified_files=len(expected['files']),worker_sha256=worker)))
+print(json.dumps(dict(verified_files=len(expected['files']),worker_sha256=worker,executor_matches_program=True)))
 """
     immutable = next(ref for ref in image['RepoDigests'] if ref.startswith('ghcr.io/imazen/zenfleet-worker@sha256:'))
     proof = json.loads(subprocess.check_output([

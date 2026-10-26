@@ -4,5 +4,7 @@ FROM ${FIT_BASE_IMAGE}
 ARG FIT_PROGRAM_SHA
 COPY --chmod=0644 program.tar.gz /opt/fleet-fits/program.tar.gz
 RUN printf '%s  /opt/fleet-fits/program.tar.gz\n' "$FIT_PROGRAM_SHA" | sha256sum -c - \
-    && tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program
+    && tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program \
+    && install -m 0755 /opt/fleet-fits/program/fit_cell_exec.py /usr/local/bin/fit-cell-exec \
+    && cmp /opt/fleet-fits/program/fit_cell_exec.py /usr/local/bin/fit-cell-exec
 ENV ZEN_FIT_PROGRAM_SHA=${FIT_PROGRAM_SHA}

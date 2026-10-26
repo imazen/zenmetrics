@@ -1072,3 +1072,20 @@ optional runtime `control-key-suffix` with the same restricted filename format.
 The next pass reads this setting; running passes retain their existing control.
 A paused replay probe confirmed the forwarded cohort key reaches the baked
 worker, performs no fit and honors PAUSED. The probe was explicitly stopped.
+
+### Program refresh must replace the launched executor (2026-10-26)
+
+A program-only FitCell image refresh previously extracted the new
+`fit_cell_exec.py` under `/opt/fleet-fits/program/` while leaving the older
+`/usr/local/bin/fit-cell-exec` as the actual launch target. The linked subset
+run returned complete blobs but its older executor removed completed staging.
+All installed results remain verified, and the two late duplicate blobs were
+recovered from the immutable store before closeout.
+
+`Dockerfile.fit-program-refresh` now installs the program's executor at the
+launch path and compares both files. `verify_fit_image.py` independently checks
+those executable bytes inside the immutable image, in addition to all program
+files and the worker. The previous image fails this check; the corrected image
+passes with the same scientific program and six binary hashes. Evidence is
+`r6/late-duplicates/EXECUTOR_IMAGE_VERIFIED.json` beneath the by-construction
+benchmark pointer's artifact root. This check changes no training invocation.
