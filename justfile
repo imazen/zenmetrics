@@ -89,6 +89,10 @@ byc-fit-native namespace program scratch +command:
 byc-fit-native-batch runtime:
     TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 42G --jobs 12 -- bash scripts/jobsys/native_fit_batch.sh "{{runtime}}"
 
+# Read aggregate cgroup accounting; single-process RSS cannot bound a fit tree.
+byc-fit-native-memory runtime:
+    python3 -c 'from pathlib import Path; import json; r=Path("{{runtime}}"); p=Path("/sys/fs/cgroup")/r.joinpath("scope.cgroup").read_text().strip().split("::",1)[1].lstrip("/"); print(json.dumps(dict(scope=str(p), **{k:(p/k).read_text().strip() for k in ("memory.current","memory.peak","memory.max","memory.swap.max","memory.events")})))'
+
 byc-fit-receipt cells manifest ids ledger out:
     python3 scripts/jobsys/byc_harvest_receipt.py --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
 

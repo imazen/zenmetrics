@@ -935,3 +935,19 @@ SHA-256 before any Docker mutation, then mounts it read-only at
 operator must bind the amendment separately and verify the created container
 before releasing paused work. `just lan-entrypoint-test` exercises admission
 and rejects missing, changed, non-executable and symlink inputs.
+
+### Native FitCell claimants under a shared resource scope
+
+For an owner-authorized workstation run, `byc-fit-native-batch RUNTIME` runs
+bounded native `zenfleet-worker` passes under one `run-heavy --jobs 12` scope
+and the shared heavy lock. It uses the same pinned program and original jobset
+claims, outputs and ledgers. `native_fit_namespace.sh` preserves the canonical
+fit paths in private mount namespaces; host data aliases remain unchanged.
+The runtime holds the verified extracted program, native manifests, native-ID
+comparisons, disk-backed scratch, bounded worker plan and `slots` admission file.
+The batch currently caps aggregate scope memory at 42 GiB with swap disabled.
+`byc-fit-native-memory RUNTIME` reports cgroup current/peak/max/events; use those
+aggregate readings and live system headroom when changing admission. A trainer's
+single-process maximum RSS does not bound its whole prediction process tree.
+Native scheduling hints may reserve more RAM without changing job IDs; verify
+this using `zenfleet-ctl ids` before sharing an existing jobset's claims.
