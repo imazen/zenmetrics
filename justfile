@@ -40,12 +40,17 @@ byc-fit-stage data program run:
     source scripts/lib/s3env.sh
     bash scripts/jobsys/stage_fit_inputs.sh "{{run}}" "{{data}}" "{{program}}"
 
-byc-fit-enqueue ctl spec run data program out:
+byc-fit-enqueue ctl spec run data program out peak_mem="0" threads="0":
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/lib/s3env.sh
     mkdir -p "{{out}}"
-    "{{ctl}}" declare-fits --spec "{{spec}}" --out "{{out}}/manifest.json"
+    if [[ '{{peak_mem}}' == 0 && '{{threads}}' == 0 ]]; then
+      "{{ctl}}" declare-fits --spec "{{spec}}" --out "{{out}}/manifest.json"
+    else
+      "{{ctl}}" declare-fits --spec "{{spec}}" --out "{{out}}/manifest-declared.json"
+      python3 scripts/jobsys/fit_admission_manifest.py --ctl '{{ctl}}' --manifest '{{out}}/manifest-declared.json' --out '{{out}}/manifest.json' --peak-mem-bytes '{{peak_mem}}' --threads '{{threads}}'
+    fi
     "{{ctl}}" ids --manifest "{{out}}/manifest.json" > "{{out}}/ids.tsv"
     just byc-fit-stage "{{data}}" "{{program}}" "{{run}}"
     printf '%s\n' '{"paused":false,"drain":false}' > "{{out}}/control.json"
