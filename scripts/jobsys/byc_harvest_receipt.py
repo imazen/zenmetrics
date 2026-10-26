@@ -18,6 +18,8 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--staged", action="store_true",
                    help="inventory only DONE cells under the native harvest's staged/ directory")
+    p.add_argument("--done-only", action="store_true",
+                   help="inventory installed DONE cells, keeping the full manifest denominator")
     args = p.parse_args()
     if args.out.exists():
         raise ValueError("preserve the previous harvest receipt")
@@ -27,7 +29,7 @@ def main():
         raise ValueError("manifest/ids inventory differs")
     cells = []
     for (job_id, name), job in zip(ids, manifest, strict=True):
-        if args.staged and job_id not in done:
+        if (args.staged or args.done_only) and job_id not in done:
             continue
         kind = job["kind"]
         if kind["argv"][0] != "byc_cells.py" or name != job["cell"]["image_path"]:

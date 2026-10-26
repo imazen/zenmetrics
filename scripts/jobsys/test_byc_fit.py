@@ -24,7 +24,7 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
-    def test_partial_blob_verification_is_explicit_and_cannot_install(self):
+    def test_partial_blob_verification_and_installation_are_explicit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             names = ["Mw100/without_kadid_s0", "Mw100/without_tid2013_s0"]
@@ -53,8 +53,11 @@ class BycTransport(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "no DONE outputs to verify"):
                     harvest.main()
                 args.append("--install")
-                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                rows["job0"] = dict(output_sha="d" * 64)
+                with patch.object(harvest, "install_stages", return_value={"installed": 1}) as install:
                     harvest.main()
+                    self.assertEqual(len(install.call_args.args[0]), 1)
+                    self.assertEqual(install.call_args.args[0][0][0], names[0])
 
     def test_input_staging_reuses_matching_objects_and_refuses_corruption(self):
         script = Path(__file__).with_name("stage_fit_inputs.sh")
