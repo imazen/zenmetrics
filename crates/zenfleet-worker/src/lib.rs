@@ -1445,8 +1445,45 @@ pub fn execute_gap_chunked<H, B, CC, F>(
     store: &B,
     claim_chunk: CC,
     params: ChunkParams,
+    flush: F,
+    ctx: WorkerCtx<'_>,
+) -> ExecOutcome
+where
+    H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError> + Sync,
+    B: BlobStore + Sync,
+    CC: Fn(&str) -> bool,
+    F: FnMut(&str, &[LedgerRow]),
+{
+    let max_chunks = std::env::var("ZEN_MAX_CHUNKS_PER_PASS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&n| n > 0);
+    execute_gap_chunked_bounded(
+        desired,
+        view,
+        policy,
+        handler,
+        store,
+        claim_chunk,
+        params,
+        flush,
+        ctx,
+        max_chunks,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_gap_chunked_bounded<H, B, CC, F>(
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    handler: H,
+    store: &B,
+    claim_chunk: CC,
+    params: ChunkParams,
     mut flush: F,
     ctx: WorkerCtx<'_>,
+    max_chunks: Option<usize>,
 ) -> ExecOutcome
 where
     H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError> + Sync,
@@ -1594,6 +1631,7 @@ where
         }
     };
 
+    let mut completed_chunks = 0;
     for &ci in &order {
         let members = &chunks[ci];
         let cid = &chunk_ids[ci];
@@ -1621,6 +1659,12 @@ where
         // Durable per-chunk write BEFORE the next claim: a crash now only re-does later chunks.
         flush(cid, &chunk_rows);
         out.rows.append(&mut chunk_rows);
+        completed_chunks += 1;
+        if max_chunks.is_some_and(|limit| completed_chunks >= limit) {
+            // Return after durable publication. The entrypoint's next pass reloads
+            // sidecars and run control before any further lease acquisition.
+            break;
+        }
     }
 
     // POISON rows the reconciler decided — identical to execute_gap_claimed; persisted in their own
@@ -4958,6 +5002,70 @@ mod tests {
         let b = host_box_budget();
         assert!(b.cores >= 1);
         assert!(b.ram_budget_bytes >= 1);
+    }
+
+    #[test]
+    fn bounded_pass_publishes_then_reloads_peer_completions() {
+        let store = LocalBlobStore::new(tmp()).unwrap();
+        let cells: Vec<DesiredJob> = (0..12u8).map(cheap_cell).collect();
+        let mut durable = Vec::new();
+        let first = execute_gap_chunked_bounded(
+            &cells,
+            &LedgerView::new(),
+            RetryPolicy::default(),
+            |job| Ok(job.job_id().as_str().as_bytes().to_vec()),
+            &store,
+            |_| true,
+            test_params(),
+            |_cid, rows| durable.extend_from_slice(rows),
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 100,
+            },
+            Some(1),
+        );
+        assert!(first.done > 0 && first.done < cells.len());
+        assert_eq!(
+            durable.len(),
+            first.done as usize,
+            "publish before returning"
+        );
+        let completed: HashSet<_> = durable.iter().map(|r| r.job_id.clone()).collect();
+        // Peers finish the rest while this worker runs its one long chunk.
+        for d in &cells {
+            if !completed.contains(&d.job_id()) {
+                durable.push(LedgerRow {
+                    job_id: d.job_id(),
+                    kind: d.kind.clone(),
+                    cell: d.cell.clone(),
+                    output_sha: Some(sha256(b"peer")),
+                    status: JobStatus::Done,
+                    error_class: None,
+                    attempts: 1,
+                    ts: 110,
+                    worker: "peer".into(),
+                    provider: "local".into(),
+                });
+            }
+        }
+        let next = execute_gap_chunked_bounded(
+            &cells,
+            &LedgerView::from_rows(durable),
+            RetryPolicy::default(),
+            |_| panic!("fresh peer DONE rows must prevent replay"),
+            &store,
+            |_| panic!("no claim after fresh reconciliation"),
+            test_params(),
+            |_cid, _rows| panic!("no new output"),
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 2000,
+            },
+            Some(1),
+        );
+        assert_eq!(next.done, 0);
     }
 
     #[test]

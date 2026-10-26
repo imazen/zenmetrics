@@ -104,7 +104,7 @@ byc-fit-worker-progress host role arm folds seeds="0,1,2":
 
 # Caller sets live-sized CPU/RAM caps and disk-backed host scratch explicitly.
 byc-fit-lan-worker host run role image:
-    bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+    ZEN_MAX_CHUNKS_PER_PASS=1 ZEN_CHUNK_WALL_SEC=300 bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
 
 byc-fit-harvest ctl run out cells *flags:
     #!/usr/bin/env bash

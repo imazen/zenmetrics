@@ -29,6 +29,9 @@ if [[ -f "$native_root/run-$native_arm" ]]; then
 fi
 export ZENSIM_MAX_TIER=v3 ZEN_FIT_RAYON_THREADS=1 RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 # Five GiB is an admission envelope, not a physical-RAM claim: 75% / 3.75GiB hint = one slot.
+native_worker_bin=${ZEN_FIT_WORKER_BIN:-$native_root/../../zenfleet-worker}
+"$native_worker_bin" capabilities | python3 -c 'import json,sys; assert json.load(sys.stdin).get("max_chunks_per_pass") is True, "refresh native worker before launching bounded fit passes"'
+export ZEN_MAX_CHUNKS_PER_PASS=1
 export ZEN_RAM_BYTES=5368709120 ZEN_CORE_OVERSUBSCRIBE=1 ZEN_CHUNK_WALL_SEC=300 ZEN_CLAIM_ORDER=manifest
 if [[ -f "$native_root/worker-ram-bytes" ]]; then
   IFS= read -r ZEN_RAM_BYTES < "$native_root/worker-ram-bytes"
@@ -87,7 +90,7 @@ PYMEM
   return "$native_rc"
 }
 trap native_scope_receipt EXIT
-"$native_root/../../zenfleet-worker" \
+"$native_worker_bin" \
   --manifest "$native_manifest" "${native_ledger[@]}" \
   --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$native_worker.parquet" \
   --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \

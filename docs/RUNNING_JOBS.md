@@ -1089,3 +1089,27 @@ files and the worker. The previous image fails this check; the corrected image
 passes with the same scientific program and six binary hashes. Evidence is
 `r6/late-duplicates/EXECUTOR_IMAGE_VERIFIED.json` beneath the by-construction
 benchmark pointer's artifact root. This check changes no training invocation.
+
+### Bound long FitCell passes before trying another lease (2026-10-26)
+
+A running pass holds its initial reconciliation view. In the linked subset run,
+two allocations finished a long first cell after peers' completed leases had
+aged out, then reclaimed those DONE cells from the stale view. The full raw
+ledger audit found 21 cells and 23 distinct DONE output hashes. Two extra partial
+fits were subsequently stopped at epoch13 with native claim release. All four
+extra candidates are preserved; completed duplicate science matches the first
+installed cells, which were never replaced.
+
+`ZEN_MAX_CHUNKS_PER_PASS=1` now returns after a chunk's durable ledger flush.
+The next entrypoint pass reloads peer sidecars and run control. By-construction
+LAN launches set this limit and a 300s chunk target; native passes set the same
+limit. Ordinary workers retain their existing unlimited-pass default. This is
+a pass bound, not a wall-clock kill of the active fit.
+
+Both launch paths require the worker's `capabilities` response to advertise
+`max_chunks_per_pass`; older binaries fail before claiming. A native operator
+may select a preserved, newer worker with `ZEN_FIT_WORKER_BIN` instead of
+replacing a historical reference binary. A worker regression verifies durable
+publication after one chunk and no replay after loading peers' DONE rows.
+The worker library passes68 tests; clippy with warnings denied and the release
+worker build also pass on r5900xt under its own8GiB/three-job run-heavy scope.

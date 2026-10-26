@@ -2376,3 +2376,16 @@ hdrvdp: 24/24 complete observation pairs; maximum absolute raw-score difference 
 hdrvdp3: 21/24 complete observation pairs; maximum absolute raw-score difference 7.815970093361102e-14. Retained fixture checks: 0 pass and 0 miss.
 
 The v2 check is the unchanged fixture-derived 0.005 TOL_Q, not a universal parity bound. V3 has no assigned original-Octave bound for this grid. The reference is the frozen Octave runner with the named image-2.20.1 resize overlay; the separately retained official Octave 11.1 controls remain separate. Incomplete warm rounds and resource-gate findings are retained. Spectral preparation differs across clocks, so comparative ratios and native-parity/timing qualification remain withheld. Every row retains its source, raw outcome, measured arm maximum RSS and run-heavy receipt.
+
+### Known Bugs: long FitCell pass retained a stale DONE view (2026-10-26, bounded)
+
+Two linked-subset workers replayed two completed cells after those peers' leases
+expired, then began two more redundant cells. All extra completed/partial bakes
+were retained; the latter stopped at epoch13 with native claim release. The
+final installed21 cells were not changed. Fit launchers now require the bounded
+worker capability and return after one durably flushed chunk, so the following
+pass reloads peer sidecars and run control. Normal worker defaults are unchanged.
+A68-test worker run, clippy and release build pass. The program-refresh image
+also now replaces and verifies its actual launched executor; previously it
+updated only the program copy. Details and preservation pointers:
+`docs/RUNNING_JOBS.md`, `benchmarks/byc_fleet_2026-10-25.pointer.md`.

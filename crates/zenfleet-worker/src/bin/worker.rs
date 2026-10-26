@@ -91,6 +91,10 @@ struct Cli {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().nth(1).as_deref() == Some("capabilities") {
+        println!("{{\"max_chunks_per_pass\":true}}");
+        return Ok(());
+    }
     let c = Cli::parse();
     let now = if c.now != 0 {
         c.now

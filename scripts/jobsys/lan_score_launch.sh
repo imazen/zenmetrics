@@ -122,7 +122,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
     ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
     ZM_ENTRYPOINT_PATH="${ZEN_ENTRYPOINT_HOST_PATH:-}" ZM_ENTRYPOINT_SHA="${ZEN_ENTRYPOINT_SHA256:-}" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_MAX_CHUNKS="${ZEN_MAX_CHUNKS_PER_PASS:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -188,6 +188,7 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 # rc=124-killed each pass, wasting the in-flight tail chunk (observed node-2 2026-08-26).
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 [ -n "${ZM_CHUNK_WALL:-}" ] && ENCP+=(-e "ZEN_CHUNK_WALL_SEC=$ZM_CHUNK_WALL")
+[ -n "${ZM_MAX_CHUNKS:-}" ] && ENCP+=(-e "ZEN_MAX_CHUNKS_PER_PASS=$ZM_MAX_CHUNKS")
 [ -n "${ZM_CAPABILITY:-}" ] && ENCP+=(-e "ZEN_CAPABILITY=$ZM_CAPABILITY")
 # Long single-cell chunks (Rev4 fit cells run hours): the 600 s lease and 1800 s stale-claim defaults
 # would let other workers re-claim a live cell, because lease renewal only fires on completions.
@@ -219,6 +220,14 @@ CAPS=()
 [ -n "${ZM_MEMORY:-}" ] && CAPS+=(--memory "$ZM_MEMORY" --memory-swap "$ZM_MEMORY")
 
 $DK pull "$ZM_IMG" >/dev/null 2>&1 || true
+if [ -n "${ZM_MAX_CHUNKS:-}" ]; then
+  [[ "$ZM_MAX_CHUNKS" =~ ^[1-9][0-9]*$ ]] || { echo "invalid chunk pass limit" >&2; exit 3; }
+  support=$($DK run --rm --network none --memory 128m --memory-swap 128m --cpus 1 \
+    -e TMPDIR=/scratch "${TMPDIR_ARGS[@]}" --entrypoint /usr/local/bin/zenfleet-worker "$ZM_IMG" capabilities) || {
+      echo "worker image lacks bounded chunk passes; refresh it before launching fits" >&2; exit 3;
+    }
+  python3 -c 'import json,sys; assert json.loads(sys.argv[1]).get("max_chunks_per_pass") is True' "$support"
+fi
 $DK rm -f "$ZM_CTR" >/dev/null 2>&1 || true
 $DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" "${ENTRYPOINT_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
