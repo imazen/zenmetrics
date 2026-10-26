@@ -150,6 +150,9 @@ fit-pack-e29 source bin_dir build_meta out:
     TMPDIR=$HOME/tmp/e29 ~/work/zen/scripts/run-heavy --mem 8G --jobs 1 -- python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{bin_dir}} --build-meta {{build_meta}} --profile v2e29 --out {{out}}
 
 # Local manifest generation only: this does not enqueue a fleet job.
+fit-image-verify base image program out:
+    nice -n19 ionice -c3 python3 scripts/jobsys/verify_fit_image.py --base '{{base}}' --image '{{image}}' --program '{{program}}' --out '{{out}}'
+
 fit-declare-e29 ctl spec out:
     {{ctl}} declare-fits --spec {{spec}} --out {{out}}
 
