@@ -9,7 +9,7 @@ import re
 import subprocess
 
 
-def host_workers(host, runs):
+def host_workers(host, runs, memory=False):
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", host):
         raise ValueError("host must be a configured SSH alias")
     names = subprocess.check_output(
@@ -34,6 +34,29 @@ def host_workers(host, runs):
                             memory_swap=c["HostConfig"]["MemorySwap"],
                             cpuset=c["HostConfig"]["CpusetCpus"],
                             claim_ttl_secs=env.get("ZEN_CLAIM_TTL_SECS")))
+    if memory and workers:
+        code = r'''
+import json,sys
+from pathlib import Path
+available=int(next(x.split()[1] for x in Path('/proc/meminfo').read_text().splitlines() if x.startswith('MemAvailable:')))*1024
+out={}
+for pid in sys.argv[1:]:
+    try:
+        rel=(Path('/proc')/pid/'cgroup').read_text().strip().split('::',1)[1]
+        path=Path('/sys/fs/cgroup')/rel.lstrip('/')
+        out[pid]=dict(cgroup=rel,host_available_bytes=available,
+                      accounting='aggregate container cgroup including charged page cache',
+                      **{k:(path/k).read_text().strip() for k in
+                         ('memory.current','memory.peak','memory.max','memory.swap.max','memory.events')})
+    except FileNotFoundError:
+        out[pid]=dict(process_exited_during_observation=True)
+print(json.dumps(out))
+'''
+        usage = json.loads(subprocess.check_output(
+            ['ssh', '-o', 'BatchMode=yes', host, 'python3', '-', *[str(w['pid']) for w in workers]],
+            input=code, text=True))
+        for worker in workers:
+            worker['memory_accounting'] = usage[str(worker['pid'])]
     return workers
 
 
@@ -65,6 +88,7 @@ def main():
     p.add_argument("--host", action="append", required=True)
     p.add_argument("--run", action="append", required=True)
     p.add_argument("--include-native", action="store_true")
+    p.add_argument("--memory", action="store_true", help="read live aggregate container cgroup memory and host headroom")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--live-workers", type=Path, required=True)
     args = p.parse_args()
@@ -72,7 +96,7 @@ def main():
         raise ValueError("use fresh receipt paths")
     runs = set(args.run)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        groups = list(pool.map(lambda host: host_workers(host, runs), args.host))
+        groups = list(pool.map(lambda host: host_workers(host, runs, args.memory), args.host))
     workers = [w for group in groups for w in group]
     if args.include_native:
         workers.extend(native_workers(runs))
