@@ -96,6 +96,12 @@ case "$KIND" in
 esac
 IMG="${5:-$DEF_IMG}"
 CTR="zen-score-${ROLE}"
+CONTROL_KEY="${ZEN_CONTROL_KEY:-jobs/$JOBSET/control.json}"
+if [[ ! "$CONTROL_KEY" =~ ^jobs/[a-zA-Z0-9_-]+/control(-[a-zA-Z0-9_-]+)?\.json$ ]] ||
+   [[ "$CONTROL_KEY" != "jobs/$JOBSET/"* ]]; then
+  echo "control key must name this jobset's control.json or control-<cohort>.json" >&2
+  exit 3
+fi
 
 # Validate before SSH: its environment assignments are parsed by a remote shell.
 if [ -n "${ZEN_ENTRYPOINT_HOST_PATH:-}${ZEN_ENTRYPOINT_SHA256:-}" ]; then
@@ -111,7 +117,7 @@ fi
 # Only SPACE-FREE single tokens cross the ssh line (a space would split the remote
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
-  ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
+  ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" ZM_CONTROL_KEY="$CONTROL_KEY" \
     ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" ZM_CLAIM_ORDER="${ZEN_CLAIM_ORDER:-}" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
     ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
@@ -219,7 +225,7 @@ $DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GP
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
   -e ZEN_MANIFEST_URI="s3://$ZM_BUCKET/jobs/$ZM_JOBSET/manifest.json" \
-  -e ZEN_CONTROL_KEY="jobs/$ZM_JOBSET/control.json" \
+  -e ZEN_CONTROL_KEY="$ZM_CONTROL_KEY" \
   "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=lan \
   -e ZEN_MAX_MIN="${ZM_MAX_MIN:-1400}" -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE="${ZM_OVERSUB:-2}" \
   -e ZEN_LONG_LIVED="${ZM_LONG_LIVED:-0}" \

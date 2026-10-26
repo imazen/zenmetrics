@@ -47,6 +47,29 @@ class Binding(unittest.TestCase):
                 self.assertEqual(result.returncode, 3)
                 self.assertFalse(marker.exists())
 
+    def test_control_cohort_is_forwarded_and_cross_run_or_shell_keys_are_refused(self):
+        source = Path(__file__).with_name('lan_score_launch.sh')
+        with tempfile.TemporaryDirectory(dir=Path.home()/'tmp') as tmp:
+            fake = Path(tmp)/'ssh'
+            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$PROBE_MARKER"\nexit 99\n')
+            fake.chmod(0o755)
+            marker = Path(tmp)/'arguments'
+            def run(key):
+                return subprocess.run(['bash', str(source), 'fixture', 'job', 'role', 'cpu'],
+                    env={**os.environ, 'PATH': tmp+':'+os.environ['PATH'],
+                         'PROBE_MARKER': str(marker), 'ZEN_CONTROL_KEY': key,
+                         'ZEN_ENTRYPOINT_HOST_PATH': '', 'ZEN_ENTRYPOINT_SHA256': ''},
+                    capture_output=True)
+            for key in ('', 'jobs/job/control-clock.json'):
+                self.assertEqual(run(key).returncode, 99)
+                expected = key or 'jobs/job/control.json'
+                self.assertIn('ZM_CONTROL_KEY='+expected, marker.read_text().splitlines())
+                marker.unlink()
+            for key in ('jobs/other/control.json', 'jobs/job/../control.json',
+                        'jobs/job/control.json;bad', 'jobs/job/control bad.json'):
+                self.assertEqual(run(key).returncode, 3)
+                self.assertFalse(marker.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

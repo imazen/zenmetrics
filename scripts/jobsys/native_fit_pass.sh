@@ -21,6 +21,11 @@ export ZENSIM_MAX_TIER=v3 ZEN_FIT_RAYON_THREADS=1 RAYON_NUM_THREADS=1 OMP_NUM_TH
 # Five GiB is an admission envelope, not a physical-RAM claim: 75% / 3.75GiB hint = one slot.
 export ZEN_RAM_BYTES=5368709120 ZEN_CORE_OVERSUBSCRIBE=1 ZEN_CHUNK_WALL_SEC=300 ZEN_CLAIM_ORDER=manifest
 native_worker="$(hostname)-byc-native-$native_arm-$native_index"
+native_control=control.json
+if [[ -f "$native_root/control-key-suffix" ]]; then
+  IFS= read -r native_control < "$native_root/control-key-suffix"
+fi
+[[ "$native_control" =~ ^control(-[a-zA-Z0-9_-]+)?\.json$ ]]
 native_snapshot="$native_root/$native_arm/snapshot-$native_index"
 mkdir -p "$native_snapshot"
 "$native_root/../../zenfleet-ctl" compact --run "byc-$native_arm-r2-20261025" \
@@ -52,6 +57,6 @@ trap native_scope_receipt EXIT
   --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$native_worker.parquet" \
   --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
   --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
-  --claim-ttl-secs "${ZEN_CLAIM_TTL_SECS:-86400}" --control-r2-key "$ZEN_RUN/control.json" --capability cpu_heavy \
+  --claim-ttl-secs "${ZEN_CLAIM_TTL_SECS:-86400}" --control-r2-key "$ZEN_RUN/$native_control" --capability cpu_heavy \
   --r2-endpoint "$EP" --exec /opt/fleet-fits/program/fit_cell_exec.py \
   --worker "$native_worker" --provider local

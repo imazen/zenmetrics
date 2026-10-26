@@ -994,3 +994,13 @@ Docker allocations and their resource caps. Repeat host/run flags as needed;
 use fresh paths and fail if a host cannot be inspected. Feed LIVE_WORKERS into
 `byc-fit-coverage`; when old passes are intentionally draining, name their
 still-served jobsets explicitly with `--serving`.
+
+For a controlled worker rollout, the LAN launcher accepts `ZEN_CONTROL_KEY`
+within the same jobset (`jobs/JOBSET/control-COHORT.json`). This overrides only
+the control object; manifest, claims and output namespaces stay unchanged.
+Keep older workers' control drained, and admit fixed-clock, same-TTL workers
+through the new cohort's control. Native by-construction passes read an
+optional runtime `control-key-suffix` with the same restricted filename format.
+The next pass reads this setting; running passes retain their existing control.
+A paused replay probe confirmed the forwarded cohort key reaches the baked
+worker, performs no fit and honors PAUSED. The probe was explicitly stopped.
