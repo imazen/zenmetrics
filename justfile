@@ -30,6 +30,10 @@ byc-fit-data root score_root label out:
 byc-fit-data-admitted root score_root label out:
     TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 8G --jobs 1 -- just byc-fit-data "{{root}}" "{{score_root}}" "{{label}}" "{{out}}"
 
+# Caller owns the shared run-heavy admission for extraction and hashing.
+byc-fit-relocation data image scratch root_sha linked_sha label out:
+    python3 scripts/jobsys/verify_byc_relocation.py --data '{{data}}' --image '{{image}}' --scratch '{{scratch}}' --root-sha '{{root_sha}}' --linked-sha '{{linked_sha}}' --label '{{label}}' --out '{{out}}'
+
 byc-fit-spec program data label folds seeds cells out *flags:
     python3 scripts/jobsys/build_fit_spec.py --grid byc --program-sha "{{program}}" --data-sha "{{data}}" --byc-label "{{label}}" --byc-folds "{{folds}}" --byc-seeds "{{seeds}}" --existing-root "{{cells}}" --out "{{out}}" {{flags}}
 
@@ -83,6 +87,9 @@ fit-worker-inventory out live_workers +options:
 
 fit-stop-drained inventory coverage out:
     python3 scripts/jobsys/stop_idle_fit_workers.py --inventory '{{inventory}}' --coverage '{{coverage}}' --out '{{out}}'
+
+fit-retain-live inventory host run data_sha arm receipt:
+    python3 scripts/jobsys/retain_fit_staging.py launch --inventory '{{inventory}}' --host '{{host}}' --run '{{run}}' --data-sha '{{data_sha}}' --arm '{{arm}}' --receipt '{{receipt}}'
 
 # Log/receipt progress only; uses the zensim owner and opens no target tables.
 byc-fit-local-progress source study arm folds:
@@ -149,10 +156,10 @@ byc-fit-prepare source bin_dir metadata pins columns worker out image control_da
 fit-pack-e29 source bin_dir build_meta out:
     TMPDIR=$HOME/tmp/e29 ~/work/zen/scripts/run-heavy --mem 8G --jobs 1 -- python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{bin_dir}} --build-meta {{build_meta}} --profile v2e29 --out {{out}}
 
-# Local manifest generation only: this does not enqueue a fleet job.
 fit-image-verify base image program out:
     nice -n19 ionice -c3 python3 scripts/jobsys/verify_fit_image.py --base '{{base}}' --image '{{image}}' --program '{{program}}' --out '{{out}}'
 
+# Local manifest generation only: this does not enqueue a fleet job.
 fit-declare-e29 ctl spec out:
     {{ctl}} declare-fits --spec {{spec}} --out {{out}}
 
