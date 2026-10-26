@@ -381,12 +381,16 @@ def main() -> None:
     p.add_argument("--install", action="store_true")
     p.add_argument("--done-only", action="store_true", help="verify or install DONE cells while other manifest cells run")
     p.add_argument("--byc-install-root", type=Path, help="study cells directory for byc outputs only")
+    p.add_argument("--no-runtime-alias", action="store_true",
+                   help="install a separate byc study without changing the shared runtime output alias")
     p.add_argument("--program-archive", type=Path, help="manifest-bound program archive; required for strict training-only")
     p.add_argument("--checkpoint-inspector", type=Path, help="canonical model loader matching program binary pin")
     p.add_argument("--allow-local-smoke", action="store_true", help="verification only, never installation")
     args = p.parse_args()
     if args.install and args.allow_local_smoke:
         p.error("local smoke verification cannot install cells")
+    if args.no_runtime_alias and (not args.install or args.byc_install_root is None):
+        p.error("no-runtime-alias requires a byc study installation")
     manifest = json.loads(args.manifest.read_text())
     if args.byc_install_root is not None:
         if (not args.byc_install_root.is_absolute() or ".." in args.byc_install_root.parts
@@ -429,7 +433,7 @@ def main() -> None:
                       "verified_cells": [name for name, _, _ in stages]}))
     if not args.install:
         return
-    if args.byc_install_root is not None:
+    if args.byc_install_root is not None and not args.no_runtime_alias:
         from fit_cell_exec import ensure_link
         args.byc_install_root.mkdir(parents=True, exist_ok=True)
         alias = POT_ROOT / "byc/cells"

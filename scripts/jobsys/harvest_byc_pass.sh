@@ -2,6 +2,7 @@
 # Incremental native harvest, immutable per-pass staging and retained-bake receipt.
 set -euo pipefail
 ctl=$1 run=$2 output=$3 cells=$4 pass=$5
+shift 5
 [[ "$run" =~ ^[A-Za-z0-9_-]+$ && "$pass" =~ ^[A-Za-z0-9_-]+$ ]]
 export TMPDIR="$HOME/tmp"
 # shellcheck disable=SC1091
@@ -23,7 +24,7 @@ PYCACHE
 python3 scripts/jobsys/harvest_fit_cells.py --manifest "$output/manifest.json" \
   --ids "$output/ids.tsv" --ledger "$output/snap_$run.parquet" \
   --blobs-prefix "s3://zentrain/jobs/$run/blobs" --endpoint "$EP" --scratch "$stage" \
-  --byc-install-root "$cells" --done-only --install
+  --byc-install-root "$cells" --done-only --install "$@"
 python3 scripts/jobsys/byc_harvest_receipt.py --done-only --cells "$cells" \
   --manifest "$output/manifest.json" --ids "$output/ids.tsv" \
   --ledger "$output/snap_$run.parquet" --out "$output/${pass}_VERIFIED_HARVEST.json"

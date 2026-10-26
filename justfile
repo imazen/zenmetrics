@@ -100,8 +100,8 @@ byc-fit-harvest ctl run out cells *flags:
     python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
 # Repeated installed passes preserve staging and reuse verified content-addressed blobs.
-byc-fit-harvest-pass ctl run out cells pass:
-    nice -n19 ionice -c3 bash scripts/jobsys/harvest_byc_pass.sh '{{ctl}}' '{{run}}' '{{out}}' '{{cells}}' '{{pass}}'
+byc-fit-harvest-pass ctl run out cells pass *flags:
+    nice -n19 ionice -c3 bash scripts/jobsys/harvest_byc_pass.sh '{{ctl}}' '{{run}}' '{{out}}' '{{cells}}' '{{pass}}' {{flags}}
 
 # Native execution keeps canonical fit paths private; caller supplies run-heavy admission.
 byc-fit-native namespace program scratch +command:

@@ -961,6 +961,10 @@ while other cells train. `byc-fit-harvest-pass CTL RUN OUT CELLS PASS` preserves
 fresh per-pass staging, reuses content-addressed blobs, publishes the native
 snapshot and writes `PASS_VERIFIED_HARVEST.json` with the full denominator.
 All prior staging, result blobs and candidate bakes remain retained.
+For a separate finalist study, add `--no-runtime-alias`: files install under the
+explicit study root while the registered study's shared runtime alias stays
+unchanged. Embedded runtime paths remain part of the immutable returned files;
+the harvest receipt gives the actual installed paths for evaluation.
 
 Each newly admitted native pass compacts the original jobset's ledger and reads
 that snapshot before claiming. Publish native snapshots during long runs with
