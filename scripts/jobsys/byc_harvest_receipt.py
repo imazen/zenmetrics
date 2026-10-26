@@ -16,6 +16,8 @@ def main():
     p.add_argument("--ids", type=Path, required=True)
     p.add_argument("--ledger", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--staged", action="store_true",
+                   help="inventory only DONE cells under the native harvest's staged/ directory")
     args = p.parse_args()
     if args.out.exists():
         raise ValueError("preserve the previous harvest receipt")
@@ -25,10 +27,12 @@ def main():
         raise ValueError("manifest/ids inventory differs")
     cells = []
     for (job_id, name), job in zip(ids, manifest, strict=True):
+        if args.staged and job_id not in done:
+            continue
         kind = job["kind"]
         if kind["argv"][0] != "byc_cells.py" or name != job["cell"]["image_path"]:
             raise ValueError("receipt requires only manifest-bound byc cells")
-        path = args.cells / name
+        path = (args.cells / job_id / "byc/cells" / name if args.staged else args.cells / name)
         receipt = json.loads((path / "fleet_receipt.json").read_text())
         if (receipt["cell"] != name or any(receipt[k] != kind[k] for k in ("program_sha", "data_sha", "argv_sha"))
                 or not done.get(job_id, {}).get("output_sha")):
@@ -48,6 +52,7 @@ def main():
                           dense_files={k: v for k, v in listed.items() if k.startswith("dense/")}))
     report = dict(schema="byc-harvest-retained-bakes-v1", observed_at=datetime.now(timezone.utc).isoformat(),
                   verified=len(cells), expected=len(manifest), manifest_sha256=digest(args.manifest),
+                  complete=len(cells) == len(manifest), staging_only=args.staged,
                   ledger_sha256=digest(args.ledger), cells=cells)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("x") as stream:

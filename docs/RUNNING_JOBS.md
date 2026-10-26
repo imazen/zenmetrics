@@ -982,3 +982,8 @@ heartbeat, and another worker uses its own TTL when deciding to steal. Do not
 restart short-TTL passes against longer-window active claims. Refresh only the
 worker layer with `fit-worker-refresh BASE_DIGEST PREBUILT_WORKER IMAGE` to retain
 the exact parity-verified scientific runtime, program and environment.
+
+`byc-fit-staged-receipt STAGED MANIFEST IDS LEDGER OUT` rehashes retained
+files and inventories candidate bakes for the verified DONE subset. It reports
+the full manifest denominator and marks the receipt `staging_only`; partial
+verification does not authorize full-arm installation.

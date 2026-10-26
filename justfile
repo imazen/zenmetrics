@@ -111,6 +111,9 @@ byc-fit-native-join runtime lock_pid +command:
 byc-fit-receipt cells manifest ids ledger out:
     python3 scripts/jobsys/byc_harvest_receipt.py --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
 
+byc-fit-staged-receipt cells manifest ids ledger out:
+    python3 scripts/jobsys/byc_harvest_receipt.py --staged --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
+
 # Caller supplies immutable source/binary pins; shared local lock serializes builds and packing.
 byc-fit-prepare source bin_dir metadata pins columns worker out image control_data="" extra_arms="" shared_lock="1":
     #!/usr/bin/env bash
