@@ -12,7 +12,7 @@ if [[ "${1:-}" == --inside ]]; then
   mount --bind "$native_ns/var-tmp" /var/tmp
   mount --bind "$native_ns/byconstruction" /mnt/v/output/zensim/byconstruction-2026-10-22
   mount --bind "$native_scratch" /scratch
-  exec setpriv --reuid "$native_uid" --regid "$native_gid" --init-groups -- env HOME="$native_home" "$@"
+  exec setpriv --reuid "$native_uid" --regid "$native_gid" --init-groups -- env HOME="$native_home" PATH="$native_home/.local/bin:/usr/local/bin:/usr/bin:/bin" "$@"
 fi
 native_ns=$(realpath "${1:?namespace directory}")
 native_program=$(realpath "${2:?verified program directory}")

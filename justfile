@@ -100,6 +100,10 @@ byc-fit-native-batch runtime:
 byc-fit-native-memory runtime:
     python3 -c 'from pathlib import Path; import json; r=Path("{{runtime}}"); p=Path("/sys/fs/cgroup")/r.joinpath("scope.cgroup").read_text().strip().split("::",1)[1].lstrip("/"); print(json.dumps(dict(scope=str(p), **{k:(p/k).read_text().strip() for k in ("memory.current","memory.peak","memory.max","memory.swap.max","memory.events")})))'
 
+# Add a bounded native launcher to the existing scope and share its original lock.
+byc-fit-native-join runtime lock_pid +command:
+    sudo -n python3 scripts/jobsys/join_native_fit_scope.py --runtime "{{runtime}}" --lock-pid "{{lock_pid}}" -- {{command}}
+
 byc-fit-receipt cells manifest ids ledger out:
     python3 scripts/jobsys/byc_harvest_receipt.py --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
 
