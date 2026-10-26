@@ -27,6 +27,23 @@ if [[ -f "$native_root/control-key-suffix" ]]; then
 fi
 [[ "$native_control" =~ ^control(-[a-zA-Z0-9_-]+)?\.json$ ]]
 native_snapshot="$native_root/$native_arm/snapshot-$native_index"
+native_manifest="$native_root/$native_arm/manifest.json"
+native_subset="$native_root/$native_arm/manifest-$native_index.json"
+native_ttl=${ZEN_CLAIM_TTL_SECS:-86400}
+if [[ -f "$native_subset" ]]; then
+  python3 - "$native_manifest" "$native_subset" <<'PYSUBSET'
+import json, sys
+from pathlib import Path
+full, subset = (json.loads(Path(p).read_text()) for p in sys.argv[1:])
+if not subset or any(full.count(job) != 1 for job in subset) or len({job['cell']['image_path'] for job in subset}) != len(subset):
+    raise ValueError('native retry must be an unchanged subset of the original manifest')
+PYSUBSET
+  native_manifest="$native_subset"
+  if [[ -f "$native_root/$native_arm/claim-ttl-$native_index" ]]; then
+    IFS= read -r native_ttl < "$native_root/$native_arm/claim-ttl-$native_index"
+    [[ "$native_ttl" =~ ^[1-9][0-9]*$ && "$native_ttl" -ge 600 ]]
+  fi
+fi
 mkdir -p "$native_snapshot"
 "$native_root/../../zenfleet-ctl" compact --run "byc-$native_arm-r2-20261025" \
   --endpoint "$EP" --out-dir "$native_snapshot" --upload
@@ -53,10 +70,10 @@ PYMEM
 }
 trap native_scope_receipt EXIT
 "$native_root/../../zenfleet-worker" \
-  --manifest "$native_root/$native_arm/manifest.json" "${native_ledger[@]}" \
+  --manifest "$native_manifest" "${native_ledger[@]}" \
   --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$native_worker.parquet" \
   --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
   --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
-  --claim-ttl-secs "${ZEN_CLAIM_TTL_SECS:-86400}" --control-r2-key "$ZEN_RUN/$native_control" --capability cpu_heavy \
+  --claim-ttl-secs "$native_ttl" --control-r2-key "$ZEN_RUN/$native_control" --capability cpu_heavy \
   --r2-endpoint "$EP" --exec /opt/fleet-fits/program/fit_cell_exec.py \
   --worker "$native_worker" --provider local
