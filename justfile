@@ -118,6 +118,10 @@ byc-fit-harvest ctl run out cells *flags:
 byc-fit-harvest-pass ctl run out cells pass *flags:
     nice -n19 ionice -c3 bash scripts/jobsys/harvest_byc_pass.sh '{{ctl}}' '{{run}}' '{{out}}' '{{cells}}' '{{pass}}' {{flags}}
 
+# Caller owns heavy admission; closed candidates and all source files stay in place.
+byc-fit-candidate-snapshot plan out:
+    python3 scripts/jobsys/snapshot_byc_candidates.py --plan '{{plan}}' --out '{{out}}'
+
 # Native execution keeps canonical fit paths private; caller supplies run-heavy admission.
 byc-fit-native namespace program scratch +command:
     bash scripts/jobsys/native_fit_namespace.sh "{{namespace}}" "{{program}}" "{{scratch}}" {{command}}

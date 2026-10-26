@@ -976,6 +976,17 @@ It does not create a sibling systemd scope or change science slots or caps.
 `just byc-fit-scope-check RUNTIME OUT` proves real nested memory enforcement
 with a small allocation, including survival of a deliberate child-only OOM.
 
+`just byc-fit-candidate-snapshot PLAN OUT` materializes a separate archive from
+an explicit `byc-candidate-archive-plan-v1` JSON file. Every planned file names
+its source, contained `relative_path` and expected `sha256`. It verifies sources
+before copying and copied bytes afterwards, preserves every source, and refuses
+existing output directories. Copies are independent of later source changes.
+`SOURCE_INDEX.json` binds the plan and file inventory. Use this for completed
+cells, canceled candidate bakes and retry scratch after their owners exit, then
+the canonical zensim dataset mirror with mounted-filesystem transport for NAS
+copying and readback. The caller supplies normal heavy admission; no remote
+compute or result deletion is involved.
+
 `byc-fit-harvest ... --done-only --scratch FRESH_DIRECTORY` verifies already
 returned blobs while the rest of an arm trains. It reports the verified subset
 against the full manifest. Add `--install` to install the verified DONE subset;

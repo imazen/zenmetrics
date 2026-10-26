@@ -20,6 +20,7 @@ import byc_harvest_receipt as summary
 from byc_linked_receipt import check_linked_cell
 from native_scope_limits import admission_budget, CELL_RESERVE_BYTES
 from prepare_native_fit_program import prepare as prepare_native_program
+from snapshot_byc_candidates import snapshot as snapshot_candidates
 
 
 ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
@@ -27,6 +28,28 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_candidate_snapshot_preserves_bakes_and_rejects_changed_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);bake=root/'candidate.bin';bake.write_bytes(b'candidate')
+            plan=root/'plan.json'
+            def write(relative):
+                plan.write_text(json.dumps(dict(schema='byc-candidate-archive-plan-v1',files=[
+                    dict(source=str(bake),relative_path=relative,sha256=hashlib.sha256(b'candidate').hexdigest())])))
+            write('cells/arm/refit/last.bin')
+            output=root/'archive'
+            self.assertEqual(snapshot_candidates(plan,output)['files'],1)
+            self.assertEqual((output/'cells/arm/refit/last.bin').read_bytes(),b'candidate')
+            self.assertTrue(bake.exists())
+            with self.assertRaises(FileExistsError):snapshot_candidates(plan,output)
+            bake.write_bytes(b'changed')
+            self.assertEqual((output/'cells/arm/refit/last.bin').read_bytes(),b'candidate')
+            with self.assertRaisesRegex(ValueError,'source differs'):
+                snapshot_candidates(plan,root/'changed')
+            self.assertFalse((root/'changed').exists())
+            write('../escape.bin')
+            with self.assertRaisesRegex(ValueError,'contained'):
+                snapshot_candidates(plan,root/'escape')
+
     def test_native_archive_entrypoint_mode_preserves_pinned_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);entry=root/'fit_cell_exec.py'
