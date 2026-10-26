@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenfleet: bound long fit passes before reloading peer completion ledgers and
+  require the worker capability before launch (`f89f9a4f`); replace and verify
+  the actual executor during program-image refresh (`e49dab5b`). Preserve late
+  redundant candidates alongside verified canonical installs.
+
 - zenfleet: transport by-construction TRAIN cells with pinned programs and frozen roots, validate prediction receipts and fixed final epochs, and harvest without replacing locally owned cells (`abeb5a4d`).
 
 - Margarine: add a separate native-linear f32 steering command without changing the selected command (`a3237b6a`); compare historical teacher and encoder-loop Butteraugli maps on identical pixels (`77fc41d4`). Calibration and steering results, with remaining qualification gates, are recorded in `crates/margarine/STEERING_REFERENCE.md`.
