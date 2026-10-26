@@ -96,6 +96,10 @@ byc-fit-harvest ctl run out cells *flags:
     stage=$(realpath -m "{{cells}}/../fleet-harvest/{{run}}")
     python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
+# Repeated installed passes preserve staging and reuse verified content-addressed blobs.
+byc-fit-harvest-pass ctl run out cells pass:
+    nice -n19 ionice -c3 bash scripts/jobsys/harvest_byc_pass.sh '{{ctl}}' '{{run}}' '{{out}}' '{{cells}}' '{{pass}}'
+
 # Native execution keeps canonical fit paths private; caller supplies run-heavy admission.
 byc-fit-native namespace program scratch +command:
     bash scripts/jobsys/native_fit_namespace.sh "{{namespace}}" "{{program}}" "{{scratch}}" {{command}}
@@ -457,6 +461,19 @@ fit-worker-refresh base worker image:
     cp crates/zenfleet-worker/Dockerfile.fit-worker-refresh "$context/Dockerfile"
     docker build --build-arg 'FIT_BASE_IMAGE={{base}}' -t '{{image}}' "$context"
     docker run --rm --entrypoint /usr/local/bin/zenfleet-worker '{{image}}' --help >/dev/null
+    docker push '{{image}}'
+
+# Update a fit program over a pinned runtime; requires a new identity control.
+fit-program-refresh base program image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ "{{base}}" =~ ^ghcr.io/imazen/zenfleet-worker@sha256:[0-9a-f]{64}$ ]]
+    export TMPDIR="$HOME/tmp"
+    context=$(mktemp -d "$TMPDIR/fit-program-refresh.XXXXXX")
+    cp '{{program}}' "$context/program.tar.gz"
+    cp crates/zenfleet-worker/Dockerfile.fit-program-refresh "$context/Dockerfile"
+    pin=$(sha256sum "$context/program.tar.gz" | cut -d' ' -f1)
+    nice -n19 ionice -c3 docker build --build-arg 'FIT_BASE_IMAGE={{base}}' --build-arg "FIT_PROGRAM_SHA=$pin" -t '{{image}}' "$context"
     docker push '{{image}}'
 
 # CLI/NN feature-combination matrix: 14 rows — every supported

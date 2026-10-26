@@ -954,9 +954,13 @@ this using `zenfleet-ctl ids` before sharing an existing jobset's claims.
 
 `byc-fit-harvest ... --done-only --scratch FRESH_DIRECTORY` verifies already
 returned blobs while the rest of an arm trains. It reports the verified subset
-against the full manifest and refuses installation. Final arm installation still
-requires every declared cell DONE. Retain partial verification staging and use a
-new directory for subsequent verification.
+against the full manifest. Add `--install` to install the verified DONE subset;
+each target retains the existing original/installed-cell protections. The
+owner requested incremental installation on 2026-10-26 so diagnostics can start
+while other cells train. `byc-fit-harvest-pass CTL RUN OUT CELLS PASS` preserves
+fresh per-pass staging, reuses content-addressed blobs, publishes the native
+snapshot and writes `PASS_VERIFIED_HARVEST.json` with the full denominator.
+All prior staging, result blobs and candidate bakes remain retained.
 
 Each newly admitted native pass compacts the original jobset's ledger and reads
 that snapshot before claiming. Publish native snapshots during long runs with
@@ -986,7 +990,24 @@ the exact parity-verified scientific runtime, program and environment.
 `byc-fit-staged-receipt STAGED MANIFEST IDS LEDGER OUT` rehashes retained
 files and inventories candidate bakes for the verified DONE subset. It reports
 the full manifest denominator and marks the receipt `staging_only`; partial
-verification does not authorize full-arm installation.
+verification does not imply full-arm completion. The receipt writer's
+`--done-only` option inventories an installed subset using the same denominator.
+
+Stopped native retries must preserve both incomplete cell outputs and their
+`BYC_SCRATCH` trees. Moving only the cell directory leaves deterministic curated
+tables behind; the next attempt then fails with `curated output must be fresh`
+before the trainer starts. A native pass may use `ARM/manifest-INDEX.json`, an
+exact unchanged subset of its original manifest, and `ARM/claim-ttl-INDEX`
+(at least 600 seconds). A shorter lease window is suitable only after proving
+every selected former owner stopped and excluding every other live cell.
+Keep the full original manifest as the ownership inventory.
+
+The by-construction adapter accepts explicit `mono:thr:mp32` and
+`mono:thr:mp64` recipes. `byc-fit-spec ... --byc-arm mono:thr:mp64` binds the
+recipe in each native job ID; archive labels bind the chosen frozen input root
+independently of the output label. `fit-program-refresh BASE PROGRAM IMAGE`
+overlays a program onto an immutable runtime image. A changed program/image
+requires a fresh exact prediction/checkpoint identity control before scaling.
 
 `fit-worker-inventory OUT LIVE_WORKERS --host HOST --run JOBSET` records live
 Docker allocations and their resource caps. Repeat host/run flags as needed;

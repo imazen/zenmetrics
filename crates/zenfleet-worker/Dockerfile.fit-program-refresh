@@ -1,0 +1,8 @@
+# Replace a pinned fit program while retaining the verified runtime and worker.
+ARG FIT_BASE_IMAGE=ghcr.io/imazen/zenfleet-worker:exec
+FROM ${FIT_BASE_IMAGE}
+ARG FIT_PROGRAM_SHA
+COPY --chmod=0644 program.tar.gz /opt/fleet-fits/program.tar.gz
+RUN printf '%s  /opt/fleet-fits/program.tar.gz\n' "$FIT_PROGRAM_SHA" | sha256sum -c - \
+    && tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program
+ENV ZEN_FIT_PROGRAM_SHA=${FIT_PROGRAM_SHA}
