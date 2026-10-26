@@ -58,6 +58,13 @@ byc-fit-status ctl run:
     source scripts/lib/s3env.sh
     "{{ctl}}" report --run "{{run}}" --endpoint "$EP"
 
+# Publish the native first-wins DONE snapshot before starting additional claimants.
+byc-fit-compact ctl run out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/s3env.sh
+    "{{ctl}}" compact --run "{{run}}" --endpoint "$EP" --out-dir "{{out}}" --upload
+
 byc-fit-coverage grid live_workers out +options:
     #!/usr/bin/env bash
     set -euo pipefail

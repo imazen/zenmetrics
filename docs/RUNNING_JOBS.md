@@ -957,3 +957,8 @@ returned blobs while the rest of an arm trains. It reports the verified subset
 against the full manifest and refuses installation. Final arm installation still
 requires every declared cell DONE. Retain partial verification staging and use a
 new directory for subsequent verification.
+
+Each newly admitted native pass compacts the original jobset's ledger and reads
+that snapshot before claiming. Publish native snapshots during long runs with
+`byc-fit-compact CTL RUN OUT`: completed claim leases can expire, so a fresh
+ledger is essential for later passes to avoid repeating completed work.

@@ -21,8 +21,13 @@ export ZENSIM_MAX_TIER=v3 ZEN_FIT_RAYON_THREADS=1 RAYON_NUM_THREADS=1 OMP_NUM_TH
 # Five GiB is an admission envelope, not a physical-RAM claim: 75% / 3.75GiB hint = one slot.
 export ZEN_RAM_BYTES=5368709120 ZEN_CORE_OVERSUBSCRIBE=1 ZEN_CHUNK_WALL_SEC=300 ZEN_CLAIM_ORDER=manifest
 native_worker="$(hostname)-byc-native-$native_arm-$native_index"
+native_snapshot="$native_root/$native_arm/snapshot-$native_index"
+mkdir -p "$native_snapshot"
+"$native_root/../../zenfleet-ctl" compact --run "byc-$native_arm-r2-20261025" \
+  --endpoint "$EP" --out-dir "$native_snapshot" --upload
 native_ledger=()
-[[ ! -f "$native_root/$native_arm/ledger.parquet" ]] || native_ledger=(--ledger-in "$native_root/$native_arm/ledger.parquet")
+native_snapfile="$native_snapshot/snap_byc-$native_arm-r2-20261025.parquet"
+[[ ! -f "$native_snapfile" ]] || native_ledger=(--ledger-in "$native_snapfile")
 mkdir -p "$TMPDIR"
 exec "$native_root/../../zenfleet-worker" \
   --manifest "$native_root/$native_arm/manifest.json" "${native_ledger[@]}" \
