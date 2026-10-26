@@ -72,6 +72,10 @@ byc-fit-coverage grid live_workers out +options:
     export TMPDIR="$HOME/tmp"
     python3 scripts/jobsys/fit_grid_coverage.py --grid-manifest "{{grid}}" --live-workers "{{live_workers}}" --json-out "{{out}}" --endpoint "$EP" {{options}}
 
+# Immutable live-allocation receipt; no claiming, retrying or process mutation.
+fit-worker-inventory out live_workers +options:
+    python3 scripts/jobsys/fit_worker_inventory.py --out "{{out}}" --live-workers "{{live_workers}}" {{options}}
+
 # Log/receipt progress only; uses the zensim owner and opens no target tables.
 byc-fit-local-progress source study arm folds:
     BYC_CELLS="{{study}}/cells" python3 "{{source}}/scripts/rev4_featpot/byc_cells.py" progress --arm "{{arm}}" --folds "{{folds}}" | python3 -c 'import json,sys; d=json.load(sys.stdin); e=[r["latest_logged_epoch"] for r in d["cells"] if r["state"]=="training" and r["latest_logged_epoch"] is not None]; print(json.dumps(dict(arm=d["arm"],complete=d["complete"],requested=d["requested"],active_epoch_min=min(e) if e else None,active_epoch_max=max(e) if e else None)))'

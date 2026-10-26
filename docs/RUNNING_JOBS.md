@@ -987,3 +987,10 @@ the exact parity-verified scientific runtime, program and environment.
 files and inventories candidate bakes for the verified DONE subset. It reports
 the full manifest denominator and marks the receipt `staging_only`; partial
 verification does not authorize full-arm installation.
+
+`fit-worker-inventory OUT LIVE_WORKERS --host HOST --run JOBSET` records live
+Docker allocations and their resource caps. Repeat host/run flags as needed;
+`--include-native` also resolves local native worker PIDs and cgroups. Receipts
+use fresh paths and fail if a host cannot be inspected. Feed LIVE_WORKERS into
+`byc-fit-coverage`; when old passes are intentionally draining, name their
+still-served jobsets explicitly with `--serving`.
