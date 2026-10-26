@@ -478,6 +478,10 @@ claim-clock-check-build:
     just snap-cargo @ clippy --release -p zenfleet-worker --bin zenfleet-worker -- -D warnings
     just snap-cargo @ build --release -p zenfleet-worker --bin zenfleet-worker
 
+# Local synthetic jobs only; caller supplies a fresh disk-backed scratch directory.
+fit-worker-bounded-smoke worker scratch:
+    nice -n19 ionice -c3 python3 scripts/jobsys/check_bounded_worker.py --worker '{{worker}}' --scratch '{{scratch}}'
+
 # Update only transport; preserve the parity-verified runtime, program and fits.
 fit-worker-refresh base worker image:
     #!/usr/bin/env bash
