@@ -31,7 +31,7 @@ def main():
                    help="owner-directed arm cancellation may retain and stop a post-fit prediction stage")
     a = p.parse_args()
     if (not re.fullmatch(r"[0-9a-f]{64}", a.data_sha)
-            or not re.fullmatch(r"[A-Za-z0-9]+", a.arm)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9+_-]*", a.arm)
             or not re.fullmatch(r"[a-z0-9_]+", a.fold)):
         raise ValueError("unsafe cell path inputs")
     if os.geteuid() != 0:
