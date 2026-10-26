@@ -254,6 +254,12 @@ else:
             blob = root / "blob.tar.gz"
             with patch.object(executor, "FIT_ROOT", pot):
                 blob.write_bytes(executor.output_bytes(dest, receipt))
+                self.assertEqual(bake.read_bytes(), b"synthetic checkpoint")
+                self.assertTrue((dest / "fleet_receipt.json").is_file())
+                with self.assertRaisesRegex(FileExistsError, "preserve the earlier candidate"):
+                    executor.run_fit_locked({}, kind, "e" * 64, {}, ARGV, "c" * 64,
+                                            Path(name), None, dest)
+                self.assertEqual(bake.read_bytes(), b"synthetic checkpoint")
             cells = root / "originals"
             original = cells / name
             original.mkdir(parents=True)
@@ -300,11 +306,11 @@ else:
                 args[args.index("--byc-install-root") + 1] = str(root / "finalists/cells")
                 args.append("--no-runtime-alias")
                 original_bake = b"synthetic checkpoint"
-                self.assertFalse(bake.exists())
+                self.assertEqual(bake.read_bytes(), original_bake)
                 harvest.main()
                 installed = root / "finalists/cells" / name
                 self.assertEqual((installed / "refit/last.bin").read_bytes(), original_bake)
-                self.assertFalse(bake.exists())
+                self.assertEqual(bake.read_bytes(), original_bake)
                 self.assertEqual(marker.read_text(), "local original")
 
 

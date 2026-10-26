@@ -314,10 +314,10 @@ def output_bytes(dest: Path, receipt: dict) -> bytes:
                 with path.open("rb") as stream:
                     tar.addfile(member, stream)
     output = buf.getvalue()
-    # The worker owns persistence of these bytes in the content-addressed
-    # store. Keep only the shared verified inputs on scratch between cells;
-    # a failed upload can safely rerun the deterministic fit.
-    shutil.rmtree(dest)
+    # By-construction candidates must survive upload failure and remain on
+    # staging until verified installation. Other profiles retain their policy.
+    if not dest.is_relative_to(FIT_ROOT / "byc/cells"):
+        shutil.rmtree(dest)
     return output
 
 
@@ -371,6 +371,8 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
                     and old.get("argv_sha") == argv_sha and
                     all(digest(dest / filename) == expected for filename, expected in old["files"].items())):
                 return output_bytes(dest, old)
+        if argv[0] == "byc_cells.py":
+            raise FileExistsError(f"{dest}: preserve the earlier candidate and use a fresh attempt namespace")
         shutil.rmtree(dest)
     env = dict(os.environ)
     for key in ['ZEN_E36_EXECUTION_CONTRACT','ZEN_E36_MEMORY_SMOKE']:
