@@ -44,6 +44,9 @@ byc-fit-stage data program run:
     source scripts/lib/s3env.sh
     bash scripts/jobsys/stage_fit_inputs.sh "{{run}}" "{{data}}" "{{program}}"
 
+fit-prefetch host run image scratch data_sha:
+    bash scripts/jobsys/prefetch_fit_inputs.sh '{{host}}' '{{run}}' '{{image}}' '{{scratch}}' '{{data_sha}}'
+
 byc-fit-enqueue ctl spec run data program out peak_mem="0" threads="0":
     #!/usr/bin/env bash
     set -euo pipefail
