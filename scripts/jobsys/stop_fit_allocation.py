@@ -27,6 +27,8 @@ def main():
         p.add_argument("--" + name, required=True)
     p.add_argument("--seed", type=int, choices=(0, 1, 2), required=True)
     p.add_argument("--max-epoch", type=int, default=30)
+    p.add_argument("--preserve-completed-fit", action="store_true",
+                   help="owner-directed arm cancellation may retain and stop a post-fit prediction stage")
     a = p.parse_args()
     if (not re.fullmatch(r"[0-9a-f]{64}", a.data_sha)
             or not re.fullmatch(r"[A-Za-z0-9]+", a.arm)
@@ -69,7 +71,8 @@ def main():
             argv = Path(f"/proc/{pid}/cmdline").read_bytes().decode().strip("\0").split("\0")
             if all(k in argv for k in ("--label", "--folds", "--seeds")):
                 running.add(tuple(argv[argv.index(k) + 1] for k in ("--label", "--folds", "--seeds")))
-        if running != {wanted} or not source.is_dir() or (source / "result.json").exists():
+        if (running != {wanted} or not source.is_dir()
+                or ((source / "result.json").exists() and not a.preserve_completed_fit)):
             raise ValueError("running cell identity or completion state changed; nothing stopped")
         held_output = open(f"/proc/{workers[0]}/fd/2", "rb")
         shutil.copytree(source, backup / "cell", symlinks=True)
