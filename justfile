@@ -81,6 +81,14 @@ byc-fit-harvest ctl run out cells *flags:
     stage=$(realpath -m "{{cells}}/../fleet-harvest/{{run}}")
     python3 scripts/jobsys/harvest_fit_cells.py --manifest "{{out}}/manifest.json" --ids "{{out}}/ids.tsv" --ledger "{{out}}/snap_{{run}}.parquet" --blobs-prefix "s3://zentrain/jobs/{{run}}/blobs" --endpoint "$EP" --scratch "$stage" --byc-install-root "{{cells}}" {{flags}}
 
+# Native execution keeps canonical fit paths private; caller supplies run-heavy admission.
+byc-fit-native namespace program scratch +command:
+    bash scripts/jobsys/native_fit_namespace.sh "{{namespace}}" "{{program}}" "{{scratch}}" {{command}}
+
+# A bounded native batch shares one hard cap and the owner's global heavy lock.
+byc-fit-native-batch runtime:
+    TMPDIR="$HOME/tmp" flock "$HOME/tmp/heavy.lock" "$HOME/work/zen/scripts/run-heavy" --mem 42G --jobs 12 -- bash scripts/jobsys/native_fit_batch.sh "{{runtime}}"
+
 byc-fit-receipt cells manifest ids ledger out:
     python3 scripts/jobsys/byc_harvest_receipt.py --cells "{{cells}}" --manifest "{{manifest}}" --ids "{{ids}}" --ledger "{{ledger}}" --out "{{out}}"
 
