@@ -286,11 +286,12 @@ else:
                 args[args.index("--scratch") + 1] = str(root / "stage-separate")
                 args[args.index("--byc-install-root") + 1] = str(root / "finalists/cells")
                 args.append("--no-runtime-alias")
-                original_bake = bake.read_bytes()
+                original_bake = b"synthetic checkpoint"
+                self.assertFalse(bake.exists())
                 harvest.main()
                 installed = root / "finalists/cells" / name
                 self.assertEqual((installed / "refit/last.bin").read_bytes(), original_bake)
-                self.assertEqual(bake.read_bytes(), original_bake)
+                self.assertFalse(bake.exists())
                 self.assertEqual(marker.read_text(), "local original")
 
 
