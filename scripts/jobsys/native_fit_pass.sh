@@ -5,7 +5,7 @@ set -euo pipefail
 native_root=$(realpath "${1:?runtime directory}")
 native_arm=${2:?arm}
 native_index=${3:?worker index}
-[[ "$native_arm" =~ ^[A-Za-z][A-Za-z0-9_-]*$ && "$native_index" =~ ^[1-9][0-9]*$ ]]
+[[ "$native_arm" =~ ^[A-Za-z][A-Za-z0-9_+-]*$ && "$native_index" =~ ^[1-9][0-9]*$ ]]
 native_repo=$(cd "$(dirname "$0")/../.." && pwd)
 if [[ "${4:-}" != --inside ]]; then
   exec bash "$native_repo/scripts/jobsys/native_fit_namespace.sh" \

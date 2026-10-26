@@ -17,7 +17,7 @@ def identity(argv):
             raise ValueError("unknown byc argument")
         values[argv[i]] = argv[i + 1]
     label, fold, seed = (values[k] for k in ("--label", "--folds", "--seeds"))
-    if (not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", label)
+    if (not re.fullmatch(r"[A-Za-z][A-Za-z0-9_+-]*", label)
             or fold not in ("kadid", "tid2013", "konfig", "cid22_a25", "pipal", "pairs", "mos7", "full")
             or seed not in ("0", "1", "2") or values["--jobs"] != "1"
             or values["--arm"] not in ("mono:thr:mp32", "mono:thr:mp64")):

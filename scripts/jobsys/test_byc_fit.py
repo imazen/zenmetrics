@@ -156,8 +156,12 @@ else:
 
     def test_one_cell_only(self):
         self.assertEqual(c.identity(ARGV), ("Mw100", "kadid", 0))
+        plus = ARGV.copy()
+        plus[plus.index("--label") + 1] = "Mlic+sub"
+        self.assertEqual(c.identity(plus), ("Mlic+sub", "kadid", 0))
         for flag, value in (("--folds", "kadid,tid2013"), ("--seeds", "0,1"),
-                            ("--jobs", "2"), ("--label", "../Mw100"), ("--arm", "mono")):
+                            ("--jobs", "2"), ("--label", "../Mw100"), ("--arm", "mono"),
+                            ("--label", "Mlic+sub/../../other"), ("--label", "Mlic;false")):
             bad = ARGV.copy()
             bad[bad.index(flag) + 1] = value
             with self.assertRaises(ValueError):
@@ -180,6 +184,15 @@ else:
                 argv = cell["argv"]
                 self.assertEqual(argv[argv.index("--arm") + 1], "mono:thr:mp64")
                 self.assertEqual(c.identity(argv)[0], "Mlic64")
+            args[args.index("--byc-label") + 1] = "Mlic+sub"
+            args[args.index("--byc-arm") + 1] = "mono:thr:mp32"
+            with patch.object(sys, "argv", args), contextlib.redirect_stdout(io.StringIO()):
+                spec.main()
+            cells = json.loads((root / "spec.json").read_text())["cells"]
+            self.assertEqual(len(cells), 9)
+            self.assertEqual(cells[0]["name"], "Mlic+sub/without_pipal_s0")
+            for cell in cells:
+                self.assertEqual(c.identity(cell["argv"])[0], "Mlic+sub")
 
     def test_shared_archive_layout(self):
         kind = {"argv": ARGV}

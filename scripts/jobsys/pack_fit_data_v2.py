@@ -111,7 +111,7 @@ def main() -> None:
 def pack_byc(args):
     """Preserve frozen root bytes and original aliases; no labels are interpreted."""
     import re
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", args.byc_label):
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_+-]*", args.byc_label):
         raise ValueError("unsafe byc label")
     members, bindings = {}, {}
     for role, root in (("fit", args.byc_root), ("score", args.byc_score_root)):
