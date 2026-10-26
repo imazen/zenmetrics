@@ -1005,6 +1005,11 @@ exact unchanged subset of its original manifest, and `ARM/claim-ttl-INDEX`
 (at least 600 seconds). A shorter lease window is suitable only after proving
 every selected former owner stopped and excluding every other live cell.
 Keep the full original manifest as the ownership inventory.
+For another pinned by-construction jobset, native runtimes may supply
+`program.sha256`, `run-ARM` and `worker-ram-bytes`. The worker still validates
+the manifest's program/input identities and claims the original jobset. Size
+the per-worker admission envelope to admit one declared cell; the enclosing
+run-heavy scope remains the aggregate hard limit.
 
 The by-construction adapter accepts explicit `mono:thr:mp32` and
 `mono:thr:mp64` recipes. `byc-fit-spec ... --byc-arm mono:thr:mp64` binds the

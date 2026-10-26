@@ -5,7 +5,7 @@ set -euo pipefail
 native_root=$(realpath "${1:?runtime directory}")
 native_arm=${2:?arm}
 native_index=${3:?worker index}
-[[ "$native_arm" =~ ^(Mw100|Mmos|Mpair)$ && "$native_index" =~ ^[1-9][0-9]*$ ]]
+[[ "$native_arm" =~ ^[A-Za-z][A-Za-z0-9_-]*$ && "$native_index" =~ ^[1-9][0-9]*$ ]]
 native_repo=$(cd "$(dirname "$0")/../.." && pwd)
 if [[ "${4:-}" != --inside ]]; then
   exec bash "$native_repo/scripts/jobsys/native_fit_namespace.sh" \
@@ -17,9 +17,23 @@ fi
 source "$native_repo/scripts/lib/s3env.sh"
 export TMPDIR=/scratch/tmp ZEN_FIT_PROGRAM_SHA=423259e7dcb70ec6fee36711bc3e40512b3dc97b1c9f6114cb0adfffbad3734a
 export ZEN_BUCKET=zentrain ZEN_RUN="jobs/byc-$native_arm-r2-20261025" ZEN_R2_ENDPOINT="$EP"
+if [[ -f "$native_root/program.sha256" ]]; then
+  IFS= read -r ZEN_FIT_PROGRAM_SHA < "$native_root/program.sha256"
+  [[ "$ZEN_FIT_PROGRAM_SHA" =~ ^[0-9a-f]{64}$ ]]
+fi
+native_run="byc-$native_arm-r2-20261025"
+if [[ -f "$native_root/run-$native_arm" ]]; then
+  IFS= read -r native_run < "$native_root/run-$native_arm"
+  [[ "$native_run" =~ ^[A-Za-z0-9_-]+$ ]]
+  export ZEN_RUN="jobs/$native_run"
+fi
 export ZENSIM_MAX_TIER=v3 ZEN_FIT_RAYON_THREADS=1 RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 # Five GiB is an admission envelope, not a physical-RAM claim: 75% / 3.75GiB hint = one slot.
 export ZEN_RAM_BYTES=5368709120 ZEN_CORE_OVERSUBSCRIBE=1 ZEN_CHUNK_WALL_SEC=300 ZEN_CLAIM_ORDER=manifest
+if [[ -f "$native_root/worker-ram-bytes" ]]; then
+  IFS= read -r ZEN_RAM_BYTES < "$native_root/worker-ram-bytes"
+  [[ "$ZEN_RAM_BYTES" =~ ^[1-9][0-9]*$ ]]
+fi
 native_worker="$(hostname)-byc-native-$native_arm-$native_index"
 native_control=control.json
 if [[ -f "$native_root/control-key-suffix" ]]; then
@@ -45,10 +59,10 @@ PYSUBSET
   fi
 fi
 mkdir -p "$native_snapshot"
-"$native_root/../../zenfleet-ctl" compact --run "byc-$native_arm-r2-20261025" \
+"$native_root/../../zenfleet-ctl" compact --run "$native_run" \
   --endpoint "$EP" --out-dir "$native_snapshot" --upload
 native_ledger=()
-native_snapfile="$native_snapshot/snap_byc-$native_arm-r2-20261025.parquet"
+native_snapfile="$native_snapshot/snap_$native_run.parquet"
 [[ ! -f "$native_snapfile" ]] || native_ledger=(--ledger-in "$native_snapfile")
 mkdir -p "$TMPDIR"
 native_scope_receipt() {
