@@ -1,0 +1,4 @@
+# Refresh transport while retaining the exact, parity-verified scientific image.
+ARG FIT_BASE_IMAGE=ghcr.io/imazen/zenfleet-worker@sha256:7a7732fae11dfec9c4339cdecf9b9c08463a75843eb445d56720ab3e91ebf5d1
+FROM ${FIT_BASE_IMAGE}
+COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker

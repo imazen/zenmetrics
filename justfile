@@ -438,6 +438,20 @@ claim-clock-check-build:
     just snap-cargo @ clippy --release -p zenfleet-worker --bin zenfleet-worker -- -D warnings
     just snap-cargo @ build --release -p zenfleet-worker --bin zenfleet-worker
 
+# Update only transport; preserve the parity-verified runtime, program and fits.
+fit-worker-refresh base worker image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ "{{base}}" =~ ^ghcr.io/imazen/zenfleet-worker@sha256:[0-9a-f]{64}$ ]]
+    export TMPDIR="$HOME/tmp"
+    context=$(mktemp -d "$TMPDIR/fit-worker-refresh.XXXXXX")
+    trap 'rm -rf "$context"' EXIT
+    cp "{{worker}}" "$context/zenfleet-worker"
+    cp crates/zenfleet-worker/Dockerfile.fit-worker-refresh "$context/Dockerfile"
+    docker build --build-arg 'FIT_BASE_IMAGE={{base}}' -t '{{image}}' "$context"
+    docker run --rm --entrypoint /usr/local/bin/zenfleet-worker '{{image}}' --help >/dev/null
+    docker push '{{image}}'
+
 # CLI/NN feature-combination matrix: 14 rows — every supported
 # `--no-default-features --features <F>` shape, plus the bare
 # `--no-default-features` build, the default build, and standalone NN WebGPU. Prints a PASS/FAIL

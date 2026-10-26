@@ -975,3 +975,10 @@ to a one-day lease (`ZEN_CLAIM_TTL_SECS` overrides it). New LAN claimants must u
 the same window while old binaries finish. This prevents late admissions from
 stealing old-binary claims stamped at pass start. Signal-based release remains
 available for reclaimed hosts; all interrupted outputs remain protected.
+
+During this mixed-binary transition, drain new passes through the run control
+while active passes continue. A larger claimant TTL also delays its timer
+heartbeat, and another worker uses its own TTL when deciding to steal. Do not
+restart short-TTL passes against longer-window active claims. Refresh only the
+worker layer with `fit-worker-refresh BASE_DIGEST PREBUILT_WORKER IMAGE` to retain
+the exact parity-verified scientific runtime, program and environment.
