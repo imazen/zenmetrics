@@ -80,6 +80,10 @@ byc-fit-local-progress source study arm folds:
 byc-fit-worker-progress host role arm folds seeds="0,1,2":
     ssh "{{host}}" docker exec -e BYC_CELLS=/var/tmp/rev4-featpot/byc/cells "zen-score-{{role}}" python3 /opt/fleet-fits/program/scripts/rev4_featpot/byc_cells.py progress --arm "{{arm}}" --folds "{{folds}}" --seeds "{{seeds}}"
 
+# Caller sets live-sized CPU/RAM caps and disk-backed host scratch explicitly.
+byc-fit-lan-worker host run role image:
+    bash scripts/jobsys/lan_score_launch.sh "{{host}}" "{{run}}" "{{role}}" cpu "{{image}}"
+
 byc-fit-harvest ctl run out cells *flags:
     #!/usr/bin/env bash
     set -euo pipefail
