@@ -951,3 +951,9 @@ aggregate readings and live system headroom when changing admission. A trainer's
 single-process maximum RSS does not bound its whole prediction process tree.
 Native scheduling hints may reserve more RAM without changing job IDs; verify
 this using `zenfleet-ctl ids` before sharing an existing jobset's claims.
+
+`byc-fit-harvest ... --done-only --scratch FRESH_DIRECTORY` verifies already
+returned blobs while the rest of an arm trains. It reports the verified subset
+against the full manifest and refuses installation. Final arm installation still
+requires every declared cell DONE. Retain partial verification staging and use a
+new directory for subsequent verification.

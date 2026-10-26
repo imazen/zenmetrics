@@ -379,11 +379,14 @@ def main() -> None:
     p.add_argument("--scratch", type=Path, default=Path("/var/tmp/fleet-fits/harvest"))
     p.add_argument("--rescue-root", type=Path, default=Path("/var/tmp/fleet-fits/original-era"))
     p.add_argument("--install", action="store_true")
+    p.add_argument("--done-only", action="store_true", help="verify returned blobs while other cells run; never install")
     p.add_argument("--byc-install-root", type=Path, help="study cells directory for byc outputs only")
     p.add_argument("--program-archive", type=Path, help="manifest-bound program archive; required for strict training-only")
     p.add_argument("--checkpoint-inspector", type=Path, help="canonical model loader matching program binary pin")
     p.add_argument("--allow-local-smoke", action="store_true", help="verification only, never installation")
     args = p.parse_args()
+    if args.done_only and args.install:
+        p.error("partial verification cannot install cells")
     if args.install and args.allow_local_smoke:
         p.error("local smoke verification cannot install cells")
     manifest = json.loads(args.manifest.read_text())
@@ -396,13 +399,20 @@ def main() -> None:
         raise ValueError("manifest and zenfleet-ctl ids counts differ")
     done = rows_from_ledger(args.ledger)
     duplicate_rows = duplicate_done_rows(args.ledger)
-    stages, tiers = [], {}
-    for (job_id, name), job in zip(ids, manifest):
+    ready = []
+    for (job_id, name), job in zip(ids, manifest, strict=True):
         if job["cell"]["image_path"] != name or job["kind"]["kind"] != "fit_cell":
             raise ValueError(f"manifest/ids mismatch at {name}")
         row = done.get(job_id)
         if row is None or not row["output_sha"]:
+            if args.done_only:
+                continue
             raise ValueError(f"no DONE output in ledger for {name} ({job_id})")
+        ready.append((job_id, name, job, row))
+    if not ready:
+        raise ValueError("no DONE outputs to verify")
+    stages, tiers = [], {}
+    for job_id, name, job, row in ready:
         blob = fetch_blob(row["output_sha"], args.blobs_prefix, args.scratch / "blobs", args.endpoint)
         stage = args.scratch / "staged" / job_id
         if stage.exists():
@@ -417,7 +427,8 @@ def main() -> None:
             raise ValueError(f"byc local cell is owned elsewhere; refusing replacement: {target}")
         stages.append((name, cell_dir(stage, name, job["kind"]), target))
     print(json.dumps({"verified": len(stages), "manifest": len(manifest), "install": args.install,
-                      "tier_status": tiers, "duplicate_done_rows": duplicate_rows}))
+                      "tier_status": tiers, "duplicate_done_rows": duplicate_rows,
+                      "verified_cells": [name for name, _, _ in stages]}))
     if not args.install:
         return
     if args.byc_install_root is not None:

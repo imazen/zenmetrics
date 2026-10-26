@@ -24,6 +24,38 @@ ARGV = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", "Mw100",
 
 
 class BycTransport(unittest.TestCase):
+    def test_partial_blob_verification_is_explicit_and_cannot_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            names = ["Mw100/without_kadid_s0", "Mw100/without_tid2013_s0"]
+            manifest, ids = root / "manifest.json", root / "ids.tsv"
+            manifest.write_text(json.dumps([dict(cell=dict(image_path=n), kind=dict(kind="fit_cell")) for n in names]))
+            ids.write_text("".join(f"{i}\tjob{i}\t{n}\n" for i, n in enumerate(names)))
+            args = ["harvest_fit_cells.py", "--manifest", str(manifest), "--ids", str(ids),
+                    "--ledger", str(root / "ledger"), "--blobs-prefix", "unused", "--endpoint", "unused",
+                    "--scratch", str(root / "stage")]
+            rows = {"job0": dict(output_sha="d" * 64)}
+            with patch.object(sys, "argv", args), patch.object(harvest, "rows_from_ledger", return_value=rows), \
+                    patch.object(harvest, "duplicate_done_rows", return_value={}), \
+                    patch.object(harvest, "fetch_blob", return_value=root / "blob") as fetch, \
+                    patch.object(harvest, "verify_blob", return_value=dict(tier_status="v3")) as verify, \
+                    patch.object(harvest, "cell_dir", return_value=root / "cell"), \
+                    patch.object(harvest, "blob_root", return_value="byc/cells"), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                with self.assertRaisesRegex(ValueError, "no DONE output"):
+                    harvest.main()
+                fetch.assert_not_called()
+                args.append("--done-only")
+                harvest.main()
+                self.assertEqual((json.loads(output.getvalue())["verified"], len(names)), (1, 2))
+                self.assertEqual(verify.call_args.args[2], names[0])
+                rows.clear()
+                with self.assertRaisesRegex(ValueError, "no DONE outputs to verify"):
+                    harvest.main()
+                args.append("--install")
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    harvest.main()
+
     def test_input_staging_reuses_matching_objects_and_refuses_corruption(self):
         script = Path(__file__).with_name("stage_fit_inputs.sh")
         with tempfile.TemporaryDirectory() as tmp:
