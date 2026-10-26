@@ -4,7 +4,29 @@
 # operators may change that file after checking the enclosing scope's memory.
 set -euo pipefail
 native_root=$(realpath "${1:?runtime directory}")
-native_script=$(cd "$(dirname "$0")" && pwd)/native_fit_pass.sh
+native_repo=$(cd "$(dirname "$0")/../.." && pwd)
+# Bash may reread a script after a long foreground worker returns. Pin the
+# wrapper bytes before launching so later operator fixes cannot shift its offset.
+native_script=$(python3 - "$native_repo" "$native_root" <<'PYSNAPSHOT'
+import hashlib, shlex, sys
+from pathlib import Path
+repo, root = map(Path, sys.argv[1:])
+source = (repo/'scripts/jobsys/native_fit_pass.sh').read_text()
+anchor = 'native_repo=$(cd "$(dirname "$0")/../.." && pwd)'
+if source.count(anchor) != 1:
+    raise ValueError('native wrapper repository anchor differs')
+content = source.replace(anchor, 'native_repo='+shlex.quote(str(repo))).encode()
+target = root/'native-wrappers'/('pass-'+hashlib.sha256(content).hexdigest()+'.sh')
+target.parent.mkdir(parents=True, exist_ok=True)
+if target.exists():
+    if target.read_bytes() != content:
+        raise ValueError('immutable native wrapper snapshot differs')
+else:
+    with target.open('xb') as stream:
+        stream.write(content)
+print(target)
+PYSNAPSHOT
+)
 native_mode=${2:-initial}
 if [[ "$native_mode" == initial ]]; then
   cat /proc/self/cgroup > "$native_root/scope.cgroup"
