@@ -20,7 +20,7 @@ def identity(argv):
     if (not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", label)
             or fold not in ("kadid", "tid2013", "konfig", "cid22_a25", "pipal", "pairs", "mos7", "full")
             or seed not in ("0", "1", "2") or values["--jobs"] != "1"
-            or values["--arm"] != "mono:thr:mp32"):
+            or values["--arm"] not in ("mono:thr:mp32", "mono:thr:mp64")):
         raise ValueError("unsupported byc scientific cell")
     return label, fold, int(seed)
 
@@ -56,7 +56,7 @@ def verify_output(dest, argv, digest):
     rec = json.loads((dest / "byc_record.json").read_text())
     result = json.loads((dest / "result.json").read_text())
     if (dest.parts[-2:] != (label, f"without_{fold}_s{seed}")
-            or (rec["fold"], rec["seed"], rec["tokens"]) != (fold, seed, "mono:thr:mp32")
+            or (rec["fold"], rec["seed"], rec["tokens"]) != (fold, seed, argv[argv.index("--arm") + 1])
             or rec["last_bin_sha256"] != digest(dest / "refit/last.bin")
             or result["epochs"] != 120 or result["pairs_per_epoch"] != 50000
             or result["selection"]["selected_epoch"] != 119 or result["seed_index"] != seed):

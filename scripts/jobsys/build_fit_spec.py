@@ -115,6 +115,7 @@ def main():
     p.add_argument("--byc-label")
     p.add_argument("--byc-folds")
     p.add_argument("--byc-seeds", default="0,1,2")
+    p.add_argument("--byc-arm", choices=("mono:thr:mp32", "mono:thr:mp64"), default="mono:thr:mp32")
     p.add_argument("--registered-grid", type=Path)
     p.add_argument("--registered-grid-sha256")
     p.add_argument("--v2-phase", choices=("calibration", "arms", "all"), default="calibration")
@@ -132,7 +133,7 @@ def main():
         all_cells = []
         for seed in args.byc_seeds.split(","):
             for fold in args.byc_folds.split(","):
-                argv = ["byc_cells.py", "run", "--arm", "mono:thr:mp32", "--label", args.byc_label,
+                argv = ["byc_cells.py", "run", "--arm", args.byc_arm, "--label", args.byc_label,
                         "--folds", fold, "--seeds", seed, "--jobs", "1"]
                 label, fold, seed_index = identity(argv)
                 all_cells.append(dict(name=f"{label}/without_{fold}_s{seed_index}", argv=argv))

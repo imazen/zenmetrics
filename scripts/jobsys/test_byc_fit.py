@@ -165,6 +165,22 @@ else:
         with self.assertRaises(ValueError):
             c.identity(ARGV + ["--seeds", "1"])
 
+    def test_mp64_declaration_keeps_explicit_recipe_and_input_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = ["build_fit_spec.py", "--grid", "byc", "--program-sha", "a" * 64,
+                    "--data-sha", "b" * 64, "--byc-label", "Mlic64", "--byc-arm", "mono:thr:mp64",
+                    "--byc-folds", "pipal,mos7,pairs", "--byc-seeds", "0,1,2",
+                    "--existing-root", str(root / "cells"), "--out", str(root / "spec.json")]
+            with patch.object(sys, "argv", args), contextlib.redirect_stdout(io.StringIO()):
+                spec.main()
+            cells = json.loads((root / "spec.json").read_text())["cells"]
+            self.assertEqual(len(cells), 9)
+            for cell in cells:
+                argv = cell["argv"]
+                self.assertEqual(argv[argv.index("--arm") + 1], "mono:thr:mp64")
+                self.assertEqual(c.identity(argv)[0], "Mlic64")
+
     def test_shared_archive_layout(self):
         kind = {"argv": ARGV}
         self.assertEqual(executor.cell_root(ARGV), "byc/cells")
