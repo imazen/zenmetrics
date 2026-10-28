@@ -53,3 +53,17 @@ renditions, calls the pinned diagnostic ports, and emits joined thin sidecars
 and raw port tables; it has no render/encode command. Selection is a scientific
 input, independent of scheduler claims and retries. It preserves target-only
 containers, including their exact target doubles.
+
+The later diagnostic pass also stores each port's per-pixel gzip/PFM f32 map.
+The pinned diagnostic binary predates file-URI variants; its existing local-shard
+path uses a small content-addressed S3 index and reads the PNGs from archive
+staging. A single native `jobexec --serve` process computes the selected maps.
+Every map is checked for geometry, finite values and CAS identity. Reference
+pixel hash, canonical candidate PNG hash, metric/display and implementation hash
+bind each map; duplicate map bytes share CAS storage. Raw scalar tables, index
+and logs are addressed from the primary sidecar too. The frozen SSIMULACRA2
+scalar API exposes no per-pixel map, so none is approximated.
+
+The12-cell diagnostic proof preserves every target and reproduces all three
+unbatched diagnostic doubles exactly, with24 verified persisted native maps.
+Receipt: `b/diagnostic-proof-r11/PROOF.json` in the chroma archive.
