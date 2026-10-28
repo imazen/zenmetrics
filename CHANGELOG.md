@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenfleet: batch complete EVIF views with a shared decoded reference, atomic archive CAS and a later persisted-rendition diagnostic pass (`a09feaba`, `6abd2eee`). Target bits and complete diagnostic containers reproduce the144-cell control exactly.
+
 - zenfleet: bound long fit passes before reloading peer completion ledgers and
   require the worker capability before launch (`f89f9a4f`); replace and verify
   the actual executor during program-image refresh (`e49dab5b`). Preserve late
