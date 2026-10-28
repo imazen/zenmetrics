@@ -3568,6 +3568,14 @@ pub enum ZensimFeatureRegime {
     /// SDR-only (no HDR route yet; the HDR arm rejects it explicitly).
     #[value(name = "folded720append2pools")]
     Folded720Append2Pools,
+    /// Width is declared by the job's `feature_set_id`, not this enum — the
+    /// validated-plan (`zensim::research`) route for formula revisions whose
+    /// compute surface the legacy regimes cannot name (e.g. rev7's
+    /// `basic+peaks+v2@w1825/rev7_rowlanes`). `total_features` is 0; the
+    /// executor overrides it with the id's declared layout width and refuses
+    /// any job that reaches it without a feature-set id.
+    #[value(name = "fsid")]
+    Declared,
 }
 
 impl ZensimFeatureRegime {
@@ -3583,6 +3591,10 @@ impl ZensimFeatureRegime {
             ZensimFeatureRegime::Folded720Append2 => 720 + 204 + 20,
             ZensimFeatureRegime::Folded720Append2Carriers => 720 + 204 + 20,
             ZensimFeatureRegime::Folded720Append2Pools => 720 + 204 + 20,
+            // Declared width lives in the job's feature_set_id; jobexec
+            // overrides this before use. 0 makes an accidental read fail the
+            // emit-length check rather than truncate a real row.
+            ZensimFeatureRegime::Declared => 0,
         }
     }
 }
@@ -3604,7 +3616,8 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             ZensimFeatureRegime::Folded720Append
             | ZensimFeatureRegime::Folded720Append2
             | ZensimFeatureRegime::Folded720Append2Carriers
-            | ZensimFeatureRegime::Folded720Append2Pools => {
+            | ZensimFeatureRegime::Folded720Append2Pools
+            | ZensimFeatureRegime::Declared => {
                 zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
             }
         }

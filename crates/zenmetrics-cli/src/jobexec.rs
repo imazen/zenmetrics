@@ -2168,6 +2168,7 @@ fn feature_regime_for_token(
             (R::Folded720Append2Carriers, "folded720append2carriers")
         }
         "944pools" | "folded720append2pools" => (R::Folded720Append2Pools, "folded720append2pools"),
+        "fsid" | "declared" | "research" => (R::Declared, "fsid-declared"),
         other => {
             return Err(format!(
                 "feature: unknown regime {other:?} — known: 228/300/372/720/924/944/\
@@ -2307,7 +2308,6 @@ fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
         .as_str()
         .ok_or("feature: kind.regime missing")?;
     let (regime, regime_tag) = feature_regime_for_token(regime_token)?;
-    let n_features = regime.total_features();
     let revision = resolve_formula_revision(job["kind"]["revision"].as_str())?;
     let inputs: Vec<&str> = job["inputs"]
         .as_array()
@@ -2325,6 +2325,22 @@ fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
     let knobs: Value = serde_json::from_str(cell["knob_tuple_json"].as_str().unwrap_or("{}"))
         .unwrap_or(Value::Null);
     let feature_set_id = knobs.get("feature_set_id").and_then(Value::as_str);
+    // Rev≥5 + a declared id: the validated-plan (`zensim::research`) route.
+    // The emitted width is the id's declared layout, not the regime token's
+    // legacy width — `Declared` (regime `fsid`) exists precisely so revisions
+    // whose compute surface no legacy regime names still declare honest jobs.
+    let use_research = feature_set_id.is_some() && revision_ge_5(&revision);
+    let n_features = if use_research {
+        feature_set_id
+            .and_then(zensim::feature_set_id::FeatureSetId::parse)
+            .and_then(|id| id.layout_width())
+            .ok_or(format!(
+                "feature: declared feature_set_id {feature_set_id:?} is unparseable \
+                 or carries no @w layout — cannot size the emitted row"
+            ))?
+    } else {
+        regime.total_features()
+    };
     // Baked by the image build; `null` when the image did not record it.
     let zensim_commit = std::env::var("ZEN_ZENSIM_BUILD_COMMIT").ok();
     let ext = ext_for(cell["codec"].as_str().unwrap_or(""));
@@ -2343,7 +2359,7 @@ fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
             | crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers
             | crate::metrics::ZensimFeatureRegime::Folded720Append2Pools
     );
-    let ref_ctx = if folded {
+    let ref_ctx = if folded || use_research {
         None
     } else {
         crate::metrics::zensim::precompute_ref_ctx(&reference).ok()
@@ -2388,10 +2404,9 @@ fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
             "decoder".into(),
             serde_json::json!(format!("zenmetrics-cli/{}", env!("CARGO_PKG_VERSION"))),
         );
-        let feats = if folded && feature_set_id.is_some() && revision_ge_5(&revision) {
-            // Rev5+ pinned jobs with a declared feature-set id go through the
-            // validated plan path — the raw toggles walk refuses append2/pools
-            // at rev≥5 (`validate_raw_rev5_request`). The fsid IS the contract.
+        let feats = if use_research {
+            // The raw toggles walk refuses every non-v2 family at rev≥5
+            // (`validate_raw_rev5_request`); the declared id IS the contract.
             crate::metrics::zensim::extract_features_research(
                 &reference,
                 &distorted,

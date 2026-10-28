@@ -325,6 +325,13 @@ pub(crate) fn extract_features_regime(
         )
         .into());
     }
+    if regime == R::Declared {
+        return Err(
+            "zensim: regime 'fsid' extracts through the validated-plan path only — \
+             declare the job with a feature_set_id at a revision ≥5"
+                .into(),
+        );
+    }
     // Folded+append 924/944: the streaming walk does its OWN sub-64 reflect-pad,
     // so it must see the RAW image — this fn's external padding would diverge
     // from the `v2_ab_extract` foldapp/foldapp2 driver on tiny cells (regime
@@ -360,8 +367,9 @@ pub(crate) fn extract_features_regime(
         R::Folded720Append
         | R::Folded720Append2
         | R::Folded720Append2Carriers
-        | R::Folded720Append2Pools => {
-            unreachable!("folded streaming early-returns above")
+        | R::Folded720Append2Pools
+        | R::Declared => {
+            unreachable!("folded/declared regimes early-return above")
         }
     };
     let mut cfg = ZensimConfig::default();
@@ -568,6 +576,7 @@ pub(crate) fn extract_features_regime_with_ctx(
         || regime == R::Folded720Append2
         || regime == R::Folded720Append2Carriers
         || regime == R::Folded720Append2Pools
+        || regime == R::Declared
     {
         return Err(
             "zensim: folded streaming regimes have no ref-ctx path — call extract_features_regime"
@@ -594,8 +603,9 @@ pub(crate) fn extract_features_regime_with_ctx(
         R::Folded720Append
         | R::Folded720Append2
         | R::Folded720Append2Carriers
-        | R::Folded720Append2Pools => {
-            unreachable!("folded streaming rejected above")
+        | R::Folded720Append2Pools
+        | R::Declared => {
+            unreachable!("folded/declared regimes rejected above")
         }
     };
     let mut cfg = ZensimConfig::default();
