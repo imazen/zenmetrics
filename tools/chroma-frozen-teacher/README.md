@@ -22,3 +22,11 @@ views, four rungs), all score bits and checked pixel hashes exact: 132/132.
 Run receipt: `/var/tmp/byc-chroma-20261028/b/teacher-replay-final/PARITY.json`.
 This identifies and reproduces the metric component; it does not claim to
 reconstruct every feature of the historical extractor.
+
+`chroma-frozen-batch-teacher` accepts a JSONL header with the reference path,
+packed RGB8 file, width/height and expected pixel SHA256, followed by candidate
+PNG paths. EVIF exports that decoded reference once; the adapter checks its
+length/hash and calls the identical frozen kernel for each decoded candidate.
+The canonical B0 implementation identity is retained for container byte parity;
+view receipts separately identify the actual batch adapter executable.
+The 144-cell gate reproduces every target bit and complete diagnostic container.

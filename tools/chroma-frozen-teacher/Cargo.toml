@@ -18,3 +18,7 @@ enough = "0.4.2"
 imgref = "1.12.3"
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 sha2 = "0.11.1"
+
+[[bin]]
+name = "chroma-frozen-batch-teacher"
+path = "src/batch.rs"
