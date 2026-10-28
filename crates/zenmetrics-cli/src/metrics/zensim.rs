@@ -487,11 +487,10 @@ pub(crate) fn extract_features_research(
     distorted: &Rgb8Image,
     feature_set_id: &str,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
-    use zensim::feature_set_id::FeatureSetId;
     use zensim::RgbSlice;
-    let id = FeatureSetId::parse(feature_set_id).ok_or_else(|| {
-        format!("zensim: unparseable feature_set_id {feature_set_id:?}")
-    })?;
+    use zensim::feature_set_id::FeatureSetId;
+    let id = FeatureSetId::parse(feature_set_id)
+        .ok_or_else(|| format!("zensim: unparseable feature_set_id {feature_set_id:?}"))?;
     let req = zensim::research::Request::for_set(&id)
         .map_err(|e| format!("zensim: plan for {feature_set_id}: {e}"))?;
     let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);

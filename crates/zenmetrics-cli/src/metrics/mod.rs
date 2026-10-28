@@ -3617,9 +3617,7 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             | ZensimFeatureRegime::Folded720Append2
             | ZensimFeatureRegime::Folded720Append2Carriers
             | ZensimFeatureRegime::Folded720Append2Pools
-            | ZensimFeatureRegime::Declared => {
-                zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
-            }
+            | ZensimFeatureRegime::Declared => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
         }
     }
 }
