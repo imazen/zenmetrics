@@ -42,12 +42,21 @@ pub(super) fn persist(
     job: &DesiredJob,
     bytes: &[u8],
 ) -> io::Result<Sha256Hex> {
+    let scratch = PathBuf::from(std::env::var_os("TMPDIR").ok_or_else(bad)?);
+    persist_with_scratch(store, job, bytes, &scratch)
+}
+fn persist_with_scratch(
+    store: &dyn BlobStore,
+    job: &DesiredJob,
+    bytes: &[u8],
+    scratch: &Path,
+) -> io::Result<Sha256Hex> {
     if bytes.len() > 1_048_576 {
         return Err(bad());
     }
     let env: Envelope =
         serde_json::from_slice(bytes.strip_prefix(MAGIC).ok_or_else(bad)?).map_err(|_| bad())?;
-    let scratch = PathBuf::from(std::env::var_os("TMPDIR").ok_or_else(bad)?).canonicalize()?;
+    let scratch = scratch.canonicalize()?;
     let root = env.root.canonicalize()?;
     let archive = std::env::var_os("ZEN_ARCHIVE_BLOBS_DIR").map(PathBuf::from);
     if archive.as_ref().is_some_and(|p| !p.is_absolute()) {
@@ -120,7 +129,18 @@ mod tests {
     use zenfleet_core::{CellId, JobKind};
     #[test]
     fn staged_objects_commit_before_primary_and_escape_is_refused() {
-        let base = std::env::temp_dir().join(format!("staged-evif-{}", std::process::id()));
+        let scratch = std::env::var_os("TMPDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(
+                    std::env::var_os("HOME")
+                        .or_else(|| std::env::var_os("USERPROFILE"))
+                        .expect("test home directory"),
+                )
+                .join("tmp")
+            });
+        fs::create_dir_all(&scratch).unwrap();
+        let base = scratch.join(format!("staged-evif-{}", std::process::id()));
         fs::create_dir(&base).unwrap();
         let root = base.join("stage");
         fs::create_dir(&root).unwrap();
@@ -149,10 +169,10 @@ mod tests {
             b.extend(serde_json::to_vec(v).unwrap());
             b
         };
-        assert!(persist(&store, &job, &wire(&value)).is_err());
+        assert!(persist_with_scratch(&store, &job, &wire(&value), &base).is_err());
         assert!(root.exists());
         value["objects"][0]["path"] = "native".into();
-        let primary = persist(&store, &job, &wire(&value)).unwrap();
+        let primary = persist_with_scratch(&store, &job, &wire(&value), &base).unwrap();
         assert!(store.exists(&primary));
         assert!(store.exists(&sha256(b"jpeg")));
         assert!(!root.exists());

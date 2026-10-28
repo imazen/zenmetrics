@@ -481,7 +481,8 @@ fn extract_features_folded_streaming(
 /// `Request::for_set` re-checks its slots hash against reconstruction, and
 /// `research::extract` returns values gathered at the id's declared layout,
 /// so the emitted row is exactly the declared vector.
-#[cfg(feature = "cpu-metrics")]
+#[cfg(all(feature = "cpu-metrics", feature = "jobexec"))]
+#[allow(dead_code)] // called by the jobexec binary; this source also compiles in the library
 pub(crate) fn extract_features_research(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
