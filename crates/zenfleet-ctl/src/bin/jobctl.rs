@@ -120,7 +120,9 @@ enum Cmd {
         /// regime (`372`, `720`, `924`, `944`, `944carriers`, `944pools`).
         #[arg(long)]
         regime: String,
-        /// zensim formula revision to pin (`1` / `2`). Omitted = shipped.
+        /// zensim formula revision to pin (`1` / `2` / `7`, any revision the
+        /// executor's zensim knows). Omitted = shipped. Pinned jobs require
+        /// the executor's `feature-rev` capability.
         #[arg(long)]
         revision: Option<String>,
         /// Distorted pairs per job. Default 16.

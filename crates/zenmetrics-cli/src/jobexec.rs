@@ -2201,6 +2201,13 @@ fn feature_regime_for_token(
 /// cannot race the first zensim call.)
 const SHIPPED_FORMULA_REV: &str = "1";
 
+/// True when a feature job's resolved revision is ≥5 — the point where the
+/// raw `V2NewFeatureToggles` walk refuses the append2/pools families and a
+/// validated `Plan` (via `zensim::research`) is required.
+fn revision_ge_5(revision: &str) -> bool {
+    revision.parse::<u32>().map_or(false, |r| r >= 5)
+}
+
 fn resolve_formula_revision(requested: Option<&str>) -> Result<String, Box<dyn Error>> {
     let env_rev = std::env::var("ZENSIM_FORMULA_REV")
         .ok()
@@ -2381,7 +2388,16 @@ fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
             "decoder".into(),
             serde_json::json!(format!("zenmetrics-cli/{}", env!("CARGO_PKG_VERSION"))),
         );
-        let feats = if folded {
+        let feats = if folded && feature_set_id.is_some() && revision_ge_5(&revision) {
+            // Rev5+ pinned jobs with a declared feature-set id go through the
+            // validated plan path — the raw toggles walk refuses append2/pools
+            // at rev≥5 (`validate_raw_rev5_request`). The fsid IS the contract.
+            crate::metrics::zensim::extract_features_research(
+                &reference,
+                &distorted,
+                feature_set_id.expect("checked above"),
+            )
+        } else if folded {
             crate::metrics::run_zensim_features(&reference, &distorted, regime)
         } else {
             ref_ctx.as_ref().map_or_else(

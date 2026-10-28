@@ -465,6 +465,36 @@ fn extract_features_folded_streaming(
     Ok(feats)
 }
 
+/// Plan-validated extraction through `zensim::research` — the ONLY legal
+/// route at formula revisions ≥5 for the append2/pools families: the raw
+/// `V2NewFeatureToggles` walk refuses them (`validate_raw_rev5_request`), so
+/// rev6+/rev7 feature jobs must go through a validated `Plan` derived from
+/// the job's declared `feature_set_id`. The id is PARSED, never re-derived —
+/// `Request::for_set` re-checks its slots hash against reconstruction, and
+/// `research::extract` returns values gathered at the id's declared layout,
+/// so the emitted row is exactly the declared vector.
+#[cfg(feature = "cpu-metrics")]
+pub(crate) fn extract_features_research(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    feature_set_id: &str,
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    use zensim::feature_set_id::FeatureSetId;
+    use zensim::RgbSlice;
+    let id = FeatureSetId::parse(feature_set_id).ok_or_else(|| {
+        format!("zensim: unparseable feature_set_id {feature_set_id:?}")
+    })?;
+    let req = zensim::research::Request::for_set(&id)
+        .map_err(|e| format!("zensim: plan for {feature_set_id}: {e}"))?;
+    let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+    let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+    let src = RgbSlice::new(r3, reference.width as usize, reference.height as usize);
+    let dst = RgbSlice::new(d3, distorted.width as usize, distorted.height as usize);
+    let ext = zensim::research::extract(&req, &src, &dst)
+        .map_err(|e| format!("zensim: research extract {feature_set_id}: {e}"))?;
+    Ok(ext.into_values())
+}
+
 /// Per-source (per-chunk) reference context: the reference reflect-padded to ≥64px
 /// ONCE, plus its v1 XYB pyramid precomputed ONCE. A ScoreFile job scores many
 /// variants of the SAME source; building this once and reusing it across the
