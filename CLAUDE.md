@@ -2389,3 +2389,11 @@ A68-test worker run, clippy and release build pass. The program-refresh image
 also now replaces and verifies its actual launched executor; previously it
 updated only the program copy. Details and preservation pointers:
 `docs/RUNNING_JOBS.md`, `benchmarks/byc_fleet_2026-10-25.pointer.md`.
+
+### Known Bugs: staged archive cleanup after successful publication (2026-10-28)
+
+A batched EVIF proof published every CAS object, then NFS/FUSE retained hidden
+files during transient cleanup. Treating the final directory removal as an
+upload failure incorrectly marked all12 view jobs failed. Publication remains
+hash-verified and primary-last; cleanup now reports its retained path separately.
+The repeated144-cell proof passes target-bit and full-container identity.

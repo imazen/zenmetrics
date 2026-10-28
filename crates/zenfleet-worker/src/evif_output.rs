@@ -26,6 +26,9 @@ pub(super) fn persist(
     if !job.cell.codec.starts_with("evif:") {
         return store.put(bytes);
     }
+    if bytes.starts_with(super::staged_output::MAGIC) {
+        return super::staged_output::persist(store, job, bytes);
+    }
     let (container, bits) = split(bytes)?;
     // A DONE ledger row can only refer to a container after both objects land.
     store.put(bits)?;

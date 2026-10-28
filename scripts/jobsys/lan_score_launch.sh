@@ -122,7 +122,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
     ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
     ZM_ENTRYPOINT_PATH="${ZEN_ENTRYPOINT_HOST_PATH:-}" ZM_ENTRYPOINT_SHA="${ZEN_ENTRYPOINT_SHA256:-}" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_MAX_CHUNKS="${ZEN_MAX_CHUNKS_PER_PASS:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
+  ZM_DATA_DIR="${ZEN_DATA_HOST_DIR:-}" ZM_ARCHIVE_DIR="${ZEN_ARCHIVE_BLOBS_DIR:-}" ZM_HEAVY_PATH="${ZEN_RUN_HEAVY_HOST_PATH:-}" ZM_HEAVY_SHA="${ZEN_RUN_HEAVY_SHA256:-}" ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_MAX_CHUNKS="${ZEN_MAX_CHUNKS_PER_PASS:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -163,6 +163,29 @@ if [ -n "${ZM_ENTRYPOINT_PATH:-}${ZM_ENTRYPOINT_SHA:-}" ]; then
   ENTRYPOINT_ARGS=(-v "$ZM_ENTRYPOINT_PATH:/usr/local/bin/fleet-entrypoint.sh:ro")
 fi
 # END verified entrypoint binding
+
+# Read-only prepared inputs plus an atomic archive CAS can share a NAS mount.
+DATA_ARGS=()
+for item in "${ZM_DATA_DIR:-}" "${ZM_ARCHIVE_DIR:-}"; do
+  if [ -n "$item" ]; then [[ "$item" =~ ^/[a-zA-Z0-9_./-]+$ ]] || { echo "invalid data/archive path" >&2; exit 3; }; fi
+ done
+if [ -n "${ZM_DATA_DIR:-}" ]; then
+  [ -d "$ZM_DATA_DIR" ] || { echo "prepared data mount missing" >&2; exit 3; }
+  DATA_ARGS+=(-v "$ZM_DATA_DIR:$ZM_DATA_DIR:ro")
+fi
+if [ -n "${ZM_ARCHIVE_DIR:-}" ]; then
+  mkdir -p "$ZM_ARCHIVE_DIR"
+  DATA_ARGS+=(-v "$ZM_ARCHIVE_DIR:$ZM_ARCHIVE_DIR" -e "ZEN_ARCHIVE_BLOBS_DIR=$ZM_ARCHIVE_DIR")
+fi
+HEAVY_ARGS=(); ENTRYPOINT=/usr/local/bin/fleet-entrypoint.sh; ENTRY_COMMAND=()
+if [ -n "${ZM_HEAVY_PATH:-}" ]; then
+  [[ "$ZM_HEAVY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]] && [[ "${ZM_HEAVY_SHA:-}" =~ ^[0-9a-f]{64}$ ]] &&
+  [ ! -L "$ZM_HEAVY_PATH" ] && [ -x "$ZM_HEAVY_PATH" ] &&
+  [ "$(sha256sum "$ZM_HEAVY_PATH" | cut -d ' ' -f 1)" = "$ZM_HEAVY_SHA" ] || { echo "run-heavy binding differs" >&2; exit 3; }
+  HEAVY_ARGS=(-v "$ZM_HEAVY_PATH:/opt/private/run-heavy:ro")
+  ENTRYPOINT=/opt/private/run-heavy
+  ENTRY_COMMAND=(--mem "${ZM_MEMORY:-4g}" -- /usr/local/bin/fleet-entrypoint.sh)
+fi
 
 # docker via passwordless sudo when the box has it, else the invoking user's docker group
 if sudo -n true 2>/dev/null; then DK="sudo -n docker"; else DK="docker"; fi
@@ -228,8 +251,11 @@ if [ -n "${ZM_MAX_CHUNKS:-}" ]; then
     }
   python3 -c 'import json,sys; assert json.loads(sys.argv[1]).get("max_chunks_per_pass") is True' "$support"
 fi
+if [ -n "${ZM_ARCHIVE_DIR:-}" ] && $DK inspect "$ZM_CTR" >/dev/null 2>&1; then
+  echo "archive worker name already exists; inspect it before any replacement" >&2; exit 3
+fi
 $DK rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-$DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" "${ENTRYPOINT_ARGS[@]}" \
+$DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" "${ENTRYPOINT_ARGS[@]}" "${DATA_ARGS[@]}" "${HEAVY_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
@@ -238,6 +264,6 @@ $DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GP
   "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=lan \
   -e ZEN_MAX_MIN="${ZM_MAX_MIN:-1400}" -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE="${ZM_OVERSUB:-2}" \
   -e ZEN_LONG_LIVED="${ZM_LONG_LIVED:-0}" \
-  --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >/dev/null
+  --entrypoint "$ENTRYPOINT" "$ZM_IMG" "${ENTRY_COMMAND[@]}" >/dev/null
 echo "$(hostname) -> $ZM_JOBSET as $WORKER [store=$ZEN_S3_STORE ep=$EP] : $($DK ps --format '{{.Names}} {{.Status}}' | grep "$ZM_CTR" || echo FAILED-TO-START)"
 REMOTE

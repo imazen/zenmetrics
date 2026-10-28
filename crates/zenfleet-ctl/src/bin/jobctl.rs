@@ -25,6 +25,7 @@
 use std::path::PathBuf;
 mod benchmark_declare;
 mod derived_declare;
+mod evif_declare;
 
 use clap::{Parser, Subcommand};
 
@@ -55,6 +56,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Declare an explicit EVIF family/parameter union with source and teacher pins.
+    DeclareEvif {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        grid_out: PathBuf,
+    },
+    /// Declare a later ScoreFile pass over persisted EVIF containers, without encoding.
+    DeclareEvifDiagnostics {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Declare hash-bound derived-data views with explicit capability/resource admission.
     DeclareViews {
         #[arg(long)]
@@ -557,6 +574,29 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match Cli::parse().cmd {
+        Cmd::DeclareEvif {
+            spec,
+            out,
+            grid_out,
+        } => {
+            if out.exists() || grid_out.exists() {
+                return Err("declaration outputs already exist".into());
+            }
+            let spec: evif_declare::Spec = serde_json::from_slice(&std::fs::read(spec)?)?;
+            let (grid, q) = evif_declare::grid(&spec)?;
+            let jobs = evif_declare::declare(spec, &grid_out.to_string_lossy(), &grid, q)?;
+            std::fs::write(grid_out, grid)?;
+            std::fs::write(out, serde_json::to_vec(&jobs)?)?;
+            eprintln!("declared {} EVIF view jobs", jobs.len());
+        }
+        Cmd::DeclareEvifDiagnostics { spec, out } => {
+            if out.exists() {
+                return Err("refusing existing diagnostic manifest".into());
+            }
+            let jobs = evif_declare::diagnostics(&std::fs::read(spec)?)?;
+            std::fs::write(&out, serde_json::to_vec(&jobs)?)?;
+            eprintln!("declared {} EVIF diagnostic ScoreFile jobs", jobs.len());
+        }
         Cmd::DeclareViews { spec, out } => {
             let jobs = derived_declare::declare(&std::fs::read(spec)?)?;
             std::fs::write(out, serde_json::to_vec(&jobs)?)?;

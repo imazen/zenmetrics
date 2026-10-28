@@ -22,3 +22,34 @@ Diagnostics use zenmetrics 0a61830db89a768ab9462f166d1412e948e4efa9,
 executable SHA256 37c3bc112d8bdc86b949005f8fcafd419510b88b7dd7c7a8938ba59251c4e50f.
 CVVDP explicitly uses `standard_4k`; butteraugli records max and 3-norm.
 The E26 HDR-only build has no CPU butteraugli arm and is not used here.
+
+The view path is `zenfleet-ctl declare-evif --spec SPEC --out MANIFEST
+--grid-out /absolute/rungs.jsonl`. Its strict specification carries prepared
+source byte/pixel hashes, source identity, four labelled parameter arrays,
+implementation hashes, memory hint and `diagnostics: none|all`. One Metric job
+renders the complete union once, reuses EVIF's decoded RGB8 reference in one
+frozen teacher process, then imports all scores in one EVIF process. Every
+native JPEG and scored EVIF reaches CAS before the view manifest becomes DONE.
+The staged-output envelope is private to the worker/executor transport.
+
+`ZEN_ARCHIVE_BLOBS_DIR=/absolute/archive` selects a sharded immutable filesystem
+CAS (`aa/bb/<sha256>`) for output bytes; claims/control/ledgers stay in the
+normal S3 job system. The archive must be mounted identically on all workers.
+This opt-in is scoped to BlobStore writes/existence checks; S3-only audit tools
+cannot audit that archive. Independently hash-check the view manifests and all
+referenced objects when admitting data. FUSE/NFS can retain transient hidden
+files after a successful hard-link publication; cleanup failures are logged
+separately from the verified result and do not mark the upload failed.
+
+The canonical LAN launcher accepts `ZEN_DATA_HOST_DIR` (read-only prepared
+inputs), `ZEN_ARCHIVE_BLOBS_DIR` (writable CAS), and a hash-verified private
+`ZEN_RUN_HEAVY_HOST_PATH`/`ZEN_RUN_HEAVY_SHA256` binding. The helper stays outside
+the image. Set CPU affinity/shares, Docker memory/swap caps and disk scratch
+explicitly; set `ZEN_CORE_OVERSUBSCRIBE=1` for one thread per admitted job.
+
+`declare-evif-diagnostics` declares a later ScoreFile pass over selected EVIF
+hashes and bound source identities. Its executor reads already persisted PNG
+renditions, calls the pinned diagnostic ports, and emits joined thin sidecars
+and raw port tables; it has no render/encode command. Selection is a scientific
+input, independent of scheduler claims and retries. It preserves target-only
+containers, including their exact target doubles.

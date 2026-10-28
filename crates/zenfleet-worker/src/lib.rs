@@ -18,10 +18,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 
+mod archive_store;
 mod evif_output;
 #[cfg(target_os = "linux")]
 mod local_fair;
 mod s3io;
+mod staged_output;
 
 use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, ShardDecision};
 use zenfleet_core::{
@@ -134,6 +136,9 @@ impl R2BlobStore {
 
 impl BlobStore for R2BlobStore {
     fn put(&self, bytes: &[u8]) -> io::Result<Sha256Hex> {
+        if let Some(root) = std::env::var_os("ZEN_ARCHIVE_BLOBS_DIR") {
+            return archive_store::put(Path::new(&root), bytes);
+        }
         let sha = sha256(bytes);
         // In-process conditional PUT: one round-trip, no `s5cmd cp`/`ls` spawn, no temp
         // file. `AlreadyExists` = content-addressed dedup hit (both are success).
@@ -148,6 +153,9 @@ impl BlobStore for R2BlobStore {
     }
 
     fn exists(&self, sha: &Sha256Hex) -> bool {
+        if let Some(root) = std::env::var_os("ZEN_ARCHIVE_BLOBS_DIR") {
+            return archive_store::path(Path::new(&root), sha).is_file();
+        }
         crate::s3io::head_exists(
             &self.target.endpoint,
             &self.target.bucket,
@@ -1331,7 +1339,11 @@ where
                     out.rows.push(make(d, JobStatus::Done, Some(sha), None));
                     out.done += 1;
                 }
-                Err(_) => {
+                Err(error) => {
+                    eprintln!(
+                        "zenfleet-worker: cell persistence failed {}: {error}",
+                        d.job_id().as_str()
+                    );
                     // the encode/score succeeded but persistence failed → transient, retry next pass
                     out.rows.push(make(
                         d,

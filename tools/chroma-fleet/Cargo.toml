@@ -11,8 +11,18 @@ path = "../../crates/zenfleet-worker/src/bin/worker.rs"
 zenfleet-worker = { path = "../../crates/zenfleet-worker" }
 zenfleet-core = { path = "../../crates/zenfleet-core" }
 clap = { version = "4.5.60", features = ["derive"] }
+zenfleet-ctl = { path = "../../crates/zenfleet-ctl" }
+zenfleet-ledger = { path = "../../crates/zenfleet-ledger" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+arrow-array = "59.3.0"
 [profile.release]
 lto = "thin"
 [[test]]
 name = "evif-output"
 path = "tests.rs"
+
+[[bin]]
+name = "zenfleet-ctl"
+path = "../../crates/zenfleet-ctl/src/bin/jobctl.rs"

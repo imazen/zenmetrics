@@ -54,12 +54,15 @@ if [ "${EVIF_EXEC_IMAGE:-0}" = "1" ]; then
   CTX="${TMPDIR:-$HOME/tmp}/chroma-image-context"
   mkdir -p "$CTX"
   cp "$ZEN_WORKER_BIN" "$CTX/zenfleet-worker"
-  cp "$ZEN_EVIF_BIN_DIR/"{evif,chroma-frozen-teacher,zenmetrics-diagnostics} "$CTX/"
+  cp "$ZEN_EVIF_BIN_DIR/"{evif,evif-batch,chroma-frozen-teacher,chroma-frozen-batch-teacher,zenmetrics-diagnostics} "$CTX/"
   cp "$ROOT/scripts/jobsys/evif_exec.py" "$CTX/evif-exec"
+  cp "$ROOT/scripts/jobsys/evif_batch.py" "$CTX/evif_batch.py"
+  cp "$ROOT/scripts/jobsys/evif_diagnostics.py" "$CTX/evif_diagnostics.py"
+  cp /usr/bin/time "$CTX/time"
   cp "$ROOT/crates/zenfleet-worker/"{fleet-entrypoint.sh,tmpdir_discipline.sh} "$CTX/"
   cp "$ROOT/crates/zenfleet-worker/Dockerfile.evif" "$CTX/Dockerfile"
-  (cd "$CTX" && sha256sum zenfleet-worker evif-exec evif chroma-frozen-teacher zenmetrics-diagnostics > provenance.sha256)
-  $DOCKER build --build-arg "BASE=$ZEN_EVIF_BASE" -t "$IMAGE" "$CTX"
+  (cd "$CTX" && sha256sum zenfleet-worker evif-exec evif_batch.py evif_diagnostics.py evif evif-batch chroma-frozen-teacher chroma-frozen-batch-teacher zenmetrics-diagnostics time > provenance.sha256)
+  DOCKER_BUILDKIT=1 $DOCKER build --build-arg "BASE=$ZEN_EVIF_BASE" -t "$IMAGE" "$CTX"
   $DOCKER run --rm --network none --entrypoint /usr/local/bin/evif-exec "$IMAGE" capabilities
   if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE"; fi
   exit 0
