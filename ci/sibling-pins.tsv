@@ -122,7 +122,12 @@ ravif	https://github.com/imazen/cavif-rs.git	../ravif	cb06487cfc8013413f5cb268a9
 # wgpu,all-metrics -- -D warnings` — both verified locally against
 # this exact pin via a full sibling-worktree CI reproduction before
 # landing.
-zensim	https://github.com/imazen/zensim.git	../zensim	96c3c9bb900b580a4d9c0266a0a0b50203757528	-
+# Bumped from 96c3c9bb (2026-09-26) to 2ac9f073 (2026-10-27, zensim
+# origin/main) for the 2026-10-28 jxlav1 feature wave: the executor's
+# `feature-rev` arm needs `FormulaRevision::Rev7` (the `rowlanes`
+# era, landed bad544a3) — 96c3c9bb tops out at Rev5. Also pulls the
+# Rev6 `globaff`/ringhpm-era groundwork the Rev7 measure builds on.
+zensim	https://github.com/imazen/zensim.git	../zensim	2ac9f07399cfb66330aab279d31087f34fe36f1b	-
 # butteraugli's local layout is a Cargo workspace at
 # ~/work/butteraugli/ with the package at
 # ~/work/butteraugli/butteraugli/. The workspace's

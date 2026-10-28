@@ -8239,7 +8239,7 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=417cc785b83bee0b3f827ae85c5203f5e104a308#417cc785b83bee0b3f827ae85c5203f5e104a308"
+source = "git+https://github.com/imazen/zenanalyze?rev=f0903489300aea240ffae2e3f1359f8f2b9a0ba4#f0903489300aea240ffae2e3f1359f8f2b9a0ba4"
 dependencies = [
  "archmage 0.9.30",
  "bytemuck",
