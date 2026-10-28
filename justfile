@@ -2749,3 +2749,8 @@ margarine-linear-calibrate pairs replay binary output:
 
 margarine-replay-oracle pairs replay output:
     python3 crates/margarine/oracle_replay.py "{{pairs}}" "{{replay}}" "{{output}}"
+
+# Run inside run-heavy on an eligible build host. This graph preserves its own lock.
+chroma-frozen-teacher-check:
+    cargo fmt --manifest-path tools/chroma-frozen-teacher/Cargo.toml --check
+    cargo clippy --manifest-path tools/chroma-frozen-teacher/Cargo.toml --locked --all-targets -- -D warnings
