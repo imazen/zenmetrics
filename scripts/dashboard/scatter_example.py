@@ -26,7 +26,7 @@ def extract(path):
     panel=data['rank']['cid22']
     return dict(schema=1,description='CID22-A, SSIMULACRA2 stored peer scores, 2,192 admitted pairs from 25 sources; frozen human gauntlet 2026-10-18. Higher score means higher quality. Corpus-specific cached implementation; historical scoring source closure remains incomplete.',
                 source_file=path.name,source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                provenance_url='https://github.com/imazen/zensim/blob/master/benchmarks/gauntlet_human_2026-10-18.pointer.md',
+                provenance_url='https://github.com/imazen/zensimx/blob/main/benchmarks/gauntlet_human_2026-10-18.pointer.md',
                 scientific_source_commit='b9196f8b',n=record['n'],
                 panel={k:panel[k] for k in ['srocc','plcc','krocc','or','pwrc','z_rmse']},
                 srocc_ci=panel['srocc_ci'],srocc_ci_method=panel['srocc_ci_method'],

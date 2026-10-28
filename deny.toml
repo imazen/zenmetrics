@@ -60,7 +60,7 @@ allow-git = [
     "https://github.com/imazen/fast-ssim2",
     "https://github.com/imazen/zenavif-serialize",
     "https://github.com/imazen/zenrav1e",
-    "https://github.com/imazen/zensim",
+    "https://github.com/imazen/zensimx",
     "https://github.com/imazen/zenresize",
     "https://github.com/imazen/zenav1-svt",
     "https://github.com/imazen/zenbench",
