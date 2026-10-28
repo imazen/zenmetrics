@@ -57,7 +57,7 @@ import pyarrow.parquet as pq
 # they still need a Mode-A leak guard + Mode-B constant-per-ref guard on
 # the final per-codec parquet so a future schema/source change can't silently
 # re-introduce the kadid/tid corruption shape.
-_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensim/scripts/canonical_corpus")
+_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensimx/scripts/canonical_corpus")
 if str(_ZEN_CORPUS_JOIN_DIR) not in sys.path:
     sys.path.insert(0, str(_ZEN_CORPUS_JOIN_DIR))
 try:

@@ -47,7 +47,7 @@ import pyarrow.parquet as pq
 sys.path.insert(0, "/home/lilith/work/zen/zenanalyze/zentrain/tools")
 from _predict_lib import forward  # noqa: E402
 
-sys.path.insert(0, "/home/lilith/work/zen/zensim/scripts")
+sys.path.insert(0, "/home/lilith/work/zen/zensimx/scripts")
 from lib.zen_stats import srocc  # noqa: E402
 
 BACKEND_PER_IMAGE = "/mnt/v/output/avif-backend-2026-09-03/parquet/backend_per_image.parquet"

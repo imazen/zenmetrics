@@ -29,7 +29,7 @@ THREE REGISTERED-VS-OBSERVED DEVIATIONS ARE ENFORCED HERE, NOT PAPERED OVER:
 import argparse, collections, csv, json, math, os, sys
 import numpy as np
 
-sys.path.insert(0, os.path.expanduser("~/work/zen/zensim/scripts"))
+sys.path.insert(0, os.path.expanduser("~/work/zen/zensimx/scripts"))
 
 def frontier(points):
     bybpp = sorted(points, key=lambda p: (p[1], -p[0]))

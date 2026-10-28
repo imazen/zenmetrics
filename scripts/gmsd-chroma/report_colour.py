@@ -15,7 +15,7 @@ import os
 import sys
 from pathlib import Path
 
-OWNER = Path('/home/lilith/work/zen/zensim')
+OWNER = Path('/home/lilith/work/zen/zensimx')
 EXPECTED = {
     'scripts/lib/zen_stats.py': '6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35',
     'scripts/band_reliability.py': 'ce98f801c3bb420e5363b3be52192df98fbb538e106d8c5060e2f81f8574b244',

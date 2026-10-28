@@ -41,7 +41,7 @@ import pyarrow.parquet as pq
 
 # Cross-repo import of zensim's join_safety guards. See sibling
 # build_per_codec_training.py for the rationale and import pattern.
-_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensim/scripts/canonical_corpus")
+_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensimx/scripts/canonical_corpus")
 if str(_ZEN_CORPUS_JOIN_DIR) not in sys.path:
     sys.path.insert(0, str(_ZEN_CORPUS_JOIN_DIR))
 try:

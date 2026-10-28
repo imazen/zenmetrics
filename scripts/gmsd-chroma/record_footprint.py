@@ -23,7 +23,7 @@ workspace = Path('/home/lilith/work/zen/zenmetrics--gmsd-chroma')
 relative = subprocess.check_output(
     ['jj', 'diff', '--from', 'be6e8a96', '--name-only'], cwd=workspace, text=True).splitlines()
 paths = {str(workspace/p) for p in relative}
-paths.update(['/home/lilith/work/zen/zensim/.workongoing', str(workspace/'.workongoing')])
+paths.update(['/home/lilith/work/zen/zensimx/.workongoing', str(workspace/'.workongoing')])
 errors = []
 for directory, dirs, files in os.walk('/var/tmp/gmsd-chroma', followlinks=False,
                                      onerror=lambda e: errors.append(str(e))):

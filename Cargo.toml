@@ -307,12 +307,12 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f62
 # branch landed on main weeks ago — the previous path-pin to
 # ../zensim--principled-activity was carrying a stale checkout that
 # would drift behind canonical on every push. Pointing at
-# ../zensim/zensim (canonical main) means a `jj git fetch` in the
+# ../zensimx/zensim (canonical main) means a `jj git fetch` in the
 # zensim repo bubbles up to zenmetrics builds automatically.
 #
 # Equivalent git ref (use when the sibling checkout is gone):
 #   { git = "https://github.com/imazen/zensimx", rev = "<commit>" }
-zensim = { path = "../zensim/zensim" }
+zensim = { path = "../zensimx/zensim" }
 # 0.9.31-beta lives as a direct git dep in [workspace.dependencies] (see
 # above) — a [patch] here would force single-source resolution and fail:
 # the prerelease can't satisfy sibling crates' ^0.9.x reqs.

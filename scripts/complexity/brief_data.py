@@ -539,7 +539,7 @@ GH = 'https://github.com/imazen/zenmetrics'
 # umbrella kind -> (crate, GitHub repo, crate directory in that repo). The revision comes from Cargo.lock
 # (git sources) or ci/sibling-pins.tsv (path patches), so a link shows the code the build compiled.
 UMBRELLA = {'Ssim2': ('fast-ssim2', 'imazen/fast-ssim2', 'fast-ssim2'), 'Butter': ('butteraugli', 'imazen/butteraugli', 'butteraugli'),
-            'Zensim': ('zensim', 'imazen/zensim', 'zensim'), 'Dssim': ('dssim-core', 'lilith/dssim', 'dssim-core')}
+            'Zensim': ('zensim', 'imazen/zensimx', 'zensim'), 'Dssim': ('dssim-core', 'lilith/dssim', 'dssim-core')}
 EXTERNAL_IDENTS = {'fast_ssim2': 'Ssim2', 'butteraugli': 'Butter', 'zensim': 'Zensim', 'dssim_core': 'Dssim'}
 
 

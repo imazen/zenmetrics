@@ -21,7 +21,7 @@ zenmetrics-stats = { path = "../zenmetrics-stats" }
 serde_json = "1.0"
 
 [patch.crates-io]
-zensim = { path = "../../../zensim/zensim" }
+zensim = { path = "../../../zensimx/zensim" }
 zenjpeg = { path = "../../../zenjpeg/zenjpeg" }
 zenanalyze = { path = "../../../zenanalyze" }
 zenpng = { path = "../../../zenpng" }

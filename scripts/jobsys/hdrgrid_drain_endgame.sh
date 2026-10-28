@@ -48,7 +48,7 @@ python3 "$HERE/writeback_scores.py" hdrgrid all "$SF_RUNS" \
   || { say "WRITEBACK FAIL — check the two-stage env contract"; exit 4; }
 
 say "STEP 3: judge-era refresh (era-B is the consumable zensim slice)"
-python3 /home/lilith/work/zen/zensim/scripts/canonical_corpus/derive_hdrgrid_zensim_judge_era.py \
+python3 /home/lilith/work/zen/zensimx/scripts/canonical_corpus/derive_hdrgrid_zensim_judge_era.py \
   --cells "$HG/zensim_scores_by_judge_era.parquet" || exit 5
 
 say "STEP 4: pool regen (coefficient owner recipe) — run from ~/work/coefficient:"

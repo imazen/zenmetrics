@@ -6,7 +6,7 @@ import sys
 
 import pyarrow.parquet as pq
 
-sys.path.insert(0, "/home/lilith/work/zen/zensim/scripts/lib")
+sys.path.insert(0, "/home/lilith/work/zen/zensimx/scripts/lib")
 from zen_stats import panel_batch_indexed
 
 ROOT = "/var/tmp/cvvdp-safesyn"

@@ -55,7 +55,7 @@ zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
 zenbench = { git = "https://github.com/imazen/zenbench", rev = "ac675d3", default-features = false, features = ["precise-timing", "alloc-profiling"] }
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std", "avx512"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std", "avx512"] }
-zensim       = { path = "../../../../../zensim/zensim" }
+zensim       = { path = "../../../../../zensimx/zensim" }
 # RESOLVED VERSION: this requirement reads 0.8.1, but the workspace's
 # [patch.crates-io] supplies the LOCAL sibling, so `cargo tree -p cpu-profile -i
 # fast-ssim2` resolves **0.8.2 (local path)**. Always check the resolver, not

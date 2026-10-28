@@ -53,7 +53,7 @@ FAMILIES = {
     "cambi": (["crates/vmaf/src/cambi.rs"], []),
     "ws-hv": ([f"{CLI}/ws_hv.rs"], []),
     "flip": ([f"{CLI}/flip.rs"], []),
-    "zensim": (["sibling:/home/lilith/work/zen/zensim:"], ["crates/zensim-gpu"]),
+    "zensim": (["sibling:/home/lilith/work/zen/zensimx:"], ["crates/zensim-gpu"]),
     "wd": ([f"{NN}/src/wd.rs", f"{NN}/models/wd"], []),
     "pieapp": ([f"{NN}/src/pieapp.rs", f"{NN}/models/pieapp"], []),
     "lpips": ([f"{NN}/src/lpips.rs", f"{NN}/models/lpips", f"{NN}/models/stlpips"], []),

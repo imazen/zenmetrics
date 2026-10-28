@@ -32,7 +32,7 @@ import argparse, collections, csv, importlib.util, json, os, sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.expanduser("~/work/zen/zensim/scripts"))
+sys.path.insert(0, os.path.expanduser("~/work/zen/zensimx/scripts"))
 
 
 def _load(name, path):

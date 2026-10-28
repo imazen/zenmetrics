@@ -175,7 +175,7 @@ fit-declare-e29 ctl spec out:
     {{ctl}} declare-fits --spec {{spec}} --out {{out}}
 
 # NEVER `cargo fmt --all` — rustfmt can follow `mod`/path-dep edges into the
-# patched sibling repos (../zensim, ../../butteraugli, …) and rewrite files
+# patched sibling repos (../zensimx, ../../butteraugli, …) and rewrite files
 # we don't own. `cargo metadata --no-deps` lists exactly this workspace's
 # members (verified to exclude every sibling path-dep); we expand it to a
 # `-p NAME` list so only in-repo crates are touched.

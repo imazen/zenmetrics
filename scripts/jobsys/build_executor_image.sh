@@ -148,7 +148,7 @@ echo "building $IMAGE (base = ghcr.io/imazen/zenfleet-worker:latest + zenmetrics
 # Record which zensim the baked zenmetrics was built against (the Feature executor
 # stamps it into every emitted row). Read from the sibling checkout by default; pass
 # ZENSIM_BUILD_COMMIT to override, or "" to record nothing rather than a guess.
-ZSC="${ZENSIM_BUILD_COMMIT-$(git -C "$ROOT/../zensim" rev-parse HEAD 2>/dev/null || echo "")}"
+ZSC="${ZENSIM_BUILD_COMMIT-$(git -C "$ROOT/../zensimx" rev-parse HEAD 2>/dev/null || echo "")}"
 echo "zensim build commit: ${ZSC:-<unrecorded>}"
 $DOCKER build --build-arg "ZENSIM_BUILD_COMMIT=$ZSC" -t "$IMAGE" "$CTX"
 # Smoke: the binary loads + jobexec is present.
