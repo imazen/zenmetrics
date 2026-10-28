@@ -1,0 +1,12 @@
+# Existing fleet base supplies Python/pyarrow, libc and object-store clients.
+# Operator resolves its immutable digest from the live image before building.
+ARG BASE
+FROM ${BASE}
+COPY zenfleet-worker /usr/local/bin/zenfleet-worker
+COPY evif-exec /usr/local/bin/evif-exec
+COPY evif chroma-frozen-teacher zenmetrics-diagnostics /opt/chroma/bin/
+COPY fleet-entrypoint.sh tmpdir_discipline.sh /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/zenfleet-worker /usr/local/bin/evif-exec /opt/chroma/bin/* /usr/local/bin/fleet-entrypoint.sh /usr/local/bin/tmpdir_discipline.sh
+ENV ZEN_EXEC=/usr/local/bin/evif-exec ZEN_EVIF_BIN_DIR=/opt/chroma/bin TMPDIR=/scratch
+ENV ZEN_PERSISTENT_EXEC=1 ZEN_PERSISTENT_KINDS=encode,metric
+ENTRYPOINT ["nice", "-n", "19", "ionice", "-c", "3", "/usr/local/bin/fleet-entrypoint.sh"]

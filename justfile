@@ -2754,3 +2754,12 @@ margarine-replay-oracle pairs replay output:
 chroma-frozen-teacher-check:
     cargo fmt --manifest-path tools/chroma-frozen-teacher/Cargo.toml --check
     cargo clippy --manifest-path tools/chroma-frozen-teacher/Cargo.toml --locked --all-targets -- -D warnings
+
+chroma-exec-check:
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_evif_exec
+
+chroma-fleet-build:
+    cargo build --manifest-path tools/chroma-fleet/Cargo.toml --locked --release
+
+chroma-natural-hdr-build:
+    cargo build --manifest-path tools/chroma-natural-hdr/Cargo.toml --locked --release

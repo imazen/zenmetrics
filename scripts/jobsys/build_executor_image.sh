@@ -45,6 +45,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # escape hatch; the default is unchanged, so nothing about an existing invocation moves.
 DOCKER="${DOCKER:-docker}"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
+if [ "${EVIF_EXEC_IMAGE:-0}" = "1" ]; then
+  : "${ZEN_EVIF_BIN_DIR:?prebuilt pinned EVIF/teacher directory required}"
+  : "${ZEN_WORKER_BIN:?prebuilt worker with EVIF CAS persistence required}"
+  : "${ZEN_EVIF_BASE:?immutable matching-libc fleet base digest required}"
+  [[ "$ZEN_EVIF_BASE" == *@sha256:* ]] || { echo "pin the base digest" >&2; exit 1; }
+  [[ "$IMAGE" == ghcr.io/imazen/zenfleet-worker:evif-* ]] || { echo "use an evif-* tag" >&2; exit 1; }
+  CTX="${TMPDIR:-$HOME/tmp}/chroma-image-context"
+  mkdir -p "$CTX"
+  cp "$ZEN_WORKER_BIN" "$CTX/zenfleet-worker"
+  cp "$ZEN_EVIF_BIN_DIR/"{evif,chroma-frozen-teacher,zenmetrics-diagnostics} "$CTX/"
+  cp "$ROOT/scripts/jobsys/evif_exec.py" "$CTX/evif-exec"
+  cp "$ROOT/crates/zenfleet-worker/"{fleet-entrypoint.sh,tmpdir_discipline.sh} "$CTX/"
+  cp "$ROOT/crates/zenfleet-worker/Dockerfile.evif" "$CTX/Dockerfile"
+  (cd "$CTX" && sha256sum zenfleet-worker evif-exec evif chroma-frozen-teacher zenmetrics-diagnostics > provenance.sha256)
+  $DOCKER build --build-arg "BASE=$ZEN_EVIF_BASE" -t "$IMAGE" "$CTX"
+  $DOCKER run --rm --network none --entrypoint /usr/local/bin/evif-exec "$IMAGE" capabilities
+  if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE"; fi
+  exit 0
+fi
 if [ "${BENCHMARK_IMAGE:-0}" = "1" ]; then
   read -r -a BENCH_DOCKER_CMD <<< "$DOCKER"
   "${BENCH_DOCKER_CMD[@]}" buildx version >/dev/null

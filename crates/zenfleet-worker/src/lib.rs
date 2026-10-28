@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 
+mod evif_output;
 #[cfg(target_os = "linux")]
 mod local_fair;
 mod s3io;
@@ -1325,7 +1326,7 @@ where
             continue;
         }
         match handler(d) {
-            Ok(bytes) => match store.put(&bytes) {
+            Ok(bytes) => match evif_output::persist(store, d, &bytes) {
                 Ok(sha) => {
                     out.rows.push(make(d, JobStatus::Done, Some(sha), None));
                     out.done += 1;
@@ -1781,7 +1782,7 @@ where
                     };
                     // Encode/score (fresh process) + persist — OUTSIDE the lock so peers run too.
                     let res = handler(gap[gi]).and_then(|bytes| {
-                        store.put(&bytes).map_err(|e| {
+                        evif_output::persist(store, gap[gi], &bytes).map_err(|e| {
                             HandlerError::new(ErrorClass::UploadFail, format!("put: {e}"))
                         })
                     });

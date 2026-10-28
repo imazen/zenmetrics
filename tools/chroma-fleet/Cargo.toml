@@ -1,0 +1,18 @@
+[package]
+name = "chroma-fleet-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[workspace]
+[[bin]]
+name = "zenfleet-worker"
+path = "../../crates/zenfleet-worker/src/bin/worker.rs"
+[dependencies]
+zenfleet-worker = { path = "../../crates/zenfleet-worker" }
+zenfleet-core = { path = "../../crates/zenfleet-core" }
+clap = { version = "4.5.60", features = ["derive"] }
+[profile.release]
+lto = "thin"
+[[test]]
+name = "evif-output"
+path = "tests.rs"
