@@ -11,6 +11,16 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+### Known Bugs: native HDR staging test scratch environment (2026-10-29, fixed)
+
+The new HDR publication test inherited `TMPDIR`, so it passed with an explicit
+local scratch path and failed when CI omitted that environment variable. The
+transport's explicit scratch requirement is unchanged. The fixture now runs
+all original publication assertions in a child with its own disk-backed temp
+environment, without unsafe global environment mutation. The isolated tests
+and the specific test with `TMPDIR`/`TMP`/`TEMP` unset pass; strict isolated
+Clippy passes. Fix: `85c4f08f`.
+
 ### Known Bugs: subsequent FitCell claim timestamp (2026-10-26)
 
 The worker used the pass-start epoch for every lease acquisition. A second

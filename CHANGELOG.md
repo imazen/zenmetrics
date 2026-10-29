@@ -90,6 +90,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Native HDR chroma view generation, exact natural SSIMULACRA2 reference reuse,
+  and atomic AVIF/PQ16/label publication through the existing zenfleet view
+  protocol (`5b4f5373`, `2d2a3194`, `c375a124`). The publication fixture also
+  passes with CI temp variables unset (`85c4f08f`). No public Rust API changed.
+
+
 - Add explicit comparative thread selection (`97ccee26`), the 40-route changed-only selector in measured local order (`d660bb58`), and source-bound per-name/per-cell canonical tables (`fd6b334f`).
 
 - Add explicit original-reference comparative commands and a compact per-metric README with measured Rust/canonical ratios (`69a0cb75`); preserve partial DMM canonical coverage and original model-card joins (`0d3807c4`).
