@@ -2775,3 +2775,17 @@ chroma-hdr-render-check:
 
 chroma-hdr-exec-check:
     TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -B -m unittest scripts.jobsys.test_hdr_chroma_exec
+
+# Pure transport refusal controls; no HDR kernel or quality target runs here.
+hdr-native-transport-check:
+    TMPDIR="$HOME/tmp" python3 -m unittest discover -s scripts/jobsys -p test_hdr_features_exec.py
+
+# Prebuilt native HDR tools only; runtime capabilities are verified before push.
+hdr-native-image-build context tag:
+    docker build --pull -t {{tag}} {{context}}
+
+# Scoped native HDR archive contract; runner is the existing zenfleet worker.
+hdr-native-worker-build target_dir:
+    test "$(hostname)" != dev
+    TMPDIR="$HOME/tmp" CARGO_TARGET_DIR={{target_dir}} cargo test --manifest-path tools/chroma-fleet/Cargo.toml -p zenfleet-worker --lib native_hdr_staging_tests
+    CARGO_TARGET_DIR={{target_dir}} cargo build --release --manifest-path tools/chroma-fleet/Cargo.toml --bin zenfleet-worker
