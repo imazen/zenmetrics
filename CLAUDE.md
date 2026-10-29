@@ -11,6 +11,19 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+### Known Bugs: native HDR feature publication (2026-10-29, dispatch regression fixed)
+
+The first native UPIQ feature job computed all380 rows, then the wrapper
+checked `build_commit` instead of research's `zensim_build_commit` and refused
+publication. The next recovery's new `hdr:` namespace bypassed the worker's
+staged-output dispatch: its DONE blob was the envelope, without the referenced
+sidecars. That row is invalid as a feature bank. Keep both attempts and native
+bytes. Repair uses the shared staging owner, requires all objects before the
+primary receipt, and republishes hash-bound stored extraction without new
+pixel reads. The shared dispatcher regression passes; end-to-end recovery
+with the rebuilt worker remains unverified. Regression fixtures run the real publication assertions in
+a child with explicit disk scratch; no unsafe environment mutation or skips.
+
 ### Known Bugs: native HDR staging test scratch environment (2026-10-29, fixed)
 
 The new HDR publication test inherited `TMPDIR`, so it passed with an explicit

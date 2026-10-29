@@ -49,6 +49,25 @@ impl HandlerError {
     }
 }
 
+// Native HDR features use the same verified staging owner as other raster jobs.
+// A new capability must not publish a staging envelope as an opaque DONE blob.
+fn persist_executor_output(
+    store: &dyn BlobStore,
+    job: &DesiredJob,
+    bytes: &[u8],
+) -> io::Result<Sha256Hex> {
+    if job.cell.codec.starts_with("hdr:") {
+        if !bytes.starts_with(staged_output::MAGIC) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "native HDR output requires verified staging",
+            ));
+        }
+        staged_output::persist(store, job, bytes)
+    } else {
+        evif_output::persist(store, job, bytes)
+    }
+}
 /// Content-addressed blob storage. Local FS today; an R2 impl drops in behind this trait.
 pub trait BlobStore {
     /// Store `bytes`, returning their content address. Identical bytes dedup to one object.
@@ -1334,7 +1353,7 @@ where
             continue;
         }
         match handler(d) {
-            Ok(bytes) => match evif_output::persist(store, d, &bytes) {
+            Ok(bytes) => match persist_executor_output(store, d, &bytes) {
                 Ok(sha) => {
                     out.rows.push(make(d, JobStatus::Done, Some(sha), None));
                     out.done += 1;
@@ -1794,7 +1813,7 @@ where
                     };
                     // Encode/score (fresh process) + persist — OUTSIDE the lock so peers run too.
                     let res = handler(gap[gi]).and_then(|bytes| {
-                        evif_output::persist(store, gap[gi], &bytes).map_err(|e| {
+                        persist_executor_output(store, gap[gi], &bytes).map_err(|e| {
                             HandlerError::new(ErrorClass::UploadFail, format!("put: {e}"))
                         })
                     });
@@ -5775,5 +5794,64 @@ mod tests {
         assert_eq!(worker_key("node-2"), "node-2");
         assert_eq!(worker_key("vast/12 34"), "vast_12_34");
         assert_eq!(worker_key("a.b_c-9"), "a.b_c-9");
+    }
+}
+
+
+#[cfg(test)]
+mod native_hdr_staging_tests {
+    use super::*;
+    #[test]
+    fn native_hdr_commits_objects_before_primary_and_refuses_raw_envelopes() {
+        if std::env::var_os("ZEN_HDR_STAGING_TEST_CHILD").is_none() {
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .expect("user home");
+            let scratch = std::path::PathBuf::from(home)
+                .join("tmp")
+                .join(format!("native-hdr-test-child-{}", std::process::id()));
+            std::fs::create_dir_all(&scratch).unwrap();
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "native_hdr_staging_tests::native_hdr_commits_objects_before_primary_and_refuses_raw_envelopes", "--nocapture"])
+                .env("TMPDIR", &scratch).env("ZEN_HDR_STAGING_TEST_CHILD", "1")
+                .env_remove("ZEN_ARCHIVE_BLOBS_DIR").status().unwrap();
+            assert!(
+                status.success(),
+                "native HDR publication assertions failed in the child"
+            );
+            std::fs::remove_dir_all(scratch).unwrap();
+        } else {
+            let root = std::path::PathBuf::from(std::env::var_os("TMPDIR").expect("disk scratch"))
+                .join(format!("native-hdr-stage-{}", std::process::id()));
+            let stage = root.join("stage");
+            std::fs::create_dir_all(&stage).unwrap();
+            std::fs::write(stage.join("features.tsv"), b"native measured slots").unwrap();
+            let primary = br#"{"image_path":"admission.json","knob_tuple_json":"{}"}"#;
+            std::fs::write(stage.join("result.json"), primary).unwrap();
+            let store = LocalBlobStore::new(root.join("blobs")).unwrap();
+            let job = DesiredJob::new(
+                zenfleet_core::JobKind::Bake {
+                    view: "hdr-upiq380-rev7-features-v1".into(),
+                },
+                vec![],
+                zenfleet_core::CellId {
+                    image_path: "admission.json".into(),
+                    codec: "hdr:upiq380-features".into(),
+                    q: -1,
+                    knob_tuple_json: "{}".into(),
+                },
+            );
+            let value = serde_json::json!({"root":stage,"primary":"result.json", "objects":[
+                {"path":"features.tsv", "sha256":sha256(b"native measured slots").as_str()}]});
+            let mut wire = staged_output::MAGIC.to_vec();
+            wire.extend(serde_json::to_vec(&value).unwrap());
+            let result = persist_executor_output(&store, &job, &wire).unwrap();
+            assert_eq!(result, sha256(primary));
+            assert_ne!(result, sha256(&wire));
+            assert!(store.exists(&sha256(b"native measured slots")));
+            assert!(!stage.exists());
+            assert!(persist_executor_output(&store, &job, primary).is_err());
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 }

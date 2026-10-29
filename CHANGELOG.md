@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Route the new native HDR feature namespace through verified staged-object publication before DONE, in both worker execution paths. The regression checks object persistence and rejects opaque staging envelopes; full native-bank recovery remains pending.
+
 - zenfleet: batch complete EVIF views with a shared decoded reference, atomic archive CAS and a later persisted-rendition diagnostic pass (`a09feaba`, `6abd2eee`). Target bits and complete diagnostic containers reproduce the144-cell control exactly.
 
 - zenfleet: bound long fit passes before reloading peer completion ledgers and
