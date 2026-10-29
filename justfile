@@ -2763,3 +2763,15 @@ chroma-fleet-build:
 
 chroma-natural-hdr-build:
     cargo build --manifest-path tools/chroma-natural-hdr/Cargo.toml --locked --release
+
+# Isolated native-HDR graph; run through run-heavy on an eligible worker host.
+chroma-hdr-render-build:
+    cargo build --release --locked --manifest-path tools/chroma-hdr-render/Cargo.toml
+
+chroma-hdr-render-check:
+    cargo fmt --check --manifest-path tools/chroma-hdr-render/Cargo.toml
+    cargo test --release --locked --manifest-path tools/chroma-hdr-render/Cargo.toml
+    cargo clippy --release --locked --manifest-path tools/chroma-hdr-render/Cargo.toml --all-targets -- -D warnings
+
+chroma-hdr-exec-check:
+    TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -B -m unittest scripts.jobsys.test_hdr_chroma_exec

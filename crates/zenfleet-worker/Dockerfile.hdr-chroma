@@ -1,0 +1,8 @@
+# Native HDR kernels and teacher are prebuilt; no installation at worker boot.
+ARG BASE=ghcr.io/imazen/zenfleet-worker:exec
+FROM ${BASE}
+COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
+COPY --chmod=0755 hdr_chroma_exec.py /usr/local/bin/hdr-chroma-exec
+COPY --chmod=0755 chroma-hdr-render chroma-natural-hdr /opt/chroma-hdr/bin/
+ENV ZEN_EXEC=/usr/local/bin/hdr-chroma-exec ZEN_HDR_BIN_DIR=/opt/chroma-hdr/bin
+ENV ZEN_PERSISTENT_EXEC=1 ZEN_PERSISTENT_KINDS=bake

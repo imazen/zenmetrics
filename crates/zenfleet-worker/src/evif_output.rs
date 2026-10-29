@@ -23,7 +23,7 @@ pub(super) fn persist(
     job: &DesiredJob,
     bytes: &[u8],
 ) -> io::Result<Sha256Hex> {
-    if !job.cell.codec.starts_with("evif:") {
+    if !job.cell.codec.starts_with("evif:") && !job.cell.codec.starts_with("hdr-chroma:") {
         return store.put(bytes);
     }
     if bytes.starts_with(super::staged_output::MAGIC) {
@@ -39,6 +39,43 @@ mod tests {
     use super::*;
     use crate::LocalBlobStore;
     use zenfleet_core::{CellId, JobKind, sha256};
+    #[test]
+    fn hdr_staging_persists_avif_and_pq16_before_the_receipt() {
+        let dir = std::env::temp_dir().join(format!("hdr-output-{}", std::process::id()));
+        let stage = dir.join("stage");
+        std::fs::create_dir_all(&stage).unwrap();
+        let store = LocalBlobStore::new(dir.join("store")).unwrap();
+        let job = DesiredJob::new(
+            JobKind::Bake {
+                view: "hdr-chroma-view-v1".into(),
+            },
+            vec![],
+            CellId {
+                image_path: "view.pq.png".into(),
+                codec: "hdr-chroma:avif-svt".into(),
+                q: -1,
+                knob_tuple_json: "{}".into(),
+            },
+        );
+        std::fs::write(stage.join("sample.avif"), b"avif").unwrap();
+        std::fs::write(stage.join("sample.pq.png"), b"pq16").unwrap();
+        std::fs::write(
+            stage.join("result.json"),
+            br#"{"image_path":"view.pq.png","knob_tuple_json":"{}"}"#,
+        )
+        .unwrap();
+        let envelope = serde_json::json!({"root":stage,"primary":"result.json","objects":[
+            {"path":"sample.avif","sha256":sha256(b"avif").as_str()},
+            {"path":"sample.pq.png","sha256":sha256(b"pq16").as_str()}]});
+        let mut bytes = crate::staged_output::MAGIC.to_vec();
+        bytes.extend(serde_json::to_vec(&envelope).unwrap());
+        let output = persist(&store, &job, &bytes).unwrap();
+        assert!(store.exists(&sha256(b"avif")));
+        assert!(store.exists(&sha256(b"pq16")));
+        assert!(store.exists(&output));
+        assert!(!stage.exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn both_artifacts_persist_and_truncation_fails() {
         let dir = std::env::temp_dir().join(format!("evif-output-{}", std::process::id()));

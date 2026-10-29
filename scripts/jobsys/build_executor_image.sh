@@ -45,6 +45,24 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # escape hatch; the default is unchanged, so nothing about an existing invocation moves.
 DOCKER="${DOCKER:-docker}"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
+if [ "${HDR_CHROMA_EXEC_IMAGE:-0}" = "1" ]; then
+  : "${ZEN_HDR_BIN_DIR:?prebuilt native HDR renderer and teacher required}"
+  : "${ZEN_WORKER_BIN:?prebuilt worker with native HDR CAS persistence required}"
+  : "${ZEN_HDR_BASE:?immutable matching-libc fleet base digest required}"
+  [[ "$ZEN_HDR_BASE" == *@sha256:* ]] || { echo "pin the base digest" >&2; exit 1; }
+  [[ "$IMAGE" == ghcr.io/imazen/zenfleet-worker:hdr-chroma-* ]] || { echo "use an hdr-chroma-* tag" >&2; exit 1; }
+  CTX="${TMPDIR:-$HOME/tmp}/hdr-chroma-image-context"
+  mkdir -p "$CTX"
+  cp "$ZEN_WORKER_BIN" "$CTX/zenfleet-worker"
+  cp "$ZEN_HDR_BIN_DIR/"{chroma-hdr-render,chroma-natural-hdr} "$CTX/"
+  cp "$ROOT/scripts/jobsys/hdr_chroma_exec.py" "$CTX/hdr_chroma_exec.py"
+  cp "$ROOT/crates/zenfleet-worker/Dockerfile.hdr-chroma" "$CTX/Dockerfile"
+  (cd "$CTX" && sha256sum zenfleet-worker hdr_chroma_exec.py chroma-hdr-render chroma-natural-hdr > provenance.sha256)
+  DOCKER_BUILDKIT=1 $DOCKER build --build-arg "BASE=$ZEN_HDR_BASE" -t "$IMAGE" "$CTX"
+  $DOCKER run --rm --network none --entrypoint /usr/local/bin/hdr-chroma-exec "$IMAGE" capabilities
+  if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE"; fi
+  exit 0
+fi
 if [ "${EVIF_EXEC_IMAGE:-0}" = "1" ]; then
   : "${ZEN_EVIF_BIN_DIR:?prebuilt pinned EVIF/teacher directory required}"
   : "${ZEN_WORKER_BIN:?prebuilt worker with EVIF CAS persistence required}"

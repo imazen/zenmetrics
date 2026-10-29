@@ -67,3 +67,12 @@ scalar API exposes no per-pixel map, so none is approximated.
 The12-cell diagnostic proof preserves every target and reproduces all three
 unbatched diagnostic doubles exactly, with24 verified persisted native maps.
 Receipt: `b/diagnostic-proof-r11/PROOF.json` in the chroma archive.
+
+Native HDR views use the same staged-object transport with codec namespace
+`hdr-chroma:avif-svt` and the existing `declare-views` adapter. The executor is
+`hdr_chroma_exec.py`; its two capabilities bind the view protocol and frozen
+natural SSIMULACRA2 arithmetic. It publishes native AVIF, exact PQ16 PNG and
+source identities before the primary receipt. Worker transport tests exercise
+this route separately from EVIF. Build with `HDR_CHROMA_EXEC_IMAGE=1` through
+the canonical image builder, supplying prebuilt binaries and an immutable base.
+No worker boot installs are added.
