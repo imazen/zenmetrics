@@ -2397,3 +2397,12 @@ files during transient cleanup. Treating the final directory removal as an
 upload failure incorrectly marked all12 view jobs failed. Publication remains
 hash-verified and primary-last; cleanup now reports its retained path separately.
 The repeated144-cell proof passes target-bit and full-container identity.
+
+### Known Bugs: diagnostic source hash reused map bytes (2026-10-29, fixed)
+
+The later EVIF diagnostic pass reused its reference-byte variable for a decoded
+map. Input authentication and map bindings were correct, but its final receipt
+recorded the map-byte SHA256 as the source SHA256. Full source-identity readback
+rejected the first production sample before scaling. The executor now retains
+reference bytes separately; the real diagnostic proof checks both source-file
+and reference-pixel hashes. Rejected receipts remain immutable and excluded.

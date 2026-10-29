@@ -18,8 +18,8 @@ def execute(job, pins):
         raise ValueError('unsupported EVIF diagnostic job')
     if set(knobs)!={'source_sha256','reference_pixels_sha256','width','height','evif_shas'}:
         raise ValueError('unknown diagnostic controls')
-    reference=Path(cell['image_path']);raw=reference.read_bytes()
-    if sha(raw)!=knobs['source_sha256'] or sha(raw) not in job['inputs']:
+    reference=Path(cell['image_path']);reference_raw=reference.read_bytes()
+    if sha(reference_raw)!=knobs['source_sha256'] or sha(reference_raw) not in job['inputs']:
         raise ValueError('unbound diagnostic reference')
     archive=Path(os.environ['ZEN_ARCHIVE_BLOBS_DIR'])
     if not archive.is_absolute() or not 0<knobs['width']*knobs['height']<1_000_000:
@@ -105,7 +105,7 @@ def execute(job, pins):
     for row in catalog:output.append({k:v for k,v in row.items() if k not in ['candidate','index']})
     sidecars={f.name:sha(f.read_bytes()) for f in stage.iterdir() if f.suffix in ['.parquet','.log','.tsv'] or f.name.endswith('.pfm.gz')}
     result=dict(schema=CAPABILITY,image_path=str(reference),knob_tuple_json=cell['knob_tuple_json'],
-                source_sha256=sha(raw),reference_pixels_sha256=knobs['reference_pixels_sha256'],variant_index_uri=uri,variant_index_sha256=index_sha,sidecars=sidecars,
+                source_sha256=sha(reference_raw),reference_pixels_sha256=knobs['reference_pixels_sha256'],variant_index_uri=uri,variant_index_sha256=index_sha,sidecars=sidecars,
                 implementation='zenmetrics@0a61830db89a768ab9462f166d1412e948e4efa9;display=standard_4k;exe-sha256='+pins['diagnostics'],cells=output)
     (stage/'result.json').write_text(json.dumps(result,sort_keys=True,allow_nan=False))
     # Preserve the raw port tables/logs as CAS objects alongside the joined rows.
