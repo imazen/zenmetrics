@@ -1,0 +1,26 @@
+[package]
+name = "chroma-hdr-render"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+[workspace]
+[dependencies]
+almost-enough = "0.4.5"
+enough = "0.4.5"
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "a7638f6e0655914fb15fe4633ac26425533756c8", default-features = false, features = ["zenav1-svt", "__expert"] }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "2802f8ee9ae5444b61c4b8f9da51645365bb1fd5", default-features = false }
+zenpixels = { version = "=0.2.17", default-features = false }
+zenpixels-convert = { version = "=0.2.17", features = ["rgb"] }
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012" }
+zencodec = { version = "0.1.26", default-features = false }
+imgref = "1.12.3"
+rgb = "0.8.53"
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+sha2 = "0.11.1"
+[patch.crates-io]
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "d327434b0826a3e39633665c76f5081c0ceb34cc" }
+[profile.release]
+lto = "thin"
