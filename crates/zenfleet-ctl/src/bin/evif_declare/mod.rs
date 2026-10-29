@@ -241,7 +241,33 @@ struct DiagnosticSource {
 }
 
 pub(super) fn diagnostics(bytes: &[u8]) -> Result<Vec<DesiredJob>, String> {
+    persisted(bytes, false)
+}
+
+pub(super) fn features(bytes: &[u8]) -> Result<Vec<DesiredJob>, String> {
+    persisted(bytes, true)
+}
+
+fn persisted(bytes: &[u8], features: bool) -> Result<Vec<DesiredJob>, String> {
     let spec: DiagnosticSpec = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let capability = if features {
+        "evif-rev7-features-v1"
+    } else {
+        "evif-diagnostics-v1"
+    };
+    let codec = if features {
+        "evif:features"
+    } else {
+        "evif:diagnostics"
+    };
+    if features
+        && !spec
+            .implementation_shas
+            .iter()
+            .any(|s| s == "ed4957417339779dd8ed25fe59a6166326ba9db86d5c1530b1e1c788c9d614d8")
+    {
+        return Err("frozen Mlic extractor pin required".into());
+    }
     if spec.sources.is_empty() || spec.implementation_shas.len() < 3 || spec.peak_mem_bytes == 0 {
         return Err("diagnostic sources, pins and memory hint required".into());
     }
@@ -275,19 +301,19 @@ pub(super) fn diagnostics(bytes: &[u8]) -> Result<Vec<DesiredJob>, String> {
         }
         let job = DesiredJob::new(
             JobKind::ScoreFile {
-                metrics: vec!["evif-diagnostics-v1".into()],
+                metrics: vec![capability.into()],
                 hdr: false,
                 hdr_transfer: None,
             },
             inputs,
             CellId {
                 image_path: source.image_path,
-                codec: "evif:diagnostics".into(),
+                codec: codec.into(),
                 q: 95,
                 knob_tuple_json: knobs,
             },
         )
-        .with_requires(["evif-diagnostics-v1".to_owned()])
+        .with_requires([capability.to_owned()])
         .with_hint(ResourceHint {
             peak_mem_bytes: spec.peak_mem_bytes,
             threads: 1,
@@ -303,6 +329,25 @@ pub(super) fn diagnostics(bytes: &[u8]) -> Result<Vec<DesiredJob>, String> {
 
 #[cfg(test)]
 mod diagnostic_tests {
+    #[test]
+    fn feature_jobs_require_the_frozen_extractor_and_have_separate_identity() {
+        let mut spec = serde_json::json!({"sources":[{"source":{"image_path":"ref.png","source_sha256":"11".repeat(32),"pixels_sha256":"22".repeat(32),"identity":"TRAIN/ref","width":32,"height":32},"evif_shas":["33".repeat(32)]}],"implementation_shas":["44".repeat(32),"55".repeat(32),"66".repeat(32)],"peak_mem_bytes":268435456});
+        assert!(super::features(&serde_json::to_vec(&spec).unwrap()).is_err());
+        spec["implementation_shas"]
+            .as_array_mut()
+            .unwrap()
+            .push("ed4957417339779dd8ed25fe59a6166326ba9db86d5c1530b1e1c788c9d614d8".into());
+        let bytes = serde_json::to_vec(&spec).unwrap();
+        let feature = super::features(&bytes).unwrap().remove(0);
+        let diagnostic = super::diagnostics(&bytes).unwrap().remove(0);
+        assert_ne!(feature.job_id(), diagnostic.job_id());
+        assert_eq!(feature.cell.codec, "evif:features");
+        assert!(
+            feature.inputs.iter().any(|s| s.as_str()
+                == "ed4957417339779dd8ed25fe59a6166326ba9db86d5c1530b1e1c788c9d614d8")
+        );
+    }
+
     #[test]
     fn selected_containers_and_pins_are_bound_without_encoding() {
         let source = serde_json::json!({"image_path":"ref.png","source_sha256":"11".repeat(32),"pixels_sha256":"22".repeat(32),"identity":"TRAIN/ref","width":32,"height":32});

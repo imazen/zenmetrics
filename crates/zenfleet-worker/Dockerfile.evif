@@ -5,9 +5,10 @@ FROM ${BASE}
 COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
 COPY --chmod=0755 evif-exec /usr/local/bin/evif-exec
 COPY --chmod=0755 evif evif-batch chroma-frozen-teacher chroma-frozen-batch-teacher zenmetrics-diagnostics /opt/chroma/bin/
+COPY --chmod=0755 extract_features_372col-rev7 /opt/chroma/bin/
 COPY --chmod=0755 fleet-entrypoint.sh tmpdir_discipline.sh /usr/local/bin/
 COPY --chmod=0755 time /usr/bin/time
-COPY evif_batch.py evif_diagnostics.py /usr/local/bin/
+COPY evif_batch.py evif_diagnostics.py evif_features.py /usr/local/bin/
 ENV ZEN_CLAIM_MODE=epoch-sharded ZEN_EPOCH_LEN_SECS=120 ZEN_EPOCH_HB_SECS=20
 ENV RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 CARGO_BUILD_JOBS=1
 ENV ZEN_EXEC=/usr/local/bin/evif-exec ZEN_EVIF_BIN_DIR=/opt/chroma/bin TMPDIR=/scratch

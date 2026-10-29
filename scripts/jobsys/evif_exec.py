@@ -20,7 +20,7 @@ TEACHER = 'ssim2-safesyn-b7c2b4b3'
 PINS = {'evif':'232434619478f3ce076e895f3b4342b00f86e8b633a0da5123867d2e45dab800',
         'teacher':'2e6d5f77f54062c9a08c6390668eb075474ff8772926720b5475d8ca179eb3a6',
         'diagnostics':'37c3bc112d8bdc86b949005f8fcafd419510b88b7dd7c7a8938ba59251c4e50f'}
-CAPABILITIES=['evif-cas-v1',TEACHER,'evif-view-batch-v1','evif-diagnostics-v1']
+CAPABILITIES=['evif-cas-v1',TEACHER,'evif-view-batch-v1','evif-diagnostics-v1','evif-rev7-features-v1']
 
 def sha(data): return hashlib.sha256(data).hexdigest()
 def validate(job):
@@ -57,6 +57,9 @@ def binaries():
     return result
 
 def execute(job):
+    if job.get('cell',{}).get('codec')=='evif:features':
+        from evif_features import execute as feature_execute
+        return feature_execute(job)
     if job.get('cell',{}).get('codec')=='evif:diagnostics':
         from evif_diagnostics import execute as diagnostic_execute
         return diagnostic_execute(job,PINS)

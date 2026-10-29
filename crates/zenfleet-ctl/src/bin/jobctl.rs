@@ -72,6 +72,13 @@ enum Cmd {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Extract frozen Mlic Rev7 features from persisted EVIF renditions.
+    DeclareEvifFeatures {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Declare hash-bound derived-data views with explicit capability/resource admission.
     DeclareViews {
         #[arg(long)]
@@ -596,6 +603,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let jobs = evif_declare::diagnostics(&std::fs::read(spec)?)?;
             std::fs::write(&out, serde_json::to_vec(&jobs)?)?;
             eprintln!("declared {} EVIF diagnostic ScoreFile jobs", jobs.len());
+        }
+        Cmd::DeclareEvifFeatures { spec, out } => {
+            if out.exists() {
+                return Err("refusing existing feature manifest".into());
+            }
+            let jobs = evif_declare::features(&std::fs::read(spec)?)?;
+            std::fs::write(&out, serde_json::to_vec(&jobs)?)?;
+            eprintln!("declared {} frozen EVIF feature ScoreFile jobs", jobs.len());
         }
         Cmd::DeclareViews { spec, out } => {
             let jobs = derived_declare::declare(&std::fs::read(spec)?)?;
