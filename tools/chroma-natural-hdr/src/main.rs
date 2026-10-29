@@ -95,11 +95,14 @@ fn load(path: &Path) -> Result<Image, Error> {
     })
 }
 fn main() -> Result<(), Error> {
+    let mut cached: Option<(String, Image)> = None;
     for line in io::stdin().lock().lines() {
         let pair: serde_json::Value = serde_json::from_str(&line?)?;
-        let r = load(Path::new(
-            pair["reference"].as_str().ok_or("reference missing")?,
-        ))?;
+        let reference = pair["reference"].as_str().ok_or("reference missing")?;
+        if cached.as_ref().is_none_or(|(path, _)| path != reference) {
+            cached = Some((reference.to_owned(), load(Path::new(reference))?));
+        }
+        let r = &cached.as_ref().expect("reference loaded").1;
         let d = load(Path::new(
             pair["distorted"].as_str().ok_or("distorted missing")?,
         ))?;

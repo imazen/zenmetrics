@@ -16,3 +16,10 @@ The isolated lock keeps this graph separate from the frozen SDR teacher.
 JSONL pairs enter stdin; finite score doubles and implementation receipts
 leave stdout. `cargo test --manifest-path tools/chroma-natural-hdr/Cargo.toml`
 checks reference white, superwhite, negative gamut values and PQ endpoints.
+
+The JSONL helper retains only its last decoded reference. This bounds the
+cache to one view and lets a complete chroma job score through one process
+without decoding the same reference for every rung. Arithmetic, ingress,
+output doubles and implementation identity are unchanged. The reference-reuse
+build replays all 208 HDR-A3 doubles and all 208 freshly rendered rungs exactly;
+receipts bind the actual executable hash separately from the frozen source pin.
