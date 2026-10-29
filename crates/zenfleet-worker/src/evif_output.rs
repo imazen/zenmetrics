@@ -41,6 +41,34 @@ mod tests {
     use zenfleet_core::{CellId, JobKind, sha256};
     #[test]
     fn hdr_staging_persists_avif_and_pq16_before_the_receipt() {
+        // The production transport requires explicit disk-backed TMPDIR. Run
+        // this fixture in a child with its own environment, avoiding unsafe
+        // process-global env mutations and dependence on the CI caller.
+        if std::env::var_os("ZEN_HDR_STAGE_TEST_CHILD").is_none() {
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .expect("test home directory");
+            let scratch = std::path::PathBuf::from(home)
+                .join("tmp")
+                .join(format!("hdr-stage-env-{}", std::process::id()));
+            std::fs::create_dir_all(&scratch).unwrap();
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "evif_output::tests::hdr_staging_persists_avif_and_pq16_before_the_receipt",
+                    "--nocapture",
+                ])
+                .env("ZEN_HDR_STAGE_TEST_CHILD", "1")
+                .env("TMPDIR", &scratch)
+                .env("TMP", &scratch)
+                .env("TEMP", &scratch)
+                .env_remove("ZEN_ARCHIVE_BLOBS_DIR")
+                .status()
+                .unwrap();
+            assert!(status.success(), "native HDR staging child failed");
+            std::fs::remove_dir_all(scratch).unwrap();
+            return;
+        }
         let dir = std::env::temp_dir().join(format!("hdr-output-{}", std::process::id()));
         let stage = dir.join("stage");
         std::fs::create_dir_all(&stage).unwrap();
