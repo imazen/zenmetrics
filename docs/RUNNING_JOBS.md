@@ -464,6 +464,36 @@ commit with the run cited. Measured in `zenfleet-sim` (900 cells, 3 workers at 2
 cells/epoch): uniform shards straggle 14 epochs apart with 450 idle cell-slots; correct
 weights finish within 1 epoch, idle 45 (−90%), completion 30 → 21 epochs.
 
+### 5c. Long view jobs (minutes to an hour per cell): what must be set (measured 2026-10-30, EVIF trade views)
+
+The first gauntlet run of `declare_evif_trade.py` jobs (0.9-megapixel views, 5-20 minutes each) lost about
+two worker-hours and then duplicated about 40 % of its work before these were set. None of them is visible in
+a short-cell smoke.
+
+- **Claim mode.** The `Dockerfile.evif` image sets `ZEN_CLAIM_MODE=epoch-sharded`, `ZEN_EPOCH_LEN_SECS=120`.
+  A worker heartbeats only between chunks, so one chunk of 5-10 minute cells outlasts several epochs, the
+  roster drops the busy worker and the other worker re-works its shard. Measured: 26 of the first 64 completed
+  results had run on both hosts, 9 minutes apart, with byte-identical ledger objects. Write
+  `{"paused":false,"drain":false,"claim_mode":"lease"}` into the run's control object (it overrides the image
+  env at the next pass). After the switch, 35 results in 10 minutes were all distinct. Stop the workers and
+  clear `claims/` first: the per-cell guarded claims epoch mode writes for the whole shard (2,755 objects within
+  two seconds) block new workers for one TTL.
+- **Lease TTL.** Lease renewal exists only while the pending work contains a `FitCell`, so a 600 s default
+  lets a live 10-20 minute cell be stolen. Set `ZEN_CLAIM_TTL_SECS` and `ZEN_STALE_CLAIM_SEC` above the longest
+  cell (6 h used). A dead worker's chunk then requeues only after the TTL: delete its `claims/chunk-*` objects
+  once the worker is confirmed gone.
+- **Pass timeout.** `ZEN_PASS_TIMEOUT` defaults to 1800 s (`fleet-entrypoint.sh`). A longer cell is killed at
+  the boundary after all of its compute (`pass 1 rc=124`, cells reported `WorkerLost`). Set it above the
+  longest cell (30 days used).
+- **Staging limit.** `staged_output.rs` refuses a job that stages more than 1 GiB in total, 512 objects, or
+  32 MiB in one object. A 0.9-megapixel trade view stages 1.15-2.29 GB. Declare such a view as several jobs
+  (`declare_evif_trade.py --split MIN_PIXELS:PARTS`: disjoint family subsets) and let the executor stop a run
+  that outgrows the limit instead of failing after the compute (`evif_trade_exec.py`). Parts of the same
+  views stage 0.08-0.62 GB. A view run whole and as parts gave identical ledger rows (927 keys, two views).
+- **Admission.** Concurrency is 75 % of `ZEN_MEMORY` divided by the per-job `peak_mem_bytes` hint, not the
+  core count: a 2.3 GB hint under a 14 GB cap ran 4-5 jobs on 14 cores. Size `ZEN_MEMORY` from the hint, or
+  replace the hint with a measured RSS (pilot peak RSS was 0.37 GiB for views up to 262 k pixels).
+
 ---
 
 ## 6. The persistent on-prem tier
