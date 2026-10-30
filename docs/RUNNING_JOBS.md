@@ -493,6 +493,17 @@ a short-cell smoke.
 - **Admission.** Concurrency is 75 % of `ZEN_MEMORY` divided by the per-job `peak_mem_bytes` hint, not the
   core count: a 2.3 GB hint under a 14 GB cap ran 4-5 jobs on 14 cores. Size `ZEN_MEMORY` from the hint, or
   replace the hint with a measured RSS (pilot peak RSS was 0.37 GiB for views up to 262 k pixels).
+- **Start every worker of a run together.** A worker plans its chunk boundaries once per pass from its own ledger
+  view, then claims chunk ids in manifest order; peers that planned from the same view draw the same ids and exclude
+  each other. A worker that joins after flushes, or re-plans at the end of its pass, draws different ids and re-runs
+  cells that peers have in flight but have not yet flushed. Measured on the 2,755-job gauntlet run: 143 of 2,898 ledger
+  rows (4.9 %) were duplicate executions (80 from one worker added 53 minutes in, 42 at the tail, 21 from the epoch-mode
+  era); three workers started within six minutes, with no flush in between, produced none. To change a fleet, stop and
+  relaunch all workers together.
+- **Flush latency.** A chunk (about 40 cells at the default 300 s target) reaches the ledger only when all of its cells
+  are done. With 3 slots and 20-minute cells the first flush came 2.3 hours after launch, and a stopped worker loses
+  every finished cell of its unflushed chunk. Lower `ZEN_CHUNK_WALL_SEC` for long cells (120 here) and keep the
+  completed-result count in the store (not the ledger) in the progress record.
 
 ---
 
