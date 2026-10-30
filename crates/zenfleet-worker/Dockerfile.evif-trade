@@ -1,0 +1,9 @@
+# Trade view executor: the verified EVIF/HDR worker image plus the pinned trade binary and bakes.
+# Nothing is installed at worker boot; the worker binary, entrypoint and Python come from BASE.
+ARG BASE
+FROM ${BASE}
+COPY evif-trade /opt/chroma/bin/evif-trade
+COPY models/ /opt/chroma-trade/models/
+COPY evif_trade_exec.py /usr/local/bin/evif-trade-exec
+ENV ZEN_EXEC=/usr/local/bin/evif-trade-exec ZEN_EVIF_BIN_DIR=/opt/chroma/bin ZEN_EVIF_MODEL_DIR=/opt/chroma-trade/models
+ENV ZEN_PERSISTENT_EXEC=1 ZEN_PERSISTENT_KINDS=bake

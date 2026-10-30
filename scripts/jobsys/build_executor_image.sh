@@ -63,6 +63,27 @@ if [ "${HDR_CHROMA_EXEC_IMAGE:-0}" = "1" ]; then
   if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE"; fi
   exit 0
 fi
+if [ "${EVIF_TRADE_EXEC_IMAGE:-0}" = "1" ]; then
+  : "${ZEN_TRADE_BIN:?prebuilt pinned evif trade binary required}"
+  : "${ZEN_TRADE_MODELS:?directory with the pinned E/ECodec/candidate bakes required}"
+  : "${ZEN_TRADE_BASE:?immutable matching-libc fleet base digest required}"
+  [[ "$ZEN_TRADE_BASE" == *@sha256:* ]] || { echo "pin the base digest" >&2; exit 1; }
+  [[ "$IMAGE" == ghcr.io/imazen/zenfleet-worker:evif-trade-* ]] || { echo "use an evif-trade-* tag" >&2; exit 1; }
+  CTX="${TMPDIR:-$HOME/tmp}/evif-trade-image-context"
+  rm -rf "$CTX"; mkdir -p "$CTX/models"
+  cp "$ZEN_TRADE_BIN" "$CTX/evif-trade"
+  cp "$ZEN_TRADE_MODELS/"* "$CTX/models/"
+  cp "$ROOT/scripts/jobsys/evif_trade_exec.py" "$CTX/evif_trade_exec.py"
+  cp "$ROOT/crates/zenfleet-worker/Dockerfile.evif-trade" "$CTX/Dockerfile"
+  chmod 0755 "$CTX/evif-trade" "$CTX/evif_trade_exec.py"
+  (cd "$CTX" && sha256sum evif-trade evif_trade_exec.py models/* > provenance.sha256)
+  # Plain COPY keeps the context file modes, so the classic builder works where buildx is absent
+  # (DOCKER_BUILDKIT=0); BuildKit stays the default.
+  DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}" $DOCKER build --build-arg "BASE=$ZEN_TRADE_BASE" -t "$IMAGE" "$CTX"
+  $DOCKER run --rm --network none --entrypoint /usr/local/bin/evif-trade-exec "$IMAGE" capabilities
+  if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE"; fi
+  exit 0
+fi
 if [ "${EVIF_EXEC_IMAGE:-0}" = "1" ]; then
   : "${ZEN_EVIF_BIN_DIR:?prebuilt pinned EVIF/teacher directory required}"
   : "${ZEN_WORKER_BIN:?prebuilt worker with EVIF CAS persistence required}"
