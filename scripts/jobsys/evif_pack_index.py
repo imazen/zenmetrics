@@ -13,7 +13,8 @@ job's result object and its tar packs. Writes to OUT_DIR:
   pixel hashes, identity) and its EVIF member hashes, the input of a features spec.
 - `MANIFEST.json`: counts, the number of packs probed, and the shard hashes.
 
-No tar header is read: offsets follow from the member list (see index_job); one member
+Offsets follow from the member list (see index_job); only packs with extended headers
+(member names past ustar's limits) have their headers read; one member
 per pack is hash-checked here and the feature executor hash-checks every member it
 reads. A job's members are listed in pack order, so a feature job reads a contiguous range.
 """
@@ -23,6 +24,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import tarfile
 
 from PIL import Image
 
@@ -62,7 +64,19 @@ def index_job(job_dir, packs):
             offset += (m['bytes'] + 511) // 512 * 512
         path = cas(packs, pack_sha)
         if path.stat().st_size != -(-(offset + 1024) // 10240) * 10240:
-            raise ValueError(f'{job_dir.name}: {pack} size does not match a plain ustar layout')
+            # Names past ustar's limits get extended headers: read this pack's headers instead.
+            last = None
+            with tarfile.open(path) as tar:
+                for info in tar:
+                    m = wanted.get(info.name)
+                    if m is not None:
+                        if info.size != m['bytes']:
+                            raise ValueError(f'{job_dir.name}: {info.name} size differs from the member list')
+                        found[info.name] = (m['sha256'], pack_sha, info.offset_data, info.size)
+                    if info.isfile():
+                        last = (None, pack_sha, info.offset_data, info.size, info.name)
+            member = next(m for m in result['members'] if m['pack'] == pack and m['name'] == last[4])
+            last = (member['sha256'], pack_sha, last[2], last[3])
         with path.open('rb') as f:
             f.seek(last[2])
             if sha(f.read(last[3])) != last[0]:
