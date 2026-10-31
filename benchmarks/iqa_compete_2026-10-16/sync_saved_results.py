@@ -9,7 +9,7 @@ A host that is gone for good (config `retired: {"since": DATE, "capture": DIR}`)
 not contacted: its final complete capture is reused every cycle and sync.json
 names it under `retired_hosts`, so its pending cells show as never run rather
 than as unfinished work. Cycle directories older than the newest KEEP_CYCLES are
-removed after each cycle; they are copies of host-held evidence, and a retired
+removed after each cycle, locally and in each ssh host's scratch; they are copies of host-held evidence, and a retired
 host's capture lives outside them.
 
 A cycle that holds new evidence but cannot publish it (lock held, dirty
@@ -109,10 +109,13 @@ def capture(config, host, cycle, tools):
     if entry.get('ssh'):
         remote = entry['scratch'].rstrip('/') + '/' + cycle.name
         ssh(entry['ssh'], ['mkdir', '-p', remote])
-        subprocess.run(['scp', '-q', *[str(tools / n) for n in FILES], str(spec), entry['ssh'] + ':' + remote + '/'], check=True)
-        ssh(entry['ssh'], ['nice', '-n', '19', entry.get('python', 'python3'), remote + '/capture_saved_results.py',
-                          remote + '/' + spec.name, remote + '/capture', '--host', host])
-        subprocess.run(['scp', '-q', '-r', entry['ssh'] + ':' + remote + '/capture', str(output)], check=True)
+        try:
+            subprocess.run(['scp', '-q', *[str(tools / n) for n in FILES], str(spec), entry['ssh'] + ':' + remote + '/'], check=True)
+            ssh(entry['ssh'], ['nice', '-n', '19', entry.get('python', 'python3'), remote + '/capture_saved_results.py',
+                              remote + '/' + spec.name, remote + '/capture', '--host', host])
+            subprocess.run(['scp', '-q', '-r', entry['ssh'] + ':' + remote + '/capture', str(output)], check=True)
+        finally:
+            prune_remote(entry)
     else:
         subprocess.run([sys.executable, str(tools / FILES[0]), str(spec), str(output), '--host', host], check=True)
     return json.loads((output / 'capture-receipt.json').read_text())
@@ -165,6 +168,20 @@ def prune(root, keep):
     for path in cycles[:-KEEP_CYCLES]:
         if path.name not in keep:
             shutil.rmtree(path)
+
+
+def prune_remote(entry):
+    """Apply prune()'s KEEP_CYCLES to a host's scratch; each cycle there is ~100 MB.
+
+    Before 2026-10-31 only the local root was pruned, and r7900x's scratch grew by
+    2,566 cycles (231 GB) until its disk was full.
+    """
+    script = ('import pathlib, re, shutil, sys\n'
+              'root = pathlib.Path(sys.argv[1])\n'
+              'cycles = sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and re.fullmatch(sys.argv[2], p.name))\n'
+              'for path in cycles[:-int(sys.argv[3])]:\n'
+              '    shutil.rmtree(path)\n')
+    ssh(entry['ssh'], [entry.get('python', 'python3'), '-c', script, entry['scratch'], CYCLE_NAME.pattern, KEEP_CYCLES])
 
 
 def publish(repo, projection, digest, cycle, config=None):
