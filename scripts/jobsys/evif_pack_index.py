@@ -11,10 +11,11 @@ job's result object and its tar packs. Writes to OUT_DIR:
   member, sharded by the member hash prefix (`ZEN_EVIF_PACK_INDEX`).
 - `selection.jsonl`: one line per trade job with its view reference (path, file and RGB8
   pixel hashes, identity) and its EVIF member hashes, the input of a features spec.
-- `MANIFEST.json`: counts, one hash-checked member per pack, and the shard hashes.
+- `MANIFEST.json`: counts, the number of packs probed, and the shard hashes.
 
-Only tar headers are read, plus one member per pack; the feature executor hash-checks
-every member it reads.
+No tar header is read: offsets follow from the member list (see index_job); one member
+per pack is hash-checked here and the feature executor hash-checks every member it
+reads. A job's members are listed in pack order, so a feature job reads a contiguous range.
 """
 import collections
 from concurrent.futures import ThreadPoolExecutor
@@ -22,7 +23,6 @@ import hashlib
 import json
 from pathlib import Path
 import sys
-import tarfile
 
 from PIL import Image
 
@@ -42,22 +42,32 @@ def index_job(job_dir, packs):
     wanted = {m['name']: m for m in result['members'] if m['kind'] == 'evif'}
     found = {}
     checked = []
+    # Packs are plain ustar written in member-list order: a 512-byte header, then the data
+    # padded to 512. Offsets follow from the sizes, so no header is read over NFS. The pack's
+    # size (end + two zero blocks, rounded to a 10240-byte record) and a hash of its LAST
+    # member check the layout: any extra header block would shift that member.
     for pack in sorted({m['pack'] for m in wanted.values()}):
         pack_sha = objects[pack]
-        with tarfile.open(cas(packs, pack_sha)) as tar:
-            for info in tar:
-                m = wanted.get(info.name)
-                if m is None:
-                    continue
-                if info.size != m['bytes'] or info.name in found:
-                    raise ValueError(f'{job_dir.name}: {info.name} size or duplicate')
-                found[info.name] = (m['sha256'], pack_sha, info.offset_data, info.size)
-        probe = next(v for v in found.values() if v[1] == pack_sha)
-        with cas(packs, pack_sha).open('rb') as f:
-            f.seek(probe[2])
-            if sha(f.read(probe[3])) != probe[0]:
-                raise ValueError(f'{job_dir.name}: {pack} member hash differs')
-        checked.append(probe[0])
+        offset = 0
+        last = None
+        for m in result['members']:
+            if m['pack'] != pack:
+                continue
+            offset += 512
+            last = (m['sha256'], pack_sha, offset, m['bytes'])
+            if m['name'] in wanted:
+                if m['name'] in found:
+                    raise ValueError(f'{job_dir.name}: duplicate member {m["name"]}')
+                found[m['name']] = last
+            offset += (m['bytes'] + 511) // 512 * 512
+        path = cas(packs, pack_sha)
+        if path.stat().st_size != -(-(offset + 1024) // 10240) * 10240:
+            raise ValueError(f'{job_dir.name}: {pack} size does not match a plain ustar layout')
+        with path.open('rb') as f:
+            f.seek(last[2])
+            if sha(f.read(last[3])) != last[0]:
+                raise ValueError(f'{job_dir.name}: {pack} last member hash differs')
+        checked.append(last[0])
     if found.keys() != wanted.keys():
         raise ValueError(f'{job_dir.name}: {len(wanted) - len(found)} members not in packs')
     spec = json.loads((job_dir / 'SPEC.json').read_text())
@@ -96,7 +106,8 @@ def main():
                 views[view['id']] = reference(view)
             selection.write(json.dumps(dict(job=job_dir.name, job_id=job['job_id'], view=view['id'],
                                             source=views[view['id']],
-                                            evif_shas=sorted({v[0] for v in found.values()}))) + '\n')
+                                            evif_shas=list(dict.fromkeys(
+                                                v[0] for v in sorted(found.values(), key=lambda v: (v[1], v[2])))))) + '\n')
             jobs += 1
             members += len(found)
     shard_shas = {}
