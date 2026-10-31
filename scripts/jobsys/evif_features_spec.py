@@ -28,9 +28,12 @@ def main():
     pins = [EXTRACTOR_SHA, hashlib.sha256(executor).hexdigest(),
             hashlib.sha256((index / 'MANIFEST.json').read_bytes()).hexdigest()]
     entries = []
+    assigned = set()
     for line in (index / 'selection.jsonl').open():
         sel = json.loads(line)
-        shas = sel['evif_shas']
+        # A container shared by two trade jobs (split-family templates of one view) is extracted once.
+        shas = [s for s in sel['evif_shas'] if s not in assigned]
+        assigned.update(shas)
         for start in range(0, len(shas), CHUNK):
             part = shas[start:start + CHUNK]
             entries.append((sel['source']['width'] * sel['source']['height'] * len(part),
