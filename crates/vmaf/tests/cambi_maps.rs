@@ -7,7 +7,8 @@ use std::ptr;
 
 use vmaf::{ModelVariant, Vmaf};
 use vmaf_head_sys::*;
-use zenmetrics_abstractions::zenpixels::{ChannelType, PixelDescriptor, PixelSlice, PlaneLayout};
+use zenmetrics_abstractions::PlaneLayout;
+use zenmetrics_abstractions::zenpixels::{ChannelType, PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{self as za, Metric as _};
 
 const W: usize = 640;
