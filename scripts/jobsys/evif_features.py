@@ -1,5 +1,14 @@
-"""Frozen Mlic feature transport over persisted renditions; no encoder or metric substitution."""
+"""Frozen Mlic feature transport over persisted renditions; no encoder or metric substitution.
+
+Containers are read from the loose CAS (`ZEN_ARCHIVE_BLOBS_DIR/aa/bb/<sha>`). Runs that
+stored their EVIFs inside tar packs (the chroma-trade gauntlet) add a member index:
+`ZEN_EVIF_PACK_INDEX` is a directory of `<aa>.tsv` shards with lines
+`member_sha256 pack_sha256 data_offset size`, and `ZEN_EVIF_PACKS_DIR` the packs' CAS
+(`aa/bb/<pack sha>`). The index only locates bytes; every container is still
+hash-checked against its selected SHA-256 before use.
+"""
 import csv
+from functools import lru_cache
 import json
 import math
 import os
@@ -12,6 +21,24 @@ CAPABILITY='evif-rev7-features-v1'
 EXTRACTOR_SHA='ed4957417339779dd8ed25fe59a6166326ba9db86d5c1530b1e1c788c9d614d8'
 FEATURE_ID='basic+peaks+v2@w1825/rev7_rowlanes#36c3f3af'
 IDS=list(range(228))+list(range(372,720))
+
+
+@lru_cache(maxsize=256)
+def pack_shard(prefix):
+    index=Path(os.environ['ZEN_EVIF_PACK_INDEX'])/(prefix+'.tsv');result={}
+    for line in index.read_text().splitlines():
+        member,pack,offset,size=line.split('\t');result[member]=(pack,int(offset),int(size))
+    return result
+
+
+def read_container(archive,digest):
+    loose=archive/digest[:2]/digest[2:4]/digest
+    if loose.exists() or 'ZEN_EVIF_PACK_INDEX' not in os.environ:return loose.read_bytes()
+    pack,offset,size=pack_shard(digest[:2])[digest]
+    with (Path(os.environ['ZEN_EVIF_PACKS_DIR'])/pack[:2]/pack[2:4]/pack).open('rb') as f:
+        f.seek(offset);data=f.read(size)
+    if len(data)!=size:raise ValueError('truncated pack member')
+    return data
 
 
 def execute(job):
@@ -36,7 +63,7 @@ def execute(job):
     for index,digest in enumerate(selected):
         if len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest) or digest not in job['inputs']:
             raise ValueError('unbound feature container')
-        data=(archive/digest[:2]/digest[2:4]/digest).read_bytes()
+        data=read_container(archive,digest)
         if sha(data)!=digest:raise ValueError('feature CAS bytes differ')
         parts=chunks(data);png_sha=sha(parts['PNGF']);candidate=stage/(png_sha+'.png')
         if not candidate.exists():candidate.write_bytes(parts['PNGF'])
