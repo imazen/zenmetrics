@@ -10,7 +10,7 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use zenpixels::{
-    ChannelLayout, ColorPrimaries, PixelBuffer, PixelCow, PixelDescriptor, PixelSlice, PlaneLayout,
+    ChannelLayout, ChannelType, ColorPrimaries, PixelBuffer, PixelCow, PixelDescriptor, PixelSlice,
     SignalRange, TransferFunction,
 };
 
@@ -99,6 +99,141 @@ impl<'a> Image<'a> {
     }
 }
 
+/// What one plane of a [`Planes`] input holds.
+///
+/// Role names follow `zencodec::frame::PlaneRole`, plus [`Gray`](Self::Gray)
+/// for a lone luminance plane that is not part of YCbCr.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PlaneRole {
+    /// Y.
+    Luma,
+    /// Cb (U).
+    Cb,
+    /// Cr (V).
+    Cr,
+    /// Red.
+    Red,
+    /// Green.
+    Green,
+    /// Blue.
+    Blue,
+    /// Alpha.
+    Alpha,
+    /// Grayscale, not part of YCbCr.
+    Gray,
+}
+
+/// One plane's role, sample type and subsampling factors relative to the
+/// full-resolution plane.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PlaneSpec {
+    /// What the plane holds.
+    pub role: PlaneRole,
+    /// Sample type of every sample in the plane.
+    pub channel_type: ChannelType,
+    /// Horizontal subsampling factor (1 = full width, 2 = half).
+    pub h_subsample: u8,
+    /// Vertical subsampling factor (1 = full height, 2 = half).
+    pub v_subsample: u8,
+}
+
+impl PlaneSpec {
+    /// A full-resolution plane.
+    pub const fn new(role: PlaneRole, channel_type: ChannelType) -> Self {
+        Self {
+            role,
+            channel_type,
+            h_subsample: 1,
+            v_subsample: 1,
+        }
+    }
+
+    /// The same plane subsampled by `h` × `v`. [`PlaneLayout::new`] rejects
+    /// a zero factor.
+    pub const fn with_subsampling(mut self, h: u8, v: u8) -> Self {
+        self.h_subsample = h;
+        self.v_subsample = v;
+        self
+    }
+
+    /// Plane width for a full-resolution width, rounded up at an odd edge.
+    pub const fn plane_width(&self, full_width: u32) -> u32 {
+        full_width.div_ceil(self.h_subsample as u32)
+    }
+
+    /// Plane height for a full-resolution height, rounded up at an odd edge.
+    pub const fn plane_height(&self, full_height: u32) -> u32 {
+        full_height.div_ceil(self.v_subsample as u32)
+    }
+
+    /// Whether either axis is subsampled.
+    pub const fn is_subsampled(&self) -> bool {
+        self.h_subsample > 1 || self.v_subsample > 1
+    }
+}
+
+/// Plane shapes of a planar input, in plane order.
+///
+/// Local to this crate so metric inputs do not depend on a pixel-crate
+/// release line: zenpixels 0.2's `planar::PlaneLayout` is deprecated in
+/// 0.2.17 and removed in 0.3. Carries no YCbCr matrix: metrics that score
+/// planes directly do not convert to RGB.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PlaneLayout {
+    planes: Vec<PlaneSpec>,
+}
+
+impl PlaneLayout {
+    /// A layout from plane specs.
+    ///
+    /// # Errors
+    /// [`ErrorKind::InvalidInput`] when `planes` is empty, a subsampling
+    /// factor is zero, or no plane is full resolution.
+    #[track_caller]
+    pub fn new(planes: Vec<PlaneSpec>) -> MetricResult<Self> {
+        let invalid =
+            |m: &'static str| fail(MetricError::new(ErrorKind::InvalidInput).with_message(m));
+        if planes.is_empty() {
+            return invalid("plane layout has no planes");
+        }
+        if planes
+            .iter()
+            .any(|p| p.h_subsample == 0 || p.v_subsample == 0)
+        {
+            return invalid("plane subsampling factor is zero");
+        }
+        if planes.iter().all(PlaneSpec::is_subsampled) {
+            return invalid("no full-resolution plane");
+        }
+        Ok(Self { planes })
+    }
+
+    /// YCbCr 4:2:0: full-resolution Y, Cb and Cr halved on both axes.
+    pub fn ycbcr_420(channel_type: ChannelType) -> Self {
+        Self {
+            planes: alloc::vec![
+                PlaneSpec::new(PlaneRole::Luma, channel_type),
+                PlaneSpec::new(PlaneRole::Cb, channel_type).with_subsampling(2, 2),
+                PlaneSpec::new(PlaneRole::Cr, channel_type).with_subsampling(2, 2),
+            ],
+        }
+    }
+
+    /// One grayscale plane.
+    pub fn gray(channel_type: ChannelType) -> Self {
+        Self {
+            planes: alloc::vec![PlaneSpec::new(PlaneRole::Gray, channel_type)],
+        }
+    }
+
+    /// The plane specs, in plane order.
+    pub fn planes(&self) -> &[PlaneSpec] {
+        &self.planes
+    }
+}
+
 /// A planar image: one single-channel [`PixelSlice`] per plane of a
 /// [`PlaneLayout`], validated against it.
 #[derive(Clone, Debug)]
@@ -129,7 +264,7 @@ pub struct PlanarFormat {
 impl<'a> Planes<'a> {
     /// Validate `planes` against `layout`.
     ///
-    /// Requirements: `layout` is planar with one descriptor per slice;
+    /// Requirements: `layout` has one spec per slice;
     /// every slice is single-channel gray of its plane's sample type; a
     /// full-resolution plane exists and fixes the image size; every other
     /// plane has exactly `plane_width`/`plane_height` of it; all planes
@@ -142,9 +277,6 @@ impl<'a> Planes<'a> {
     pub fn new(layout: PlaneLayout, planes: Vec<PixelSlice<'a>>) -> MetricResult<Self> {
         let invalid =
             |m: Cow<'static, str>| fail(MetricError::new(ErrorKind::InvalidInput).with_message(m));
-        if !layout.is_planar() {
-            return invalid("plane layout is interleaved".into());
-        }
         let descs = layout.planes();
         if descs.len() != planes.len() {
             return invalid(
@@ -415,7 +547,6 @@ pub fn contiguous_rgb8<'a>(r: &Rgb8In<'a>) -> Cow<'a, [u8]> {
 mod tests {
     use super::*;
     use alloc::vec;
-    use zenpixels::ChannelType;
 
     fn gray8(data: &[u8], w: u32, h: u32) -> PixelSlice<'_> {
         PixelSlice::new(data, w, h, w as usize, PixelDescriptor::GRAY8).unwrap()
@@ -446,6 +577,26 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.error().kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn plane_layout_rejects_shapes_without_a_full_plane() {
+        use zenpixels::ChannelType::U8;
+        let y = PlaneSpec::new(PlaneRole::Luma, U8);
+        let half = PlaneSpec::new(PlaneRole::Cb, U8).with_subsampling(2, 2);
+        assert!(PlaneLayout::new(alloc::vec![]).is_err());
+        assert!(PlaneLayout::new(alloc::vec![half]).is_err());
+        assert!(
+            PlaneLayout::new(alloc::vec![
+                y,
+                PlaneSpec::new(PlaneRole::Cr, U8).with_subsampling(0, 1)
+            ])
+            .is_err()
+        );
+        let cr = PlaneSpec::new(PlaneRole::Cr, U8).with_subsampling(2, 2);
+        let l = PlaneLayout::new(alloc::vec![y, half, cr]).unwrap();
+        assert_eq!(l, PlaneLayout::ycbcr_420(U8));
+        assert_eq!((half.plane_width(5), half.plane_height(3)), (3, 2));
     }
 
     #[test]

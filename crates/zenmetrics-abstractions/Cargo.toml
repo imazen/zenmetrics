@@ -15,4 +15,4 @@ enough = { version = "0.4.5", default-features = false, features = ["alloc"] }
 how-far = { version = "0.1.0", default-features = false }
 libm = { version = "0.2", default-features = false }
 whereat = { version = "0.1.5", default-features = false }
-zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["planar"] }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false }
