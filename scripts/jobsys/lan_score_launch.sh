@@ -119,6 +119,7 @@ fi
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" ZM_CONTROL_KEY="$CONTROL_KEY" \
     ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" ZM_CLAIM_ORDER="${ZEN_CLAIM_ORDER:-}" \
+    ZM_PACK_INDEX="${ZEN_EVIF_PACK_INDEX:-}" ZM_PACKS_DIR="${ZEN_EVIF_PACKS_DIR:-}" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
     ZM_NO_NEW_AFTER="${ZEN_NO_NEW_AFTER_EPOCH:-}" \
     ZM_ENTRYPOINT_PATH="${ZEN_ENTRYPOINT_HOST_PATH:-}" ZM_ENTRYPOINT_SHA="${ZEN_ENTRYPOINT_SHA256:-}" \
@@ -235,6 +236,10 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 # Claim order (zenfleet-worker ZEN_CLAIM_ORDER=manifest: walk chunks in manifest order, so a longest-first
 # manifest is claimed longest-first fleet-wide and passes end on short cells).
 [ -n "${ZM_CLAIM_ORDER:-}" ] && ENCP+=(-e "ZEN_CLAIM_ORDER=$ZM_CLAIM_ORDER")
+# EVIF feature jobs over a run that stored its containers in CAS tar packs (evif_features.py);
+# both paths must be visible in the container, e.g. under ZEN_DATA_HOST_DIR.
+[ -n "${ZM_PACK_INDEX:-}" ] && ENCP+=(-e "ZEN_EVIF_PACK_INDEX=$ZM_PACK_INDEX")
+[ -n "${ZM_PACKS_DIR:-}" ] && ENCP+=(-e "ZEN_EVIF_PACKS_DIR=$ZM_PACKS_DIR")
 ENCP+=(-e "ZEN_REQUIRE_SNAPSHOT=${ZM_REQ_SNAP}")   # strict by default for single-run queues; ZEN_REQUIRE_SNAPSHOT=0 opts out
 # Resource caps for shared boxes (tower rule: never an uncapped worker on the media server).
 CAPS=()
