@@ -4,8 +4,11 @@ Containers are read from the loose CAS (`ZEN_ARCHIVE_BLOBS_DIR/aa/bb/<sha>`). Ru
 stored their EVIFs inside tar packs (the chroma-trade gauntlet) add a member index:
 `ZEN_EVIF_PACK_INDEX` is a directory of `<aa>.tsv` shards with lines
 `member_sha256 pack_sha256 data_offset size`, and `ZEN_EVIF_PACKS_DIR` the packs' CAS
-(`aa/bb/<pack sha>`). The index only locates bytes; every container is still
-hash-checked against its selected SHA-256 before use.
+(`aa/bb/<pack sha>`). A fifth field, when present, is the file's path under
+`ZEN_EVIF_PACKS_DIR` instead (archives not stored by hash: the E36 ladders, `e36_pack_index.py`).
+The index only locates bytes; every container is still hash-checked against its selected
+SHA-256 before use. A selected object may also be a PNG file (E36's decoded views), used as
+the distorted pixels directly.
 """
 import csv
 from functools import lru_cache
@@ -21,21 +24,23 @@ CAPABILITY='evif-rev7-features-v1'
 EXTRACTOR_SHA='ed4957417339779dd8ed25fe59a6166326ba9db86d5c1530b1e1c788c9d614d8'
 FEATURE_ID='basic+peaks+v2@w1825/rev7_rowlanes#36c3f3af'
 IDS=list(range(228))+list(range(372,720))
+PNG_SIGNATURE=b'\x89PNG\r\n\x1a\n'
 
 
 @lru_cache(maxsize=256)
 def pack_shard(prefix):
     index=Path(os.environ['ZEN_EVIF_PACK_INDEX'])/(prefix+'.tsv');result={}
     for line in index.read_text().splitlines():
-        member,pack,offset,size=line.split('\t');result[member]=(pack,int(offset),int(size))
+        member,pack,offset,size,*rel=line.split('\t');result[member]=(pack,int(offset),int(size),rel[0] if rel else None)
     return result
 
 
 def read_container(archive,digest):
     loose=archive/digest[:2]/digest[2:4]/digest
     if loose.exists() or 'ZEN_EVIF_PACK_INDEX' not in os.environ:return loose.read_bytes()
-    pack,offset,size=pack_shard(digest[:2])[digest]
-    with (Path(os.environ['ZEN_EVIF_PACKS_DIR'])/pack[:2]/pack[2:4]/pack).open('rb') as f:
+    pack,offset,size,rel=pack_shard(digest[:2])[digest]
+    packs=Path(os.environ['ZEN_EVIF_PACKS_DIR'])
+    with (packs/rel if rel else packs/pack[:2]/pack[2:4]/pack).open('rb') as f:
         f.seek(offset);data=f.read(size)
     if len(data)!=size:raise ValueError('truncated pack member')
     return data
@@ -65,11 +70,13 @@ def execute(job):
             raise ValueError('unbound feature container')
         data=read_container(archive,digest)
         if sha(data)!=digest:raise ValueError('feature CAS bytes differ')
-        parts=chunks(data);png_sha=sha(parts['PNGF']);candidate=stage/(png_sha+'.png')
-        if not candidate.exists():candidate.write_bytes(parts['PNGF'])
+        if data.startswith(PNG_SIGNATURE):png,bits=data,None
+        else:parts=chunks(data);png,bits=parts['PNGF'],sha(parts['BITS'][4:])
+        png_sha=sha(png);candidate=stage/(png_sha+'.png')
+        if not candidate.exists():candidate.write_bytes(png)
         row_id=unique.setdefault(png_sha,len(unique))
         catalog.append(dict(row_id=row_id,evif_sha256=digest,png_sha256=png_sha,candidate=candidate,
-                            jpeg_sha256=sha(parts['BITS'][4:])))
+                            jpeg_sha256=bits))
     pairs=stage/'pairs.tsv'
     with pairs.open('w') as f:
         writer=csv.writer(f,delimiter='\t');writer.writerow(['ref_path','dist_path','human_score','row_id'])

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn an `evif_pack_index.py` selection into a `zenfleet-ctl declare-evif-features` spec.
 
-usage: evif_features_spec.py INDEX_DIR OUT_SPEC [--peak-mem-bytes N]
+usage: evif_features_spec.py INDEX_DIR OUT_SPEC [--peak-mem-bytes N] [--per-reference]
 
 Each trade job's EVIF members are split into feature jobs of at most 128 containers
 (the declaration's limit), ordered by pixel work, largest first, so that a manifest-order
@@ -22,6 +22,9 @@ def main():
     ap.add_argument('index_dir')
     ap.add_argument('out_spec')
     ap.add_argument('--peak-mem-bytes', type=int, default=512 * 1024 * 1024)
+    ap.add_argument('--per-reference', action='store_true',
+                    help='extract a member once per reference, not once overall: one decoded view can belong to two '
+                         'references (E36: tiny views of different sources that encode to the same pixels)')
     a = ap.parse_args()
     index = Path(a.index_dir)
     executor = Path(__file__).with_name('evif_features.py').read_bytes()
@@ -32,8 +35,9 @@ def main():
     for line in (index / 'selection.jsonl').open():
         sel = json.loads(line)
         # A container shared by two trade jobs (split-family templates of one view) is extracted once.
-        shas = [s for s in sel['evif_shas'] if s not in assigned]
-        assigned.update(shas)
+        key = sel['source']['source_sha256'] if a.per_reference else ''
+        shas = [s for s in sel['evif_shas'] if (key, s) not in assigned]
+        assigned.update((key, s) for s in shas)
         for start in range(0, len(shas), CHUNK):
             part = shas[start:start + CHUNK]
             entries.append((sel['source']['width'] * sel['source']['height'] * len(part),
