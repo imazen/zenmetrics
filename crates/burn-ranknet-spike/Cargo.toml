@@ -19,7 +19,7 @@ publish = false
 # (`Device::flex()`); ndarray is deprecated there, and `optim` is a feature.
 burn = { version = "0.22.0", default-features = false, features = ["std", "flex", "autodiff", "optim"] }
 # Pure-Rust XGBoost-algorithm GBDT for the teacher in teacher_compare.
-forust-ml = "0.7.0"
+forust-ml = "0.8.0"
 
 [profile.release]
 opt-level = 3
