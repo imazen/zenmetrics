@@ -51,7 +51,7 @@ cudarc = { version = "0.19.10", default-features = false, features = ["std", "dr
 zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
+zenpixels = { version = ">=0.2.16, <0.4.0", default-features = false, features = ["std"] }
 zenbench = { git = "https://github.com/imazen/zenbench", rev = "ac675d3", default-features = false, features = ["precise-timing", "alloc-profiling"] }
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std", "avx512"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std", "avx512"] }

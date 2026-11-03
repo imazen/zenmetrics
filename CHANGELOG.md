@@ -14,6 +14,7 @@ Workspace conventions per the global rules:
 ## [Unreleased]
 
 - zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.
+- zenmetrics-abstractions: the local plane types are replaced by re-exports of zenpixels 0.3.1 `plane::{PlanarLayout, PlaneSpec, PlaneRole, PlaneEncoding}` and `sample::{ChromaSubsampling, ChromaSiting}`; `PlaneLayout::ycbcr_420`/`gray` become `ycbcr_420_layout`/`gray_layout`. The workspace zenpixels patch moves to `5bf81d64` (feat/plane-types).
 
 - Route the new native HDR feature namespace through verified staged-object publication before DONE, in both worker execution paths. The regression checks object persistence and rejects opaque staging envelopes; full native-bank recovery remains pending.
 

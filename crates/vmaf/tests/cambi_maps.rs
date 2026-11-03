@@ -7,7 +7,7 @@ use std::ptr;
 
 use vmaf::{ModelVariant, Vmaf};
 use vmaf_head_sys::*;
-use zenmetrics_abstractions::PlaneLayout;
+use zenmetrics_abstractions::ycbcr_420_layout;
 use zenmetrics_abstractions::zenpixels::{ChannelType, PixelDescriptor, PixelSlice};
 use zenmetrics_abstractions::{self as za, Metric as _};
 
@@ -40,7 +40,7 @@ fn gray16(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
 fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
     za::Image::from(
         za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U16),
+            ycbcr_420_layout(ChannelType::U16),
             vec![
                 gray16(&p[0], W, H),
                 gray16(&p[1], W / 2, H / 2),

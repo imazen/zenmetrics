@@ -296,8 +296,8 @@ zenquant = { git = "https://github.com/imazen/zenquant", rev = "8ec37ee21f0216cf
 # minimum and drop these patches. The 0.2.16 registry release predates the
 # exact U16->U8 narrowing fix already on zenpixels main at e56f626b.
 # Pin both crates to that same source commit so PixelDescriptor types remain unified.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e56f626b14e6f0211e020159d30b3a48616e88e0" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f626b14e6f0211e020159d30b3a48616e88e0" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "5bf81d640752793454802d7a94346c3c1e97c81e" }
 # zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
 # because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
 # 0.2.16 is on crates.io and the zenpng sibling now requires
