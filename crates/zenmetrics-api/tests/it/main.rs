@@ -81,6 +81,7 @@ mod session_parity;
 mod session_reclaim_non_cvvdp;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]
 mod session_vram_isolation;
+mod strided_linear_planes;
 #[cfg(all(
     feature = "butter",
     feature = "cuda",

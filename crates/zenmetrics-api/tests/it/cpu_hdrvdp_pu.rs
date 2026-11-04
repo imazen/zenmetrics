@@ -153,7 +153,7 @@ fn cpu_hdrvdp_default_ppd_and_input_validation() {
 
     // Display-relative linear planes are equally invalid input.
     let err = m
-        .compute_from_linear_planes(&r, &r, &r, &d, &d, &d)
+        .compute_from_linear_planes([&r, &r, &r], w as usize, [&d, &d, &d], w as usize)
         .expect_err("linear planes must error");
     let msg = err.to_string();
     assert!(

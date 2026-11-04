@@ -187,7 +187,12 @@ fn score_from_linear_planes_matches_score_to_srgb_lut_tolerance() {
 
     let jod_bytes = cvvdp.score(&r_bytes, &d_bytes).expect("score sRGB-bytes") as f32;
     let jod_planes = cvvdp
-        .score_from_linear_planes(&r_r, &r_g, &r_b, &d_r, &d_g, &d_b)
+        .score_from_linear_planes(
+            [&r_r, &r_g, &r_b],
+            w as usize,
+            [&d_r, &d_g, &d_b],
+            w as usize,
+        )
         .expect("score_from_linear_planes");
 
     // The LUT itself rounds at f32 — feeding host-computed linear-f32
@@ -254,22 +259,24 @@ fn warm_reference_from_linear_planes_matches_one_shot() {
     let mut diffmap_oneshot = Vec::new();
     let jod_oneshot = cvvdp
         .score_from_linear_planes_with_diffmap(
-            &r_r,
-            &r_g,
-            &r_b,
-            &d_r,
-            &d_g,
-            &d_b,
+            [&r_r, &r_g, &r_b],
+            w as usize,
+            [&d_r, &d_g, &d_b],
+            w as usize,
             &mut diffmap_oneshot,
         )
         .expect("score_from_linear_planes_with_diffmap");
 
     cvvdp
-        .warm_reference_from_linear_planes(&r_r, &r_g, &r_b)
+        .warm_reference_from_linear_planes([&r_r, &r_g, &r_b], w as usize)
         .expect("warm_reference_from_linear_planes");
     let mut diffmap_warm = Vec::new();
     let jod_warm = cvvdp
-        .score_from_linear_planes_with_warm_ref_diffmap(&d_r, &d_g, &d_b, &mut diffmap_warm)
+        .score_from_linear_planes_with_warm_ref_diffmap(
+            [&d_r, &d_g, &d_b],
+            w as usize,
+            &mut diffmap_warm,
+        )
         .expect("score_from_linear_planes_with_warm_ref_diffmap");
 
     assert!(
@@ -300,14 +307,24 @@ fn dimension_mismatch_surfaced_on_linear_planes() {
 
     let good = vec![0.5_f32; n_pix];
     let bad = vec![0.5_f32; n_pix - 1]; // one short
-    let result = cvvdp.score_from_linear_planes(&bad, &good, &good, &good, &good, &good);
+    let result = cvvdp.score_from_linear_planes(
+        [&bad, &good, &good],
+        w as usize,
+        [&good, &good, &good],
+        w as usize,
+    );
     assert!(matches!(
         result,
         Err(cvvdp_gpu::Error::DimensionMismatch { .. })
     ));
 
     // Also fires from a wrong-size DIST plane.
-    let result = cvvdp.score_from_linear_planes(&good, &good, &good, &good, &good, &bad);
+    let result = cvvdp.score_from_linear_planes(
+        [&good, &good, &good],
+        w as usize,
+        [&good, &good, &bad],
+        w as usize,
+    );
     assert!(matches!(
         result,
         Err(cvvdp_gpu::Error::DimensionMismatch { .. })

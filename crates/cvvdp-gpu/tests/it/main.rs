@@ -116,6 +116,7 @@ mod shadow_jod;
 mod srgb_byte_to_dkl_invariants;
 #[cfg(feature = "cubecl-types")]
 mod state_machine_independence;
+mod strided_linear_planes;
 mod strip_kernel_parity;
 mod strip_kernel_parity_pyramid;
 mod strip_kernel_parity_upscale;

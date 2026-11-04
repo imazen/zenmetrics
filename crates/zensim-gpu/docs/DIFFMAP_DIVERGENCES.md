@@ -76,7 +76,7 @@ The Phase 1 path:
 - `Zensim::score_from_linear_planes_with_diffmap(...)`:
   skip the host LUT decode, go directly to the CPU linear-planar
   diffmap API.
-- `Zensim::warm_reference_from_linear_planes(ref_r, ref_g, ref_b)`:
+- `Zensim::warm_reference_from_linear_planes(ref_planes, ref_stride)`:
   build and cache a CPU `PrecomputedReference` in the diffmap state
   for subsequent warm-ref-diffmap calls.
 - `Zensim::set_reference(ref_srgb)` ALSO populates the diffmap

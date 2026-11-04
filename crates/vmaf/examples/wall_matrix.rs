@@ -72,6 +72,7 @@ fn run(label: &str, which: &str) {
             y: &f.0,
             u: &f.1,
             v: &f.2,
+            strides: [w, w / 2, w / 2],
         })
         .collect();
     let df: Vec<Yuv420Frame<'_>> = diss
@@ -80,6 +81,7 @@ fn run(label: &str, which: &str) {
             y: &f.0,
             u: &f.1,
             v: &f.2,
+            strides: [w, w / 2, w / 2],
         })
         .collect();
 
@@ -118,6 +120,7 @@ fn heap(label: &str) {
             y: &f.0,
             u: &f.1,
             v: &f.2,
+            strides: [w, w / 2, w / 2],
         })
         .collect();
     let df: Vec<Yuv420Frame<'_>> = diss
@@ -126,6 +129,7 @@ fn heap(label: &str) {
             y: &f.0,
             u: &f.1,
             v: &f.2,
+            strides: [w, w / 2, w / 2],
         })
         .collect();
     for model in ["v0", "v1"] {

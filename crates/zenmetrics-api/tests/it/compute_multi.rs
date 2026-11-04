@@ -95,7 +95,7 @@ fn butter_linear_planes_multi_returns_max_and_pnorm3() {
     .expect("Metric::new_with_memory_mode butter Full");
 
     let multi = m
-        .compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
+        .compute_from_linear_planes_multi([&rr, &rg, &rb], w as usize, [&dr, &dg, &db], w as usize)
         .expect("compute_from_linear_planes_multi");
     assert_eq!(multi.metric_name, "butter");
     assert_eq!(multi.scores.len(), 2);
@@ -144,7 +144,7 @@ fn butter_interleaved_multi_matches_planar() {
     .expect("Metric::new_with_memory_mode butter Full");
 
     let planar = m
-        .compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
+        .compute_from_linear_planes_multi([&rr, &rg, &rb], w as usize, [&dr, &dg, &db], w as usize)
         .expect("planar");
     let inter = m
         .compute_from_linear_interleaved_multi(&ref_il, &dis_il)
@@ -187,7 +187,7 @@ fn butter_linear_planes_rejects_strip_mode() {
         MemoryMode::Strip { h_body: None },
     )
     .expect("Metric::new_with_memory_mode butter Strip");
-    let r = m.compute_from_linear_planes_multi(&z, &z, &z, &z, &z, &z);
+    let r = m.compute_from_linear_planes_multi([&z, &z, &z], w as usize, [&z, &z, &z], w as usize);
     assert!(
         r.is_err(),
         "strip-mode butter linear path must error, not return garbage"

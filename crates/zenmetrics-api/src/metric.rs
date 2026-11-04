@@ -1603,8 +1603,8 @@ impl MetricInner {
     }
 
     /// Faithful HDR scoring from display-relative `[0,1]` linear-RGB f32
-    /// planes — six tight `width × height` planes (ref R/G/B, dist R/G/B,
-    /// each `nits / intensity_target`). This is the
+    /// planes — `width × height` planes (ref R/G/B, dist R/G/B, each
+    /// `nits / intensity_target`). This is the
     /// `hdr::HdrFeeding::LinearPlanes` path: the luminance-aware metrics
     /// (`cvvdp`, `butter`) score the HDR signal natively — no sRGB→linear
     /// LUT, no u8 quantization — so the full highlight range survives.
@@ -1629,18 +1629,19 @@ impl MetricInner {
     /// [`Self::new_with_memory_mode`] + [`MemoryMode::Full`] for the faithful
     /// `butter` HDR path. (`cvvdp`/`zensim` are unaffected — cvvdp is
     /// Full-only and zensim's linear path is whole-image.)
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// Each image's three planes share a stride in samples, at least the width; a
+    /// tight image passes its width. Padding is never read, and a plane needs
+    /// `(height - 1) * stride + width` samples.
     pub fn compute_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
     ) -> Result<Score> {
         // CPU-only builds reject planar ingress; these planes are used by GPU arms.
-        let _ = (ref_r, ref_g, ref_b, dis_r, dis_g, dis_b);
+        let _ = (ref_planes, ref_stride, dis_planes, dis_stride);
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1665,7 +1666,7 @@ impl MetricInner {
             }),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m
-                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
+                .compute_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride, None)
                 .map(convert_score)
                 .map_err(|e| Error::Metric {
                     kind: "cvvdp",
@@ -1673,7 +1674,7 @@ impl MetricInner {
                 }),
             #[cfg(feature = "butter")]
             MetricInner::Butter(m) => m
-                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .compute_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride)
                 .map(|(s, _pnorm3)| convert_score_butter(s))
                 .map_err(|e| Error::Metric {
                     kind: "butter",
@@ -1687,7 +1688,7 @@ impl MetricInner {
             MetricInner::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(m) => m
-                .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .score_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride)
                 .map(|v| Score {
                     value: v as f64,
                     metric_name: "zensim",
@@ -1731,18 +1732,15 @@ impl MetricInner {
     /// requires a whole-image instance — construct via
     /// [`Self::new_with_memory_mode`] + [`MemoryMode::Full`] (butter's `Auto`
     /// is strip-preferred and the linear path rejects strip).
-    #[allow(clippy::too_many_arguments)]
     pub fn compute_from_linear_planes_multi(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
     ) -> Result<Scores> {
         // CPU-only builds reject planar ingress; these planes are used by GPU arms.
-        let _ = (ref_r, ref_g, ref_b, dis_r, dis_g, dis_b);
+        let _ = (ref_planes, ref_stride, dis_planes, dis_stride);
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1767,7 +1765,7 @@ impl MetricInner {
             }),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m
-                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
+                .compute_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride, None)
                 .map(convert_score)
                 .map(Scores::single)
                 .map_err(|e| Error::Metric {
@@ -1776,7 +1774,7 @@ impl MetricInner {
                 }),
             #[cfg(feature = "butter")]
             MetricInner::Butter(m) => m
-                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .compute_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride)
                 .map(|(s, pnorm3)| Scores {
                     metric_name: "butter",
                     metric_version: s.metric_version,
@@ -1804,7 +1802,7 @@ impl MetricInner {
             MetricInner::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(m) => m
-                .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .score_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride)
                 .map(|v| {
                     Scores::single(Score {
                         value: v as f64,
@@ -1870,7 +1868,10 @@ impl MetricInner {
         }
         let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
         let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
-        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+        {
+            let w = self.dims().0 as usize;
+            self.compute_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
+        }
     }
 
     /// Multi-output non-planar counterpart of
@@ -1919,7 +1920,10 @@ impl MetricInner {
         }
         let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
         let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
-        self.compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
+        {
+            let w = self.dims().0 as usize;
+            self.compute_from_linear_planes_multi([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
+        }
     }
 
     /// **Integrated PU21 HDR entry** (`hdr::HdrFeeding::IntegratedPuNits`):

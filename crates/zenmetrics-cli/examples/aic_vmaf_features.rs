@@ -93,11 +93,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     y: &ry,
                     u: &ur,
                     v: &vr,
+                    strides: [w, w / 2, w / 2],
                 }];
                 let fd = [Yuv420Frame {
                     y: &dy,
                     u: &ud,
                     v: &vd,
+                    strides: [w, w / 2, w / 2],
                 }];
                 let std_scorer = VmafV0Scorer::new(w, h, 8, VmafV0Variant::Standard)
                     .unwrap_or_else(|e| panic!("scorer {dp}: {e}"));

@@ -307,6 +307,11 @@ where
 /// Opaque butteraugli scorer.
 pub struct ButteraugliOpaque {
     inner: Box<dyn ButteraugliInner + Send>,
+    /// Reused tight copies of strided linear planes, three per image:
+    /// `compute_from_linear_planes` packs here when a stride differs
+    /// from the width.
+    #[cfg(feature = "internals")]
+    linear_pack: [Vec<f32>; 6],
     params: ButteraugliParams,
     #[allow(dead_code)]
     backend: Backend,
@@ -437,6 +442,8 @@ impl ButteraugliOpaque {
         };
         Ok(Self {
             inner,
+            #[cfg(feature = "internals")]
+            linear_pack: Default::default(),
             params,
             backend,
             cached_ref_strip: None,
@@ -480,6 +487,8 @@ impl ButteraugliOpaque {
         };
         Ok(Self {
             inner,
+            #[cfg(feature = "internals")]
+            linear_pack: Default::default(),
             params,
             backend,
             cached_ref_strip: None,
@@ -529,34 +538,49 @@ impl ButteraugliOpaque {
     /// Score one pair from display-relative `[0,1]` linear-RGB f32 planes
     /// (`nits / intensity_target` per channel) — the faithful HDR path that
     /// bypasses the sRGB→linear LUT and u8 quantization, so the full HDR
-    /// highlight range survives. The six planes are each `width × height`
-    /// f32 in row-major order (tight stride). The cd/m² that maps to
+    /// highlight range survives. The planes are `width × height` f32 in
+    /// row-major order. The cd/m² that maps to
     /// plane-value `1.0` is `self.params.intensity_target` — set it at
     /// construction via [`ButteraugliParams::with_intensity_target`].
     ///
     /// Returns `(max-norm Score, pnorm_3)` like
     /// [`Self::compute_srgb_u8_with_pnorm3`]. Gated behind the `internals`
     /// cargo feature (mirrors the typed pipeline's linear-planes API).
+    ///
+    /// Each image's three planes share a stride in samples, at least the width; a tight
+    /// image passes its width. Padding is never read, and a plane needs `(height - 1) *
+    /// stride + width` samples. A plane is packed on upload only when its stride differs
+    /// from the width, into scratch this instance keeps.
     #[cfg(feature = "internals")]
-    #[allow(clippy::too_many_arguments)]
     pub fn compute_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<(Score, f64)> {
-        self.inner.compute_from_linear_planes(
-            ref_r,
-            ref_g,
-            ref_b,
-            dist_r,
-            dist_g,
-            dist_b,
-            &self.params,
-        )
+        let (w, h) = self.inner.dims();
+        let (w, h) = (w as usize, h as usize);
+        for (planes, stride) in [(ref_planes, ref_stride), (dist_planes, dist_stride)] {
+            for plane in planes {
+                zenmetrics_gpu_core::check_strided_plane(plane.len(), w, h, stride)
+                    .map_err(|(expected, got)| crate::Error::DimensionMismatch { expected, got })?;
+            }
+        }
+        let mut pack = core::mem::take(&mut self.linear_pack);
+        let [a, b, c, d, e, f] = &mut pack;
+        let params = self.params;
+        let result = self.inner.compute_from_linear_planes(
+            zenmetrics_gpu_core::tight_plane(a, ref_planes[0], w, h, ref_stride),
+            zenmetrics_gpu_core::tight_plane(b, ref_planes[1], w, h, ref_stride),
+            zenmetrics_gpu_core::tight_plane(c, ref_planes[2], w, h, ref_stride),
+            zenmetrics_gpu_core::tight_plane(d, dist_planes[0], w, h, dist_stride),
+            zenmetrics_gpu_core::tight_plane(e, dist_planes[1], w, h, dist_stride),
+            zenmetrics_gpu_core::tight_plane(f, dist_planes[2], w, h, dist_stride),
+            &params,
+        );
+        self.linear_pack = pack;
+        result
     }
 
     /// Non-planar (interleaved) variant of [`Self::compute_from_linear_planes`]:
@@ -583,7 +607,11 @@ impl ButteraugliOpaque {
                 got: dis_rgb.len(),
             },
         )?;
-        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+        {
+            let (w, _) = self.inner.dims();
+            let w = w as usize;
+            self.compute_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
+        }
     }
 
     /// **PROTOTYPE — unified SDR/HDR entry.** Score two [`PixelSlice`]s + a

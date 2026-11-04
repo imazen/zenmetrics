@@ -114,8 +114,13 @@ let dis_r = vec![0.4_f32; n_pix];
 let dis_g = vec![0.5_f32; n_pix];
 let dis_b = vec![0.5_f32; n_pix];
 
+// Each image's planes share a stride in samples; a tight image passes its width.
+let stride = w as usize;
 let jod = cvvdp.score_from_linear_planes(
-    &ref_r, &ref_g, &ref_b, &dis_r, &dis_g, &dis_b,
+    [&ref_r, &ref_g, &ref_b],
+    stride,
+    [&dis_r, &dis_g, &dis_b],
+    stride,
 )?;
 # Ok::<(), cvvdp_gpu::Error>(())
 ```

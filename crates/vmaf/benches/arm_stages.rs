@@ -68,6 +68,7 @@ fn main() {
             y: &f.planes[0],
             u: &f.planes[1],
             v: &f.planes[2],
+            strides: [WIDTH, WIDTH / 2, WIDTH / 2],
         })
         .collect();
     let dis_yuv: Vec<Yuv420Frame> = distorted
@@ -76,6 +77,7 @@ fn main() {
             y: &f.planes[0],
             u: &f.planes[1],
             v: &f.planes[2],
+            strides: [WIDTH, WIDTH / 2, WIDTH / 2],
         })
         .collect();
 
