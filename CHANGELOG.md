@@ -282,6 +282,16 @@ Workspace conventions per the global rules:
 
 None.
 
+## cvvdp, cvvdp-gpu, zensim-gpu, butteraugli-gpu, zenmetrics-api, zenmetrics-gpu-core
+
+### QUEUED BREAKING CHANGES
+
+- Linear-plane entry points take `[&[f32]; 3]` plus a stride per image and replace the tight forms; a tight caller passes its width. Covers `cvvdp::Cvvdp`, `cvvdp_gpu::{Cvvdp, CvvdpOpaque}`, `zensim_gpu::{Zensim, ZensimOpaque}`, `butteraugli_gpu::ButteraugliOpaque` (`internals`) and `zenmetrics_api::Metric::compute_from_linear_planes{,_multi}`. CPU cvvdp's shared `padded_width` argument is gone. A plane longer than `(height - 1) * stride + width` is now accepted (`ef9f086f`).
+
+### Added
+
+- `zenmetrics_gpu_core::{tight_plane, check_strided_plane, StridedPlaneMisfit}` (`ef9f086f`).
+
 ## vmaf
 
 ### Changed
@@ -298,7 +308,7 @@ None.
 
 ### QUEUED BREAKING CHANGES
 
-None.
+- `Yuv420Frame` gains the required field `strides: [usize; 3]`. A plane needs `(rows - 1) * stride + width` samples; a strided plane is packed once at scorer entry and a plane at its width is borrowed (`ef9f086f`).
 
 ### Added
 
