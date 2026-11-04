@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-api: SSIMULACRA2's HDR feeding on `Backend::Cpu` is fast-ssim2 0.9.1's native absolute-light path
+  (`hdr::HdrFeeding::NativeNits`, `Metric::compute_native_nits_interleaved_multi`: `compute_ssimulacra2` on an
+  `RGBF32_LINEAR` slice with a 1 cd/m² diffuse white; UPIQ-380 pooled SROCC 0.765 against 0.704 for the deprecated
+  PU21 entry); the GPU class keeps integrated PU21. `fast-ssim2` comes from the registry for zenmetrics-api and
+  cvvdp, the `[patch.crates-io]` sibling pin and the `hdr-pu` feature are gone, and `tests/it/cpu_ssim2_native.rs`
+  replaces `cpu_ssim2_pu.rs` (`87b29be8`; test-target lints `34308f52`).
+
 - Route the new native HDR feature namespace through verified staged-object publication before DONE, in both worker execution paths. The regression checks object persistence and rejects opaque staging envelopes; full native-bank recovery remains pending.
 
 - zenfleet: batch complete EVIF views with a shared decoded reference, atomic archive CAS and a later persisted-rendition diagnostic pass (`a09feaba`, `6abd2eee`). Target bits and complete diagnostic containers reproduce the144-cell control exactly.
