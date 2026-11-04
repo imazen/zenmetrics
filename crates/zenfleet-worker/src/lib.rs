@@ -5797,7 +5797,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod native_hdr_staging_tests {
     use super::*;
