@@ -1466,7 +1466,7 @@ name = "cvvdp"
 version = "0.1.0"
 dependencies = [
  "archmage 0.9.31-beta.1",
- "fast-ssim2 0.9.0",
+ "fast-ssim2 0.9.1",
  "image",
  "magetypes 0.9.31-beta.1",
  "rayon",
@@ -1954,6 +1954,23 @@ dependencies = [
 [[package]]
 name = "fast-ssim2"
 version = "0.9.0"
+dependencies = [
+ "archmage 0.9.30",
+ "bytemuck",
+ "enough",
+ "linear-srgb",
+ "magetypes 0.9.30",
+ "num-traits",
+ "rayon",
+ "thiserror 2.0.21",
+ "zenpixels",
+]
+
+[[package]]
+name = "fast-ssim2"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1f3216821c49c3988daa5f35451152559093e7b55c065ec3240ec60a11cc61b"
 dependencies = [
  "archmage 0.9.30",
  "bytemuck",
@@ -7923,7 +7940,7 @@ dependencies = [
  "dssim-core",
  "dssim-gpu",
  "enough",
- "fast-ssim2 0.9.0",
+ "fast-ssim2 0.9.1",
  "hdrvdp",
  "image",
  "imgref",

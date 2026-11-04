@@ -52,8 +52,11 @@ fn butter_hdr_scorer_cpu_linear_max_and_pnorm3() {
     assert!(id.primary() <= 1e-3, "identity max {}", id.primary());
 }
 
+/// ssim2 on `Backend::Cpu` routes `HdrFeeding::NativeNits` (fast-ssim2's own
+/// absolute-light path); the scorer contract is the same as every other row:
+/// identity at the top of the scale, a darker copy strictly below it.
 #[test]
-fn ssim2_hdr_scorer_cpu_integrated_pu() {
+fn ssim2_hdr_scorer_cpu_native_nits() {
     let (w, h) = (256u32, 256u32);
     let (r, d) = hdr_pair(w, h);
     let mut s = HdrScorer::new(MetricKind::Ssim2, Backend::Cpu, w, h, HDR_PEAK_NITS)
@@ -165,8 +168,9 @@ fn display_peak_split_measured_vs_config() {
         "configured-1000 (clipping) vs measured-peak butter must differ: {s_cfg} vs {s_meas}"
     );
 
-    // (2) ssim2 integrated PU (absolute nits in): display peak irrelevant —
-    // bit-identical across display peaks at a fixed shell peak.
+    // (2) ssim2 native nits (absolute nits in, fast-ssim2 anchors them
+    // itself): display peak irrelevant — bit-identical across display peaks
+    // at a fixed shell peak.
     let mut a =
         HdrScorer::new(MetricKind::Ssim2, Backend::Cpu, w, h, HDR_PEAK_NITS).expect("ssim2 a");
     let mut b = HdrScorer::new_with_display_peak(
@@ -183,6 +187,6 @@ fn display_peak_split_measured_vs_config() {
     assert_eq!(
         va.to_bits(),
         vb.to_bits(),
-        "integrated-PU ssim2 must ignore the display peak: {va} vs {vb}"
+        "native-nits ssim2 must ignore the display peak: {va} vs {vb}"
     );
 }

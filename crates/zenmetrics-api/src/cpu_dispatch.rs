@@ -543,16 +543,17 @@ impl CpuMetricState {
         }
     }
 
-    /// Integrated-PU HDR feeding for ssim2 + zensim: **absolute-luminance
-    /// interleaved linear-RGB f32** (cd/m², `[R,G,B, …]`) straight into the
-    /// metric's PU21 entry — `fast_ssim2::compute_ssimulacra2_pu_nits`
-    /// (`hdr-pu` feature, git-pinned via the workspace `[patch.crates-io]`
-    /// until a fast-ssim2 release ships it) / `Zensim::compute_pu_linear`
-    /// (zensim PR #44, squashed as 3f0334de). The PU21 (banding_glare)
-    /// front-end replaces the SDR cube-root *inside* each metric, so there
-    /// is no u8 round-trip and no input-side PU shell (the shell capped at
-    /// ~0.61 UPIQ, #25). Every other metric returns a loud error; feed it
-    /// per `hdr::hdr_feeding()`.
+    /// Integrated-PU HDR feeding for zensim and the HDR-VDP ports:
+    /// **absolute-luminance interleaved linear-RGB f32** (cd/m², `[R,G,B, …]`)
+    /// straight into the metric's absolute-light entry —
+    /// `Zensim::compute_pu_linear` (zensim PR #44, squashed as 3f0334de; the
+    /// PU21 banding_glare front-end replaces the SDR cube-root *inside* the
+    /// metric, so there is no u8 round-trip and no input-side PU shell, which
+    /// capped at ~0.61 UPIQ, #25) and `hdrvdp::score` / `hdrvdp::v3::score`
+    /// (nits are their native input). ssim2 is **not** served here any more:
+    /// its CPU feeding is [`Self::compute_native_nits_interleaved`] (fast-ssim2
+    /// deprecated its PU21 entry in 0.9.1). Every other metric returns a loud
+    /// error; feed it per `hdr::hdr_feeding()`.
     /// Returns `(Score, features)` -- `features` is empty for every metric
     /// except zensim, whose `ZensimResult::features()` (the picker-training
     /// feature vector) was previously discarded here (found 2026-07-03: this
@@ -570,39 +571,15 @@ impl CpuMetricState {
         let _ = (ref_nits, dis_nits);
         match self {
             #[cfg(feature = "cpu-ssim2")]
-            CpuMetricState::Ssim2 { width, height, .. } => {
-                let (w, h) = (*width as usize, *height as usize);
-                let expected = w * h * 3;
-                if ref_nits.len() != expected || dis_nits.len() != expected {
-                    return Err(Error::Metric {
-                        kind: "ssim2",
-                        message: format!(
-                            "nits buffer length mismatch: expected {expected}, got {} / {}",
-                            ref_nits.len(),
-                            dis_nits.len()
-                        ),
-                    });
-                }
-                // `[f32; 3]` is `bytemuck::Pod`, so the interleaved buffer
-                // reinterprets per-pixel without a copy — PixelSlice
-                // borrows it directly (linear-light f32 nits).
-                let v = fast_ssim2::compute_ssimulacra2_pu(
-                    &ssim2_nits_slice(ref_nits, w, h)?,
-                    &ssim2_nits_slice(dis_nits, w, h)?,
-                )
-                .map_err(|e| Error::Metric {
-                    kind: "ssim2",
-                    message: format!("fast-ssim2 compute_ssimulacra2_pu: {e}"),
-                })?;
-                Ok((
-                    Score {
-                        value: v,
-                        metric_name: "ssim2",
-                        metric_version: env!("CARGO_PKG_VERSION"),
-                    },
-                    Vec::new(),
-                ))
-            }
+            CpuMetricState::Ssim2 { .. } => Err(Error::Metric {
+                kind: "ssim2",
+                message: "ssim2 on Backend::Cpu feeds HDR through fast-ssim2's native \
+                          absolute-light path (hdr::HdrFeeding::NativeNits, \
+                          `compute_native_nits_interleaved`); fast-ssim2 deprecated its \
+                          PU21 entry in 0.9.1 and the two regimes' scores are not \
+                          interchangeable"
+                    .into(),
+            }),
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim {
                 inner,
@@ -741,6 +718,68 @@ impl CpuMetricState {
             _ => Err(Error::Metric {
                 kind: "cpu",
                 message: "no integrated-PU nits path for this metric on the CPU dispatch;                           feed it per hdr::hdr_feeding()"
+                    .into(),
+            }),
+        }
+    }
+
+    /// Native absolute-light HDR feeding (`hdr::HdrFeeding::NativeNits`):
+    /// **absolute-luminance interleaved linear-RGB f32** (cd/m², `[R,G,B, …]`)
+    /// handed to the metric's **own** HDR colour front end. Served by ssim2
+    /// only: fast-ssim2 0.9.1's `compute_ssimulacra2` on `RGBF32_LINEAR`
+    /// slices whose diffuse white is declared as 1 cd/m², so the buffer's unit
+    /// is one nit and the pipeline applies the reference SSIMULACRA2 2.1
+    /// anchor (255 cd/m² ↦ 1.0 before the cube-root XYB opsin; the
+    /// `intensity_matrix(1.0)` scaling). No PU21, no u8 round-trip, nothing
+    /// clipped. Every other metric returns a loud error; feed it per
+    /// `hdr::hdr_feeding()`. Returns `(Score, features)` like the integrated
+    /// entry; the feature vector is empty for ssim2.
+    pub(crate) fn compute_native_nits_interleaved(
+        &mut self,
+        ref_nits: &[f32],
+        dis_nits: &[f32],
+    ) -> Result<(Score, Vec<f64>)> {
+        // Quiet unused-arg lints in single-`cpu-*` feature configurations.
+        let _ = (ref_nits, dis_nits);
+        match self {
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { width, height, .. } => {
+                let (w, h) = (*width as usize, *height as usize);
+                let expected = w * h * 3;
+                if ref_nits.len() != expected || dis_nits.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "ssim2",
+                        message: format!(
+                            "nits buffer length mismatch: expected {expected}, got {} / {}",
+                            ref_nits.len(),
+                            dis_nits.len()
+                        ),
+                    });
+                }
+                // `[f32; 3]` is `bytemuck::Pod`, so the interleaved buffer
+                // reinterprets per-pixel without a copy — PixelSlice borrows
+                // it directly (linear-light f32 in cd/m²).
+                let v = fast_ssim2::compute_ssimulacra2(
+                    &ssim2_native_nits_slice(ref_nits, w, h)?,
+                    &ssim2_native_nits_slice(dis_nits, w, h)?,
+                )
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: format!("fast-ssim2 compute_ssimulacra2 (native HDR): {e}"),
+                })?;
+                Ok((
+                    Score {
+                        value: v,
+                        metric_name: "ssim2",
+                        metric_version: env!("CARGO_PKG_VERSION"),
+                    },
+                    Vec::new(),
+                ))
+            }
+            _ => Err(Error::Metric {
+                kind: "cpu",
+                message: "no native absolute-light nits path for this metric on the CPU \
+                          dispatch (only ssim2 has one); feed it per hdr::hdr_feeding()"
                     .into(),
             }),
         }
@@ -1326,6 +1365,21 @@ fn ssim2_nits_slice<'a>(nits: &'a [f32], w: usize, h: usize) -> Result<fast_ssim
         kind: "ssim2",
         message: format!("fast-ssim2 PixelSlice: {e:?}"),
     })
+}
+
+/// The same borrowed nits buffer as the **native HDR** input fast-ssim2's
+/// reference conversion takes: `RGBF32_LINEAR` with a diffuse white of
+/// 1 cd/m², which declares the buffer's unit as one nit (fast-ssim2 then
+/// anchors 255 cd/m² at 1.0 before its cube-root opsin, the libjxl
+/// convention). Without the diffuse white a linear f32 slice is read as
+/// display-relative `[0, 1]` SDR and clipped — never feed nits that way.
+#[cfg(feature = "cpu-ssim2")]
+fn ssim2_native_nits_slice<'a>(
+    nits: &'a [f32],
+    w: usize,
+    h: usize,
+) -> Result<fast_ssim2::PixelSlice<'a>> {
+    Ok(ssim2_nits_slice(nits, w, h)?.with_diffuse_white(zenpixels::DiffuseWhite::new(1.0)))
 }
 
 #[cfg(feature = "cpu-ssim2")]
