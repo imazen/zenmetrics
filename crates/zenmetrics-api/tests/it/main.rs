@@ -41,7 +41,7 @@ mod cpu_dispatch;
 mod cpu_hdrvdp3_pu;
 mod cpu_hdrvdp_pu;
 #[cfg(all(feature = "cpu-ssim2", feature = "hdr", feature = "ssim2"))]
-mod cpu_ssim2_pu;
+mod cpu_ssim2_native;
 #[cfg(all(feature = "cpu-zensim", feature = "hdr", feature = "zensim"))]
 mod cpu_zensim_pu;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]

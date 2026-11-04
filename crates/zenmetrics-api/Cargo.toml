@@ -98,7 +98,10 @@ cpu = [
 # mirroring zenmetrics-orchestrator's `cpu_adapter`. Wired per-metric (one
 # per chunk); a metric without its `cpu-*` feature returns
 # `Error::BackendNotEnabled` for `Backend::Cpu`.
-cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
+# `dep:zenpixels` names the `DiffuseWhite` anchor the native HDR feeding puts
+# on fast-ssim2's `PixelSlice` (fast-ssim2 re-exports the slice types but not
+# the HDR context); zenpixels is already in the graph through fast-ssim2.
+cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck", "dep:zenpixels"]
 # `cvvdp`/`iwssim` are workspace deps with `default-features = false`, and
 # both are no_std+alloc crates with an explicit `std` feature. The umbrella
 # uses `std` (process probes, format!, Vec) so the optimized-CPU path needs
@@ -174,13 +177,11 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # phase 2). Pulled only by the `cpu-*` features above; pins match the ones
 # zenmetrics-orchestrator's cpu_adapter uses (workspace consistency).
 #
-# fast-ssim2 `hdr-pu` gates the integrated-PU21 HDR entry
-# (`compute_ssimulacra2_pu_nits`) the CPU dispatch routes for
-# `hdr_feeding(Ssim2, Backend::Cpu)`. The feature is git-main-only —
-# crates.io 0.8.1 predates it — so the 0.8.2 requirement resolves through
-# the workspace `[patch.crates-io]` sibling pin (root Cargo.toml); move
-# back to the registry once a fast-ssim2 release ships `hdr-pu`.
-fast-ssim2  = { version = "0.9.0", optional = true, features = ["imgref", "hdr-pu", "rayon"] }
+# fast-ssim2 0.9.1 (registry) ships the native HDR path the CPU dispatch
+# routes for `hdr_feeding(Ssim2, Backend::Cpu)`: `compute_ssimulacra2` on an
+# `RGBF32_LINEAR` slice with a `DiffuseWhite` anchor. Its PU21 entry
+# (`hdr-pu`) is deprecated there and no longer used here.
+fast-ssim2  = { version = "0.9.1", optional = true, features = ["imgref", "rayon"] }
 cvvdp       = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }

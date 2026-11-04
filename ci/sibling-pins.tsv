@@ -137,27 +137,10 @@ zensim	https://github.com/imazen/zensimx.git	../zensimx	2ac9f07399cfb66330aab279
 # ../../butteraugli so that ../../butteraugli/butteraugli/
 # is the package dir.
 butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	791d08d725f27b5331ef7b96e73aad89ed895f45	-
-# fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
-# AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
-# the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
-# git-main-only, crates.io 0.8.1 predates it) and dssim (root
-# [patch.crates-io] dssim-core = `../../dssim/dssim-core`) are loaded
-# by `cargo metadata` for the whole workspace, so they must be cloned
-# even when a job doesn't compile them. Pinned to the revs the local
-# workspace builds against (stable, fetchable). The fast-ssim2 pin must
-# carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
-# AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
-# former pin 7628f9ee was 0.8.2). 96ad1ab0 is version 0.9.0 and
-# supplies the PixelSlice/config APIs used by zenmetrics-api and the
-# IQA driver, plus HDR-PU cancellation handling. Validated in the pinned
-# workspace build and the IQA latency/heap score-parity controls.
-# 389e9aaa (branch ssim2-spatial-maps, fast-ssim2 PR #12 on main
-# f73500be) adds compute_ssimulacra2_maps + VERSION for the browser's
-# unified SSIMULACRA2 adapter; the lock resolves unchanged and score bits
-# match 96ad1ab0 on textured 64x48..1024x768 and the tank pair. c91ca7ed
-# adds Ssimulacra2Reference::compare_with_maps and Ssimulacra2Maps::diffmap
-# (score path unchanged; weighted_sum/transform split is the same ops).
-# 54fabca9 is PR #12 squash-merged on main, tree-identical to c91ca7ed.
+# fast-ssim2: zenmetrics-api and cvvdp take it from the registry (0.9.1, native HDR
+# path) since 2026-11-04 and the root [patch.crates-io] pin is gone; the crates with
+# a direct path dep (`../../../fast-ssim2/fast-ssim2`: zenmetrics-cli and the
+# browser/py adapters) still need the sibling checkout, so the clone stays.
 fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	7c71ca00f08df3e6582f54c10edeef228ce2cb3c	-
 dssim	https://github.com/lilith/dssim.git	../../dssim	eec33f556d7ee991c4b906198c3a1b74f6f6063d	-
 # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`

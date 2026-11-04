@@ -805,8 +805,8 @@ impl Metric {
         // Feeding routes on (metric, backend-class). The concrete GPU flavor
         // never changes the recipe, so any GPU-class `Backend` stands in for
         // the non-`Cpu` case; only the native-CPU dispatch differs (its
-        // ssim2 is fast-ssim2, which has no integrated-PU entry until a
-        // release ships `hdr-pu` — see `hdr::hdr_feeding` docs).
+        // ssim2 is fast-ssim2, whose native HDR path takes absolute nits
+        // directly — see `hdr::hdr_feeding` docs).
         let backend_class = {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -856,6 +856,13 @@ impl Metric {
                 let rn = crate::hdr::slice_to_absolute_nits_interleaved(&r, peak)?;
                 let dn = crate::hdr::slice_to_absolute_nits_interleaved(&d, peak)?;
                 self.inner.compute_pu_nits_interleaved_multi(&rn, &dn)
+            }
+            // Native absolute light (ssim2 on the native-CPU dispatch): the
+            // same nits transport, handed to fast-ssim2's own HDR front end.
+            crate::hdr::HdrFeeding::NativeNits => {
+                let rn = crate::hdr::slice_to_absolute_nits_interleaved(&r, peak)?;
+                let dn = crate::hdr::slice_to_absolute_nits_interleaved(&d, peak)?;
+                self.inner.compute_native_nits_interleaved_multi(&rn, &dn)
             }
             // Float PU(luma) gray (iwssim): absolute nits → PU21(bt709-luma)
             // at full f32 precision, no u8 round-trip.
@@ -1929,12 +1936,10 @@ impl MetricInner {
     ///
     /// Implemented by the GPU ssim2 opaque
     /// (`ssim2_gpu::Ssim2Opaque::compute_linear_nits`, which swaps the
-    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25),
-    /// by **ssim2 on the native-CPU dispatch**
-    /// (`fast_ssim2::compute_ssimulacra2_pu_nits`, the same
-    /// PU21-for-cube-root swap in the CPU pipeline — UPIQ SRCC 0.7044 at
-    /// fast-ssim2 git 35f198af; `hdr-pu` feature, workspace `[patch]` pin
-    /// until a fast-ssim2 release ships it), by **zensim on the
+    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25;
+    /// **ssim2 on the native-CPU dispatch is not served here**: its feeding is
+    /// [`Self::compute_native_nits_interleaved_multi`], fast-ssim2 having
+    /// deprecated its PU21 entry in 0.9.1), by **zensim on the
     /// native-CPU dispatch** (`zensim::Zensim::compute_pu_linear`, the PU21
     /// banding_glare front-end from zensim PR #44 replacing the SDR
     /// cube-root — no u8 round-trip), and by the **GPU zensim opaque**
@@ -2014,6 +2019,98 @@ impl MetricInner {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
+        }
+    }
+
+    /// **Native absolute-light HDR entry** (`hdr::HdrFeeding::NativeNits`):
+    /// score a pair of **absolute-luminance** interleaved linear-RGB f32
+    /// buffers (cd/m², `[R,G,B, …]`, each length `width·height·3`) through
+    /// the metric's **own** HDR colour front end — no PU21 surrogate, no u8
+    /// round-trip, nothing clipped.
+    ///
+    /// Implemented by **ssim2 on the native-CPU dispatch**: fast-ssim2 0.9.1's
+    /// `compute_ssimulacra2` on `RGBF32_LINEAR` nits whose diffuse white is
+    /// declared as 1 cd/m², the reference SSIMULACRA2 2.1 conversion (cube-root
+    /// XYB on nits anchored at 255 cd/m² ↦ 1.0). UPIQ-380 pooled SROCC 0.765
+    /// against 0.704 for the deprecated PU21 entry (zensimx
+    /// `benchmarks/e36_subset_test_2026-11-01.md`, amendment 6 addendum).
+    /// Every other variant returns [`Error::Metric`]: the GPU ssim2 opaque has
+    /// only the PU21 HDR flavour ([`Self::compute_pu_nits_interleaved_multi`]),
+    /// and the other metrics have their own `hdr::hdr_feeding` recipes.
+    pub fn compute_native_nits_interleaved_multi(
+        &mut self,
+        ref_nits: &[f32],
+        dis_nits: &[f32],
+    ) -> Result<Scores> {
+        // Only the GPU-opaque arms below reference this; gate it to match so
+        // cpu-only feature configurations don't warn it dead.
+        #[cfg(any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        ))]
+        fn no_native_nits_path(kind: &'static str) -> Error {
+            Error::Metric {
+                kind,
+                message: format!(
+                    "metric '{kind}' has no native absolute-light nits path on this \
+                     backend; feed it per hdr::hdr_feeding() (ssim2's GPU class routes \
+                     IntegratedPuNits)"
+                ),
+            }
+        }
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
+            ))]
+            MetricInner::Cpu(state, _) => state
+                .compute_native_nits_interleaved(ref_nits, dis_nits)
+                .map(|(score, features)| {
+                    let mut s = Scores::single(score);
+                    s.features = features;
+                    s
+                }),
+            #[cfg(feature = "ssim2")]
+            MetricInner::Ssim2(_) => Err(no_native_nits_path("ssim2")),
+            #[cfg(feature = "cvvdp")]
+            MetricInner::Cvvdp(_) => Err(no_native_nits_path("cvvdp")),
+            #[cfg(feature = "butter")]
+            MetricInner::Butter(_) => Err(no_native_nits_path("butter")),
+            #[cfg(feature = "dssim")]
+            MetricInner::Dssim(_) => Err(no_native_nits_path("dssim")),
+            #[cfg(feature = "iwssim")]
+            MetricInner::Iwssim(_) => Err(no_native_nits_path("iwssim")),
+            #[cfg(feature = "zensim")]
+            MetricInner::Zensim(_) => Err(no_native_nits_path("zensim")),
             #[cfg(not(any(
                 feature = "cvvdp",
                 feature = "butter",

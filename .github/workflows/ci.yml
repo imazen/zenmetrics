@@ -373,7 +373,7 @@ jobs:
           cargo test -p zenmetrics-api \
             --no-default-features \
             --features all-metrics,cpu-metrics,wgpu,pixels,encoded \
-            --test it -- backend_matrix cpu_dispatch cpu_ssim2_pu cpu_zensim_pu
+            --test it -- backend_matrix cpu_dispatch cpu_ssim2_native cpu_zensim_pu
       # hdrvdp — the f64 CPU reference port of HDR-VDP-2.2 (zenmetrics#50). No
       # features, no dependencies, no GPU runtime, so it belongs on a CPU job.
       # It runs HERE rather than only next to the cvvdp CPU tests in the
