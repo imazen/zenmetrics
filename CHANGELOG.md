@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.
+
 - Route the new native HDR feature namespace through verified staged-object publication before DONE, in both worker execution paths. The regression checks object persistence and rejects opaque staging envelopes; full native-bank recovery remains pending.
 
 - zenfleet: batch complete EVIF views with a shared decoded reference, atomic archive CAS and a later persisted-rendition diagnostic pass (`a09feaba`, `6abd2eee`). Target bits and complete diagnostic containers reproduce the144-cell control exactly.
