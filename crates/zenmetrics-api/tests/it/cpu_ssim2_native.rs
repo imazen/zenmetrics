@@ -45,7 +45,7 @@ fn native_nits_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelSl
         fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
     )
     .expect("PixelSlice RGBF32_LINEAR")
-    .with_diffuse_white(zenpixels::DiffuseWhite::new(1.0))
+    .with_diffuse_white(zenpixels::hdr::DiffuseWhite::new(1.0))
 }
 
 /// The umbrella's CPU-ssim2 HDR score equals calling

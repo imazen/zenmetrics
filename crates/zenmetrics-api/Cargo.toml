@@ -98,7 +98,7 @@ cpu = [
 # mirroring zenmetrics-orchestrator's `cpu_adapter`. Wired per-metric (one
 # per chunk); a metric without its `cpu-*` feature returns
 # `Error::BackendNotEnabled` for `Backend::Cpu`.
-# `dep:zenpixels` names the `DiffuseWhite` anchor the native HDR feeding puts
+# `dep:zenpixels` names the `hdr::DiffuseWhite` anchor the native HDR feeding puts
 # on fast-ssim2's `PixelSlice` (fast-ssim2 re-exports the slice types but not
 # the HDR context); zenpixels is already in the graph through fast-ssim2.
 cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck", "dep:zenpixels"]

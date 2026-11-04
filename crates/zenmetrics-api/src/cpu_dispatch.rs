@@ -1379,7 +1379,7 @@ fn ssim2_native_nits_slice<'a>(
     w: usize,
     h: usize,
 ) -> Result<fast_ssim2::PixelSlice<'a>> {
-    Ok(ssim2_nits_slice(nits, w, h)?.with_diffuse_white(zenpixels::DiffuseWhite::new(1.0)))
+    Ok(ssim2_nits_slice(nits, w, h)?.with_diffuse_white(zenpixels::hdr::DiffuseWhite::new(1.0)))
 }
 
 #[cfg(feature = "cpu-ssim2")]
