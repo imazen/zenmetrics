@@ -9,26 +9,30 @@
 
 ## summary
 #
-#   pub modules                                 1
+#   pub modules                                 2
 #   pub consts/statics                          2
-#   free functions                             11
+#   free functions                             14
 #   inherent methods                            5
-#   trait roster entries (type × trait)        11
+#   trait roster entries (type × trait)        16
 #
 # per-module pub lines:
-#   (root)                            4
+#   (root)                            6
+#   __bench_math                      3
 #   __simd_equiv_test_api            13
-#   kernels                           1
-#   params                            1
+#   display                           1
 
-## items (19 lines)
+## items (20 lines)
 
 pub const __simd_equiv_test_api::GAUSS5: [f32; 5]
 pub const __simd_equiv_test_api::PU_BLUR_KERNEL_1D: [f32; 13]
 pub fn Cvvdp::reset_strip_dispatch_counter(&self)
 pub fn Cvvdp::strip_dispatch_counter(&self) -> u32
 pub fn Error::assert_fields_are_eq(&self)
-pub fn __simd_equiv_test_api::expand_horizontal_pass(&[f32], usize, usize, usize, &mut [f32], &mut alloc::vec::Vec<f32>)
+pub fn VideoScorer::q_per_ch_table(&self) -> &[alloc::vec::Vec<[f32; 4]>]
+pub fn __bench_math::vexp_into(&[f32], &mut [f32]) [also: __simd_equiv_test_api]
+pub fn __bench_math::vlog_into(&[f32], &mut [f32]) [also: __simd_equiv_test_api]
+pub fn __bench_math::vpow_into(&[f32], &mut [f32], f32) [also: __simd_equiv_test_api]
+pub fn __simd_equiv_test_api::expand_horizontal_pass(&[f32], usize, usize, usize, &mut [f32])
 pub fn __simd_equiv_test_api::expand_vertical_pass(&[f32], usize, usize, usize, &mut [f32])
 pub fn __simd_equiv_test_api::gaussian_blur_sigma3_simd(&[f32], usize, usize, &mut alloc::vec::Vec<f32>, &mut alloc::vec::Vec<f32>)
 pub fn __simd_equiv_test_api::pu_blur_horizontal_pass(&[f32], usize, usize, &mut [f32])
@@ -36,15 +40,17 @@ pub fn __simd_equiv_test_api::pu_blur_vertical_pass(&[f32], usize, usize, &mut [
 pub fn __simd_equiv_test_api::reduce_horizontal_pass(&[f32], usize, usize, usize, &mut [f32])
 pub fn __simd_equiv_test_api::reduce_vertical_pass(&[f32], usize, usize, usize, &mut [f32])
 pub fn __simd_equiv_test_api::safe_pow_with_offset_into(&[f32], &mut [f32], f32, f32, f32)
-pub fn __simd_equiv_test_api::vexp_into(&[f32], &mut [f32])
-pub fn __simd_equiv_test_api::vlog_into(&[f32], &mut [f32])
-pub fn __simd_equiv_test_api::vpow_into(&[f32], &mut [f32], f32)
-pub fn kernels::csf::CsfChannel::assert_fields_are_eq(&self)
-pub fn params::PerfMode::assert_fields_are_eq(&self)
+pub fn display::DisplayError::assert_fields_are_eq(&self)
+pub mod __bench_math
 pub mod __simd_equiv_test_api
 
-## trait impls (11 types)
+## trait impls (16 types)
 
+FrameLayout: TrivialClone
+TempFilter: TrivialClone
+TempPadding: TrivialClone
+VideoScorerOptions: TrivialClone
+display::DisplayPreset: TrivialClone
 kernels::csf::CsfChannel: TrivialClone
 params::CsfParams: TrivialClone
 params::CvvdpParams: TrivialClone

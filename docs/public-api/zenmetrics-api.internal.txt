@@ -13,17 +13,17 @@
 #   free functions                              2
 #   inherent methods                           33
 #   enum variants                               7
-#   trait roster entries (type × trait)        11
+#   trait roster entries (type × trait)        14
 #
 # per-module pub lines:
-#   (root)                           42
-#   hdr                               2
+#   (root)                           40
+#   alpha                             2
+#   hdr                               1
+#   zensim_profile                    1
 
 ## items (44 lines)
 
 #[non_exhaustive] pub enum MetricInner
-pub fn Backend::assert_fields_are_eq(&self)
-pub fn CachedRefStripPolicy::assert_fields_are_eq(&self)
 pub fn MemoryMode::assert_fields_are_eq(&self)
 pub fn Metric::deref(&self) -> &MetricInner
 pub fn Metric::deref_mut(&mut self) -> &mut MetricInner
@@ -32,15 +32,18 @@ pub fn MetricInner::clear_reference(&mut self)
 pub fn MetricInner::compute_features_srgb_u8(&mut self, &[u8], &[u8]) -> Result<(Score, alloc::vec::Vec<f64>)>
 pub fn MetricInner::compute_from_linear_interleaved(&mut self, &[f32], &[f32]) -> Result<Score>
 pub fn MetricInner::compute_from_linear_interleaved_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
-pub fn MetricInner::compute_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<Score>
-pub fn MetricInner::compute_from_linear_planes_multi(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<Scores>
+pub fn MetricInner::compute_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<Score>
+pub fn MetricInner::compute_from_linear_planes_multi(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<Scores>
 pub fn MetricInner::compute_handles(&mut self, &context::PairHandles) -> Result<Score>
 pub fn MetricInner::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Score>
+pub fn MetricInner::compute_pixels_with_stop(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>, &dyn enough::Stop) -> Result<Score>
 pub fn MetricInner::compute_pu_luma_gray_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
 pub fn MetricInner::compute_pu_nits_interleaved_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
 pub fn MetricInner::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<Score>
 pub fn MetricInner::compute_srgb_u8_multi(&mut self, &[u8], &[u8]) -> Result<Scores>
+pub fn MetricInner::compute_srgb_u8_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<Score>
 pub fn MetricInner::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<Score>
+pub fn MetricInner::compute_with_reference_srgb_u8_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<Score>
 pub fn MetricInner::dims(&self) -> (u32, u32)
 pub fn MetricInner::has_reference(&self) -> bool
 pub fn MetricInner::kind(&self) -> MetricKind
@@ -48,15 +51,14 @@ pub fn MetricInner::new(MetricKind, Backend, u32, u32, MetricParams) -> Result<S
 pub fn MetricInner::new_with_memory_mode(MetricKind, Backend, u32, u32, MetricParams, MemoryMode) -> Result<Self>
 pub fn MetricInner::release(self, Backend)
 pub fn MetricInner::set_reference_srgb_u8(&mut self, &[u8]) -> Result<()>
-pub fn MetricKind::assert_fields_are_eq(&self)
 pub fn MetricSession::__stream_value(&self) -> u64
 pub fn OwnedSessionMetric::__stream_value(&self) -> u64
-pub fn Priority::assert_fields_are_eq(&self)
-pub fn Reuse::assert_fields_are_eq(&self)
 pub fn __stream_reserved_bytes(Backend, u64) -> core::option::Option<u64>
 pub fn __stream_value_for_slot(u32) -> u64
+pub fn alpha::AlphaError::assert_fields_are_eq(&self)
+pub fn alpha::AlphaPolicy::assert_fields_are_eq(&self)
 pub fn hdr::HdrFeeding::assert_fields_are_eq(&self)
-pub fn hdr::HdrTransfer::assert_fields_are_eq(&self)
+pub fn zensim_profile::BakeProfileConfig::assert_fields_are_eq(&self)
 pub type Metric::Target = MetricInner
 pub MetricInner::Butter(butteraugli_gpu::opaque::ButteraugliOpaque)
 pub MetricInner::Cpu(alloc::boxed::Box<crate::cpu_dispatch::CpuMetricState>, core::option::Option<alloc::vec::Vec<u8>>)
@@ -66,7 +68,7 @@ pub MetricInner::Iwssim(iwssim_gpu::opaque::IwssimOpaque)
 pub MetricInner::Ssim2(ssim2_gpu::opaque::Ssim2Opaque)
 pub MetricInner::Zensim(zensim_gpu::opaque::ZensimOpaque)
 
-## trait impls (11 types)
+## trait impls (14 types)
 
 Backend: TrivialClone
 CachedRefStripPolicy: TrivialClone
@@ -76,6 +78,9 @@ NamedScore: TrivialClone
 Priority: TrivialClone
 Reuse: TrivialClone
 Score: TrivialClone
+alpha::AlphaPolicy: TrivialClone
+alpha::AlphaStats: TrivialClone
 hdr::DisplayModel: TrivialClone
 hdr::HdrFeeding: TrivialClone
 hdr::HdrTransfer: TrivialClone
+zensim_profile::BakeProfileConfig: TrivialClone

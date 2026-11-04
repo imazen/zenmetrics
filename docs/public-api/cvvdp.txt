@@ -6,32 +6,82 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: cvvdp.txt 324 lines (supported surface) | cvvdp.features.txt 1 added (features: alloc,avx512,cvvdp-strip-parity-big,parallel,pixels,std) | cvvdp.internal.txt 30 lines (30 hidden + 0 excluded-feature)
+# files: cvvdp.txt 503 lines (supported surface) | cvvdp.features.txt 1 added (features: alloc,avx512,cvvdp-strip-parity-big,parallel,pixels,std) | cvvdp.internal.txt 36 lines (39 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                14
-#   pub types (struct/enum/trait/alias)        20
-#   pub consts/statics                        131
-#   free functions                             33
-#   inherent methods                           44
-#   struct fields                              57
-#   enum variants                              21
-#   trait roster entries (type × trait)        50
-#   auto-trait-complete types                  14
+#   pub modules                                15
+#   pub types (struct/enum/trait/alias)        35
+#   pub consts/statics                        144
+#   free functions                             48
+#   inherent methods                           79
+#   struct fields                              76
+#   enum variants                              97
+#   trait roster entries (type × trait)       105
+#   auto-trait-complete types                  25
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           66
+#   (root)                          129
+#   diffmap                           6
+#   display                          52
 #   host_scalar                       2
-#   kernels                          86
-#   params                          165
+#   kernels                         103
+#   params                          201
 #   presets                           1
 
-## items (310 lines)
+## items (478 lines)
 
 pub mod cvvdp
 pub mod diffmap
+#[non_exhaustive] pub struct diffmap::CvvdpDiffmap
+pub diffmap::CvvdpDiffmap::height: u32
+pub diffmap::CvvdpDiffmap::jod: f32
+pub diffmap::CvvdpDiffmap::width: u32
+pub fn diffmap::CvvdpDiffmap::geometry(&self) -> zenmetrics_abstractions::map::MapGeometry
+pub fn diffmap::CvvdpDiffmap::map(&self) -> &[f32]
+pub mod display
+pub display::CvvdpDisplay::Custom(display::CustomDisplay)
+pub display::CvvdpDisplay::Preset(display::DisplayPreset)
+pub fn display::CvvdpDisplay::geometry(&self) -> params::DisplayGeometry
+pub fn display::CvvdpDisplay::model(&self) -> params::DisplayModel
+pub fn display::CvvdpDisplay::slug(&self) -> &str
+pub display::DisplayError::InvalidSlug(alloc::string::String)
+pub display::DisplayError::SlugIsPreset(alloc::string::String)
+pub display::DisplayError::UnknownPreset(alloc::string::String)
+pub display::DisplayPreset::EizoCg3146
+pub display::DisplayPreset::HtcVivePro
+pub display::DisplayPreset::Inch65HdrPq1Knit
+pub display::DisplayPreset::Inch65HdrPq2Knit
+pub display::DisplayPreset::Inch65HdrPq4Knit
+pub display::DisplayPreset::IpadPro12_9
+pub display::DisplayPreset::Iphone12Pro
+pub display::DisplayPreset::Iphone14Pro
+pub display::DisplayPreset::Iphone14ProHdr
+pub display::DisplayPreset::Iphone14ProHdrVert
+pub display::DisplayPreset::Iphone14ProVert
+pub display::DisplayPreset::LgOled2017Hdr
+pub display::DisplayPreset::LgOled2017Sdr
+pub display::DisplayPreset::LgOled2026HdrPq
+pub display::DisplayPreset::MacbookPro16
+pub display::DisplayPreset::ModernOledPhoneIndoor
+pub display::DisplayPreset::Sdr4k30
+pub display::DisplayPreset::SdrFhd24
+pub display::DisplayPreset::Standard4k
+pub display::DisplayPreset::StandardFhd
+pub display::DisplayPreset::StandardHdrHlg
+pub display::DisplayPreset::StandardHdrLinear
+pub display::DisplayPreset::StandardHdrLinearDark
+pub display::DisplayPreset::StandardHdrLinearZoom
+pub display::DisplayPreset::StandardHdrPq
+pub display::DisplayPreset::StandardHmd
+pub display::DisplayPreset::StandardPhone
+pub const display::DisplayPreset::ALL: &'static [display::DisplayPreset]
+pub const fn display::DisplayPreset::name(self) -> &'static str [also: (root)]
+pub fn display::DisplayPreset::geometry(self) -> params::DisplayGeometry
+pub fn display::DisplayPreset::model(self) -> params::DisplayModel
+pub fn display::CustomDisplay::new(&str, params::DisplayModel, params::DisplayGeometry) -> core::result::Result<Self, display::DisplayError>
+pub fn display::CustomDisplay::slug(&self) -> &str
 pub mod host_scalar
 pub fn host_scalar::predict_jod_still_3ch(&[u8], &[u8], usize, usize, params::DisplayModel, f32) -> f32
 pub fn host_scalar::predict_jod_still_3ch_capped(&[u8], &[u8], usize, usize, params::DisplayModel, f32, core::option::Option<usize>) -> f32
@@ -46,6 +96,7 @@ pub const kernels::color::eotf_tag::PQ: u32
 pub const kernels::color::eotf_tag::SRGB: u32
 pub const kernels::color::SRGB8_TO_LINEAR_LUT: [f32; 256]
 pub fn kernels::color::display_byte_to_dkl_scalar(u8, u8, u8, params::DisplayModel) -> (f32, f32, f32)
+pub fn kernels::color::display_encoded_to_dkl_scalar(f32, f32, f32, params::DisplayModel) -> (f32, f32, f32)
 pub fn kernels::color::display_linear_rgb_to_dkl_scalar(f32, f32, f32, params::DisplayModel) -> (f32, f32, f32)
 pub fn kernels::color::eotf_tag_and_gamma(params::Eotf) -> (u32, f32)
 pub fn kernels::color::srgb_byte_to_dkl_scalar(u8, u8, u8, f32, f32, f32) -> (f32, f32, f32)
@@ -62,43 +113,58 @@ pub const kernels::csf::LOG_RHO_AXIS: [f32; 32] [also: kernels::csf::csf_lut_v0_
 pub const kernels::csf::LOG_S_O0_C1: [f32; 1024] [also: kernels::csf::csf_lut_v0_5_4]
 pub const kernels::csf::LOG_S_O0_C2: [f32; 1024] [also: kernels::csf::csf_lut_v0_5_4]
 pub const kernels::csf::LOG_S_O0_C3: [f32; 1024] [also: kernels::csf::csf_lut_v0_5_4]
+pub const kernels::csf::LOG_S_O5_C1: [f32; 1024] [also: kernels::csf::csf_lut_v0_5_4]
 pub const kernels::csf::N_L_BKG: usize
 pub const kernels::csf::N_RHO: usize
 pub const kernels::csf::SENSITIVITY_CORRECTION_DB: f32
 pub fn kernels::csf::precompute_logs_row(f32, kernels::csf::CsfChannel) -> [f32; 32]
+pub fn kernels::csf::precompute_logs_row_o5(f32) -> [f32; 32]
 pub fn kernels::csf::sensitivity_corrected_scalar(f32, f32, kernels::csf::CsfChannel) -> f32
+pub fn kernels::csf::sensitivity_corrected_scalar_o5(f32, f32) -> f32
 pub fn kernels::csf::sensitivity_scalar(f32, f32, kernels::csf::CsfChannel) -> f32
+pub fn kernels::csf::sensitivity_scalar_o5(f32, f32) -> f32
 pub mod kernels::diffmap
 pub fn kernels::diffmap::bilinear_sample_scalar(&[f32], u32, u32, u32, u32, u32, u32) -> f32
 pub fn kernels::diffmap::channel_pool_scalar(f32, f32, f32, f32) -> f32
 pub mod kernels::masking
 pub const kernels::masking::CH_GAIN: [f32; 3]
+pub const kernels::masking::CH_GAIN_4: [f32; 4]
 pub const kernels::masking::D_MAX: f32
 pub const kernels::masking::MASK_C: f32
 pub const kernels::masking::MASK_P: f32
 pub const kernels::masking::MASK_Q: [f32; 3]
+pub const kernels::masking::MASK_Q_4: [f32; 4]
 pub const kernels::masking::PU_BLUR_KERNEL_1D: [f32; 13]
 pub const kernels::masking::PU_PADSIZE: usize
 pub const kernels::masking::XCM_3X3: [[f32; 3]; 3]
+pub const kernels::masking::XCM_4X4: [[f32; 4]; 4]
 pub fn kernels::masking::clamp_diff_soft(f32) -> f32
 pub fn kernels::masking::gaussian_blur_sigma3(&[f32], usize, usize) -> alloc::vec::Vec<f32>
 pub fn kernels::masking::mask_pool_pixel([f32; 3]) -> [f32; 3]
+pub fn kernels::masking::mask_pool_pixel_4([f32; 4]) -> [f32; 4]
 pub fn kernels::masking::mult_mutual_band(&[alloc::vec::Vec<f32>; 3], &[alloc::vec::Vec<f32>; 3], usize, usize) -> [alloc::vec::Vec<f32>; 3]
+pub fn kernels::masking::mult_mutual_band_4ch(&[alloc::vec::Vec<f32>; 4], &[alloc::vec::Vec<f32>; 4], usize, usize) -> [alloc::vec::Vec<f32>; 4]
 pub fn kernels::masking::mult_mutual_pixel([f32; 3], [f32; 3]) -> [f32; 3]
 pub fn kernels::masking::phase_uncertainty_band(&[f32], usize, usize) -> alloc::vec::Vec<f32>
 pub fn kernels::masking::phase_uncertainty_no_blur(f32) -> f32
 pub fn kernels::masking::safe_pow(f32, f32) -> f32
 pub mod kernels::pool
 pub const kernels::pool::BASEBAND_W: [f32; 3]
+pub const kernels::pool::BASEBAND_W_4: [f32; 4]
 pub const kernels::pool::BETA_BAND: f32
 pub const kernels::pool::BETA_CH: f32
 pub const kernels::pool::BETA_SPATIAL: f32
+pub const kernels::pool::BETA_T: f32
+pub const kernels::pool::CH_TRANS_W: f32
 pub const kernels::pool::IMAGE_INT: f32
 pub const kernels::pool::JOD_A: f32
 pub const kernels::pool::JOD_EXP: f32
 pub const kernels::pool::PER_CH_W: [f32; 3]
+pub const kernels::pool::PER_CH_W_4: [f32; 4]
 pub fn kernels::pool::do_pooling_and_jod_still_3ch(&[[f32; 3]]) -> f32
+pub fn kernels::pool::do_pooling_and_jod_video_4ch(&[alloc::vec::Vec<[f32; 4]>]) -> f32
 pub fn kernels::pool::lp_norm_mean(&[f32], f32) -> f32
+pub fn kernels::pool::lp_norm_mean3(&[f32], &[f32], &[f32], f32) -> [f32; 3]
 pub fn kernels::pool::lp_norm_sum(&[f32], f32) -> f32
 pub fn kernels::pool::met2jod(f32) -> f32
 pub mod kernels::pyramid
@@ -117,6 +183,47 @@ pub fn kernels::pyramid::gausspyr_reduce_scalar(&[f32], usize, usize, &mut alloc
 pub fn kernels::pyramid::laplacian_pyramid_dec_scalar(&[f32], usize, usize, usize) -> alloc::vec::Vec<kernels::pyramid::Band>
 pub fn kernels::pyramid::weber_contrast_pyr_dec_scalar(&[f32], &[f32], usize, usize, usize) -> kernels::pyramid::WeberPyramid
 pub mod params
+#[non_exhaustive] pub enum params::CvvdpDisplay [also: display]
+pub params::CvvdpDisplay::Custom(display::CustomDisplay)
+pub params::CvvdpDisplay::Preset(display::DisplayPreset)
+pub fn display::CvvdpDisplay::geometry(&self) -> params::DisplayGeometry
+pub fn display::CvvdpDisplay::model(&self) -> params::DisplayModel
+pub fn display::CvvdpDisplay::slug(&self) -> &str
+#[non_exhaustive] pub enum params::DisplayError [also: display]
+pub params::DisplayError::InvalidSlug(alloc::string::String)
+pub params::DisplayError::SlugIsPreset(alloc::string::String)
+pub params::DisplayError::UnknownPreset(alloc::string::String)
+#[non_exhaustive] pub enum params::DisplayPreset [also: display]
+pub params::DisplayPreset::EizoCg3146
+pub params::DisplayPreset::HtcVivePro
+pub params::DisplayPreset::Inch65HdrPq1Knit
+pub params::DisplayPreset::Inch65HdrPq2Knit
+pub params::DisplayPreset::Inch65HdrPq4Knit
+pub params::DisplayPreset::IpadPro12_9
+pub params::DisplayPreset::Iphone12Pro
+pub params::DisplayPreset::Iphone14Pro
+pub params::DisplayPreset::Iphone14ProHdr
+pub params::DisplayPreset::Iphone14ProHdrVert
+pub params::DisplayPreset::Iphone14ProVert
+pub params::DisplayPreset::LgOled2017Hdr
+pub params::DisplayPreset::LgOled2017Sdr
+pub params::DisplayPreset::LgOled2026HdrPq
+pub params::DisplayPreset::MacbookPro16
+pub params::DisplayPreset::ModernOledPhoneIndoor
+pub params::DisplayPreset::Sdr4k30
+pub params::DisplayPreset::SdrFhd24
+pub params::DisplayPreset::Standard4k
+pub params::DisplayPreset::StandardFhd
+pub params::DisplayPreset::StandardHdrHlg
+pub params::DisplayPreset::StandardHdrLinear
+pub params::DisplayPreset::StandardHdrLinearDark
+pub params::DisplayPreset::StandardHdrLinearZoom
+pub params::DisplayPreset::StandardHdrPq
+pub params::DisplayPreset::StandardHmd
+pub params::DisplayPreset::StandardPhone
+pub const display::DisplayPreset::ALL: &'static [display::DisplayPreset]
+pub fn display::DisplayPreset::geometry(self) -> params::DisplayGeometry
+pub fn display::DisplayPreset::model(self) -> params::DisplayModel
 pub enum params::Eotf
 pub params::Eotf::Bt1886
 pub params::Eotf::Gamma(f32)
@@ -138,6 +245,9 @@ pub struct params::CsfParams
 pub params::CsfParams::a_peak: f32
 pub params::CsfParams::rg_peak: f32
 pub params::CsfParams::vy_peak: f32
+pub struct params::CustomDisplay [also: display]
+pub fn display::CustomDisplay::new(&str, params::DisplayModel, params::DisplayGeometry) -> core::result::Result<Self, display::DisplayError>
+pub fn display::CustomDisplay::slug(&self) -> &str
 pub params::CvvdpParams::csf: params::CsfParams
 pub params::CvvdpParams::display: params::DisplayModel
 pub params::CvvdpParams::jod: params::JodParams
@@ -233,16 +343,33 @@ pub enum Error
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: usize
 pub Error::DimensionMismatch::got: usize
+pub Error::InvalidFps
 pub Error::InvalidImageSize
 pub Error::InvalidImageSize::height: u32
 pub Error::InvalidImageSize::width: u32
+pub Error::MixedSampleTypes
+pub Error::NoFrames
 pub Error::NoWarmReference
 pub Error::PlaneShapeMismatch
 pub Error::PlaneShapeMismatch::expected: usize
 pub Error::PlaneShapeMismatch::got: usize
+pub Error::TooShortForFilter
+pub Error::TooShortForFilter::filter_len: usize
+pub Error::TooShortForFilter::frames: usize
+pub enum FrameLayout
+pub FrameLayout::Interleaved
+pub FrameLayout::Planar
 pub enum PerfMode [also: params]
 pub PerfMode::Fast
 pub PerfMode::Strict
+pub enum TempFilter
+pub TempFilter::Default
+pub TempFilter::GradTrans
+pub TempFilter::HpTrans
+pub enum TempPadding
+pub TempPadding::Replicate
+pub TempPadding::Symmetric
+pub TempPadding::Valid
 pub struct Cvvdp
 pub fn Cvvdp::drop_warm_reference(&mut self)
 pub fn Cvvdp::has_reference(&self) -> bool
@@ -251,13 +378,19 @@ pub fn Cvvdp::new(u32, u32, params::CvvdpParams) -> Result<Self>
 pub fn Cvvdp::new_strip(u32, u32, params::CvvdpParams, u32) -> Result<Self>
 pub fn Cvvdp::pixels_per_degree(&self) -> f32
 pub fn Cvvdp::score(&mut self, &[u8], &[u8]) -> Result<f32>
-pub fn Cvvdp::score_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32], usize) -> Result<f32>
-pub fn Cvvdp::score_from_linear_planes_with_diffmap(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn Cvvdp::score_and_diffmap(&mut self, &[u8], &[u8]) -> Result<(f32, diffmap::CvvdpDiffmap)>
+pub fn Cvvdp::score_f32(&mut self, &[f32], &[f32]) -> Result<f32>
+pub fn Cvvdp::score_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<f32>
+pub fn Cvvdp::score_from_linear_planes_with_diffmap(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn Cvvdp::score_strip(&mut self, &[u8], &[u8], u32) -> Result<f32>
+pub fn Cvvdp::score_u16(&mut self, &[u16], &[u16]) -> Result<f32>
 pub fn Cvvdp::score_with_diffmap(&mut self, &[u8], &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn Cvvdp::score_with_warm_ref(&mut self, &[u8]) -> Result<f32>
 pub fn Cvvdp::score_with_warm_ref_diffmap(&mut self, &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn Cvvdp::score_with_warm_ref_strip(&mut self, &[u8], u32) -> Result<f32>
+pub fn Cvvdp::video(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry) -> Result<VideoScorer>
+pub fn Cvvdp::video_with_layout(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout) -> Result<VideoScorer>
+pub fn Cvvdp::video_with_options(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, VideoScorerOptions) -> Result<VideoScorer>
 pub fn Cvvdp::warm_reference(&mut self, &[u8]) -> Result<()>
 pub fn Cvvdp::width(&self) -> u32
 pub fn Cvvdp::with_geometry(u32, u32, params::CvvdpParams, params::DisplayGeometry) -> Result<Self>
@@ -334,21 +467,69 @@ pub const params::DisplayModel::STANDARD_PHONE: Self
 pub fn params::DisplayModel::compute_y_refl(f32, f32) -> f32
 pub fn params::DisplayModel::new(f32, f32, f32, f32, params::Eotf, params::Primaries) -> Self
 pub fn params::DisplayModel::by_name(&str) -> core::option::Option<Self>
+pub struct VideoScorer
+pub fn VideoScorer::band_frequencies(&self) -> &[f32]
+pub fn VideoScorer::finish(self) -> Result<f32>
+pub fn VideoScorer::finish_with_stats(self) -> Result<VideoStats>
+pub fn VideoScorer::frames_pushed(&self) -> usize
+pub fn VideoScorer::new(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry) -> Result<Self>
+pub fn VideoScorer::pop_heatmap(&mut self) -> core::option::Option<alloc::vec::Vec<f32>>
+pub fn VideoScorer::push_frame(&mut self, &[u8], &[u8]) -> Result<()>
+pub fn VideoScorer::push_frame_f32(&mut self, &[f32], &[f32]) -> Result<()>
+pub fn VideoScorer::push_frame_u16(&mut self, &[u16], &[u16]) -> Result<()>
+pub fn VideoScorer::with_layout(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout) -> Result<Self>
+pub fn VideoScorer::with_layout_and_padding(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout, TempPadding) -> Result<Self>
+pub fn VideoScorer::with_options(u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, VideoScorerOptions) -> Result<Self>
+pub struct VideoScorerOptions
+pub VideoScorerOptions::heatmap: bool
+pub VideoScorerOptions::layout: FrameLayout
+pub VideoScorerOptions::low_memory: bool
+pub VideoScorerOptions::temp_filter: TempFilter
+pub VideoScorerOptions::temp_padding: TempPadding
+pub VideoScorerOptions::temp_resample: core::option::Option<f32>
+pub struct VideoStats
+pub VideoStats::frames_per_second: f32
+pub VideoStats::heatmaps: alloc::vec::Vec<alloc::vec::Vec<f32>>
+pub VideoStats::height: u32
+pub VideoStats::jod: f32
+pub VideoStats::n_frames: usize
+pub VideoStats::q_per_ch: alloc::vec::Vec<alloc::vec::Vec<[f32; 4]>>
+pub VideoStats::rho_band: alloc::vec::Vec<f32>
+pub VideoStats::width: u32
+pub fn VideoStats::loss(&self) -> f32
 pub const CVVDP_COLUMN_NAME: &str
 pub const MAX_LEVELS: usize
 pub const N_CHANNELS: usize
 pub const PYCVVDP_REFERENCE_VERSION: &str
 pub const PYRAMID_MIN_DIM: u32
+pub fn score_video<F: core::convert::AsRef<[u8]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry) -> Result<f32>
+pub fn score_video_f32<F: core::convert::AsRef<[f32]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry) -> Result<f32>
+pub fn score_video_f32_with_stats<F: core::convert::AsRef<[f32]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout, TempPadding) -> Result<VideoStats>
+pub fn score_video_u16<F: core::convert::AsRef<[u16]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry) -> Result<f32>
+pub fn score_video_u16_with_stats<F: core::convert::AsRef<[u16]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout, TempPadding) -> Result<VideoStats>
+pub fn score_video_with_stats<F: core::convert::AsRef<[u8]>>(&[F], &[F], u32, u32, f32, params::CvvdpParams, params::DisplayGeometry, FrameLayout, TempPadding) -> Result<VideoStats>
+pub fn video_filter_len(f32) -> usize
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (12 types)
+## trait impls (23 types)
 
+Cvvdp: zenmetrics_abstractions::metric::Metric
 Error: Clone, Debug, Display, Eq, Error, PartialEq
+FrameLayout: Clone, Copy, Debug, Default, Eq, PartialEq
+TempFilter: Clone, Copy, Debug, Default, Eq, PartialEq
+TempPadding: Clone, Copy, Debug, Default, Eq, PartialEq
+VideoScorerOptions: Clone, Copy, Debug, Default, PartialEq
+VideoStats: Clone, Debug
+diffmap::CvvdpDiffmap: zenmetrics_abstractions::eval::Evaluation
+display::CustomDisplay: Clone, Debug, PartialEq
+display::CvvdpDisplay: Clone, Debug, Display, From<display::CustomDisplay>, From<display::DisplayPreset>, FromStr, PartialEq
+display::DisplayError: Clone, Debug, Display, Eq, Error, PartialEq
+display::DisplayPreset: Clone, Copy, Debug, Display, Eq, FromStr, Hash, Ord, PartialEq, PartialOrd
 kernels::csf::CsfChannel: Clone, Copy, Debug, Eq, PartialEq
 params::CsfParams: Clone, Copy, Debug
 params::CvvdpParams: Clone, Copy, Debug, Default
-params::DisplayGeometry: Clone, Copy, Debug
-params::DisplayModel: Clone, Copy, Debug, Default
+params::DisplayGeometry: Clone, Copy, Debug, PartialEq
+params::DisplayModel: Clone, Copy, Debug, Default, PartialEq
 params::Eotf: Clone, Copy, Debug, Default, PartialEq
 params::JodParams: Clone, Copy, Debug
 params::MaskingParams: Clone, Copy, Debug
@@ -358,5 +539,5 @@ params::Primaries: Clone, Copy, Debug, Default, PartialEq
 
 ## auto traits
 
-14 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+25 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Cvvdp: !Freeze !RefUnwindSafe !Sync

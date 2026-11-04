@@ -13,7 +13,7 @@
 #   free functions                              1
 #   inherent methods                            2
 #   re-exports                                  2
-#   trait roster entries (type × trait)         4
+#   trait roster entries (type × trait)         5
 #
 # per-module pub lines:
 #   (root)                            1
@@ -29,9 +29,10 @@ pub mod session
 pub use session::cleanup_stream
 pub use session::stream_reserved_bytes
 
-## trait impls (4 types)
+## trait impls (5 types)
 
 DssimParams: TrivialClone
 GpuDssimResult: TrivialClone
 memory_mode::MemoryMode: TrivialClone
 memory_mode::ResolvedMode: TrivialClone
+memory_mode::ScoreResourceEstimate: TrivialClone

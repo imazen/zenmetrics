@@ -13,20 +13,20 @@
 #   pub types (struct/enum/trait/alias)       118
 #   pub consts/statics                          2
 #   free functions                            122
-#   inherent methods                          506
+#   inherent methods                          510
 #   enum variants                              58
 #   re-exports                                  2
-#   trait roster entries (type × trait)       410
-#   auto-trait exceptions                     117
+#   trait roster entries (type × trait)       411
+#   auto-trait exceptions                     118
 #
 # per-module pub lines:
 #   (root)                           62
 #   kernels                         770
 #   memory_mode                       2
-#   pipeline                         42
+#   pipeline                         46
 #   session                           3
 
-## items (859 lines)
+## items (863 lines)
 
 pub const kernels::blur_lut::M: f32
 pub const pipeline::DEFAULT_INTENSITY_MULTIPLIER: f32
@@ -608,16 +608,18 @@ pub fn pipeline::Butteraugli<R>::compute_handles(&mut self, &cubecl_runtime::ser
 pub fn pipeline::Butteraugli<R>::compute_handles_with_options(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle, &ButteraugliParams) -> Result<GpuButteraugliResult>
 pub fn pipeline::Butteraugli<R>::compute_strip(&mut self, &[u8], &[u8]) -> Result<GpuButteraugliResult>
 pub fn pipeline::Butteraugli<R>::compute_strip_with_options(&mut self, &[u8], &[u8], &ButteraugliParams) -> Result<GpuButteraugliResult>
+pub fn pipeline::Butteraugli<R>::compute_strip_with_options_and_stop(&mut self, &[u8], &[u8], &ButteraugliParams, &dyn enough::Stop) -> Result<GpuButteraugliResult>
 pub fn pipeline::Butteraugli<R>::compute_with_options(&mut self, &[u8], &[u8], &ButteraugliParams) -> Result<GpuButteraugliResult>
 pub fn pipeline::Butteraugli<R>::compute_with_reference(&mut self, &[u8]) -> Result<GpuButteraugliResult>
 pub fn pipeline::Butteraugli<R>::compute_with_reference_from_linear_planes(&mut self, cubecl_runtime::server::handle::Handle, cubecl_runtime::server::handle::Handle, cubecl_runtime::server::handle::Handle) -> Result<GpuButteraugliResult>
-pub fn pipeline::Butteraugli<R>::copy_diffmap(&self) -> alloc::vec::Vec<f32>
+pub fn pipeline::Butteraugli<R>::compute_with_reference_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<GpuButteraugliResult>
+pub fn pipeline::Butteraugli<R>::copy_diffmap(&self) -> Result<alloc::vec::Vec<f32>>
 pub fn pipeline::Butteraugli<R>::copy_diffmap_to(&self, &mut [f32]) -> Result<()>
-pub fn pipeline::Butteraugli<R>::debug_block_diff_ac(&self, usize) -> alloc::vec::Vec<f32>
-pub fn pipeline::Butteraugli<R>::debug_block_diff_dc(&self, usize) -> alloc::vec::Vec<f32>
-pub fn pipeline::Butteraugli<R>::debug_freq(&self, bool, usize, usize) -> alloc::vec::Vec<f32>
-pub fn pipeline::Butteraugli<R>::debug_lf(&self, bool, usize) -> alloc::vec::Vec<f32>
-pub fn pipeline::Butteraugli<R>::debug_mask(&self) -> alloc::vec::Vec<f32>
+pub fn pipeline::Butteraugli<R>::debug_block_diff_ac(&self, usize) -> Result<alloc::vec::Vec<f32>>
+pub fn pipeline::Butteraugli<R>::debug_block_diff_dc(&self, usize) -> Result<alloc::vec::Vec<f32>>
+pub fn pipeline::Butteraugli<R>::debug_freq(&self, bool, usize, usize) -> Result<alloc::vec::Vec<f32>>
+pub fn pipeline::Butteraugli<R>::debug_lf(&self, bool, usize) -> Result<alloc::vec::Vec<f32>>
+pub fn pipeline::Butteraugli<R>::debug_mask(&self) -> Result<alloc::vec::Vec<f32>>
 pub fn pipeline::Butteraugli<R>::dimensions(&self) -> (u32, u32)
 pub fn pipeline::Butteraugli<R>::half_res(&self) -> core::option::Option<&Self>
 pub fn pipeline::Butteraugli<R>::has_reference(&self) -> bool
@@ -638,6 +640,8 @@ pub fn pipeline::Butteraugli<R>::set_reference_with_options(&mut self, &[u8], &B
 pub fn pipeline::Butteraugli<R>::strip_body_h(&self) -> u32
 pub fn pipeline::Butteraugli<R>::strip_halo_h(&self) -> u32
 pub fn pipeline::Butteraugli<R>::try_compute_with_reference(&mut self, &[u8]) -> Result<GpuButteraugliResult>
+pub fn pipeline::Butteraugli<R>::try_new(cubecl_runtime::client::ComputeClient<R>, u32, u32) -> Result<Self>
+pub fn pipeline::Butteraugli<R>::try_new_multires(cubecl_runtime::client::ComputeClient<R>, u32, u32) -> Result<Self>
 pub fn session::new_opaque_on_stream(zenmetrics_gpu_core::Backend, u64, u32, u32, ButteraugliParams, memory_mode::MemoryMode) -> Result<ButteraugliOpaque>
 pub mod kernels
 pub mod kernels::blur
@@ -888,7 +892,7 @@ pub unsafe fn kernels::masking::mask_to_error_mul_kernel::launch_unchecked<'kern
 pub use session::cleanup_stream
 pub use session::stream_reserved_bytes
 
-## trait impls (120 types)
+## trait impls (121 types)
 
 ButteraugliParams: TrivialClone
 GpuButteraugliResult: TrivialClone
@@ -1010,124 +1014,126 @@ kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernel<__R>: cubecl_ru
 kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 memory_mode::MemoryMode: TrivialClone
 memory_mode::ResolvedMode: TrivialClone
+memory_mode::ScoreResourceEstimate: TrivialClone
 
 ## auto traits
 
 0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-kernels::blur::horizontal_blur_kernel::HorizontalBlurKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::horizontal_blur_kernel::HorizontalBlurKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::vertical_blur_batched_kernel::VerticalBlurBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::vertical_blur_batched_kernel::VerticalBlurBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::vertical_blur_kernel::VerticalBlurKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::vertical_blur_kernel::VerticalBlurKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_3ch::horizontal_blur_3ch_kernel::HorizontalBlur3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_3ch::horizontal_blur_3ch_kernel::HorizontalBlur3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_3ch::vertical_blur_3ch_kernel::VerticalBlur3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_3ch::vertical_blur_3ch_kernel::VerticalBlur3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_2ch_lut_kernel::HorizontalBlur2chLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_2ch_lut_kernel::HorizontalBlur2chLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_3ch_lut_kernel::HorizontalBlur3chLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_3ch_lut_kernel::HorizontalBlur3chLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_lut_kernel::HorizontalBlurLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::horizontal_blur_lut_kernel::HorizontalBlurLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::VerticalBlur2chUhfSplitLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::VerticalBlur2chUhfSplitLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_hf_split_lut_kernel::VerticalBlur3chHfSplitLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_hf_split_lut_kernel::VerticalBlur3chHfSplitLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel::VerticalBlur3chLfSplitLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel::VerticalBlur3chLfSplitLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel_2d::VerticalBlur3chLfSplitLutKernel2d<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel_2d::VerticalBlur3chLfSplitLutKernel2dInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lut_kernel::VerticalBlur3chLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_lut_kernel::VerticalBlur3chLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_opsin_lut_kernel::VerticalBlur3chOpsinLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_3ch_opsin_lut_kernel::VerticalBlur3chOpsinLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_lut_kernel::VerticalBlurLutKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur_lut::vertical_blur_lut_kernel::VerticalBlurLutKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::colors::opsin_dynamics_planar_kernel::OpsinDynamicsPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::colors::opsin_dynamics_planar_kernel::OpsinDynamicsPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::colors::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::colors::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::compute_diffmap_kernel::ComputeDiffmapKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::compute_diffmap_kernel::ComputeDiffmapKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_diff_broadcast_batched_kernel::L2AsymDiffBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_diff_broadcast_batched_kernel::L2AsymDiffBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_diff_kernel::L2AsymDiffKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_diff_kernel::L2AsymDiffKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_plus_l2_kernel::L2AsymPlusL2Kernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_asym_plus_l2_kernel::L2AsymPlusL2KernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_broadcast_batched_kernel::L2DiffBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_broadcast_batched_kernel::L2DiffBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_kernel::L2DiffKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_kernel::L2DiffKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_3ch_kernel::L2DiffWrite3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_3ch_kernel::L2DiffWrite3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_broadcast_batched_kernel::L2DiffWriteBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_broadcast_batched_kernel::L2DiffWriteBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_kernel::L2DiffWriteKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::l2_diff_write_kernel::L2DiffWriteKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::add_upsample_2x_batched_kernel::AddUpsample2xBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::add_upsample_2x_batched_kernel::AddUpsample2xBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::add_upsample_2x_kernel::AddUpsample2xKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::add_upsample_2x_kernel::AddUpsample2xKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_3ch_kernel::Downsample2x3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_3ch_kernel::Downsample2x3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_batched_kernel::Downsample2xBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_batched_kernel::Downsample2xBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_kernel::Downsample2xKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downsample_2x_kernel::Downsample2xKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::amplify_range_kernel::AmplifyRangeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::amplify_range_kernel::AmplifyRangeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::broadcast_plane_kernel::BroadcastPlaneKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::broadcast_plane_kernel::BroadcastPlaneKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::copy_plane_kernel::CopyPlaneKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::copy_plane_kernel::CopyPlaneKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::copy_slab_from_full_kernel::CopySlabFromFullKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::copy_slab_from_full_kernel::CopySlabFromFullKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::remove_range_kernel::RemoveRangeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::remove_range_kernel::RemoveRangeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::separate_hf_uhf_kernel::SeparateHfUhfKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::separate_hf_uhf_kernel::SeparateHfUhfKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_band_amplify_inplace_kernel::SplitBandAmplifyInplaceKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_band_amplify_inplace_kernel::SplitBandAmplifyInplaceKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_band_remove_inplace_kernel::SplitBandRemoveInplaceKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_band_remove_inplace_kernel::SplitBandRemoveInplaceKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_uhf_hf_x_kernel::SplitUhfHfXKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_uhf_hf_x_kernel::SplitUhfHfXKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_uhf_hf_y_kernel::SplitUhfHfYKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::split_uhf_hf_y_kernel::SplitUhfHfYKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::sub_amplify_range_kernel::SubAmplifyRangeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::sub_amplify_range_kernel::SubAmplifyRangeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::sub_remove_range_kernel::SubRemoveRangeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::sub_remove_range_kernel::SubRemoveRangeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::subtract_arrays_kernel::SubtractArraysKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::subtract_arrays_kernel::SubtractArraysKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::suppress_x_by_y_kernel::SuppressXByYKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::suppress_x_by_y_kernel::SuppressXByYKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::xyb_low_freq_to_vals_kernel::XybLowFreqToValsKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::xyb_low_freq_to_vals_kernel::XybLowFreqToValsKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::zero_plane_kernel::ZeroPlaneKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::frequency::zero_plane_kernel::ZeroPlaneKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_hf_batched_kernel::MaltaDiffMapHfBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_hf_batched_kernel::MaltaDiffMapHfBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_hf_kernel::MaltaDiffMapHfKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_hf_kernel::MaltaDiffMapHfKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_lf_batched_kernel::MaltaDiffMapLfBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_lf_batched_kernel::MaltaDiffMapLfBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_lf_kernel::MaltaDiffMapLfKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_lf_kernel::MaltaDiffMapLfKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_triple_kernel::MaltaDiffMapTripleKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::malta::malta_diff_map_triple_kernel::MaltaDiffMapTripleKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::combine_channels_and_diff_precompute_kernel::CombineChannelsAndDiffPrecomputeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::combine_channels_and_diff_precompute_kernel::CombineChannelsAndDiffPrecomputeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::combine_channels_for_masking_kernel::CombineChannelsForMaskingKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::combine_channels_for_masking_kernel::CombineChannelsForMaskingKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::diff_precompute_kernel::DiffPrecomputeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::diff_precompute_kernel::DiffPrecomputeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::fuzzy_erosion_kernel::FuzzyErosionKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::fuzzy_erosion_kernel::FuzzyErosionKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mask_to_error_mul_batched_kernel::MaskToErrorMulBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mask_to_error_mul_batched_kernel::MaskToErrorMulBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-pipeline::Butteraugli<R>: !RefUnwindSafe !UnwindSafe
+ButteraugliBatch<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::horizontal_blur_kernel::HorizontalBlurKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::horizontal_blur_kernel::HorizontalBlurKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::vertical_blur_batched_kernel::VerticalBlurBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::vertical_blur_batched_kernel::VerticalBlurBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::vertical_blur_kernel::VerticalBlurKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::vertical_blur_kernel::VerticalBlurKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_3ch::horizontal_blur_3ch_kernel::HorizontalBlur3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_3ch::horizontal_blur_3ch_kernel::HorizontalBlur3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_3ch::vertical_blur_3ch_kernel::VerticalBlur3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_3ch::vertical_blur_3ch_kernel::VerticalBlur3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_2ch_lut_kernel::HorizontalBlur2chLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_2ch_lut_kernel::HorizontalBlur2chLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_3ch_lut_kernel::HorizontalBlur3chLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_3ch_lut_kernel::HorizontalBlur3chLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_lut_kernel::HorizontalBlurLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::horizontal_blur_lut_kernel::HorizontalBlurLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::VerticalBlur2chUhfSplitLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::VerticalBlur2chUhfSplitLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_hf_split_lut_kernel::VerticalBlur3chHfSplitLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_hf_split_lut_kernel::VerticalBlur3chHfSplitLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel::VerticalBlur3chLfSplitLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel::VerticalBlur3chLfSplitLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel_2d::VerticalBlur3chLfSplitLutKernel2d<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lf_split_lut_kernel_2d::VerticalBlur3chLfSplitLutKernel2dInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lut_kernel::VerticalBlur3chLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_lut_kernel::VerticalBlur3chLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_opsin_lut_kernel::VerticalBlur3chOpsinLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_3ch_opsin_lut_kernel::VerticalBlur3chOpsinLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_lut_kernel::VerticalBlurLutKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur_lut::vertical_blur_lut_kernel::VerticalBlurLutKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::colors::opsin_dynamics_planar_kernel::OpsinDynamicsPlanarKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::colors::opsin_dynamics_planar_kernel::OpsinDynamicsPlanarKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::colors::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::colors::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::compute_diffmap_kernel::ComputeDiffmapKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::compute_diffmap_kernel::ComputeDiffmapKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_diff_broadcast_batched_kernel::L2AsymDiffBroadcastBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_diff_broadcast_batched_kernel::L2AsymDiffBroadcastBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_diff_kernel::L2AsymDiffKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_diff_kernel::L2AsymDiffKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_plus_l2_kernel::L2AsymPlusL2Kernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_asym_plus_l2_kernel::L2AsymPlusL2KernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_broadcast_batched_kernel::L2DiffBroadcastBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_broadcast_batched_kernel::L2DiffBroadcastBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_kernel::L2DiffKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_kernel::L2DiffKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_3ch_kernel::L2DiffWrite3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_3ch_kernel::L2DiffWrite3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_broadcast_batched_kernel::L2DiffWriteBroadcastBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_broadcast_batched_kernel::L2DiffWriteBroadcastBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_kernel::L2DiffWriteKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::l2_diff_write_kernel::L2DiffWriteKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::add_upsample_2x_batched_kernel::AddUpsample2xBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::add_upsample_2x_batched_kernel::AddUpsample2xBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::add_upsample_2x_kernel::AddUpsample2xKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::add_upsample_2x_kernel::AddUpsample2xKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_3ch_kernel::Downsample2x3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_3ch_kernel::Downsample2x3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_batched_kernel::Downsample2xBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_batched_kernel::Downsample2xBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_kernel::Downsample2xKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downsample_2x_kernel::Downsample2xKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::amplify_range_kernel::AmplifyRangeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::amplify_range_kernel::AmplifyRangeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::broadcast_plane_kernel::BroadcastPlaneKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::broadcast_plane_kernel::BroadcastPlaneKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::copy_plane_kernel::CopyPlaneKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::copy_plane_kernel::CopyPlaneKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::copy_slab_from_full_kernel::CopySlabFromFullKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::copy_slab_from_full_kernel::CopySlabFromFullKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::remove_range_kernel::RemoveRangeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::remove_range_kernel::RemoveRangeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::separate_hf_uhf_kernel::SeparateHfUhfKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::separate_hf_uhf_kernel::SeparateHfUhfKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_band_amplify_inplace_kernel::SplitBandAmplifyInplaceKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_band_amplify_inplace_kernel::SplitBandAmplifyInplaceKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_band_remove_inplace_kernel::SplitBandRemoveInplaceKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_band_remove_inplace_kernel::SplitBandRemoveInplaceKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_uhf_hf_x_kernel::SplitUhfHfXKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_uhf_hf_x_kernel::SplitUhfHfXKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_uhf_hf_y_kernel::SplitUhfHfYKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::split_uhf_hf_y_kernel::SplitUhfHfYKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::sub_amplify_range_kernel::SubAmplifyRangeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::sub_amplify_range_kernel::SubAmplifyRangeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::sub_remove_range_kernel::SubRemoveRangeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::sub_remove_range_kernel::SubRemoveRangeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::subtract_arrays_kernel::SubtractArraysKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::subtract_arrays_kernel::SubtractArraysKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::suppress_x_by_y_kernel::SuppressXByYKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::suppress_x_by_y_kernel::SuppressXByYKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::xyb_low_freq_to_vals_kernel::XybLowFreqToValsKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::xyb_low_freq_to_vals_kernel::XybLowFreqToValsKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::zero_plane_kernel::ZeroPlaneKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::frequency::zero_plane_kernel::ZeroPlaneKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_hf_batched_kernel::MaltaDiffMapHfBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_hf_batched_kernel::MaltaDiffMapHfBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_hf_kernel::MaltaDiffMapHfKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_hf_kernel::MaltaDiffMapHfKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_lf_batched_kernel::MaltaDiffMapLfBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_lf_batched_kernel::MaltaDiffMapLfBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_lf_kernel::MaltaDiffMapLfKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_lf_kernel::MaltaDiffMapLfKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_triple_kernel::MaltaDiffMapTripleKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::malta::malta_diff_map_triple_kernel::MaltaDiffMapTripleKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::combine_channels_and_diff_precompute_kernel::CombineChannelsAndDiffPrecomputeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::combine_channels_and_diff_precompute_kernel::CombineChannelsAndDiffPrecomputeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::combine_channels_for_masking_kernel::CombineChannelsForMaskingKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::combine_channels_for_masking_kernel::CombineChannelsForMaskingKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::diff_precompute_kernel::DiffPrecomputeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::diff_precompute_kernel::DiffPrecomputeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::fuzzy_erosion_kernel::FuzzyErosionKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::fuzzy_erosion_kernel::FuzzyErosionKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mask_to_error_mul_batched_kernel::MaskToErrorMulBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mask_to_error_mul_batched_kernel::MaskToErrorMulBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mask_to_error_mul_kernel::MaskToErrorMulKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+pipeline::Butteraugli<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

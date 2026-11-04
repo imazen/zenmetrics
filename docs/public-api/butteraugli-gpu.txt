@@ -6,26 +6,26 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: butteraugli-gpu.txt 89 lines (supported surface) | butteraugli-gpu.features.txt 3 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,internals,pixels,staging-async-probe,wgpu) | butteraugli-gpu.internal.txt 1097 lines (2167 hidden + 0 excluded-feature)
+# files: butteraugli-gpu.txt 107 lines (supported surface) | butteraugli-gpu.features.txt 3 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,internals,pixels,staging-async-probe,wgpu) | butteraugli-gpu.internal.txt 1103 lines (2177 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        10
-#   free functions                             11
-#   inherent methods                           25
-#   struct fields                              17
-#   enum variants                              18
+#   pub types (struct/enum/trait/alias)        12
+#   free functions                             15
+#   inherent methods                           28
+#   struct fields                              24
+#   enum variants                              22
 #   re-exports                                  3
-#   trait roster entries (type × trait)        21
-#   auto-trait-complete types                   5
+#   trait roster entries (type × trait)        26
+#   auto-trait-complete types                   6
 #   auto-trait exceptions                       2
 #
 # per-module pub lines:
-#   (root)                           67
-#   memory_mode                      19
+#   (root)                           82
+#   memory_mode                      24
 
-## items (81 lines)
+## items (98 lines)
 
 pub mod butteraugli_gpu
 pub use Backend
@@ -42,17 +42,26 @@ pub memory_mode::MemoryMode::Tile::w: u32
 pub memory_mode::ResolvedMode::Full
 pub memory_mode::ResolvedMode::Strip
 pub memory_mode::ResolvedMode::Strip::h_body: u32
+pub memory_mode::ScoreResourceEstimate::time_ms: f32
+pub memory_mode::ScoreResourceEstimate::vram_bytes: usize
 pub fn memory_mode::auto_strip_body_for(u32, u32, usize) -> u32
 pub fn memory_mode::live_vram_probe_bytes() -> core::option::Option<usize>
 pub fn memory_mode::reclaim_pooled_vram(zenmetrics_gpu_core::Backend)
 pub fn memory_mode::resolve_auto(u32, u32, usize) -> Result<memory_mode::ResolvedMode>
 pub enum Error
+pub Error::Cancelled(enough::reason::StopReason)
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: usize
 pub Error::DimensionMismatch::got: usize
+pub Error::InvalidDimensions
+pub Error::InvalidDimensions::height: u32
+pub Error::InvalidDimensions::width: u32
 pub Error::InvalidParams(&'static str)
 pub Error::ModeUnsupported(&'static str)
 pub Error::NoCachedReference
+pub Error::ReadbackFailed(alloc::string::String)
+pub Error::SilentIdenticalClaim
+pub Error::SilentIdenticalClaim::score: f64
 pub Error::StripModeUnsupported(&'static str)
 pub Error::TooBigForFull
 pub Error::TooBigForFull::cap: usize
@@ -80,13 +89,16 @@ pub fn ButteraugliBatch<R>::new(cubecl_runtime::client::ComputeClient<R>, u32, u
 pub fn ButteraugliBatch<R>::params(&self) -> &ButteraugliParams
 pub fn ButteraugliBatch<R>::set_reference(&mut self, &[u8]) -> Result<()>
 pub fn ButteraugliBatch<R>::set_reference_with_options(&mut self, &[u8], &ButteraugliParams) -> Result<()>
+pub fn ButteraugliBatch<R>::try_new(cubecl_runtime::client::ComputeClient<R>, u32, u32, usize) -> Result<Self>
 pub struct ButteraugliOpaque
 pub fn ButteraugliOpaque::clear_reference(&mut self)
 pub fn ButteraugliOpaque::compute_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle) -> Result<zenmetrics_gpu_core::Score>
 pub fn ButteraugliOpaque::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<zenmetrics_gpu_core::Score>
 pub fn ButteraugliOpaque::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<zenmetrics_gpu_core::Score>
 pub fn ButteraugliOpaque::compute_srgb_u8_with_pnorm3(&mut self, &[u8], &[u8]) -> Result<(zenmetrics_gpu_core::Score, f64)>
+pub fn ButteraugliOpaque::compute_srgb_u8_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn ButteraugliOpaque::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<zenmetrics_gpu_core::Score>
+pub fn ButteraugliOpaque::compute_with_reference_srgb_u8_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn ButteraugliOpaque::dims(&self) -> (u32, u32)
 pub fn ButteraugliOpaque::has_reference(&self) -> bool
 pub fn ButteraugliOpaque::new(zenmetrics_gpu_core::Backend, u32, u32, ButteraugliParams) -> Result<Self>
@@ -103,22 +115,28 @@ pub fn ButteraugliParams::with_xmul(self, f32) -> Self
 pub struct GpuButteraugliResult
 pub GpuButteraugliResult::pnorm_3: f32
 pub GpuButteraugliResult::score: f32
+pub struct ScoreResourceEstimate [also: memory_mode]
+pub ScoreResourceEstimate::time_ms: f32
+pub ScoreResourceEstimate::vram_bytes: usize
 pub fn estimate_gpu_memory_bytes(u32, u32) -> usize [also: memory_mode]
+pub fn estimate_score_resources(u32, u32) -> memory_mode::ScoreResourceEstimate [also: memory_mode]
+pub fn estimate_score_time_ms(u32, u32) -> f32 [also: memory_mode]
 pub fn estimate_strip_gpu_memory_bytes(u32, u32) -> core::option::Option<usize> [also: memory_mode]
 pub fn reduce_diffmap_to_score<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize) -> GpuButteraugliResult
 pub fn vram_cap_bytes() -> usize [also: memory_mode]
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (5 types)
+## trait impls (6 types)
 
 ButteraugliParams: Clone, Copy, Debug, Default
-Error: Clone, Debug, Display, Error
+Error: Clone, Debug, Display, Error, From<enough::reason::StopReason>
 GpuButteraugliResult: Clone, Copy, Debug
 memory_mode::MemoryMode: Clone, Copy, Debug, Eq, PartialEq
 memory_mode::ResolvedMode: Clone, Copy, Debug, Eq, PartialEq
+memory_mode::ScoreResourceEstimate: Clone, Copy, Debug, PartialEq
 
 ## auto traits
 
-5 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-ButteraugliBatch<R>: !RefUnwindSafe !Unpin !UnwindSafe
+6 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+ButteraugliBatch<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 ButteraugliOpaque: !RefUnwindSafe !Sync !UnwindSafe

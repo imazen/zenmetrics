@@ -1,5 +1,5 @@
 # zenmetrics-api public API — additions from non-default features
-# features: all-metrics,butter,cpu,cpu-butter,cpu-cvvdp,cpu-dssim,cpu-iwssim,cpu-metrics,cpu-ssim2,cpu-zensim,cubecl-types,cuda,cvvdp,dssim,encoded,hdr,hip,iwssim,pixels,ssim2,wgpu,zensim
+# features: all-metrics,butter,cpu,cpu-butter,cpu-cvvdp,cpu-dssim,cpu-hdrvdp,cpu-iwssim,cpu-metrics,cpu-ssim2,cpu-zensim,cubecl-types,cuda,cvvdp,dssim,encoded,hdr,hip,iwssim,pixels,ssim2,wgpu,zensim,zensim-candidate-profiles,zensim-deprecated-profiles
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -11,17 +11,22 @@
 #
 #   pub modules                                 1
 #   pub types (struct/enum/trait/alias)         3
-#   inherent methods                           10
+#   inherent methods                           11
 #   struct fields                               9
+#   enum variants                               2
+#   re-exports                                  3
 #   trait roster entries (type × trait)         2
 #   auto-trait exceptions                       2
 #
 # per-module pub lines:
-#   (root)                            5
+#   (root)                           11
 #   context                          18
 
-## items (22 lines)
+## items (28 lines)
 
+pub use cvvdp_cpu
+pub use hdrvdp_cpu
+pub use iwssim_cpu
 pub mod context
 pub context::MetricContext::client: cubecl_runtime::client::ComputeClient<R>
 pub context::MetricContext::height: u32
@@ -35,6 +40,9 @@ pub struct context::PairHandles
 pub context::PairHandles::dist_handle: cubecl_runtime::server::handle::Handle
 pub context::PairHandles::generation: u64
 pub context::PairHandles::ref_handle: cubecl_runtime::server::handle::Handle
+pub MetricParams::Hdrvdp(alloc::boxed::Box<hdrvdp::params::Params>)
+pub MetricParams::Hdrvdp3(alloc::boxed::Box<hdrvdp::v3::params::Params>)
+pub fn Metric::new_cpu_hdr(MetricKind, u32, u32, f32) -> Result<Self>
 pub struct MetricContext<R: cubecl_runtime::runtime::Runtime> [also: context]
 pub MetricContext::client: cubecl_runtime::client::ComputeClient<R>
 pub MetricContext::height: u32
@@ -52,5 +60,5 @@ context::PairHandles: Clone, Debug
 ## auto traits
 
 0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-context::MetricContext<R>: !RefUnwindSafe !UnwindSafe
+context::MetricContext<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 context::PairHandles: !RefUnwindSafe !UnwindSafe

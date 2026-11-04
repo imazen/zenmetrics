@@ -6,28 +6,28 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: cvvdp-gpu.txt 89 lines (supported surface) | cvvdp-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,hip,parity-goldens,pixels,wgpu,zenpixels-convert) | cvvdp-gpu.internal.txt 822 lines (1549 hidden + 0 excluded-feature)
+# files: cvvdp-gpu.txt 113 lines (supported surface) | cvvdp-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,hip,parity-goldens,pixels,wgpu) | cvvdp-gpu.internal.txt 870 lines (1631 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 3
-#   pub types (struct/enum/trait/alias)         7
-#   pub consts/statics                          7
-#   free functions                              8
-#   inherent methods                           19
-#   struct fields                              12
-#   enum variants                              20
+#   pub types (struct/enum/trait/alias)        11
+#   pub consts/statics                          8
+#   free functions                             12
+#   inherent methods                           22
+#   struct fields                              22
+#   enum variants                              22
 #   re-exports                                 12
-#   trait roster entries (type × trait)        14
-#   auto-trait-complete types                   3
+#   trait roster entries (type × trait)        27
+#   auto-trait-complete types                   6
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           66
-#   memory_mode                      21
+#   (root)                           85
+#   memory_mode                      26
 #   params                            1
 
-## items (84 lines)
+## items (105 lines)
 
 pub mod cvvdp_gpu
 pub use Backend
@@ -53,6 +53,8 @@ pub memory_mode::MemoryMode::StripPair::h_body: core::option::Option<u32>
 pub memory_mode::ResolvedMode::Full
 pub memory_mode::ResolvedMode::Strip
 pub memory_mode::ResolvedMode::Strip::h_body: u32
+pub memory_mode::ScoreResourceEstimate::time_ms: f32
+pub memory_mode::ScoreResourceEstimate::vram_bytes: usize
 pub const memory_mode::STRIP_ALIGN: u32
 pub const memory_mode::STRIP_H_BODY_DEFAULT: u32
 pub fn memory_mode::estimate_gpu_memory_bytes_for_mode(u32, u32, memory_mode::MemoryMode) -> usize
@@ -62,6 +64,7 @@ pub fn memory_mode::resolve_auto(u32, u32, usize) -> Result<memory_mode::Resolve
 pub mod params
 pub use params::<<cvvdp::params::*>>
 pub enum Error
+pub Error::Cancelled(enough::reason::StopReason)
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: usize
 pub Error::DimensionMismatch::got: usize
@@ -69,6 +72,7 @@ pub Error::InvalidImageSize
 pub Error::ModeUnsupported(&'static str)
 pub Error::NoCachedReference
 pub Error::NoWarmReference
+pub Error::ReadbackFailed(alloc::string::String)
 pub Error::TooBigForFull
 pub Error::TooBigForFull::cap: usize
 pub Error::TooBigForFull::needed: usize
@@ -85,16 +89,21 @@ pub enum ResolvedMode [also: memory_mode]
 pub ResolvedMode::Full
 pub ResolvedMode::Strip
 pub ResolvedMode::Strip::h_body: u32
+pub struct BandBreakdown
+pub BandBreakdown::jod: f64
+pub BandBreakdown::q_per_ch: alloc::vec::Vec<[f32; 3]>
 pub struct CvvdpOpaque
 pub fn CvvdpOpaque::compute_from_linear_interleaved(&mut self, &[f32], &[f32], core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
-pub fn CvvdpOpaque::compute_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32], core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
+pub fn CvvdpOpaque::compute_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize, core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_srgb_u8_with_diffmap(&mut self, &[u8], &[u8], &mut alloc::vec::Vec<f32>) -> Result<zenmetrics_gpu_core::Score>
+pub fn CvvdpOpaque::compute_srgb_u8_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::compute_with_reference_srgb_u8_with_diffmap(&mut self, &[u8], core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
-pub fn CvvdpOpaque::compute_with_warm_ref_from_linear_planes(&mut self, &[f32], &[f32], &[f32], core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
+pub fn CvvdpOpaque::compute_with_reference_srgb_u8_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
+pub fn CvvdpOpaque::compute_with_warm_ref_from_linear_planes(&mut self, [&[f32]; 3], usize, core::option::Option<&mut alloc::vec::Vec<f32>>) -> Result<zenmetrics_gpu_core::Score>
 pub fn CvvdpOpaque::dims(&self) -> (u32, u32)
 pub fn CvvdpOpaque::has_reference(&self) -> bool
 pub fn CvvdpOpaque::is_strip_mode(&self) -> bool
@@ -104,23 +113,38 @@ pub fn CvvdpOpaque::new_with_geometry_and_memory_mode(zenmetrics_gpu_core::Backe
 pub fn CvvdpOpaque::new_with_memory_mode(zenmetrics_gpu_core::Backend, u32, u32, cvvdp::params::CvvdpParams, memory_mode::MemoryMode) -> Result<Self>
 pub fn CvvdpOpaque::pack_srgb_into_packed_u32_handle(&self, &[u8]) -> Result<cubecl_runtime::server::handle::Handle>
 pub fn CvvdpOpaque::set_reference_srgb_u8(&mut self, &[u8]) -> Result<()>
-pub fn CvvdpOpaque::warm_reference_from_linear_planes(&mut self, &[f32], &[f32], &[f32]) -> Result<()>
+pub fn CvvdpOpaque::warm_reference_from_linear_planes(&mut self, [&[f32]; 3], usize) -> Result<()>
+pub struct MaskingCalibration
+pub MaskingCalibration::d_max_lin: f32
+pub MaskingCalibration::mask_p: f32
+pub MaskingCalibration::mask_q: [f32; 3]
+pub MaskingCalibration::pu_scale_lin: f32
+pub const MaskingCalibration::V0_5_4: Self
+pub fn MaskingCalibration::from_upstream_json(&str) -> core::result::Result<Self, alloc::string::String>
+pub struct ScoreResourceEstimate [also: memory_mode]
+pub ScoreResourceEstimate::time_ms: f32
+pub ScoreResourceEstimate::vram_bytes: usize
 pub const CVVDP_COLUMN_NAME: &str
 pub const MAX_LEVELS: usize
 pub const N_CHANNELS: usize
 pub const PYCVVDP_REFERENCE_VERSION: &str
 pub const PYRAMID_MIN_DIM: u32
 pub fn estimate_gpu_memory_bytes_usize(u32, u32) -> usize [also: memory_mode]
+pub fn estimate_score_resources(u32, u32) -> memory_mode::ScoreResourceEstimate [also: memory_mode]
+pub fn estimate_score_time_ms(u32, u32) -> f32 [also: memory_mode]
 pub fn vram_cap_bytes() -> usize [also: memory_mode]
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (3 types)
+## trait impls (6 types)
 
-Error: Clone, Debug, Display, Error
+BandBreakdown: Clone, Debug, PartialEq
+Error: Clone, Debug, Display, Error, From<enough::reason::StopReason>
+MaskingCalibration: Clone, Copy, Debug, Default, PartialEq
 memory_mode::MemoryMode: Clone, Copy, Debug, Eq, PartialEq
 memory_mode::ResolvedMode: Clone, Copy, Debug, Eq, PartialEq
+memory_mode::ScoreResourceEstimate: Clone, Copy, Debug, PartialEq
 
 ## auto traits
 
-3 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+6 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CvvdpOpaque: !RefUnwindSafe !Sync !UnwindSafe

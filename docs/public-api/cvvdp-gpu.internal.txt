@@ -9,31 +9,34 @@
 
 ## summary
 #
-#   pub modules                                50
-#   pub types (struct/enum/trait/alias)        80
-#   pub consts/statics                          5
-#   free functions                            134
-#   inherent methods                          353
+#   pub modules                                52
+#   pub types (struct/enum/trait/alias)        84
+#   pub consts/statics                          8
+#   free functions                            140
+#   inherent methods                          374
 #   enum variants                               3
 #   re-exports                                 63
-#   trait roster entries (type × trait)       275
+#   trait roster entries (type × trait)       291
 #   auto-trait-complete types                   1
-#   auto-trait exceptions                      77
+#   auto-trait exceptions                      81
 #
 # per-module pub lines:
 #   (root)                           13
-#   heatmap                          10
+#   heatmap                           9
 #   host_scalar                       2
-#   kernels                         603
+#   kernels                         634
 #   memory_mode                       2
-#   pipeline                         54
+#   pipeline                         60
 #   presets                           1
 #   session                           3
 
-## items (665 lines)
+## items (703 lines)
 
 pub const PARALLEL_SAFETY_FACTOR: f64 [also: pipeline]
+pub const kernels::masking::D_MAX_LIN: f32
+pub const kernels::masking::PU_SCALE_LIN: f32
 pub const kernels::pool::POOL_LDS_BLOCK_DIM: u32
+pub const kernels::pool::POOL_ROW_LANES: u32
 pub const kernels::pyramid::DOWNSCALE_TILED_BLOCK_DIM: u32
 pub const pipeline::MIN_PAD_DIM: u32
 pub heatmap::HeatmapMode::Raw
@@ -44,9 +47,8 @@ pub fn estimate_gpu_memory_bytes(u32, u32) -> core::option::Option<usize> [also:
 pub fn estimate_gpu_memory_bytes_capped(u32, u32, u32) -> core::option::Option<usize> [also: pipeline]
 pub fn estimate_gpu_memory_bytes_strip(u32, u32, u32) -> core::option::Option<usize> [also: pipeline]
 pub fn estimate_gpu_memory_bytes_strip_pair(u32, u32, u32) -> core::option::Option<usize> [also: pipeline]
-pub fn heatmap::HeatmapMode::assert_fields_are_eq(&self)
-pub fn heatmap::HeatmapMode::clone(&self) -> heatmap::HeatmapMode
-pub fn heatmap::HeatmapMode::eq(&self, &heatmap::HeatmapMode) -> bool
+pub fn heatmap::HeatmapMode::clone(&self) -> Self
+pub fn heatmap::HeatmapMode::eq(&self, &Self) -> bool
 pub fn heatmap::HeatmapMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn heatmap::HeatmapMode::hash<__H: core::hash::Hasher>(&self, &mut __H)
 pub fn heatmap::render_heatmap(&[f32], usize, usize, heatmap::HeatmapMode, core::option::Option<&[u8]>) -> alloc::vec::Vec<u8>
@@ -169,28 +171,30 @@ pub fn kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>::clone(&se
 pub fn kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>::eq(&self, &Self) -> bool
 pub fn kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
-pub fn kernels::masking::min_abs_3ch_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::masking::diff_abs_3ch_kernel, kernels::masking::mult_mutual_3ch_no_blur_kernel]
-pub fn kernels::masking::min_abs_3ch_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>) [also: kernels::masking::diff_abs_3ch_kernel, kernels::masking::mult_mutual_3ch_no_blur_kernel]
-pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::masking::min_abs_3ch_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::masking::diff_abs_3ch_kernel]
+pub fn kernels::masking::min_abs_3ch_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>) [also: kernels::masking::diff_abs_3ch_kernel]
+pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, f32, f32, f32, f32, f32, f32)
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
-pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>::clone(&self) -> Self
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>::eq(&self, &Self) -> bool
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
-pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::masking::mult_mutual_3ch_no_blur_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>)
+pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, f32, f32, f32, f32, f32)
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
-pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>::clone(&self) -> Self
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>::eq(&self, &Self) -> bool
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
-pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
-pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::masking::mult_mutual_3ch_with_blurred_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<f32, __R>)
 pub fn kernels::masking::pu_blur_h_3ch_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32)
 pub fn kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
 pub fn kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
@@ -318,6 +322,28 @@ pub fn kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R>::fmt(&self, &mut
 pub fn kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
 pub fn kernels::pool::pool_band_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<cubecl_core::frontend::element::atomic::Atomic<f32>> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
 pub fn kernels::pool::pool_band_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<cubecl_core::frontend::element::atomic::Atomic<f32>>, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub fn kernels::pool::pool_rows_3ch_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, f32, u32, u32, u32, u32, u32, u32, u32)
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <f32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::pool::pool_rows_3ch_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <f32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::pool::pool_rows_3ch_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<f32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub fn kernels::pool::pool_rows_finalize_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<u32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<u32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::pool::pool_rows_finalize_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<u32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::pool::pool_rows_finalize_kernel::launch<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<u32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
 pub fn kernels::pyramid::baseband_divide_3ch_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, f32, u32)
 pub fn kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
 pub fn kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
@@ -466,7 +492,9 @@ pub fn pipeline::Cvvdp<R>::compute_dkl_jod(&mut self, &[u8], &[u8], f32) -> Resu
 pub fn pipeline::Cvvdp<R>::compute_dkl_jod_from_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle, f32) -> Result<f32>
 pub fn pipeline::Cvvdp<R>::compute_dkl_jod_host_pool(&mut self, &[u8], &[u8], f32) -> Result<f32>
 pub fn pipeline::Cvvdp<R>::compute_dkl_jod_host_pool_with_warm_ref(&mut self, &[u8], f32) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::compute_dkl_jod_with_stop(&mut self, &[u8], &[u8], f32, &dyn enough::Stop) -> Result<f32>
 pub fn pipeline::Cvvdp<R>::compute_dkl_jod_with_warm_ref(&mut self, &[u8], f32) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::compute_dkl_jod_with_warm_ref_with_stop(&mut self, &[u8], f32, &dyn enough::Stop) -> Result<f32>
 pub fn pipeline::Cvvdp<R>::compute_dkl_laplacian_pyramid(&mut self, &[u8]) -> Result<alloc::vec::Vec<[alloc::vec::Vec<f32>; 3]>>
 pub fn pipeline::Cvvdp<R>::compute_dkl_planes(&mut self, &[u8]) -> Result<[alloc::vec::Vec<f32>; 3]>
 pub fn pipeline::Cvvdp<R>::compute_dkl_t_p_bands(&mut self, &[u8], f32) -> Result<alloc::vec::Vec<[alloc::vec::Vec<f32>; 3]>>
@@ -477,6 +505,7 @@ pub fn pipeline::Cvvdp<R>::geometry_ppd_for_warm_ref(&self) -> f32
 pub fn pipeline::Cvvdp<R>::has_reference(&self) -> bool
 pub fn pipeline::Cvvdp<R>::is_strip_mode(&self) -> bool
 pub fn pipeline::Cvvdp<R>::is_strip_pair_mode(&self) -> bool
+pub fn pipeline::Cvvdp<R>::masking_calibration(&self) -> MaskingCalibration
 pub fn pipeline::Cvvdp<R>::new(cubecl_runtime::client::ComputeClient<R>, u32, u32, cvvdp::params::CvvdpParams) -> Result<Self>
 pub fn pipeline::Cvvdp<R>::new_capped_pyramid(cubecl_runtime::client::ComputeClient<R>, u32, u32, cvvdp::params::CvvdpParams, u32) -> Result<Self>
 pub fn pipeline::Cvvdp<R>::new_capped_pyramid_with_geometry(cubecl_runtime::client::ComputeClient<R>, u32, u32, cvvdp::params::CvvdpParams, cvvdp::params::DisplayGeometry, u32) -> Result<Self>
@@ -489,18 +518,21 @@ pub fn pipeline::Cvvdp<R>::new_with_memory_mode(cubecl_runtime::client::ComputeC
 pub fn pipeline::Cvvdp<R>::pack_srgb_into_packed_u32_handle(&self, &[u8]) -> Result<cubecl_runtime::server::handle::Handle>
 pub fn pipeline::Cvvdp<R>::reset_strip_dispatch_counter(&self)
 pub fn pipeline::Cvvdp<R>::score(&mut self, &[u8], &[u8]) -> Result<f64>
-pub fn pipeline::Cvvdp<R>::score_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<f32>
-pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_diffmap(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32], &mut alloc::vec::Vec<f32>) -> Result<f32>
-pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_warm_ref(&mut self, &[f32], &[f32], &[f32]) -> Result<f32>
-pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_warm_ref_diffmap(&mut self, &[f32], &[f32], &[f32], &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::score_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_diffmap(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_warm_ref(&mut self, [&[f32]; 3], usize) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::score_from_linear_planes_with_warm_ref_diffmap(&mut self, [&[f32]; 3], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::score_with_band_breakdown(&mut self, &[u8], &[u8]) -> Result<BandBreakdown>
 pub fn pipeline::Cvvdp<R>::score_with_diffmap(&mut self, &[u8], &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn pipeline::Cvvdp<R>::score_with_reference(&mut self, &[u8]) -> Result<f64>
+pub fn pipeline::Cvvdp<R>::score_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<f64>
 pub fn pipeline::Cvvdp<R>::score_with_warm_ref_diffmap(&mut self, &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn pipeline::Cvvdp<R>::set_masking_calibration(&mut self, MaskingCalibration)
 pub fn pipeline::Cvvdp<R>::set_reference(&mut self, &[u8]) -> Result<()>
 pub fn pipeline::Cvvdp<R>::strip_dispatch_counter(&self) -> u32
 pub fn pipeline::Cvvdp<R>::strip_h_body(&self) -> core::option::Option<u32>
 pub fn pipeline::Cvvdp<R>::warm_reference(&mut self, &[u8]) -> Result<()>
-pub fn pipeline::Cvvdp<R>::warm_reference_from_linear_planes(&mut self, &[f32], &[f32], &[f32]) -> Result<()>
+pub fn pipeline::Cvvdp<R>::warm_reference_from_linear_planes(&mut self, [&[f32]; 3], usize) -> Result<()>
 pub fn pipeline::mode_b_halo_at_level(u32, u32) -> u32
 pub fn pipeline::mode_b_k_split(u32, u32) -> u32
 pub fn pipeline::mode_b_strip_h_at_level(u32, u32, u32) -> u32
@@ -539,6 +571,8 @@ pub mod kernels::pool::pool_band_3ch_kernel
 pub mod kernels::pool::pool_band_3ch_lds_kernel
 pub mod kernels::pool::pool_band_3ch_offset_kernel
 pub mod kernels::pool::pool_band_kernel
+pub mod kernels::pool::pool_rows_3ch_kernel
+pub mod kernels::pool::pool_rows_finalize_kernel
 pub mod kernels::pyramid
 pub mod kernels::pyramid::baseband_divide_3ch_kernel
 pub mod kernels::pyramid::downscale_kernel
@@ -607,6 +641,10 @@ pub struct kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernel<_
 pub struct kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernelInfo<__R: cubecl_runtime::runtime::Runtime>
 pub struct kernels::pool::pool_band_kernel::PoolBandKernel<__R: cubecl_runtime::runtime::Runtime>
 pub struct kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R: cubecl_runtime::runtime::Runtime>
 pub struct kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R: cubecl_runtime::runtime::Runtime>
 pub struct kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernelInfo<__R: cubecl_runtime::runtime::Runtime>
 pub struct kernels::pyramid::downscale_kernel::DownscaleKernel<__R: cubecl_runtime::runtime::Runtime>
@@ -698,8 +736,9 @@ pub use presets::<<cvvdp::presets::*>>
 pub use session::cleanup_stream
 pub use session::stream_reserved_bytes
 
-## trait impls (79 types)
+## trait impls (85 types)
 
+MaskingCalibration: TrivialClone
 heatmap::HeatmapMode: Clone, Copy, Debug, Eq, Hash, PartialEq, TrivialClone
 kernels::color::srgb_to_dkl_kernel::SrgbToDklKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
 kernels::color::srgb_to_dkl_kernel::SrgbToDklKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
@@ -751,6 +790,10 @@ kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernel<__R>: cubecl
 kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 kernels::pool::pool_band_kernel::PoolBandKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
 kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
 kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 kernels::pyramid::downscale_kernel::DownscaleKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
@@ -779,84 +822,89 @@ kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernel<__R>
 kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 memory_mode::MemoryMode: TrivialClone
 memory_mode::ResolvedMode: TrivialClone
+memory_mode::ScoreResourceEstimate: TrivialClone
 
 ## auto traits
 
 1 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-kernels::color::srgb_to_dkl_kernel::SrgbToDklKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::color::srgb_to_dkl_kernel::SrgbToDklKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_3ch_kernel::CsfApply3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_3ch_kernel::CsfApply3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_6ch_kernel::CsfApply6chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_6ch_kernel::CsfApply6chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_per_pixel_kernel::CsfApplyPerPixelKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::csf_apply_per_pixel_kernel::CsfApplyPerPixelKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::weight_band_kernel::WeightBandKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::csf::weight_band_kernel::WeightBandKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_band_accumulate_kernel::DiffmapBandAccumulateKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_band_accumulate_kernel::DiffmapBandAccumulateKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_channel_pool_kernel::DiffmapChannelPoolKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_channel_pool_kernel::DiffmapChannelPoolKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_zero_kernel::DiffmapZeroKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::diffmap_zero_kernel::DiffmapZeroKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::linear_rgb_planes_to_dkl_kernel::LinearRgbPlanesToDklKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::diffmap::linear_rgb_planes_to_dkl_kernel::LinearRgbPlanesToDklKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::diff_abs_3ch_kernel::DiffAbs3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::diff_abs_3ch_kernel::DiffAbs3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::min_abs_3ch_kernel::MinAbs3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_3ch_strip_aware_kernel::PuBlurH3chStripAwareKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_3ch_strip_aware_kernel::PuBlurH3chStripAwareKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_kernel::PuBlurHKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_h_kernel::PuBlurHKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_3ch_scaled_kernel::PuBlurV3chScaledKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_3ch_scaled_kernel::PuBlurV3chScaledKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_3ch_scaled_strip_aware_kernel::PuBlurV3chScaledStripAwareKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_3ch_scaled_strip_aware_kernel::PuBlurV3chScaledStripAwareKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_kernel::PuBlurVKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::masking::pu_blur_v_kernel::PuBlurVKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::copy_f32_kernel::CopyF32Kernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::copy_f32_kernel::CopyF32KernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::fill_f32_kernel::FillF32Kernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::fill_f32_kernel::FillF32KernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_kernel::PoolBand3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_kernel::PoolBand3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_lds_kernel::PoolBand3chLdsKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_lds_kernel::PoolBand3chLdsKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_kernel::PoolBandKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_kernel::DownscaleKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_kernel::DownscaleKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_strip_kernel::DownscaleStripKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_strip_kernel::DownscaleStripKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_tiled_kernel::DownscaleTiledKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::downscale_tiled_kernel::DownscaleTiledKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_kernel::SubtractKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_kernel::SubtractKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_weber_3ch_kernel::SubtractWeber3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_weber_3ch_kernel::SubtractWeber3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_weber_3ch_strip_kernel::SubtractWeber3chStripKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::subtract_weber_3ch_strip_kernel::SubtractWeber3chStripKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_h_kernel::UpscaleHKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_h_kernel::UpscaleHKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_h_strip_kernel::UpscaleHStripKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_h_strip_kernel::UpscaleHStripKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_v_kernel::UpscaleVKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_v_kernel::UpscaleVKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_v_strip_kernel::UpscaleVStripKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::upscale_v_strip_kernel::UpscaleVStripKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::weber_contrast_compute_3ch_kernel::WeberContrastCompute3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::weber_contrast_compute_3ch_kernel::WeberContrastCompute3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-pipeline::Cvvdp<R>: !Freeze !RefUnwindSafe !UnwindSafe
+kernels::color::srgb_to_dkl_kernel::SrgbToDklKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::color::srgb_to_dkl_kernel::SrgbToDklKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_3ch_kernel::CsfApply3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_3ch_kernel::CsfApply3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_6ch_kernel::CsfApply6chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_6ch_kernel::CsfApply6chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_per_pixel_kernel::CsfApplyPerPixelKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::csf_apply_per_pixel_kernel::CsfApplyPerPixelKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::weight_band_kernel::WeightBandKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::csf::weight_band_kernel::WeightBandKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_band_accumulate_kernel::DiffmapBandAccumulateKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_band_accumulate_kernel::DiffmapBandAccumulateKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_channel_pool_kernel::DiffmapChannelPoolKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_channel_pool_kernel::DiffmapChannelPoolKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_zero_kernel::DiffmapZeroKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::diffmap_zero_kernel::DiffmapZeroKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::linear_rgb_planes_to_dkl_kernel::LinearRgbPlanesToDklKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::diffmap::linear_rgb_planes_to_dkl_kernel::LinearRgbPlanesToDklKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::diff_abs_3ch_kernel::DiffAbs3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::diff_abs_3ch_kernel::DiffAbs3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::min_abs_3ch_kernel::MinAbs3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::min_abs_3ch_kernel::MinAbs3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mult_mutual_3ch_no_blur_kernel::MultMutual3chNoBlurKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::mult_mutual_3ch_with_blurred_kernel::MultMutual3chWithBlurredKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_3ch_kernel::PuBlurH3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_3ch_strip_aware_kernel::PuBlurH3chStripAwareKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_3ch_strip_aware_kernel::PuBlurH3chStripAwareKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_kernel::PuBlurHKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_h_kernel::PuBlurHKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_3ch_scaled_kernel::PuBlurV3chScaledKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_3ch_scaled_kernel::PuBlurV3chScaledKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_3ch_scaled_strip_aware_kernel::PuBlurV3chScaledStripAwareKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_3ch_scaled_strip_aware_kernel::PuBlurV3chScaledStripAwareKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_kernel::PuBlurVKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::masking::pu_blur_v_kernel::PuBlurVKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::copy_f32_kernel::CopyF32Kernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::copy_f32_kernel::CopyF32KernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::fill_f32_kernel::FillF32Kernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::fill_f32_kernel::FillF32KernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_kernel::PoolBand3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_kernel::PoolBand3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_lds_kernel::PoolBand3chLdsKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_lds_kernel::PoolBand3chLdsKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_3ch_offset_kernel::PoolBand3chOffsetKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_kernel::PoolBandKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_band_kernel::PoolBandKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_rows_3ch_kernel::PoolRows3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pool::pool_rows_finalize_kernel::PoolRowsFinalizeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::baseband_divide_3ch_kernel::BasebandDivide3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_kernel::DownscaleKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_kernel::DownscaleKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_strip_kernel::DownscaleStripKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_strip_kernel::DownscaleStripKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_tiled_kernel::DownscaleTiledKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::downscale_tiled_kernel::DownscaleTiledKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_kernel::SubtractKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_kernel::SubtractKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_weber_3ch_kernel::SubtractWeber3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_weber_3ch_kernel::SubtractWeber3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_weber_3ch_strip_kernel::SubtractWeber3chStripKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::subtract_weber_3ch_strip_kernel::SubtractWeber3chStripKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_h_kernel::UpscaleHKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_h_kernel::UpscaleHKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_h_strip_kernel::UpscaleHStripKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_h_strip_kernel::UpscaleHStripKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_v_kernel::UpscaleVKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_v_kernel::UpscaleVKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_v_strip_kernel::UpscaleVStripKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::upscale_v_strip_kernel::UpscaleVStripKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::weber_contrast_compute_3ch_kernel::WeberContrastCompute3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::weber_contrast_compute_3ch_kernel::WeberContrastCompute3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::pyramid::weber_contrast_compute_kernel::WeberContrastComputeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+pipeline::Cvvdp<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

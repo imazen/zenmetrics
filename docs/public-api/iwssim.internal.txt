@@ -1,5 +1,5 @@
 # iwssim public API — doc(hidden) items and excluded-feature surface
-# excluded features: (none)
+# excluded features: _dev
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -9,17 +9,36 @@
 
 ## summary
 #
+#   pub modules                                 1
+#   free functions                             14
 #   inherent methods                            1
-#   trait roster entries (type × trait)         2
+#   trait roster entries (type × trait)         3
 #
 # per-module pub lines:
-#   (root)                            1
+#   (root)                            2
+#   simd_kernels                     14
 
-## items (1 lines)
+## items (16 lines)
 
 pub fn Error::assert_fields_are_eq(&self)
+pub fn simd_kernels::box_gain_rows(&[f32], &[f32], usize, usize, usize, usize, &mut [f32], &mut [f32])
+pub fn simd_kernels::corr_dn_h(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::corr_dn_v(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::cs_combine_into(&[f32], &[f32], &[f32], &[f32], &[f32], &mut [f32], bool)
+pub fn simd_kernels::infow_map(&[f32], &[f32], &[f32], &[f32], f32, f32, &mut [f32])
+pub fn simd_kernels::mul_into(&[f32], &[f32], &mut [f32])
+pub fn simd_kernels::quad_form_rows(&[f32], core::option::Option<&[f32]>, usize, usize, usize, usize, usize, &[(i32, i32)], &[f32], &mut [f32])
+pub fn simd_kernels::square_into(&[f32], &mut [f32])
+pub fn simd_kernels::ssim_gauss_h_pass(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::ssim_gauss_v_pass(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::up_conv_h(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::up_conv_v(&[f32], usize, usize, usize, &mut [f32])
+pub fn simd_kernels::weighted_sum_pair(&[f32], &[f32]) -> (f64, f64)
+pub fn simd_kernels::weighted_sum_pair_iw_strided(&[f32], &[f32], usize, usize, usize, usize) -> (f64, f64)
+pub mod simd_kernels
 
-## trait impls (2 types)
+## trait impls (3 types)
 
 IwssimParams: TrivialClone
 IwssimScore: TrivialClone
+LumaConvention: TrivialClone
