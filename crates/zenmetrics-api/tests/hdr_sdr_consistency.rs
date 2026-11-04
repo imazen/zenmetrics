@@ -84,7 +84,7 @@ fn lift_to_hdr_shell(px: &[u8]) -> Vec<u8> {
 }
 
 fn zensim_score(refe: &[u8], dist: &[u8]) -> f64 {
-    let mut z = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
     let src: &[[u8; 3]] = bytemuck::cast_slice(refe);
     let dst: &[[u8; 3]] = bytemuck::cast_slice(dist);
     let r = zensim::RgbSlice::new(src, W, H);

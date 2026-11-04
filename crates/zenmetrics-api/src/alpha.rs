@@ -485,7 +485,7 @@ mod tests {
     #[test]
     fn test_noise_table_bounds_and_determinism() {
         for &v in &ALPHA_BG_TABLE {
-            assert!(v >= 0.2 && v <= 0.8, "noise out of [0.2, 0.8]: {v}");
+            assert!((0.2..=0.8).contains(&v), "noise out of [0.2, 0.8]: {v}");
         }
         // Bit-exact across repeated calls
         let bg1 = alpha_background_linear(42, 107);
