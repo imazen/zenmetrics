@@ -42,7 +42,8 @@ use std::borrow::Cow;
 use std::boxed::Box;
 use std::vec::Vec;
 
-use za::zenpixels::{ChannelType, PixelSlice, PlaneSemantic};
+use za::PlaneRole;
+use za::zenpixels::{ChannelType, PixelSlice};
 use zenmetrics_abstractions as za;
 
 use crate::{Error, ModelVariant, PoolingMethod, VmafFrameResult, VmafV1Stream, Yuv420Frame};
@@ -126,15 +127,15 @@ fn accepts_format(format: &za::InputFormat) -> bool {
     };
     let planes = p.layout.planes();
     let shape = [
-        (PlaneSemantic::Luma, 1, 1),
-        (PlaneSemantic::ChromaCb, 2, 2),
-        (PlaneSemantic::ChromaCr, 2, 2),
+        (PlaneRole::Luma, 1, 1),
+        (PlaneRole::Cb, 2, 2),
+        (PlaneRole::Cr, 2, 2),
     ];
     planes.len() == 3
         && planes
             .iter()
             .zip(shape)
-            .all(|(d, (s, h, v))| d.semantic == s && d.h_subsample == h && d.v_subsample == v)
+            .all(|(d, (s, h, v))| d.role == s && d.h_subsample == h && d.v_subsample == v)
         && planes
             .iter()
             .all(|d| d.channel_type == planes[0].channel_type)
@@ -607,7 +608,8 @@ impl za::Sequence for VmafSequence {
 mod tests {
     use super::*;
     use za::Metric as _;
-    use za::zenpixels::{PixelDescriptor, PlaneLayout};
+    use za::PlaneLayout;
+    use za::zenpixels::PixelDescriptor;
 
     // The libvmaf parity tests' size: above every feature's floor.
     const W: usize = 640;
@@ -784,7 +786,8 @@ mod tests {
 mod map_tests {
     use super::*;
     use za::Metric as _;
-    use za::zenpixels::{PixelDescriptor, PlaneLayout};
+    use za::PlaneLayout;
+    use za::zenpixels::PixelDescriptor;
 
     const W: usize = 640;
     const H: usize = 360;
@@ -1095,7 +1098,8 @@ mod map_tests {
 mod size_tests {
     use super::*;
     use za::Metric as _;
-    use za::zenpixels::{PixelDescriptor, PlaneLayout};
+    use za::PlaneLayout;
+    use za::zenpixels::PixelDescriptor;
 
     #[test]
     fn below_cambi_minimum_is_too_small() {

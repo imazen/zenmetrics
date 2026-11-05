@@ -62,8 +62,8 @@ pub use eval::{
 };
 pub use identity::{Backend, Implementation, MetricId, is_sanitized_column};
 pub use input::{
-    Image, InputFormat, OwnedImage, PlanarFormat, Planes, Rgb8In, check_same_size, contiguous_rgb8,
-    is_rgb8_srgb, rgb8_pair, rgb8_view, unsupported,
+    Image, InputFormat, OwnedImage, PlanarFormat, PlaneLayout, PlaneRole, PlaneSpec, Planes,
+    Rgb8In, check_same_size, contiguous_rgb8, is_rgb8_srgb, rgb8_pair, rgb8_view, unsupported,
 };
 pub use map::{
     MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, Support,
