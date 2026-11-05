@@ -33,7 +33,7 @@
 //!
 //! Motion is not exposed as maps.
 //!
-//! Input is planar YCbCr 4:2:0 (`PlaneLayout::ycbcr_420`) with U8 samples,
+//! Input is planar YCbCr 4:2:0 (`ycbcr_420_layout`) with U8 samples,
 //! or U16 samples carrying 10 significant bits. VMAF is defined on code
 //! values: transfer, primaries and signal range are used as given, exactly
 //! as libvmaf does, and are not checked.
@@ -125,22 +125,16 @@ fn accepts_format(format: &za::InputFormat) -> bool {
     let za::InputFormat::Planar(p) = format else {
         return false;
     };
-    let planes = p.layout.planes();
-    let shape = [
-        (PlaneRole::Luma, 1, 1),
-        (PlaneRole::Cb, 2, 2),
-        (PlaneRole::Cr, 2, 2),
-    ];
-    planes.len() == 3
-        && planes
-            .iter()
-            .zip(shape)
-            .all(|(d, (s, h, v))| d.role == s && d.h_subsample == h && d.v_subsample == v)
-        && planes
-            .iter()
-            .all(|d| d.channel_type == planes[0].channel_type)
+    let layout = &p.layout;
+    let planes = layout.planes();
+    let shape = [PlaneRole::Luma, PlaneRole::Cb, PlaneRole::Cr];
+    let ct = |d: &za::PlaneSpec| d.encoding().channel_type();
+    layout.subsampling() == za::ChromaSubsampling::Yuv420
+        && planes.len() == 3
+        && planes.iter().zip(shape).all(|(d, s)| d.role() == s)
+        && planes.iter().all(|d| ct(d) == ct(&planes[0]))
         && matches!(
-            (planes[0].channel_type, p.significant_bits),
+            (ct(&planes[0]), p.significant_bits),
             (ChannelType::U8, 8) | (ChannelType::U16, 10)
         )
 }
@@ -608,7 +602,7 @@ impl za::Sequence for VmafSequence {
 mod tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
+    use za::ycbcr_420_layout;
     use za::zenpixels::PixelDescriptor;
 
     // The libvmaf parity tests' size: above every feature's floor.
@@ -652,7 +646,7 @@ mod tests {
 
     fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
         za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
+            ycbcr_420_layout(ChannelType::U8),
             vec![
                 gray8(&p[0], W, H),
                 gray8(&p[1], W / 2, H / 2),
@@ -725,7 +719,7 @@ mod tests {
             .collect();
         let planes = || {
             za::Planes::new(
-                PlaneLayout::ycbcr_420(ChannelType::U16),
+                ycbcr_420_layout(ChannelType::U16),
                 vec![
                     gray16(&bytes[0], W, H),
                     gray16(&bytes[1], W / 2, H / 2),
@@ -759,7 +753,7 @@ mod tests {
         fn small(p: &[Vec<u8>; 3]) -> za::Image<'_> {
             za::Image::from(
                 za::Planes::new(
-                    PlaneLayout::ycbcr_420(ChannelType::U8),
+                    ycbcr_420_layout(ChannelType::U8),
                     vec![
                         gray8(&p[0], W, H - 2),
                         gray8(&p[1], W / 2, H / 2 - 1),
@@ -786,7 +780,7 @@ mod tests {
 mod map_tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
+    use za::ycbcr_420_layout;
     use za::zenpixels::PixelDescriptor;
 
     const W: usize = 640;
@@ -814,7 +808,7 @@ mod map_tests {
 
     fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
         za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
+            ycbcr_420_layout(ChannelType::U8),
             vec![
                 gray8(&p[0], W, H),
                 gray8(&p[1], W / 2, H / 2),
@@ -1098,7 +1092,7 @@ mod map_tests {
 mod size_tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
+    use za::ycbcr_420_layout;
     use za::zenpixels::PixelDescriptor;
 
     #[test]
@@ -1109,7 +1103,7 @@ mod size_tests {
             PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
         }
         let img: za::Image<'_> = za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
+            ycbcr_420_layout(ChannelType::U8),
             vec![g(&y, w, h), g(&c, w / 2, h / 2), g(&c, w / 2, h / 2)],
         )
         .unwrap()

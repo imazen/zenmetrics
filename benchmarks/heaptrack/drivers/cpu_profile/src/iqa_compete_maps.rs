@@ -239,13 +239,13 @@ fn vmaf_image(
     w: usize,
     h: usize,
 ) -> Result<za::Image<'_>, String> {
-    use za::PlaneLayout;
+    use za::ycbcr_420_layout;
     use za::zenpixels::ChannelType;
     fn gray(p: &[u8], w: usize, h: usize) -> Result<PixelSlice<'_>, String> {
         PixelSlice::new(p, w as u32, h as u32, w, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
     }
     za::Planes::new(
-        PlaneLayout::ycbcr_420(ChannelType::U8),
+        ycbcr_420_layout(ChannelType::U8),
         vec![
             gray(&planes.0, w, h)?,
             gray(&planes.1, w / 2, h / 2)?,

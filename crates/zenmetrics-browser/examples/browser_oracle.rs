@@ -296,7 +296,7 @@ fn main() {
         };
         zenmetrics_abstractions::Image::from(
             zenmetrics_abstractions::Planes::new(
-                zenmetrics_abstractions::PlaneLayout::ycbcr_420(zenpixels::ChannelType::U8),
+                zenmetrics_abstractions::ycbcr_420_layout(zenpixels::ChannelType::U8),
                 vec![
                     plane(y, w, h),
                     plane(cb, w / 2, h / 2),
