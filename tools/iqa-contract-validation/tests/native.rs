@@ -148,17 +148,9 @@ fn wrapper_scores_and_maps_match_direct_native_calls() {
     );
 }
 #[test]
-fn unsupported_maps_and_geometry_remain_classified_native_causes_remain_typed() {
+fn geometry_remains_classified_native_causes_remain_typed() {
     let r = fixture(64, 64, 0, false);
     let ri = image(&r, 64, 64, 0);
-    let e = iqa::score(
-        &mut Ssim2,
-        ri.clone(),
-        ri.clone(),
-        EvalOpts::new().with_native_map(),
-    )
-    .unwrap_err();
-    assert_eq!(e.error().kind(), ErrorKind::NoMap);
     let e = iqa::score(
         &mut Butter,
         ri.clone(),
@@ -221,25 +213,123 @@ fn cancellation_during_native_work_keeps_the_first_reason() {
         Box::new(Zen),
         Box::new(Ssim2),
     ] {
-        let count = Arc::new(AtomicUsize::new(0));
-        let pulse = Budget(count.clone());
-        let e = iqa::score(
-            m.as_mut(),
-            image(&r, 131, 129, 0),
-            image(&d, 131, 129, 0),
-            EvalOpts::new().with_pulse(&pulse),
-        )
-        .unwrap_err();
-        assert_eq!(
-            iqa::stop_reason(&e),
-            Some(iqa::how_far::StopReason::TimedOut),
-            "{}",
-            m.id().family()
-        );
-        assert!(
-            std::error::Error::source(e.error()).is_some(),
-            "native cancellation must retain its typed cause"
-        );
-        assert!(count.load(Ordering::SeqCst) > 3);
+        for maps in [false, true] {
+            let count = Arc::new(AtomicUsize::new(0));
+            let pulse = Budget(count.clone());
+            let opts = EvalOpts::new().with_pulse(&pulse);
+            let opts = if maps { opts.with_native_map() } else { opts };
+            let e = iqa::score(
+                m.as_mut(),
+                image(&r, 131, 129, 0),
+                image(&d, 131, 129, 0),
+                opts,
+            )
+            .unwrap_err();
+            assert_eq!(
+                iqa::stop_reason(&e),
+                Some(iqa::how_far::StopReason::TimedOut),
+                "{}",
+                m.id().family()
+            );
+            assert!(
+                std::error::Error::source(e.error()).is_some(),
+                "native cancellation must retain its typed cause"
+            );
+            assert!(count.load(Ordering::SeqCst) > 3);
+        }
     }
+}
+
+/// Every native term, including coarse grids, survives both the core and the
+/// actual cached-reference path. Odd, padded and sub-8 inputs exercise edges.
+#[test]
+fn ssim2_native_maps_match_direct_strided_and_prepared_calls() {
+    for (w, h) in [(64, 64), (97, 73), (131, 129), (5, 3), (130, 9)] {
+        let r = fixture(w, h, 0, false);
+        let d = fixture(w, h, 0, true);
+        let rp = fixture(w, h, 9, false);
+        let dp = fixture(w, h, 15, true);
+        let ri = image(&r, w, h, 0);
+        let di = image(&d, w, h, 0);
+        let native =
+            fast_ssim2::compute_ssimulacra2_maps(ri.as_packed().unwrap(), di.as_packed().unwrap())
+                .unwrap();
+        let scalar =
+            fast_ssim2::compute_ssimulacra2(ri.as_packed().unwrap(), di.as_packed().unwrap())
+                .unwrap();
+        assert_eq!(native.score.to_bits(), scalar.to_bits());
+        let opts = EvalOpts::new().with_native_map();
+        let cold = iqa::score(&mut Ssim2, ri, di, opts).unwrap();
+        let strided =
+            iqa::score(&mut Ssim2, image(&rp, w, h, 9), image(&dp, w, h, 15), opts).unwrap();
+        let mut metric = Ssim2;
+        let mut warm =
+            iqa::prepare_reference(&mut metric, image(&rp, w, h, 9), EvalOpts::new()).unwrap();
+        let prepared = warm.score(image(&dp, w, h, 15), opts).unwrap();
+        let fused = native.diffmap();
+        for evaluated in [&cold, &strided, &prepared] {
+            assert_eq!(evaluated.result.score().to_bits(), scalar.to_bits());
+            let maps = evaluated.result.maps();
+            assert_eq!(maps.len(), 1 + 9 * native.scales.len());
+            assert_eq!(maps[0].name, "diffmap");
+            assert_eq!(
+                maps[0].geometry,
+                iqa::MapGeometry::identity(w, h).with_support(iqa::Support::Global)
+            );
+            assert_map_bits(&maps[0], &fused);
+            for (s, scale) in native.scales.iter().enumerate() {
+                for (t, (term, planes)) in [
+                    ("ssim", &scale.ssim),
+                    ("artifact", &scale.artifact),
+                    ("detail_lost", &scale.detail_lost),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    for (c, (channel, values)) in
+                        ["x", "y", "b"].into_iter().zip(planes).enumerate()
+                    {
+                        let map = &maps[1 + s * 9 + t * 3 + c];
+                        assert_eq!(map.name, format!("{term}_{channel}_{s}"));
+                        let cell = 1 << s;
+                        let geometry = iqa::MapGeometry::grid(
+                            w,
+                            h,
+                            0,
+                            0,
+                            cell,
+                            cell,
+                            scale.width as u32,
+                            scale.height as u32,
+                        );
+                        let geometry = if w < 8 || h < 8 {
+                            geometry.with_support(iqa::Support::Global)
+                        } else {
+                            geometry.with_halo(5 * cell, 5 * cell)
+                        };
+                        assert_eq!(map.geometry, geometry);
+                        assert_map_bits(map, values);
+                    }
+                }
+            }
+        }
+        let identity =
+            iqa::score(&mut Ssim2, image(&r, w, h, 0), image(&r, w, h, 0), opts).unwrap();
+        assert!(
+            identity
+                .result
+                .maps()
+                .iter()
+                .all(|m| m.values().iter().all(|&v| v == 0.0))
+        );
+    }
+}
+fn assert_map_bits(map: &iqa::MapView<'_>, expected: &[f32]) {
+    assert_eq!(map.polarity, iqa::MapPolarity::Difference);
+    assert_eq!(
+        map.values().iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        "{}",
+        map.name
+    );
 }

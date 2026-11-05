@@ -70,8 +70,8 @@ checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "fast-ssim2"
-version = "0.9.0"
-source = "git+https://github.com/imazen/fast-ssim2?rev=aaf7705be0b923fb9c0f7fbda37e13b2aaccd3fc#aaf7705be0b923fb9c0f7fbda37e13b2aaccd3fc"
+version = "0.9.1"
+source = "git+https://github.com/imazen/fast-ssim2?rev=6d27c728a4094cbbcf5f04e3b61859f062951f2e#6d27c728a4094cbbcf5f04e3b61859f062951f2e"
 dependencies = [
  "archmage",
  "bytemuck",

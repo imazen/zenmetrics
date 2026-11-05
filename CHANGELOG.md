@@ -105,7 +105,9 @@ Workspace conventions per the global rules:
   with serving Zensim A, Butteraugli, fast-ssim2 and selected Margarine. Keep
   source pins and frozen vendor identity explicit; no consumer migration
   (`40590360`). Preserve the selected Margarine frontend's error interface and
-  compile it in the standalone gate (`1d4dd5a4`).
+  compile it in the standalone gate (`1d4dd5a4`). Validate current fast-ssim2
+  native diffmap/component maps through cold and prepared-reference calls,
+  correcting the original pre-map dependency pin.
 
 - Native HDR chroma view generation, exact natural SSIMULACRA2 reference reuse,
   and atomic AVIF/PQ16/label publication through the existing zenfleet view

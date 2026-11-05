@@ -178,11 +178,11 @@ impl WarmReference for ButterWarm {
         true
     }
 }
-/// SSIMULACRA2 native whole-image scalar; no spatial map is exposed by this API.
+/// SSIMULACRA2 native scalar, fused diffmap and per-scale spatial terms.
 pub struct Ssim2;
 impl Metric for Ssim2 {
     fn id(&self) -> MetricId {
-        id("ssim2", "0.9.0", "aaf7705b")
+        id("ssim2", fast_ssim2::VERSION, "6d27c728")
             .with_config("kernel", "simd")
             .with_config("strips", false)
     }
@@ -198,7 +198,15 @@ impl Metric for Ssim2 {
         d: Image<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Box<dyn Evaluation>> {
-        opts.refuse_map("ssim2")?;
+        if opts.map.is_some() {
+            let native = fast_ssim2::compute_ssimulacra2_maps_with_config(
+                pixel(&r)?,
+                pixel(&d)?,
+                &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
+            )
+            .metric_err_with("ssim2", ssim_error)?;
+            return ssim_maps(native, opts);
+        }
         let value = fast_ssim2::compute_ssimulacra2_with_config(
             pixel(&r)?,
             pixel(&d)?,
@@ -223,7 +231,16 @@ impl Metric for Ssim2 {
 struct SsimWarm(fast_ssim2::Ssimulacra2Reference);
 impl WarmReference for SsimWarm {
     fn evaluate(&mut self, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>> {
-        opts.refuse_map("ssim2")?;
+        if opts.map.is_some() {
+            let native = self
+                .0
+                .compare_with_maps_with_config(
+                    pixel(&d)?,
+                    &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
+                )
+                .metric_err_with("ssim2", ssim_error)?;
+            return ssim_maps(native, opts);
+        }
         let value = self
             .0
             .compare_with_config(
@@ -235,6 +252,129 @@ impl WarmReference for SsimWarm {
     }
     fn reuses_reference_work(&self) -> bool {
         true
+    }
+}
+// Mirror the existing browser adapter's native terms and geometry. The primary
+// fused map depends on global L4 normalization; component maps retain their grids.
+const SSIM_MAP_NAMES: [[[&str; 3]; 3]; 6] = [
+    [
+        ["ssim_x_0", "ssim_y_0", "ssim_b_0"],
+        ["artifact_x_0", "artifact_y_0", "artifact_b_0"],
+        ["detail_lost_x_0", "detail_lost_y_0", "detail_lost_b_0"],
+    ],
+    [
+        ["ssim_x_1", "ssim_y_1", "ssim_b_1"],
+        ["artifact_x_1", "artifact_y_1", "artifact_b_1"],
+        ["detail_lost_x_1", "detail_lost_y_1", "detail_lost_b_1"],
+    ],
+    [
+        ["ssim_x_2", "ssim_y_2", "ssim_b_2"],
+        ["artifact_x_2", "artifact_y_2", "artifact_b_2"],
+        ["detail_lost_x_2", "detail_lost_y_2", "detail_lost_b_2"],
+    ],
+    [
+        ["ssim_x_3", "ssim_y_3", "ssim_b_3"],
+        ["artifact_x_3", "artifact_y_3", "artifact_b_3"],
+        ["detail_lost_x_3", "detail_lost_y_3", "detail_lost_b_3"],
+    ],
+    [
+        ["ssim_x_4", "ssim_y_4", "ssim_b_4"],
+        ["artifact_x_4", "artifact_y_4", "artifact_b_4"],
+        ["detail_lost_x_4", "detail_lost_y_4", "detail_lost_b_4"],
+    ],
+    [
+        ["ssim_x_5", "ssim_y_5", "ssim_b_5"],
+        ["artifact_x_5", "artifact_y_5", "artifact_b_5"],
+        ["detail_lost_x_5", "detail_lost_y_5", "detail_lost_b_5"],
+    ],
+];
+struct SsimMaps {
+    score: f64,
+    maps: Vec<(&'static str, PixelBuffer, iqa::MapGeometry)>,
+}
+impl SsimMaps {
+    fn view(&self, index: usize) -> Option<iqa::MapView<'_>> {
+        let (name, pixels, geometry) = self.maps.get(index)?;
+        Some(
+            iqa::MapView::new(
+                name,
+                pixels.as_slice(),
+                iqa::MapPolarity::Difference,
+                *geometry,
+            )
+            .expect("validated native map geometry"),
+        )
+    }
+}
+impl Evaluation for SsimMaps {
+    fn score(&self) -> f64 {
+        self.score
+    }
+    fn scores(&self) -> iqa::Scores<'_> {
+        Box::new(std::iter::once((Cow::Borrowed("score"), self.score)))
+    }
+    fn map(&self) -> Option<iqa::MapView<'_>> {
+        self.view(0)
+    }
+    fn maps(&self) -> Vec<iqa::MapView<'_>> {
+        (0..self.maps.len())
+            .map(|index| self.view(index).unwrap())
+            .collect()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+fn ssim_maps(
+    native: fast_ssim2::Ssimulacra2Maps,
+    opts: EvalOpts<'_>,
+) -> MetricResult<Box<dyn Evaluation>> {
+    opts.checkpoint()?;
+    let (w, h) = (native.width as u32, native.height as u32);
+    let mut maps = vec![(
+        "diffmap",
+        iqa::gray_f32_buffer(&native.diffmap(), w, h)?,
+        iqa::MapGeometry::identity(w, h).with_support(iqa::Support::Global),
+    )];
+    for (scale_index, scale) in native.scales.into_iter().enumerate() {
+        let cell = 1 << scale_index;
+        let geometry = iqa::MapGeometry::grid(
+            w,
+            h,
+            0,
+            0,
+            cell,
+            cell,
+            scale.width as u32,
+            scale.height as u32,
+        );
+        let geometry = if w < 8 || h < 8 {
+            geometry.with_support(iqa::Support::Global)
+        } else {
+            geometry.with_halo(5 * cell, 5 * cell)
+        };
+        for (term, planes) in [scale.ssim, scale.artifact, scale.detail_lost]
+            .into_iter()
+            .enumerate()
+        {
+            for (channel, values) in planes.into_iter().enumerate() {
+                maps.push((
+                    SSIM_MAP_NAMES[scale_index][term][channel],
+                    iqa::gray_f32_buffer(&values, scale.width as u32, scale.height as u32)?,
+                    geometry,
+                ));
+            }
+        }
+    }
+    opts.checkpoint()?;
+    let result: Box<dyn Evaluation> = Box::new(SsimMaps {
+        score: native.score,
+        maps,
+    });
+    if let Some(request) = opts.map {
+        iqa::apply_map_request(result, request)
+    } else {
+        Ok(result)
     }
 }
 /// The serving repository's adopted A profile, not the research checkout.

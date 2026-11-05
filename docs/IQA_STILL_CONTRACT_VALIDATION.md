@@ -14,7 +14,7 @@ The standalone manifests and lockfiles bind the exact dependency graph:
 |---|---|---|
 | Serving Zensim A (`latest`, single-threaded) | [5475929d](https://github.com/imazen/zensim/commit/5475929d22306846cfe533312a110dbf7d3669e9) | Native scalar/map and actual cached-reference operations |
 | Butteraugli 0.9.4 | [31687022](https://github.com/imazen/butteraugli/commit/31687022761bf5b401a9f1e0ed6e6dd407afee70) | Max and pnorm3 from one operation, native map and real cached reference |
-| fast-ssim2 0.9.0 | [aaf7705b](https://github.com/imazen/fast-ssim2/commit/aaf7705be0b923fb9c0f7fbda37e13b2aaccd3fc) | Native whole-image scalar and cached reference; map requests refuse |
+| fast-ssim2 0.9.1 | [6d27c728](https://github.com/imazen/fast-ssim2/commit/6d27c728a4094cbbcf5f04e3b61859f062951f2e) | Native scalar, fused diffmap, per-scale terms and actual cached-reference maps |
 | Selected Margarine `simd-row-malta` | In-tree selected kernel from zenmetrics b50fea22; 128 rows, 512 columns, existing vendor snapshot | Max/p1/p2/p3/p6 and native map; preparation explicitly refuses |
 
 The Zensim dependency names imazen/zensim explicitly: a local directory named
@@ -42,8 +42,22 @@ Serving Zensim A, Butteraugli and fast-ssim2 preserve exact scalar bits between
 cold and actual cached-reference calls at every shape. Zensim and Butteraugli
 map/scalar bits match separate direct native calls at 97x73. Margarine's five
 scalar outputs and full native map bits match direct selected-kernel calls at
-all three shapes, including strided maps. These adapters do not synthesize a
-spatial map for SSIMULACRA2 or a warm cache for Margarine.
+all three shapes, including strided maps. The Margarine adapter does not
+synthesize a warm cache.
+
+SSIMULACRA2 additionally checks all native map values against direct calls on
+those three shapes plus 5x3 and 130x9: cold, strided and actual cached-reference
+results preserve exact score and map bits. Identity inputs produce zero maps.
+The primary `diffmap` retains global support from its L4 normalization. Each
+`{ssim,artifact,detail_lost}_{x,y,b}_{scale}` map retains its pyramid grid and
+five-sample blur halo; sub-8 reflect-padded maps declare global support.
+These error contributions are not per-pixel SSIMULACRA2 scores.
+
+The first validation pinned fast-ssim2 before its map API and refused map
+requests. That was a validation coverage gap: current fast-ssim2 already
+provides both cold and cached maps, also used by the existing browser adapter.
+The corrected panel updates only this standalone dependency; the root workspace
+lock, metric algorithms and frozen Margarine teacher remain unchanged.
 
 A check-budget token stops Zensim, Butteraugli and SSIMULACRA2 inside their
 native calls; each retains TimedOut and an underlying native error. The
@@ -73,7 +87,10 @@ CI runs both harnesses on Linux x64 and aarch64.
 
 The [Linux x64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502159/job/127114853182)
 and [Linux aarch64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502159/job/127114853279)
-both pass the same native controls and strict lint at source `40590360`.
+both pass the original native controls and strict lint at source `40590360`;
+those historical panels predate the SSIMULACRA2 map correction. The corrected
+source-pinned panel passes on native aarch64 Linux with strict Clippy; the
+existing CI matrix repeats it on x64 and aarch64.
 
 This is interface and forwarding validation on native x86 and ARM Linux. It does not
 requalify metric algorithms against published reference goldens, establish

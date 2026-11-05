@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 zenpixels-iqa = { git = "https://github.com/imazen/zenpixels", rev = "6962bf77bcae", version = "0.1.0" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "5475929d22306846cfe533312a110dbf7d3669e9", default-features = false, features = ["zenpixels"] }
 butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "31687022761bf5b401a9f1e0ed6e6dd407afee70", default-features = false }
-fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "aaf7705be0b923fb9c0f7fbda37e13b2aaccd3fc", default-features = false }
+fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "6d27c728a4094cbbcf5f04e3b61859f062951f2e", default-features = false }
 bytemuck = "1.25.2"
 [patch.crates-io]
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "6962bf77bcae" }
