@@ -64,3 +64,16 @@ Reproduce: build the retained example at both revisions via the CI-pinned
 snapshot, preserve each binary, then run `just vmaf-stride-cost-profile
 BEFORE AFTER OUTPUT` under run-heavy. Arguments are literal paths. The runner
 records binary hashes, checks exact output identity and retains all samples.
+
+## Focused software-WGPU stride controls
+
+With the pinned dependency graph and current merged source, all newly added
+stride modules pass: CVVDP 2/2, Butteraugli 2/2, Zensim 2/2 and the umbrella
+API 3/3. They exercise exact tight/strided score/map identity, minimum extents,
+invalid geometry and applicable warm paths. `vulkaninfo --summary` identifies
+the available device as llvmpipe (LLVM 21.1.8, CPU device). These are software
+WGPU controls; they do not qualify CUDA or discrete GPU performance.
+
+Commands and full output are retained in `pr109-gpu-stride.log` and
+`pr109-other-gpu-stride.log` beside the profiling artifacts. The latter wrapper
+receipt is `run-heavy: done rc=0 86s | peak-RSS 2.15GiB | min-avail 15735MiB | peak-load 5.14`.
