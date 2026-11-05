@@ -606,6 +606,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- Fixed IQA Margarine error bridging (2026-11-05): strengthening the existing
+  geometry entry's boxed error broke the selected command's `?` conversion.
+  Preserve that legacy entry and use a separate private Send+Sync entry for
+  IQA cause transfer. The validation gate compiles the original selected
+  frontend as well as running the adapter's exact scalar/map controls. Kernel
+  arithmetic and the frozen vendor snapshot remain unchanged.
+
+
 - **2026-11-04 — abstraction compatibility fixed; sequence contract gaps remain.**
   PR 104 (`1658d4de`) replaces the removed zenpixels `PlaneLayout` with local
   compatibility types. Its abstraction tests pass on locked zenpixels 0.2.16

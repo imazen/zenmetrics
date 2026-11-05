@@ -104,7 +104,7 @@ impl Metric for Margarine {
         .expect("shared RGB input admission validated row geometry");
         // The selected kernel has no Pulse argument. Boundaries remain cooperative;
         // no claim of cancellation within its native call is made.
-        let n = row_psycho::compute_geometry(&r, &d, 128, 512, &ButteraugliParams::default())
+        let n = row_psycho::compute_geometry_send(&r, &d, 128, 512, &ButteraugliParams::default())
             .map_err(|e| {
                 iqa::whereat::at(MetricError::new(ErrorKind::Backend).with_boxed_detail(e))
             })?;
@@ -168,7 +168,7 @@ fn main() {
     let sample_image = image(&sample, 64, 64, 0);
     let sample_view = iqa::rgb8_view(&sample_image).unwrap();
     let sample_rows = rows(&sample_view);
-    let error = row_psycho::compute_geometry(
+    let error = row_psycho::compute_geometry_send(
         &sample_rows,
         &sample_rows,
         128,

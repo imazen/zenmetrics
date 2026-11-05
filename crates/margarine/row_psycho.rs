@@ -557,10 +557,22 @@ pub(super) fn compute(
         Err(std::env::VarError::NotPresent) => 512,
         Err(error) => return Err(error.into()),
     };
-    compute_geometry(a, b, rows, columns, params).map_err(|e| e as Box<dyn Error>)
+    compute_geometry(a, b, rows, columns, params)
 }
 
+// Preserve the experiment's existing command/steering error interface.
 pub(super) fn compute_geometry(
+    a: &ingress::EncodedRows<'_>,
+    b: &ingress::EncodedRows<'_>,
+    rows: usize,
+    columns: usize,
+    params: &ButteraugliParams,
+) -> Result<diff::InternalResult, Box<dyn Error>> {
+    compute_geometry_send(a, b, rows, columns, params).map_err(|e| e as Box<dyn Error>)
+}
+
+// The IQA envelope retains this boxed native cause across worker boundaries.
+pub(super) fn compute_geometry_send(
     a: &ingress::EncodedRows<'_>,
     b: &ingress::EncodedRows<'_>,
     rows: usize,

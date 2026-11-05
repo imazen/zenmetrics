@@ -65,3 +65,8 @@ stable-peak = ["reference-regions"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("iir-blur", "unsafe-performance", "internals"))'] }
+
+# Compile the original selected frontend too, retaining its legacy error API.
+[[bin]]
+name = "margarine-selected-frontend"
+path = "../../crates/margarine/margarine.rs"

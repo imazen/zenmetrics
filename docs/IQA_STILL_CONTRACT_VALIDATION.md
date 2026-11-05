@@ -71,9 +71,12 @@ Use the normal resource wrapper on shared hosts. These standalone workspaces
 have their own tracked lockfiles and do not regenerate the root Cargo.lock.
 CI runs both harnesses on Linux x64 and aarch64.
 
-This is interface and forwarding validation on native x86 Linux. It does not
+The [Linux x64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502159/job/127114853182)
+and [Linux aarch64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502159/job/127114853279)
+both pass the same native controls and strict lint at source `40590360`.
+
+This is interface and forwarding validation on native x86 and ARM Linux. It does not
 requalify metric algorithms against published reference goldens, establish
 quality/performance/memory acceptance, validate HDR or every profile/input
-format, or migrate/publish any metric implementation. Additional native ARM
-execution is tracked by CI, not inferred from the x86 results. Margarine stays
+format, or migrate/publish any metric implementation. Margarine stays
 unpublished and outside the normal workspace dependency graph.

@@ -2806,5 +2806,6 @@ iqa-native-check:
 
 # Selected Margarine kernels, with their own frozen teacher dependency graph.
 iqa-margarine-check:
-    cargo run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml
+    cargo check --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bins
+    cargo run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation
     cargo clippy --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation -- -D warnings
