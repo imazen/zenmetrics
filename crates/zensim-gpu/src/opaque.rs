@@ -216,15 +216,6 @@ trait ZensimInner: Send {
         dis_rgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32>;
-    fn score_from_linear_planes(
-        &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-    ) -> Result<f32>;
     /// GPU PU-XYB (HDR) feature vector from absolute-luminance linear
     /// planes — the regime-appropriate length (228 / 300 / 372), exactly
     /// like the SDR `compute_features_vec`.
@@ -233,34 +224,35 @@ trait ZensimInner: Send {
         ref_planes: [&[f32]; 3],
         dist_planes: [&[f32]; 3],
     ) -> Result<Vec<f64>>;
-    #[allow(clippy::too_many_arguments)]
+    fn score_from_linear_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32>;
     fn score_from_linear_planes_with_diffmap(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32>;
     fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()>;
     fn score_from_linear_planes_with_warm_ref(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<f32>;
     fn score_from_linear_planes_with_warm_ref_diffmap(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32>;
 }
@@ -270,6 +262,59 @@ where
     R: cubecl::Runtime,
     Self: Send,
 {
+    fn score_from_linear_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes(self, ref_planes, ref_stride, dist_planes, dist_stride)
+    }
+    fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_diffmap(
+            self,
+            ref_planes,
+            ref_stride,
+            dist_planes,
+            dist_stride,
+            diffmap_out,
+        )
+    }
+    fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+    ) -> Result<()> {
+        Zensim::warm_reference_from_linear_planes(self, ref_planes, ref_stride)
+    }
+    fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_warm_ref(self, dist_planes, dist_stride)
+    }
+    fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_warm_ref_diffmap(
+            self,
+            dist_planes,
+            dist_stride,
+            diffmap_out,
+        )
+    }
     fn compute_features(
         &mut self,
         ref_rgb: &[u8],
@@ -336,80 +381,12 @@ where
         Zensim::score_with_warm_ref_diffmap(self, dis_rgb, diffmap_out)
     }
 
-    fn score_from_linear_planes(
-        &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-    ) -> Result<f32> {
-        Zensim::score_from_linear_planes(self, ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
-    }
-
     fn compute_features_pu_linear_nits(
         &mut self,
         ref_planes: [&[f32]; 3],
         dist_planes: [&[f32]; 3],
     ) -> Result<Vec<f64>> {
         Zensim::compute_features_pu_linear_nits(self, ref_planes, dist_planes)
-    }
-
-    fn score_from_linear_planes_with_diffmap(
-        &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-        diffmap_out: &mut Vec<f32>,
-    ) -> Result<f32> {
-        Zensim::score_from_linear_planes_with_diffmap(
-            self,
-            ref_r,
-            ref_g,
-            ref_b,
-            dist_r,
-            dist_g,
-            dist_b,
-            diffmap_out,
-        )
-    }
-
-    fn warm_reference_from_linear_planes(
-        &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-    ) -> Result<()> {
-        Zensim::warm_reference_from_linear_planes(self, ref_r, ref_g, ref_b)
-    }
-
-    fn score_from_linear_planes_with_warm_ref(
-        &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-    ) -> Result<f32> {
-        Zensim::score_from_linear_planes_with_warm_ref(self, dist_r, dist_g, dist_b)
-    }
-
-    fn score_from_linear_planes_with_warm_ref_diffmap(
-        &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-        diffmap_out: &mut Vec<f32>,
-    ) -> Result<f32> {
-        Zensim::score_from_linear_planes_with_warm_ref_diffmap(
-            self,
-            dist_r,
-            dist_g,
-            dist_b,
-            diffmap_out,
-        )
     }
 }
 
@@ -1154,27 +1131,6 @@ impl ZensimOpaque {
         Ok(score)
     }
 
-    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes`].
-    /// See that method's docs.
-    pub fn score_from_linear_planes(
-        &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-    ) -> Result<f32> {
-        let rr = self.pad_plane(ref_r)?;
-        let rg = self.pad_plane(ref_g)?;
-        let rb = self.pad_plane(ref_b)?;
-        let dr = self.pad_plane(dist_r)?;
-        let dg = self.pad_plane(dist_g)?;
-        let db = self.pad_plane(dist_b)?;
-        self.inner
-            .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
-    }
-
     /// GPU PU-XYB (HDR) feature vector from absolute-luminance linear-RGB
     /// planes (cd/m²) — the HDR analog of [`Self::compute_features_vec_pixels`].
     ///
@@ -1321,88 +1277,173 @@ impl ZensimOpaque {
                 got: dis_rgb.len(),
             },
         )?;
-        self.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+        {
+            let w = self.logical_w as usize;
+            self.score_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
+        }
+    }
+
+    /// Strided planes reflect-padded for an instance that pads; `None` when it
+    /// does not, so the pipeline reads them where they are.
+    #[allow(clippy::type_complexity)]
+    fn pad_planes<'a>(
+        &self,
+        planes: [&'a [f32]; 3],
+        stride: usize,
+    ) -> Result<Option<[std::borrow::Cow<'a, [f32]>; 3]>> {
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        for plane in planes {
+            zenmetrics_gpu_core::check_strided_plane(plane.len(), lw, lh, stride)
+                .map_err(|(expected, got)| crate::Error::DimensionMismatch { expected, got })?;
+        }
+        if !self.is_padded() {
+            return Ok(None);
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(Some(planes.map(|plane| {
+            let mut scratch = Vec::new();
+            let tight = zenmetrics_gpu_core::tight_plane(&mut scratch, plane, lw, lh, stride);
+            std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
+                tight,
+                lw,
+                lh,
+                pw as usize,
+                ph as usize,
+                1,
+            ))
+        })))
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes`]. Each image's
+    /// three planes share a stride in samples, at least the width; a tight image
+    /// passes its width. Padding is never read, and a plane needs `(height - 1) *
+    /// stride + width` samples. Planes spanning `stride * height` samples are read
+    /// where they are; only a plane that stops short of that, or a sub-64px image,
+    /// is packed first.
+    pub fn score_from_linear_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32> {
+        let rp = self.pad_planes(ref_planes, ref_stride)?;
+        let dp = self.pad_planes(dist_planes, dist_stride)?;
+        match (&rp, &dp) {
+            (Some(r), Some(d)) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner.score_from_linear_planes(
+                    [&r[0], &r[1], &r[2]],
+                    pw,
+                    [&d[0], &d[1], &d[2]],
+                    pw,
+                )
+            }
+            _ => self.inner.score_from_linear_planes(
+                ref_planes,
+                ref_stride,
+                dist_planes,
+                dist_stride,
+            ),
+        }
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_diffmap`].
-    /// See that method's docs.
-    #[allow(clippy::too_many_arguments)]
+    /// The stride rules of [`Self::score_from_linear_planes`] apply.
     pub fn score_from_linear_planes_with_diffmap(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        let rr = self.pad_plane(ref_r)?;
-        let rg = self.pad_plane(ref_g)?;
-        let rb = self.pad_plane(ref_b)?;
-        let dr = self.pad_plane(dist_r)?;
-        let dg = self.pad_plane(dist_g)?;
-        let db = self.pad_plane(dist_b)?;
-        let score = self.inner.score_from_linear_planes_with_diffmap(
-            &rr,
-            &rg,
-            &rb,
-            &dr,
-            &dg,
-            &db,
-            diffmap_out,
-        )?;
+        let rp = self.pad_planes(ref_planes, ref_stride)?;
+        let dp = self.pad_planes(dist_planes, dist_stride)?;
+        let score = match (&rp, &dp) {
+            (Some(r), Some(d)) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner.score_from_linear_planes_with_diffmap(
+                    [&r[0], &r[1], &r[2]],
+                    pw,
+                    [&d[0], &d[1], &d[2]],
+                    pw,
+                    diffmap_out,
+                )
+            }
+            _ => self.inner.score_from_linear_planes_with_diffmap(
+                ref_planes,
+                ref_stride,
+                dist_planes,
+                dist_stride,
+                diffmap_out,
+            ),
+        }?;
         self.crop_diffmap(diffmap_out);
         Ok(score)
     }
 
-    /// Mirror of [`crate::pipeline::Zensim::warm_reference_from_linear_planes`].
-    /// See that method's docs.
+    /// Mirror of [`crate::pipeline::Zensim::warm_reference_from_linear_planes`]. The
+    /// stride rules of [`Self::score_from_linear_planes`] apply.
     pub fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()> {
-        let rr = self.pad_plane(ref_r)?;
-        let rg = self.pad_plane(ref_g)?;
-        let rb = self.pad_plane(ref_b)?;
-        self.inner.warm_reference_from_linear_planes(&rr, &rg, &rb)
+        match self.pad_planes(ref_planes, ref_stride)? {
+            Some(r) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner
+                    .warm_reference_from_linear_planes([&r[0], &r[1], &r[2]], pw)
+            }
+            None => self
+                .inner
+                .warm_reference_from_linear_planes(ref_planes, ref_stride),
+        }
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref`].
-    /// See that method's docs.
+    /// The stride rules of [`Self::score_from_linear_planes`] apply.
     pub fn score_from_linear_planes_with_warm_ref(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<f32> {
-        let dr = self.pad_plane(dist_r)?;
-        let dg = self.pad_plane(dist_g)?;
-        let db = self.pad_plane(dist_b)?;
-        self.inner
-            .score_from_linear_planes_with_warm_ref(&dr, &dg, &db)
+        match self.pad_planes(dist_planes, dist_stride)? {
+            Some(d) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner
+                    .score_from_linear_planes_with_warm_ref([&d[0], &d[1], &d[2]], pw)
+            }
+            None => self
+                .inner
+                .score_from_linear_planes_with_warm_ref(dist_planes, dist_stride),
+        }
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref_diffmap`].
-    /// See that method's docs.
+    /// The stride rules of [`Self::score_from_linear_planes`] apply.
     pub fn score_from_linear_planes_with_warm_ref_diffmap(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        let dr = self.pad_plane(dist_r)?;
-        let dg = self.pad_plane(dist_g)?;
-        let db = self.pad_plane(dist_b)?;
-        let score = self.inner.score_from_linear_planes_with_warm_ref_diffmap(
-            &dr,
-            &dg,
-            &db,
-            diffmap_out,
-        )?;
+        let score = match self.pad_planes(dist_planes, dist_stride)? {
+            Some(d) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner.score_from_linear_planes_with_warm_ref_diffmap(
+                    [&d[0], &d[1], &d[2]],
+                    pw,
+                    diffmap_out,
+                )
+            }
+            None => self.inner.score_from_linear_planes_with_warm_ref_diffmap(
+                dist_planes,
+                dist_stride,
+                diffmap_out,
+            ),
+        }?;
         self.crop_diffmap(diffmap_out);
         Ok(score)
     }

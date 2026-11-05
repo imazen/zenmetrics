@@ -60,25 +60,21 @@ trait CvvdpInner: Send {
     #[allow(clippy::too_many_arguments)]
     fn compute_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score>;
     fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()>;
     fn compute_with_warm_ref_from_linear_planes(
         &mut self,
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score>;
 }
@@ -200,21 +196,19 @@ where
 
     fn compute_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
         let jod = match diffmap_out {
             Some(out) => Cvvdp::score_from_linear_planes_with_diffmap(
-                self, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, out,
+                self, ref_planes, ref_stride, dis_planes, dis_stride, out,
             )?,
-            None => {
-                Cvvdp::score_from_linear_planes(self, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)?
-            }
+            None => Cvvdp::score_from_linear_planes(
+                self, ref_planes, ref_stride, dis_planes, dis_stride,
+            )?,
         };
         Ok(Score {
             value: f64::from(jod),
@@ -225,25 +219,23 @@ where
 
     fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()> {
-        Cvvdp::warm_reference_from_linear_planes(self, ref_r, ref_g, ref_b)
+        Cvvdp::warm_reference_from_linear_planes(self, ref_planes, ref_stride)
     }
 
     fn compute_with_warm_ref_from_linear_planes(
         &mut self,
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
         let jod = match diffmap_out {
             Some(out) => Cvvdp::score_from_linear_planes_with_warm_ref_diffmap(
-                self, dis_r, dis_g, dis_b, out,
+                self, dis_planes, dis_stride, out,
             )?,
-            None => Cvvdp::score_from_linear_planes_with_warm_ref(self, dis_r, dis_g, dis_b)?,
+            None => Cvvdp::score_from_linear_planes_with_warm_ref(self, dis_planes, dis_stride)?,
         };
         Ok(Score {
             value: f64::from(jod),
@@ -465,28 +457,35 @@ impl CvvdpOpaque {
         )))
     }
 
-    /// Reflect(mirror)-pad a single-channel `f32` linear plane from the
-    /// logical extent up to the padded extent. Borrows unchanged at ≥8px.
-    fn pad_plane<'a>(&self, src: &'a [f32]) -> Result<std::borrow::Cow<'a, [f32]>> {
-        if !self.is_padded() {
-            return Ok(std::borrow::Cow::Borrowed(src));
-        }
+    /// Strided planes reflect-padded for an instance that pads; `None` when it does
+    /// not, so the pipeline reads them at their stride.
+    #[allow(clippy::type_complexity)]
+    fn pad_strided_planes<'a>(
+        &self,
+        planes: [&'a [f32]; 3],
+        stride: usize,
+    ) -> Result<Option<[std::borrow::Cow<'a, [f32]>; 3]>> {
         let (lw, lh) = (self.width as usize, self.height as usize);
-        if src.len() != lw * lh {
-            return Err(crate::Error::DimensionMismatch {
-                expected: lw * lh,
-                got: src.len(),
-            });
+        for plane in planes {
+            zenmetrics_gpu_core::check_strided_plane(plane.len(), lw, lh, stride)
+                .map_err(|(expected, got)| crate::Error::DimensionMismatch { expected, got })?;
+        }
+        if !self.is_padded() {
+            return Ok(None);
         }
         let (pw, ph) = self.inner.dims();
-        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src,
-            lw,
-            lh,
-            pw as usize,
-            ph as usize,
-            1,
-        )))
+        Ok(Some(planes.map(|plane| {
+            let mut scratch = Vec::new();
+            let tight = zenmetrics_gpu_core::tight_plane(&mut scratch, plane, lw, lh, stride);
+            std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
+                tight,
+                lw,
+                lh,
+                pw as usize,
+                ph as usize,
+                1,
+            ))
+        })))
     }
 
     /// Crop a padded-extent diffmap (`pw × ph`, row-major) back to the
@@ -657,32 +656,37 @@ impl CvvdpOpaque {
     /// LUT conversion. Pass `Some(&mut Vec<f32>)` to also fill a
     /// per-pixel diffmap. Mirrors butteraugli-gpu's W44-PHASE3-B4
     /// `compute_with_reference_from_linear_planes` pattern.
-    #[allow(clippy::too_many_arguments)] // 6 planar slices + diffmap option — natural shape for the linear-planes API.
+    ///
+    /// Each image's three planes share a stride in samples, at least the width; a
+    /// tight image passes its width. Padding is never read, and a plane needs
+    /// `(height - 1) * stride + width` samples. A plane is packed on upload only
+    /// when its stride differs from the width, into scratch this instance keeps.
     pub fn compute_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
-        let rr = self.pad_plane(ref_r)?;
-        let rg = self.pad_plane(ref_g)?;
-        let rb = self.pad_plane(ref_b)?;
-        let dr = self.pad_plane(dis_r)?;
-        let dg = self.pad_plane(dis_g)?;
-        let db = self.pad_plane(dis_b)?;
+        let rp = self.pad_strided_planes(ref_planes, ref_stride)?;
+        let dp = self.pad_strided_planes(dis_planes, dis_stride)?;
+        let pw = self.inner.dims().0 as usize;
+        let (ref_planes, ref_stride): ([&[f32]; 3], usize) = match &rp {
+            Some(r) => ([&r[0], &r[1], &r[2]], pw),
+            None => (ref_planes, ref_stride),
+        };
+        let (dis_planes, dis_stride): ([&[f32]; 3], usize) = match &dp {
+            Some(d) => ([&d[0], &d[1], &d[2]], pw),
+            None => (dis_planes, dis_stride),
+        };
         match diffmap_out {
             Some(out) => {
                 let s = self.inner.compute_from_linear_planes(
-                    &rr,
-                    &rg,
-                    &rb,
-                    &dr,
-                    &dg,
-                    &db,
+                    ref_planes,
+                    ref_stride,
+                    dis_planes,
+                    dis_stride,
                     Some(out),
                 )?;
                 self.crop_diffmap(out);
@@ -690,7 +694,7 @@ impl CvvdpOpaque {
             }
             None => self
                 .inner
-                .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, None),
+                .compute_from_linear_planes(ref_planes, ref_stride, dis_planes, dis_stride, None),
         }
     }
 
@@ -717,44 +721,55 @@ impl CvvdpOpaque {
                 got: dis_rgb.len(),
             },
         )?;
-        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, diffmap_out)
+        {
+            let w = self.width as usize;
+            self.compute_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w, diffmap_out)
+        }
     }
 
     /// Cache the REF side from three planar linear-RGB f32 buffers
     /// (cvvdp/zensim-specific linear-planes extension of
     /// [`Self::set_reference_srgb_u8`]).
-    /// See [`crate::pipeline::Cvvdp::warm_reference_from_linear_planes`].
+    /// See [`crate::pipeline::Cvvdp::warm_reference_from_linear_planes`]. The stride
+    /// rules of [`Self::compute_from_linear_planes`] apply.
     pub fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()> {
-        let rr = self.pad_plane(ref_r)?;
-        let rg = self.pad_plane(ref_g)?;
-        let rb = self.pad_plane(ref_b)?;
-        self.inner.warm_reference_from_linear_planes(&rr, &rg, &rb)
+        match self.pad_strided_planes(ref_planes, ref_stride)? {
+            Some(r) => {
+                let pw = self.inner.dims().0 as usize;
+                self.inner
+                    .warm_reference_from_linear_planes([&r[0], &r[1], &r[2]], pw)
+            }
+            None => self
+                .inner
+                .warm_reference_from_linear_planes(ref_planes, ref_stride),
+        }
     }
 
     /// Score a DIST candidate (linear-RGB f32 planes) against the cached
     /// REF state. Pass `Some(&mut Vec<f32>)` to also fill a per-pixel
-    /// diffmap (cvvdp/zensim-specific linear-planes extension).
+    /// diffmap (cvvdp/zensim-specific linear-planes extension). The stride rules of
+    /// [`Self::compute_from_linear_planes`] apply.
     pub fn compute_with_warm_ref_from_linear_planes(
         &mut self,
-        dis_r: &[f32],
-        dis_g: &[f32],
-        dis_b: &[f32],
+        dis_planes: [&[f32]; 3],
+        dis_stride: usize,
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
-        let dr = self.pad_plane(dis_r)?;
-        let dg = self.pad_plane(dis_g)?;
-        let db = self.pad_plane(dis_b)?;
+        let dp = self.pad_strided_planes(dis_planes, dis_stride)?;
+        let pw = self.inner.dims().0 as usize;
+        let (dis_planes, dis_stride): ([&[f32]; 3], usize) = match &dp {
+            Some(d) => ([&d[0], &d[1], &d[2]], pw),
+            None => (dis_planes, dis_stride),
+        };
         match diffmap_out {
             Some(out) => {
                 let s = self.inner.compute_with_warm_ref_from_linear_planes(
-                    &dr,
-                    &dg,
-                    &db,
+                    dis_planes,
+                    dis_stride,
                     Some(out),
                 )?;
                 self.crop_diffmap(out);
@@ -762,7 +777,7 @@ impl CvvdpOpaque {
             }
             None => self
                 .inner
-                .compute_with_warm_ref_from_linear_planes(&dr, &dg, &db, None),
+                .compute_with_warm_ref_from_linear_planes(dis_planes, dis_stride, None),
         }
     }
 }

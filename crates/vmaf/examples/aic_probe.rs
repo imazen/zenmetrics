@@ -31,11 +31,13 @@ fn main() {
         y: &yr,
         u: &ur,
         v: &vr,
+        strides: [w, w / 2, w / 2],
     };
     let fd = Yuv420Frame {
         y: &yd,
         u: &ud,
         v: &vd,
+        strides: [w, w / 2, w / 2],
     };
     for variant in [VmafV0Variant::Standard, VmafV0Variant::StandardNeg] {
         let scorer = VmafV0Scorer::new(w, h, 8, variant).unwrap();

@@ -696,108 +696,81 @@ impl Cvvdp {
     /// One-shot score from linear-f32 RGB planes (display-relative
     /// `[0, 1]`). Bypasses the sRGB byte → linear LUT — useful for
     /// JPEG XL encoder paths that already hold linear-f32 planes.
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// Each image's three planes share a stride, in samples, at least the width;
+    /// reference and distorted may differ. Padding is never read, and a plane needs
+    /// `(height - 1) * stride + width` samples.
     pub fn score_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-        padded_width: usize,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<f32> {
-        self.check_linear_planes(ref_r, padded_width)?;
-        self.check_linear_planes(ref_g, padded_width)?;
-        self.check_linear_planes(ref_b, padded_width)?;
-        self.check_linear_planes(dist_r, padded_width)?;
-        self.check_linear_planes(dist_g, padded_width)?;
-        self.check_linear_planes(dist_b, padded_width)?;
-        self.warm_active = false;
-        let display = self.params.display;
-        let w = self.width;
-        let h = self.height;
-        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
-        linear_planes_to_dkl_planar(
-            ref_r,
-            ref_g,
-            ref_b,
-            w,
-            h,
-            padded_width,
-            display,
-            ra,
-            rrg,
-            rvy,
-        );
-        linear_planes_to_dkl_planar(
-            dist_r,
-            dist_g,
-            dist_b,
-            w,
-            h,
-            padded_width,
-            display,
-            da,
-            drg,
-            dvy,
-        );
+        self.convert_strided_planes(ref_planes, ref_stride, dist_planes, dist_stride)?;
         let (jod, _) = self.score_internal(false)?;
         Ok(jod)
     }
 
-    /// As `score_from_linear_planes` but also returns the per-pixel
+    /// As [`Self::score_from_linear_planes`] but also returns the per-pixel
     /// diffmap.
-    #[allow(clippy::too_many_arguments)]
     pub fn score_from_linear_planes_with_diffmap(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
-        padded_width: usize,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        self.check_linear_planes(ref_r, padded_width)?;
-        self.check_linear_planes(ref_g, padded_width)?;
-        self.check_linear_planes(ref_b, padded_width)?;
-        self.check_linear_planes(dist_r, padded_width)?;
-        self.check_linear_planes(dist_g, padded_width)?;
-        self.check_linear_planes(dist_b, padded_width)?;
-        self.warm_active = false;
-        let display = self.params.display;
-        let w = self.width;
-        let h = self.height;
-        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
-        linear_planes_to_dkl_planar(
-            ref_r,
-            ref_g,
-            ref_b,
-            w,
-            h,
-            padded_width,
-            display,
-            ra,
-            rrg,
-            rvy,
-        );
-        linear_planes_to_dkl_planar(
-            dist_r,
-            dist_g,
-            dist_b,
-            w,
-            h,
-            padded_width,
-            display,
-            da,
-            drg,
-            dvy,
-        );
+        self.convert_strided_planes(ref_planes, ref_stride, dist_planes, dist_stride)?;
         let (jod, diff) = self.score_internal(true)?;
         *diffmap_out = diff.expect("with_diffmap=true returns Some");
         Ok(jod)
+    }
+
+    fn convert_strided_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<()> {
+        for (planes, stride) in [(ref_planes, ref_stride), (dist_planes, dist_stride)] {
+            for plane in planes {
+                self.check_strided_plane(plane, stride)?;
+            }
+        }
+        self.warm_active = false;
+        let display = self.params.display;
+        let (w, h) = (self.width, self.height);
+        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
+        let [r, g, b] = ref_planes;
+        linear_planes_to_dkl_planar(r, g, b, w, h, ref_stride, display, ra, rrg, rvy);
+        let [r, g, b] = dist_planes;
+        linear_planes_to_dkl_planar(r, g, b, w, h, dist_stride, display, da, drg, dvy);
+        Ok(())
+    }
+
+    fn check_strided_plane(&self, plane: &[f32], stride: usize) -> Result<()> {
+        let misfit = |expected| {
+            Err(Error::PlaneShapeMismatch {
+                expected,
+                got: plane.len(),
+            })
+        };
+        if stride < self.width {
+            return misfit(self.width);
+        }
+        let needed = self
+            .height
+            .checked_sub(1)
+            .and_then(|rows| rows.checked_mul(stride))
+            .and_then(|start| start.checked_add(self.width));
+        match needed {
+            Some(needed) if needed <= plane.len() => Ok(()),
+            Some(needed) => misfit(needed),
+            None => misfit(usize::MAX),
+        }
     }
 
     // --- internal helpers ---
@@ -813,18 +786,6 @@ impl Cvvdp {
             Ok(())
         } else {
             Err(Error::DimensionMismatch {
-                expected: need,
-                got: buf.len(),
-            })
-        }
-    }
-
-    fn check_linear_planes(&self, buf: &[f32], padded_width: usize) -> Result<()> {
-        let need = padded_width * self.height;
-        if buf.len() == need {
-            Ok(())
-        } else {
-            Err(Error::PlaneShapeMismatch {
                 expected: need,
                 got: buf.len(),
             })

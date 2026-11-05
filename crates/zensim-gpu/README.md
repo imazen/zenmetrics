@@ -154,7 +154,8 @@ let ref_r: Vec<f32> = vec![0.5; 512 * 512];
 let ref_g: Vec<f32> = vec![0.5; 512 * 512];
 let ref_b: Vec<f32> = vec![0.5; 512 * 512];
 
-z.warm_reference_from_linear_planes(&ref_r, &ref_g, &ref_b)?;
+// The planes share a stride in samples; a tight image passes its width.
+z.warm_reference_from_linear_planes([&ref_r, &ref_g, &ref_b], 512)?;
 let mut diffmap = Vec::new();
 
 let dist_r: Vec<f32> = vec![0.49; 512 * 512];
@@ -162,7 +163,9 @@ let dist_g: Vec<f32> = vec![0.49; 512 * 512];
 let dist_b: Vec<f32> = vec![0.49; 512 * 512];
 
 let score = z.score_from_linear_planes_with_warm_ref_diffmap(
-    &dist_r, &dist_g, &dist_b, &mut diffmap,
+    [&dist_r, &dist_g, &dist_b],
+    512,
+    &mut diffmap,
 )?;
 # Ok::<(), zensim_gpu::Error>(())
 ```

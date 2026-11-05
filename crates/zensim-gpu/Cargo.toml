@@ -110,6 +110,13 @@ required-features = ["cubecl-types"]
 name = "it"
 path = "tests/it/main.rs"
 
+# Its own binary: `it::cpu_gpu_diffmap_parity` sets ZENSIM_GPU_DIFFMAP=1 for the
+# whole process, which would switch a diffmap source partway through this
+# comparison of the CPU reader's two plane layouts.
+[[test]]
+name = "strided_linear_planes"
+path = "tests/strided_linear_planes.rs"
+
 [[example]]
 name = "strip_cached_ref_speedup"
 required-features = ["cuda"]

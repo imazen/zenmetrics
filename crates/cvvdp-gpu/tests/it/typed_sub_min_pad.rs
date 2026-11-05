@@ -233,7 +233,7 @@ fn typed_sub8_linear_planes_matches_manual_pad_to_8() {
     )
     .expect("sub-8 pads");
     let s_sub = z
-        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+        .score_from_linear_planes([&rr, &rg, &rb], w as usize, [&dr, &dg, &db], w as usize)
         .expect("sub linear-planes score");
 
     let plan = PadPlan::to_min(w, h, MIN);
@@ -246,7 +246,12 @@ fn typed_sub8_linear_planes_matches_manual_pad_to_8() {
     )
     .expect("8 new");
     let s8 = z8
-        .score_from_linear_planes(&p(&rr), &p(&rg), &p(&rb), &p(&dr), &p(&dg), &p(&db))
+        .score_from_linear_planes(
+            [&p(&rr), &p(&rg), &p(&rb)],
+            MIN as usize,
+            [&p(&dr), &p(&dg), &p(&db)],
+            MIN as usize,
+        )
         .expect("8 linear-planes score");
 
     eprintln!(

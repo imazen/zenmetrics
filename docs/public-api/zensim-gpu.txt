@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zensim-gpu.txt 145 lines (supported surface) | zensim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,pixels,wgpu) | zensim-gpu.internal.txt 372 lines (653 hidden + 0 excluded-feature)
+# files: zensim-gpu.txt 146 lines (supported surface) | zensim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,pixels,wgpu) | zensim-gpu.internal.txt 370 lines (651 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -16,18 +16,18 @@
 #   free functions                             19
 #   inherent methods                           37
 #   struct fields                              23
-#   enum variants                              27
+#   enum variants                              28
 #   re-exports                                  3
 #   trait roster entries (type × trait)        35
 #   auto-trait-complete types                   7
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                          117
+#   (root)                          118
 #   formula_rev                       5
 #   memory_mode                      26
 
-## items (136 lines)
+## items (137 lines)
 
 pub mod zensim_gpu
 pub use Backend
@@ -74,6 +74,7 @@ pub Error::FormulaRevisionMismatch::pipeline: formula_rev::FormulaRevision
 pub Error::InvalidImageSize
 pub Error::ModeUnsupported(&'static str)
 pub Error::NoCachedReference
+pub Error::ReadbackFailed(alloc::string::String)
 pub Error::TooBigForFull
 pub Error::TooBigForFull::cap: usize
 pub Error::TooBigForFull::needed: usize
@@ -126,15 +127,15 @@ pub fn ZensimOpaque::new(zenmetrics_gpu_core::Backend, u32, u32, ZensimParams) -
 pub fn ZensimOpaque::new_with_memory_mode(zenmetrics_gpu_core::Backend, u32, u32, ZensimParams, memory_mode::MemoryMode) -> Result<Self>
 pub fn ZensimOpaque::regime(&self) -> ZensimFeatureRegime
 pub fn ZensimOpaque::score_from_linear_interleaved(&mut self, &[f32], &[f32]) -> Result<f32>
-pub fn ZensimOpaque::score_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<f32>
-pub fn ZensimOpaque::score_from_linear_planes_with_diffmap(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32], &mut alloc::vec::Vec<f32>) -> Result<f32>
-pub fn ZensimOpaque::score_from_linear_planes_with_warm_ref(&mut self, &[f32], &[f32], &[f32]) -> Result<f32>
-pub fn ZensimOpaque::score_from_linear_planes_with_warm_ref_diffmap(&mut self, &[f32], &[f32], &[f32], &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn ZensimOpaque::score_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<f32>
+pub fn ZensimOpaque::score_from_linear_planes_with_diffmap(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
+pub fn ZensimOpaque::score_from_linear_planes_with_warm_ref(&mut self, [&[f32]; 3], usize) -> Result<f32>
+pub fn ZensimOpaque::score_from_linear_planes_with_warm_ref_diffmap(&mut self, [&[f32]; 3], usize, &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn ZensimOpaque::score_with_diffmap(&mut self, &[u8], &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn ZensimOpaque::score_with_warm_ref_diffmap(&mut self, &[u8], &mut alloc::vec::Vec<f32>) -> Result<f32>
 pub fn ZensimOpaque::set_reference_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>) -> Result<()>
 pub fn ZensimOpaque::set_reference_srgb_u8(&mut self, &[u8]) -> Result<()>
-pub fn ZensimOpaque::warm_reference_from_linear_planes(&mut self, &[f32], &[f32], &[f32]) -> Result<()>
+pub fn ZensimOpaque::warm_reference_from_linear_planes(&mut self, [&[f32]; 3], usize) -> Result<()>
 #[non_exhaustive] pub struct ZensimParams
 pub ZensimParams::profile: core::option::Option<zensim::profile::ZensimProfile>
 pub ZensimParams::regime: ZensimFeatureRegime

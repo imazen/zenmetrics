@@ -3,13 +3,117 @@ use crate::{
     Error, MOTION_MAX_VAL, ModelVariant, VmafFeatures, VmafModel, adm3_v1_from_luma, motion_sad,
     motion3_from_luma, speed_v1_chroma_420,
 };
+use std::borrow::Cow;
 use std::collections::VecDeque;
 
+/// One 4:2:0 frame. `strides` gives each plane's row pitch `[y, u, v]` in
+/// samples, at least its width. A strided plane needs `(rows - 1) * stride +
+/// width` samples, and padding may hold anything: it is never read. A plane whose
+/// stride is its width is exactly `rows * width` samples. The scorers pack a
+/// strided plane once at entry, because their kernels read tight planes; a plane
+/// at its width is not copied.
 #[derive(Clone, Copy)]
 pub struct Yuv420Frame<'a> {
     pub y: &'a [u16],
     pub u: &'a [u16],
     pub v: &'a [u16],
+    pub strides: [usize; 3],
+}
+
+/// A frame's planes, tightly packed, and the strides that says.
+pub(crate) struct TightFrame<'a> {
+    y: Cow<'a, [u16]>,
+    u: Cow<'a, [u16]>,
+    v: Cow<'a, [u16]>,
+    strides: [usize; 3],
+}
+
+impl TightFrame<'_> {
+    pub(crate) fn frame(&self) -> Yuv420Frame<'_> {
+        Yuv420Frame {
+            y: &self.y,
+            u: &self.u,
+            v: &self.v,
+            strides: self.strides,
+        }
+    }
+}
+
+fn tight_plane(
+    plane: &[u16],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<Cow<'_, [u16]>, Error> {
+    let misfit = Error::InvalidInput("strided plane does not fit its geometry");
+    if stride < width {
+        return Err(misfit);
+    }
+    // Unsliced, so the kernels' own length checks see what the caller passed.
+    if stride == width {
+        return Ok(Cow::Borrowed(plane));
+    }
+    let span = match height.checked_sub(1) {
+        None => 0,
+        Some(rows) => rows
+            .checked_mul(stride)
+            .and_then(|start| start.checked_add(width))
+            .ok_or(Error::InvalidInput(
+                "strided plane does not fit its geometry",
+            ))?,
+    };
+    if plane.len() < span {
+        return Err(misfit);
+    }
+    let mut out = Vec::with_capacity(width * height);
+    for row in plane.chunks(stride).take(height) {
+        out.extend_from_slice(&row[..width]);
+    }
+    Ok(Cow::Owned(out))
+}
+
+impl<'a> Yuv420Frame<'a> {
+    /// The frame with tight planes.
+    pub(crate) fn tight(&self, width: usize, height: usize) -> Result<TightFrame<'a>, Error> {
+        let [ys, us, vs] = self.strides;
+        let (cw, ch) = (width.div_ceil(2), height.div_ceil(2));
+        Ok(TightFrame {
+            y: tight_plane(self.y, width, height, ys)?,
+            u: tight_plane(self.u, cw, ch, us)?,
+            v: tight_plane(self.v, cw, ch, vs)?,
+            strides: [width, cw, cw],
+        })
+    }
+}
+
+/// Borrow the descriptor slice unchanged when every frame is already tight.
+/// Packed samples retain the kernels' exact-length validation.
+pub(crate) enum TightFrames<'frames, 'samples> {
+    Borrowed(&'frames [Yuv420Frame<'samples>]),
+    Packed(Vec<TightFrame<'samples>>),
+}
+impl<'frames, 'samples> TightFrames<'frames, 'samples> {
+    pub(crate) fn new(
+        frames: &'frames [Yuv420Frame<'samples>],
+        width: usize,
+        height: usize,
+    ) -> Result<Self, Error> {
+        let strides = [width, width.div_ceil(2), width.div_ceil(2)];
+        if frames.iter().all(|frame| frame.strides == strides) {
+            return Ok(Self::Borrowed(frames));
+        }
+        frames
+            .iter()
+            .map(|frame| frame.tight(width, height))
+            .collect::<Result<Vec<_>, _>>()
+            .map(Self::Packed)
+    }
+    pub(crate) fn frames(&self) -> Cow<'_, [Yuv420Frame<'_>]> {
+        match self {
+            Self::Borrowed(frames) => Cow::Borrowed(frames),
+            Self::Packed(frames) => Cow::Owned(frames.iter().map(TightFrame::frame).collect()),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -211,6 +315,10 @@ impl VmafV1Scorer {
                 "reference/distorted frame count mismatch or empty",
             ));
         }
+        let reference = TightFrames::new(reference, self.width, self.height)?;
+        let distorted = TightFrames::new(distorted, self.width, self.height)?;
+        let reference = reference.frames();
+        let distorted = distorted.frames();
         let hfr = matches!(
             self.variant,
             ModelVariant::HfrStandard1080p
@@ -244,7 +352,7 @@ impl VmafV1Scorer {
         }
         reference
             .iter()
-            .zip(distorted)
+            .zip(distorted.iter())
             .zip(motion)
             .map(|((reference, distorted), motion3)| {
                 self.score_frame(reference, distorted, motion3, true)
@@ -302,6 +410,10 @@ impl VmafV1Stream {
         let next = index
             .checked_add(1)
             .ok_or(Error::InvalidInput("frame count overflow"))?;
+        let (width, height) = (self.scorer.width, self.scorer.height);
+        let reference = reference.tight(width, height)?;
+        let distorted = distorted.tight(width, height)?;
+        let (reference, distorted) = (reference.frame(), distorted.frame());
         let features = self.scorer.extract_features(&reference, &distorted, true)?;
         let hfr = matches!(
             self.scorer.variant,
@@ -469,11 +581,13 @@ mod cambi_thread_tests {
             y: &reference,
             u: &chroma,
             v: &chroma,
+            strides: [width, width / 2, width / 2],
         }; 2];
         let distortions = [Yuv420Frame {
             y: &distorted,
             u: &chroma,
             v: &chroma,
+            strides: [width, width / 2, width / 2],
         }; 2];
         let serial = VmafV1Scorer::new(width, height, 10, ModelVariant::Standard1080p).unwrap();
         let parallel = VmafV1Scorer {

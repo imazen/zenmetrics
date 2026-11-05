@@ -59,6 +59,7 @@ impl Drop for Session {
 }
 
 struct Frame {
+    width: usize,
     planes: [Vec<u16>; 3],
 }
 
@@ -99,7 +100,10 @@ fn frame(index: usize, bit_depth: u32, distorted: bool) -> Frame {
             planes[2][slot] = (v.saturating_sub(usize::from(distorted) * 5) * multiplier) as u16;
         }
     }
-    Frame { planes }
+    Frame {
+        width: WIDTH,
+        planes,
+    }
 }
 
 fn banded_frame(index: usize, bit_depth: u32, distorted: bool) -> Frame {
@@ -161,7 +165,7 @@ fn large_frame(
             planes[2][slot] = (dv * multiplier) as u16;
         }
     }
-    Frame { planes }
+    Frame { width, planes }
 }
 
 fn sharpened_frame(index: usize, bit_depth: u32, distorted: bool) -> Frame {
@@ -480,6 +484,7 @@ fn cambi_high_resolution_speedup_matches_v321() {
     let width = 1920;
     let height = 1080;
     let mut rendered = Frame {
+        width,
         planes: [
             vec![0; width * height],
             vec![512; width * height / 4],
@@ -680,6 +685,7 @@ fn yuv(frame: &Frame) -> Yuv420Frame<'_> {
         y: &frame.planes[0],
         u: &frame.planes[1],
         v: &frame.planes[2],
+        strides: [frame.width, frame.width / 2, frame.width / 2],
     }
 }
 
@@ -862,6 +868,7 @@ fn v1_rejects_invalid_planar_input() {
         y: &[],
         u: &[],
         v: &[],
+        strides: [WIDTH, WIDTH / 2, WIDTH / 2],
     };
     assert!(score_v1_420(&[], &[], WIDTH, HEIGHT, 8, ModelVariant::Standard1080p).is_err());
     assert!(score_v1_420(&[frame], &[], WIDTH, HEIGHT, 8, ModelVariant::Standard1080p).is_err());
@@ -1034,6 +1041,7 @@ fn streaming_rejects_invalid_frame_without_advancing() {
         y: &[],
         u: &[],
         v: &[],
+        strides: [WIDTH, WIDTH / 2, WIDTH / 2],
     };
     let mut stream = VmafV1Stream::new(WIDTH, HEIGHT, 8, ModelVariant::Standard1080p).unwrap();
     assert!(stream.push(ref_frame, invalid).is_err());
@@ -1557,6 +1565,7 @@ fn v0_rejects_invalid_frames_without_advancing_stream() {
         y: &distorted.planes[0],
         u: &[],
         v: &distorted.planes[2],
+        strides: [WIDTH, WIDTH / 2, WIDTH / 2],
     };
     assert!(
         score_v0_420(
@@ -1595,6 +1604,7 @@ fn small_adm_frames_are_rejected_without_panicking() {
             y: &luma,
             u: &chroma,
             v: &chroma,
+            strides: [width, width / 2, width / 2],
         };
         assert!(
             adm3_v1_from_luma(&luma, &luma, width, height, 8, ModelVariant::Standard1080p).is_err()
@@ -1619,6 +1629,7 @@ fn small_adm_frames_are_rejected_without_panicking() {
         y: &luma,
         u: &chroma,
         v: &chroma,
+        strides: [34, 17, 17],
     };
     assert!(score_v0_420(&[frame], &[frame], 34, 34, 8, VmafV0Variant::Standard).is_ok());
 }

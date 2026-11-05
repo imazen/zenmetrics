@@ -18,6 +18,7 @@ mod opaque_strip_parity;
 mod reduction_parity;
 #[cfg(all(feature = "cubecl-types", feature = "cuda", feature = "internals"))]
 mod set_reference_from_linear_planes;
+mod strided_linear_planes;
 mod strip_hf_checkerboard;
 #[cfg(feature = "cubecl-types")]
 mod strip_parity;

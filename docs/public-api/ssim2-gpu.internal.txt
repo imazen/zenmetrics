@@ -13,19 +13,19 @@
 #   pub types (struct/enum/trait/alias)        38
 #   pub consts/statics                         13
 #   free functions                             45
-#   inherent methods                          157
+#   inherent methods                          154
 #   enum variants                              19
 #   re-exports                                  2
-#   trait roster entries (type × trait)       140
+#   trait roster entries (type × trait)       141
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                           24
+#   (root)                           21
 #   kernels                         273
 #   memory_mode                       2
 #   session                           3
 
-## items (295 lines)
+## items (292 lines)
 
 pub const kernels::blur::BLOCK_WIDTH: u32
 pub const kernels::blur::FIR_BLOCK_WIDTH: u32
@@ -40,9 +40,6 @@ pub const kernels::reduction::THREADS_PER_REDUCTION: usize
 pub const kernels::transpose::TILE_DIM: u32
 pub const kernels::transpose::TPB_X: u32
 pub const kernels::transpose::TPB_Y: u32
-pub fn Ssim2Blur::assert_fields_are_eq(&self)
-pub fn Ssim2Mode::assert_fields_are_eq(&self)
-pub fn XybFlavor::assert_fields_are_eq(&self)
 pub fn kernels::blur::blur_h_fir5_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32)
 pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
 pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
@@ -323,7 +320,7 @@ pub unsafe fn kernels::xyb::linear_to_xyb_planar_kernel::launch_unchecked<'kerne
 pub use session::cleanup_stream
 pub use session::stream_reserved_bytes
 
-## trait impls (45 types)
+## trait impls (46 types)
 
 GpuSsim2Result: TrivialClone
 Ssim2Blur: TrivialClone
@@ -370,45 +367,46 @@ kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>: cubecl_
 kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
 memory_mode::MemoryMode: TrivialClone
 memory_mode::ResolvedMode: TrivialClone
+memory_mode::ScoreResourceEstimate: TrivialClone
 
 ## auto traits
 
 0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_pass_kernel::BlurPassKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::transpose::transpose_kernel::TransposeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
-kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_pass_kernel::BlurPassKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::transpose::transpose_kernel::TransposeKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

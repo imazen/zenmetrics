@@ -1138,6 +1138,9 @@ pub struct Cvvdp<R: Runtime> {
     /// call; `None` until then. Skipped entirely on the sRGB-byte
     /// upload path.
     linear_planes_upload: Option<LinearPlanesUpload>,
+    /// Reused tight copies of strided linear planes, three per image, packed on
+    /// upload only when a stride differs from the width.
+    linear_pack: [Vec<f32>; 6],
 
     /// Strip-mode configuration. `Some(_)` iff this `Cvvdp<R>` was
     /// built via [`Cvvdp::new_strip`] / `new_with_memory_mode` resolving
@@ -2533,6 +2536,7 @@ impl<R: Runtime> Cvvdp<R> {
             warm_ref_baseband_log_l_bkg: None,
             diffmap_scratch: None,
             linear_planes_upload: None,
+            linear_pack: Default::default(),
             strip_config: None,
             ref_full_state: None,
             strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
@@ -3211,6 +3215,34 @@ impl<R: Runtime> Cvvdp<R> {
     /// extent at the dispatch chokepoint
     /// ([`Self::_dispatch_dkl_planes_gpu_from_linear_planes`] via
     /// [`Self::_prep_linear_planes`]).
+    fn _take_linear_pack(&mut self) -> [Vec<f32>; 6] {
+        core::mem::take(&mut self.linear_pack)
+    }
+
+    /// Strided linear planes as tight samples: each plane itself when the stride is
+    /// the width, otherwise packed into `pack`, kept across calls. The stride must
+    /// reach the logical width, and a plane needs `(height - 1) * stride + width`
+    /// samples, since the last row needs no padding.
+    fn _tight_linear_planes<'a>(
+        &self,
+        pack: [&'a mut Vec<f32>; 3],
+        planes: [&'a [f32]; 3],
+        stride: usize,
+    ) -> Result<[&'a [f32]; 3]> {
+        let (w, h) = self.pad.logical();
+        let (w, h) = (w as usize, h as usize);
+        for plane in planes {
+            zenmetrics_gpu_core::check_strided_plane(plane.len(), w, h, stride)
+                .map_err(|(expected, got)| Error::DimensionMismatch { expected, got })?;
+        }
+        let [a, b, c] = pack;
+        Ok([
+            zenmetrics_gpu_core::tight_plane(a, planes[0], w, h, stride),
+            zenmetrics_gpu_core::tight_plane(b, planes[1], w, h, stride),
+            zenmetrics_gpu_core::tight_plane(c, planes[2], w, h, stride),
+        ])
+    }
+
     fn _validate_linear_planes(&self, r: &[f32], g: &[f32], b: &[f32]) -> Result<usize> {
         let expected = self.pad.logical_len(1);
         for (label, plane) in [("r", r), ("g", g), ("b", b)] {
@@ -9270,6 +9302,26 @@ impl<R: Runtime> Cvvdp<R> {
     /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
     pub fn score_from_linear_planes(
         &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32> {
+        let mut pack = self._take_linear_pack();
+        let result = (|| {
+            let [a, b, c, d, e, f] = &mut pack;
+            let [ref_r, ref_g, ref_b] =
+                self._tight_linear_planes([a, b, c], ref_planes, ref_stride)?;
+            let [dist_r, dist_g, dist_b] =
+                self._tight_linear_planes([d, e, f], dist_planes, dist_stride)?;
+            self._score_tight_linear_planes(ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
+        })();
+        self.linear_pack = pack;
+        result
+    }
+
+    fn _score_tight_linear_planes(
+        &mut self,
         ref_r: &[f32],
         ref_g: &[f32],
         ref_b: &[f32],
@@ -9286,6 +9338,35 @@ impl<R: Runtime> Cvvdp<R> {
     /// As [`Self::score_from_linear_planes`], plus per-pixel diffmap.
     #[allow(clippy::too_many_arguments)] // 6 planar f32 slices + W*H out — natural shape for "ref + dist" linear-RGB.
     pub fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let mut pack = self._take_linear_pack();
+        let result = (|| {
+            let [a, b, c, d, e, f] = &mut pack;
+            let [ref_r, ref_g, ref_b] =
+                self._tight_linear_planes([a, b, c], ref_planes, ref_stride)?;
+            let [dist_r, dist_g, dist_b] =
+                self._tight_linear_planes([d, e, f], dist_planes, dist_stride)?;
+            self._score_tight_linear_planes_with_diffmap(
+                ref_r,
+                ref_g,
+                ref_b,
+                dist_r,
+                dist_g,
+                dist_b,
+                diffmap_out,
+            )
+        })();
+        self.linear_pack = pack;
+        result
+    }
+
+    fn _score_tight_linear_planes_with_diffmap(
         &mut self,
         ref_r: &[f32],
         ref_g: &[f32],
@@ -9318,6 +9399,22 @@ impl<R: Runtime> Cvvdp<R> {
     ///   from `width × height`.
     /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
     pub fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+    ) -> Result<()> {
+        let mut pack = self._take_linear_pack();
+        let result = (|| {
+            let [a, b, c, ..] = &mut pack;
+            let [ref_r, ref_g, ref_b] =
+                self._tight_linear_planes([a, b, c], ref_planes, ref_stride)?;
+            self._warm_reference_tight_linear_planes(ref_r, ref_g, ref_b)
+        })();
+        self.linear_pack = pack;
+        result
+    }
+
+    fn _warm_reference_tight_linear_planes(
         &mut self,
         ref_r: &[f32],
         ref_g: &[f32],
@@ -9352,6 +9449,22 @@ impl<R: Runtime> Cvvdp<R> {
     /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
     pub fn score_from_linear_planes_with_warm_ref(
         &mut self,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+    ) -> Result<f32> {
+        let mut pack = self._take_linear_pack();
+        let result = (|| {
+            let [_, _, _, d, e, f] = &mut pack;
+            let [dist_r, dist_g, dist_b] =
+                self._tight_linear_planes([d, e, f], dist_planes, dist_stride)?;
+            self._score_tight_linear_planes_with_warm_ref(dist_r, dist_g, dist_b)
+        })();
+        self.linear_pack = pack;
+        result
+    }
+
+    fn _score_tight_linear_planes_with_warm_ref(
+        &mut self,
         dist_r: &[f32],
         dist_g: &[f32],
         dist_b: &[f32],
@@ -9380,6 +9493,28 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Same as [`Self::score_from_linear_planes_with_warm_ref`].
     pub fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let mut pack = self._take_linear_pack();
+        let result = (|| {
+            let [_, _, _, d, e, f] = &mut pack;
+            let [dist_r, dist_g, dist_b] =
+                self._tight_linear_planes([d, e, f], dist_planes, dist_stride)?;
+            self._score_tight_linear_planes_with_warm_ref_diffmap(
+                dist_r,
+                dist_g,
+                dist_b,
+                diffmap_out,
+            )
+        })();
+        self.linear_pack = pack;
+        result
+    }
+
+    fn _score_tight_linear_planes_with_warm_ref_diffmap(
         &mut self,
         dist_r: &[f32],
         dist_g: &[f32],

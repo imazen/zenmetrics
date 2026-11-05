@@ -6,24 +6,24 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: iwssim.txt 50 lines (supported surface) | iwssim.features.txt 0 added (features: avx512,parallel,pixels,std) | iwssim.internal.txt 3 lines (3 hidden + 0 excluded-feature)
+# files: iwssim.txt 59 lines (supported surface) | iwssim.features.txt 0 added (features: avx512,parallel,pixels,std) | iwssim.internal.txt 19 lines (4 hidden + 15 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 1
-#   pub types (struct/enum/trait/alias)         5
-#   pub consts/statics                          8
-#   free functions                              2
+#   pub types (struct/enum/trait/alias)         6
+#   pub consts/statics                         10
+#   free functions                              3
 #   inherent methods                           15
-#   struct fields                              12
-#   enum variants                               3
-#   trait roster entries (type × trait)        13
-#   auto-trait-complete types                   4
+#   struct fields                              13
+#   enum variants                               5
+#   trait roster entries (type × trait)        20
+#   auto-trait-complete types                   5
 #
 # per-module pub lines:
-#   (root)                           46
+#   (root)                           53
 
-## items (46 lines)
+## items (53 lines)
 
 pub mod iwssim
 pub enum Error
@@ -34,6 +34,9 @@ pub Error::InvalidImageSize
 pub Error::InvalidImageSize::height: u32
 pub Error::InvalidImageSize::width: u32
 pub Error::NoWarmReference
+pub enum LumaConvention
+pub LumaConvention::Bt601Rounded
+pub LumaConvention::YiqUnrounded
 pub struct Iwssim
 pub fn Iwssim::clear_warm_reference(&mut self)
 pub fn Iwssim::dimensions(&self) -> (u32, u32)
@@ -55,14 +58,17 @@ pub IwssimParams::allow_small: bool
 pub IwssimParams::bl_sz_x: u32
 pub IwssimParams::bl_sz_y: u32
 pub IwssimParams::iw_flag: bool
+pub IwssimParams::luma: LumaConvention
 pub IwssimParams::parent: bool
 pub IwssimParams::sigma_nsq: f32
 pub const fn IwssimParams::allow_small(bool) -> Self
 pub const fn IwssimParams::new() -> Self
+pub const fn IwssimParams::piq_luma() -> Self
 pub struct IwssimScore
 pub IwssimScore::per_scale: [f64; 5]
 pub IwssimScore::score: f64
 pub const IWSSIM_COLUMN_NAME: &str
+pub const IWSSIM_PIQ_COLUMN_NAME: &str
 pub const MIN_NATIVE_DIM: u32
 pub const NUM_SCALES: usize
 pub const STRIP_BODY_DEFAULT: u32
@@ -70,14 +76,17 @@ pub const STRIP_BODY_MIN: u32
 pub const STRIP_HALO_ROWS: usize
 pub fn rgb_u8_to_gray_bt601(&[u8], &mut [f32])
 pub fn rgb_u8_to_gray_bt601_vec(&[u8]) -> alloc::vec::Vec<f32>
+pub fn rgb_u8_to_gray_yiq(&[u8], &mut [f32])
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (3 types)
+## trait impls (5 types)
 
 Error: Clone, Debug, Display, Eq, Error, PartialEq
+Iwssim: zenmetrics_abstractions::metric::Metric
 IwssimParams: Clone, Copy, Debug, Default
 IwssimScore: Clone, Copy, Debug
+LumaConvention: Clone, Copy, Debug, Default, Eq, PartialEq
 
 ## auto traits
 
-4 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+5 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe

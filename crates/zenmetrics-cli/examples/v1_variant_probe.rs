@@ -138,11 +138,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 y: &ry,
                 u: &ru,
                 v: &rv,
+                strides: [w, w / 2, w / 2],
             }];
             let dd = [Yuv420Frame {
                 y: &dy,
                 u: &du,
                 v: &dv,
+                strides: [w, w / 2, w / 2],
             }];
             let res = &scorer.score(&rr, &dd)?[0];
             if name == &"3d0h" {
@@ -151,11 +153,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         y: &ry,
                         u: &neutral,
                         v: &neutral,
+                        strides: [w, w / 2, w / 2],
                     }];
                     let dd = [Yuv420Frame {
                         y: &dy,
                         u: &neutral,
                         v: &neutral,
+                        strides: [w, w / 2, w / 2],
                     }];
                     let r0 = &scorer.score(&rr, &dd)?[0];
                     (r0.score, r0.features.speed_chroma_uv)
@@ -165,11 +169,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         y: &fy,
                         u: &fu,
                         v: &fv,
+                        strides: [w, w / 2, w / 2],
                     }];
                     let dd = [Yuv420Frame {
                         y: &gy,
                         u: &gu,
                         v: &gv,
+                        strides: [w, w / 2, w / 2],
                     }];
                     scorer.score(&rr, &dd)?[0].score
                 };
@@ -179,11 +185,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         y: &ry10,
                         u: &ru10,
                         v: &rv10,
+                        strides: [w, w / 2, w / 2],
                     }];
                     let dd = [Yuv420Frame {
                         y: &dy10,
                         u: &du10,
                         v: &dv10,
+                        strides: [w, w / 2, w / 2],
                     }];
                     s10.score(&rr, &dd)?[0].score
                 };
@@ -195,11 +203,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             y: &ry,
                             u: &ru,
                             v: &rv,
+                            strides: [w, w / 2, w / 2],
                         },
                         Yuv420Frame {
                             y: &ry,
                             u: &ru,
                             v: &rv,
+                            strides: [w, w / 2, w / 2],
                         },
                     ];
                     let dd = [
@@ -207,11 +217,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             y: &ry,
                             u: &ru,
                             v: &rv,
+                            strides: [w, w / 2, w / 2],
                         },
                         Yuv420Frame {
                             y: &dy,
                             u: &du,
                             v: &dv,
+                            strides: [w, w / 2, w / 2],
                         },
                     ];
                     let s = scorer.score(&rr, &dd)?;
@@ -220,11 +232,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             y: &dy,
                             u: &du,
                             v: &dv,
+                            strides: [w, w / 2, w / 2],
                         },
                         Yuv420Frame {
                             y: &dy,
                             u: &du,
                             v: &dv,
+                            strides: [w, w / 2, w / 2],
                         },
                     ];
                     let s2 = scorer.score(&rr, &dd2)?;

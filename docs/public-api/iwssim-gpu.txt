@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: iwssim-gpu.txt 89 lines (supported surface) | iwssim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,hip,pixels,wgpu) | iwssim-gpu.internal.txt 47 lines (54 hidden + 0 excluded-feature)
+# files: iwssim-gpu.txt 101 lines (supported surface) | iwssim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,hip,pixels,wgpu) | iwssim-gpu.internal.txt 52 lines (59 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        11
+#   pub types (struct/enum/trait/alias)        13
 #   pub consts/statics                          6
-#   free functions                             11
-#   inherent methods                           13
-#   struct fields                              16
-#   enum variants                              22
+#   free functions                             15
+#   inherent methods                           15
+#   struct fields                              20
+#   enum variants                              24
 #   re-exports                                  5
-#   trait roster entries (type × trait)        31
-#   auto-trait-complete types                   7
+#   trait roster entries (type × trait)        36
+#   auto-trait-complete types                   8
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           67
-#   memory_mode                      19
+#   (root)                           76
+#   memory_mode                      24
 
-## items (80 lines)
+## items (91 lines)
 
 pub mod iwssim_gpu
 pub use Backend
@@ -45,11 +45,14 @@ pub memory_mode::MemoryMode::Tile::w: u32
 pub memory_mode::ResolvedMode::Full
 pub memory_mode::ResolvedMode::Strip
 pub memory_mode::ResolvedMode::Strip::h_body: u32
+pub memory_mode::ScoreResourceEstimate::time_ms: f32
+pub memory_mode::ScoreResourceEstimate::vram_bytes: usize
 pub fn memory_mode::auto_strip_body_for(u32, u32, usize) -> u32
 pub fn memory_mode::reclaim_pooled_vram(zenmetrics_gpu_core::Backend)
 pub fn memory_mode::resolve_auto(u32, u32, usize) -> Result<memory_mode::ResolvedMode>
 pub enum Error
 pub Error::CachedRefNotSupportedInStripMode
+pub Error::Cancelled(enough::reason::StopReason)
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: usize
 pub Error::DimensionMismatch::got: usize
@@ -57,6 +60,7 @@ pub Error::InvalidImageSize
 pub Error::ModeUnsupported(&'static str)
 pub Error::NoCachedReference
 pub Error::NotStripMode
+pub Error::ReadbackFailed(alloc::string::String)
 pub Error::TooBigForFull
 pub Error::TooBigForFull::cap: usize
 pub Error::TooBigForFull::needed: usize
@@ -90,7 +94,9 @@ pub fn IwssimOpaque::compute_gray_f32(&mut self, &[f32], &[f32]) -> Result<zenme
 pub fn IwssimOpaque::compute_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle) -> Result<zenmetrics_gpu_core::Score>
 pub fn IwssimOpaque::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<zenmetrics_gpu_core::Score>
 pub fn IwssimOpaque::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<zenmetrics_gpu_core::Score>
+pub fn IwssimOpaque::compute_srgb_u8_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn IwssimOpaque::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<zenmetrics_gpu_core::Score>
+pub fn IwssimOpaque::compute_with_reference_srgb_u8_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn IwssimOpaque::dims(&self) -> (u32, u32)
 pub fn IwssimOpaque::has_reference(&self) -> bool
 pub fn IwssimOpaque::n_scales(&self) -> usize
@@ -102,24 +108,30 @@ pub fn IwssimOpaque::set_reference_srgb_u8(&mut self, &[u8]) -> Result<()>
 pub IwssimParams::allow_small: bool
 pub const IwssimParams::DEFAULT: Self
 pub const fn IwssimParams::allow_small(bool) -> Self
+pub struct ScoreResourceEstimate [also: memory_mode]
+pub ScoreResourceEstimate::time_ms: f32
+pub ScoreResourceEstimate::vram_bytes: usize
 pub const IWSSIM_COLUMN_NAME: &str
 pub fn estimate_gpu_memory_bytes(u32, u32) -> usize [also: memory_mode]
+pub fn estimate_score_resources(u32, u32) -> memory_mode::ScoreResourceEstimate [also: memory_mode]
+pub fn estimate_score_time_ms(u32, u32) -> f32 [also: memory_mode]
 pub fn estimate_strip_gpu_memory_bytes(u32, u32) -> core::option::Option<usize> [also: memory_mode]
 pub fn live_vram_probe_bytes() -> core::option::Option<usize> [also: memory_mode]
 pub fn vram_cap_bytes() -> usize [also: memory_mode]
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (7 types)
+## trait impls (8 types)
 
-Error: Clone, Debug, Display, Error
+Error: Clone, Debug, Display, Error, From<enough::reason::StopReason>
 GpuIwssimResult: Clone, Copy, Debug
 IwssimConfig: Clone, Copy, Debug, Default
 IwssimParams: Clone, Copy, Debug, Default
 IwssimStrategy: Clone, Copy, Debug, Default, Eq, PartialEq
 memory_mode::MemoryMode: Clone, Copy, Debug, Eq, PartialEq
 memory_mode::ResolvedMode: Clone, Copy, Debug, Eq, PartialEq
+memory_mode::ScoreResourceEstimate: Clone, Copy, Debug, PartialEq
 
 ## auto traits
 
-7 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+8 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 IwssimOpaque: !RefUnwindSafe !Sync !UnwindSafe

@@ -6,35 +6,74 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenmetrics-api.txt 198 lines (supported surface) | zenmetrics-api.features.txt 26 added (features: all-metrics,butter,cpu,cpu-butter,cpu-cvvdp,cpu-dssim,cpu-iwssim,cpu-metrics,cpu-ssim2,cpu-zensim,cubecl-types,cuda,cvvdp,dssim,encoded,hdr,hip,iwssim,pixels,ssim2,wgpu,zensim) | zenmetrics-api.internal.txt 55 lines (56 hidden + 0 excluded-feature)
+# files: zenmetrics-api.txt 304 lines (supported surface) | zenmetrics-api.features.txt 32 added (features: all-metrics,butter,cpu,cpu-butter,cpu-cvvdp,cpu-dssim,cpu-hdrvdp,cpu-iwssim,cpu-metrics,cpu-ssim2,cpu-zensim,cubecl-types,cuda,cvvdp,dssim,encoded,hdr,hip,iwssim,pixels,ssim2,wgpu,zensim,zensim-candidate-profiles,zensim-deprecated-profiles) | zenmetrics-api.internal.txt 58 lines (59 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        21
-#   pub consts/statics                          7
-#   free functions                             16
-#   inherent methods                           55
-#   struct fields                              22
-#   enum variants                              41
-#   re-exports                                  6
-#   trait roster entries (type × trait)        74
-#   auto-trait-complete types                  15
+#   pub modules                                 4
+#   pub types (struct/enum/trait/alias)        29
+#   pub consts/statics                          9
+#   free functions                             35
+#   inherent methods                           65
+#   struct fields                              58
+#   enum variants                              66
+#   re-exports                                  8
+#   trait roster entries (type × trait)       100
+#   auto-trait-complete types                  20
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          131
-#   hdr                              39
+#   (root)                          177
+#   alpha                            38
+#   hdr                              41
+#   zensim_profile                   18
 
-## items (170 lines)
+## items (271 lines)
 
 pub mod zenmetrics_api
 pub use butter
 pub use cvvdp
 pub use dssim
+pub use enough
 pub use iwssim
 pub use ssim2
 pub use zensim
+pub use zensim_cpu
+pub mod alpha
+pub alpha::AlphaError::AlphaNotOpaque
+pub alpha::AlphaError::AlphaNotOpaque::max_transparency: u8
+pub alpha::AlphaError::AlphaNotOpaque::non_opaque_count: usize
+pub alpha::AlphaError::BufferLengthMismatch
+pub alpha::AlphaError::BufferLengthMismatch::actual: usize
+pub alpha::AlphaError::BufferLengthMismatch::expected: usize
+pub alpha::AlphaError::DimensionMismatch
+pub alpha::AlphaError::DimensionMismatch::dist_dims: (u32, u32)
+pub alpha::AlphaError::DimensionMismatch::ref_dims: (u32, u32)
+pub alpha::AlphaPolicy::CompositeOnto
+pub alpha::AlphaPolicy::CompositeOnto::b: u8
+pub alpha::AlphaPolicy::CompositeOnto::g: u8
+pub alpha::AlphaPolicy::CompositeOnto::r: u8
+pub alpha::AlphaPolicy::DeterministicNoise
+pub alpha::AlphaPolicy::DiscardUnchecked
+pub alpha::AlphaPolicy::MatteBlack
+pub alpha::AlphaPolicy::MatteWhite
+pub alpha::AlphaPolicy::MinWhiteBlack
+pub alpha::AlphaPolicy::RequireOpaque
+pub fn alpha::AlphaPolicy::from_str_loose(&str) -> core::option::Option<Self>
+pub alpha::AlphaStats::mae: f64
+pub alpha::AlphaStats::max_delta: u8
+pub alpha::AlphaStats::pixels_differing: u64
+pub alpha::AlphaStats::psnr: f64
+pub alpha::AlphaStats::total_pixels: u64
+pub const alpha::ALPHA_BG_TABLE: [f32; 4096]
+pub fn alpha::alpha_background_linear(usize, usize) -> f32
+pub fn alpha::composite_rgba_srgb8(&[u8], u32, u32, alpha::AlphaPolicy) -> core::result::Result<alloc::vec::Vec<u8>, alpha::AlphaError>
+pub fn alpha::compute_alpha_stats(&[u8], &[u8]) -> core::result::Result<alpha::AlphaStats, alpha::AlphaError>
+pub fn alpha::compute_rgba_alpha_stats(&[u8], &[u8]) -> core::result::Result<alpha::AlphaStats, alpha::AlphaError>
+pub fn alpha::extract_alpha_channel(&[u8]) -> alloc::vec::Vec<u8>
+pub fn alpha::is_fully_opaque_rgba(&[u8]) -> bool
+pub fn alpha::linear_to_srgb_u8(f32) -> u8
+pub fn alpha::srgb_u8_to_linear(u8) -> f32
 pub mod hdr
 pub enum hdr::HdrFeeding
 pub hdr::HdrFeeding::IntegratedPuNits
@@ -58,8 +97,10 @@ pub fn hdr::HdrScorer::compute(&mut self, &[f32], &[f32]) -> Result<Score>
 pub fn hdr::HdrScorer::compute_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
 pub fn hdr::HdrScorer::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Score>
 pub fn hdr::HdrScorer::compute_pixels_multi(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Scores>
+pub fn hdr::HdrScorer::display_peak_nits(&self) -> f32
 pub fn hdr::HdrScorer::kind(&self) -> MetricKind
 pub fn hdr::HdrScorer::new(MetricKind, Backend, u32, u32, f32) -> Result<Self>
+pub fn hdr::HdrScorer::new_with_display_peak(MetricKind, Backend, u32, u32, f32, f32) -> Result<Self>
 pub fn hdr::HdrScorer::peak_nits(&self) -> f32
 pub fn hdr::HdrScorer::with_transfer(self, hdr::HdrTransfer) -> Self
 pub const hdr::HDR_PEAK_NITS: f32
@@ -75,6 +116,47 @@ pub fn hdr::pu21_decode(f32) -> f32
 pub fn hdr::pu21_encode(f32) -> f32
 pub fn hdr::srgb_eotf(f32) -> f32
 pub fn hdr::to_sdr_u8(&[f32], hdr::HdrTransfer, f32) -> alloc::vec::Vec<u8>
+pub mod zensim_profile
+#[non_exhaustive] pub struct zensim_profile::BakeProfileConfig
+pub zensim_profile::BakeProfileConfig::compute_iw_features: bool
+pub zensim_profile::BakeProfileConfig::extended_features: bool
+pub zensim_profile::BakeProfileConfig::extrapolate_score: bool
+pub zensim_profile::BakeProfileConfig::skip_score_mapping: bool
+pub zensim_profile::BakeProfileConfig::soft_clamp_score: bool
+pub const zensim_profile::MAX_RUNTIME_BAKES: usize
+pub fn zensim_profile::builtin(&str) -> core::option::Option<zensim::profile::ZensimProfile>
+pub fn zensim_profile::builtin_names() -> alloc::vec::Vec<&'static str>
+pub fn zensim_profile::clear_default()
+pub fn zensim_profile::default_profile() -> zensim::profile::ZensimProfile
+pub fn zensim_profile::from_bake_path(impl core::convert::AsRef<std::path::Path>) -> Result<zensim::profile::ZensimProfile>
+pub fn zensim_profile::from_bake_path_with(impl core::convert::AsRef<std::path::Path>, zensim_profile::BakeProfileConfig) -> Result<zensim::profile::ZensimProfile>
+pub fn zensim_profile::has_default_override() -> bool
+pub fn zensim_profile::override_profile() -> core::option::Option<zensim::profile::ZensimProfile>
+pub fn zensim_profile::resolve(&str) -> Result<zensim::profile::ZensimProfile>
+pub fn zensim_profile::set_default(zensim::profile::ZensimProfile)
+pub fn zensim_profile::set_default_from_spec(&str) -> Result<zensim::profile::ZensimProfile>
+pub enum AlphaError [also: alpha]
+pub AlphaError::AlphaNotOpaque
+pub AlphaError::AlphaNotOpaque::max_transparency: u8
+pub AlphaError::AlphaNotOpaque::non_opaque_count: usize
+pub AlphaError::BufferLengthMismatch
+pub AlphaError::BufferLengthMismatch::actual: usize
+pub AlphaError::BufferLengthMismatch::expected: usize
+pub AlphaError::DimensionMismatch
+pub AlphaError::DimensionMismatch::dist_dims: (u32, u32)
+pub AlphaError::DimensionMismatch::ref_dims: (u32, u32)
+pub enum AlphaPolicy [also: alpha]
+pub AlphaPolicy::CompositeOnto
+pub AlphaPolicy::CompositeOnto::b: u8
+pub AlphaPolicy::CompositeOnto::g: u8
+pub AlphaPolicy::CompositeOnto::r: u8
+pub AlphaPolicy::DeterministicNoise
+pub AlphaPolicy::DiscardUnchecked
+pub AlphaPolicy::MatteBlack
+pub AlphaPolicy::MatteWhite
+pub AlphaPolicy::MinWhiteBlack
+pub AlphaPolicy::RequireOpaque
+pub fn alpha::AlphaPolicy::from_str_loose(&str) -> core::option::Option<Self>
 pub enum Backend
 pub Backend::Auto
 pub Backend::Cpu
@@ -91,9 +173,15 @@ pub CachedRefStripPolicy::RefFull
 #[non_exhaustive] pub enum Error
 pub Error::BackendNotEnabled
 pub Error::BackendNotEnabled::backend: &'static str
+pub Error::BackendUnavailable
+pub Error::BackendUnavailable::backend: &'static str
+pub Error::BackendUnavailable::reason: alloc::string::String
+pub Error::Cancelled(enough::reason::StopReason)
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: (u32, u32)
 pub Error::DimensionMismatch::got: (u32, u32)
+pub Error::DisplayRequired
+pub Error::DisplayRequired::kind: &'static str
 pub Error::Metric
 pub Error::Metric::kind: &'static str
 pub Error::Metric::message: alloc::string::String
@@ -113,19 +201,22 @@ pub enum MetricKind
 pub MetricKind::Butter
 pub MetricKind::Cvvdp
 pub MetricKind::Dssim
+pub MetricKind::Hdrvdp
+pub MetricKind::Hdrvdp3
 pub MetricKind::Iwssim
 pub MetricKind::Ssim2
 pub MetricKind::Zensim
 pub fn MetricKind::tag(self) -> &'static str
 #[non_exhaustive] pub enum MetricParams
 pub MetricParams::Butter(butteraugli_gpu::ButteraugliParams)
-pub MetricParams::Cvvdp(cvvdp::params::CvvdpParams)
+pub MetricParams::Cvvdp(CvvdpConfig)
 pub MetricParams::Dssim(dssim_gpu::opaque::DssimParams)
 pub MetricParams::Iwssim(iwssim_gpu::opaque::IwssimParams)
 pub MetricParams::Ssim2(ssim2_gpu::opaque::Ssim2Params)
 pub MetricParams::Zensim(zensim_gpu::opaque::ZensimParams)
-pub fn MetricParams::cvvdp_with_display(cvvdp::params::DisplayModel) -> Self
+pub fn MetricParams::cvvdp(impl core::convert::Into<cvvdp::display::CvvdpDisplay>) -> Self
 pub fn MetricParams::default_for(MetricKind) -> Self
+pub fn MetricParams::kind(&self) -> MetricKind
 pub fn MetricParams::try_default_for(MetricKind) -> Result<Self>
 pub enum Priority
 pub Priority::Memory
@@ -133,9 +224,21 @@ pub Priority::Speed
 pub enum Reuse
 pub Reuse::OneOff
 pub Reuse::Warm
+pub struct AlphaStats [also: alpha]
+pub AlphaStats::mae: f64
+pub AlphaStats::max_delta: u8
+pub AlphaStats::pixels_differing: u64
+pub AlphaStats::psnr: f64
+pub AlphaStats::total_pixels: u64
+pub struct CvvdpConfig
+pub fn CvvdpConfig::display(&self) -> &cvvdp::display::CvvdpDisplay
+pub fn CvvdpConfig::geometry(&self) -> cvvdp::params::DisplayGeometry
+pub fn CvvdpConfig::new(impl core::convert::Into<cvvdp::display::CvvdpDisplay>) -> Self
+pub fn CvvdpConfig::params(&self) -> cvvdp::params::CvvdpParams
 pub struct Metric
 pub fn Metric::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Score>
 pub fn Metric::compute_pixels_multi(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Scores>
+pub fn Metric::compute_pixels_with_stop(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>, &dyn enough::Stop) -> Result<Score>
 pub fn Metric::display_peak(&self) -> f32
 pub fn Metric::new(MetricKind, Backend, u32, u32, MetricParams) -> Result<Self>
 pub fn Metric::new_with_memory_mode(MetricKind, Backend, u32, u32, MetricParams, MemoryMode) -> Result<Self>
@@ -199,11 +302,12 @@ pub fn score_pair(MetricKind, Backend, u32, u32, &[u8], &[u8]) -> Result<Score>
 pub fn warm_reference(MetricKind, Backend, zenpixels::buffer::PixelSlice<'_>) -> Result<Warm>
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (22 types)
+## trait impls (27 types)
 
 Backend: Clone, Copy, Debug, Eq, PartialEq
 CachedRefStripPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
-Error: Debug, Display, Error
+CvvdpConfig: Clone, Debug
+Error: Debug, Display, Error, From<enough::reason::StopReason>
 MemoryMode: Clone, Copy, Debug, Default, Eq, PartialEq
 Metric: Deref, DerefMut
 MetricKind: Clone, Copy, Debug, Eq, Hash, PartialEq
@@ -214,6 +318,9 @@ Priority: Clone, Copy, Debug, Default, Eq, PartialEq
 Reuse: Clone, Copy, Debug, Eq, PartialEq
 Score: Clone, Copy, Debug, PartialEq
 Scores: Clone, Debug, PartialEq
+alpha::AlphaError: Clone, Debug, Display, Eq, Error, PartialEq
+alpha::AlphaPolicy: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+alpha::AlphaStats: Clone, Copy, Debug, PartialEq
 butteraugli_gpu::memory_mode::MemoryMode: From<MemoryMode>
 cvvdp_gpu::memory_mode::MemoryMode: From<MemoryMode>
 dssim_gpu::memory_mode::MemoryMode: From<MemoryMode>
@@ -223,10 +330,11 @@ hdr::HdrTransfer: Clone, Copy, Debug, Default, Eq, PartialEq
 iwssim_gpu::memory_mode::MemoryMode: From<MemoryMode>
 ssim2_gpu::memory_mode::MemoryMode: From<MemoryMode>
 zensim_gpu::memory_mode::MemoryMode: From<MemoryMode>
+zensim_profile::BakeProfileConfig: Clone, Copy, Debug, Default, Eq, PartialEq
 
 ## auto traits
 
-15 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+20 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Metric: !RefUnwindSafe !Sync !UnwindSafe
 OwnedSessionMetric: !RefUnwindSafe !Sync !UnwindSafe
 SessionMetric<'ctx>: !RefUnwindSafe !Sync !UnwindSafe

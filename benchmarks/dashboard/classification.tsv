@@ -1950,3 +1950,5 @@ benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-deb
 benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-02.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/build-debug-03.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
 benchmarks/canonical_recheck_2026-10-19/retained-storage-2026-10-21-v3/index.json	ignored	Native reference comparison source and artifact provenance; not timing observations.
+benchmarks/vmaf_stride_wall_2026-11-04.csv	ignored	Retained default-release confirmation is invalid on resource observations; no qualified timing rows.
+benchmarks/vmaf_stride_wall_2026-11-04.plan.json	ignored	Portable reproduction plan for the resource-invalid VMAF stride confirmation, not measurement rows.

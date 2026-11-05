@@ -2000,7 +2000,11 @@ fn diffmap_pair_to_blob(
                     let mut dm = Vec::new();
                     scorer
                         .score_from_linear_planes_with_diffmap(
-                            &rr, &rg, &rb, &dr, &dg, &db, w as usize, &mut dm,
+                            [&rr, &rg, &rb],
+                            w as usize,
+                            [&dr, &dg, &db],
+                            w as usize,
+                            &mut dm,
                         )
                         .map_err(|e| format!("cvvdp diffmap: {e}"))?;
                     diffmap_to_pfm_gz(&dm, w, h)

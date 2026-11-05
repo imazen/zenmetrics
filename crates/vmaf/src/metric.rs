@@ -166,6 +166,7 @@ fn plane_u16(s: &PixelSlice<'_>) -> Vec<u16> {
 }
 
 struct Frame {
+    width: usize,
     y: Vec<u16>,
     u: Vec<u16>,
     v: Vec<u16>,
@@ -177,6 +178,7 @@ impl Frame {
             y: &self.y,
             u: &self.u,
             v: &self.v,
+            strides: [self.width, self.width.div_ceil(2), self.width.div_ceil(2)],
         }
     }
 }
@@ -199,6 +201,7 @@ fn frame(img: &za::Image<'_>) -> za::MetricResult<(Frame, (u32, u32, u8))> {
     let s = p.planes();
     Ok((
         Frame {
+            width: p.width() as usize,
             y: plane_u16(&s[0]),
             u: plane_u16(&s[1]),
             v: plane_u16(&s[2]),
@@ -628,6 +631,7 @@ mod tests {
             y: &p[0],
             u: &p[1],
             v: &p[2],
+            strides: [W, W / 2, W / 2],
         }
     }
 

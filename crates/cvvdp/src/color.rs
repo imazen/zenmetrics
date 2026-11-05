@@ -466,9 +466,11 @@ pub(crate) fn linear_planes_to_dkl_planar(
     out_vy: &mut Vec<f32>,
 ) {
     debug_assert!(padded_width >= width);
-    debug_assert_eq!(r.len(), padded_width * height);
-    debug_assert_eq!(g.len(), padded_width * height);
-    debug_assert_eq!(b.len(), padded_width * height);
+    // The last row needs no padding.
+    let span = (height - 1) * padded_width + width;
+    debug_assert!(r.len() >= span);
+    debug_assert!(g.len() >= span);
+    debug_assert!(b.len() >= span);
     let n = width * height;
     out_a.resize(n, 0.0);
     out_rg.resize(n, 0.0);
