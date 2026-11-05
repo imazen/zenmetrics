@@ -9,7 +9,7 @@ use iqa::{
     MetricId, MetricResult, ScoreKind, ScoreSpec,
 };
 use std::borrow::Cow;
-use zenpixels_iqa as iqa;
+use zenpsychovisual_api as iqa;
 
 struct Margarine;
 struct Native {

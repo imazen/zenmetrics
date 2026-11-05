@@ -195,7 +195,7 @@ dependencies = [
  "magetypes",
  "rayon",
  "rgb",
- "zenpixels-iqa",
+ "zenpsychovisual-api",
 ]
 
 [[package]]
@@ -370,16 +370,16 @@ checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=6962bf77bcae#6962bf77bcaedcfbfbe58c2c2e2f685c0863d6d3"
+source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
 dependencies = [
  "bytemuck",
  "whereat",
 ]
 
 [[package]]
-name = "zenpixels-iqa"
+name = "zenpsychovisual-api"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenpixels?rev=6962bf77bcae#6962bf77bcaedcfbfbe58c2c2e2f685c0863d6d3"
+source = "git+https://github.com/imazen/zenpixels?rev=c5552470016090e3e2be92e368d1afdde83198d6#c5552470016090e3e2be92e368d1afdde83198d6"
 dependencies = [
  "bytemuck",
  "how-far",
