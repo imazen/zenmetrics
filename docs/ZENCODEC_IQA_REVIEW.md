@@ -3,6 +3,12 @@
 Source review, 2026-11-04. This is a proposed direction, not an approved API
 change or a claim of end-to-end integration.
 
+Update, 2026-11-04: PR 104 merged as `1658d4de` and fixes the removed
+`PlaneLayout` import through the local compatibility types. The master
+failure below describes the inspected `d46ec235` baseline. The shared-plane
+migration remains draft. See [the PR review](PR_REVIEW_2026-11-04.md) for its
+lockfile blocker and the compatibility change's new qualification.
+
 ## Inspected state
 
 - zenmetrics `master`: `d46ec235d3bb080188445f9ccf4685afdff209b9`.

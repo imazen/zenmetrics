@@ -606,17 +606,17 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
-- **2026-11-04 — abstraction compatibility and sequence contract review.**
-  Master's `zenmetrics-abstractions` imports the removed root
-  `zenpixels::PlaneLayout`: an isolated build with committed zenpixels 0.3.1
-  fails with E0432. The unmerged `feat/zenpixels-planes` abstraction source
-  passes 35 unit tests and one doctest against that dependency; whole-branch
-  and codec integration remain unqualified. A synthetic scorer reproduces the
-  default `StatelessSequence` accepting changed-size frames and further work
-  after a failed push, contrary to its contract. The conformance harness also
-  reports zero violations when that scorer omits a declared secondary output. No metric arithmetic, numerical gate or
-  public API was changed. Scope and proposed repairs:
-  [the IQA integration review](docs/ZENCODEC_IQA_REVIEW.md).
+- **2026-11-04 — abstraction compatibility fixed; sequence contract gaps remain.**
+  PR 104 (`1658d4de`) replaces the removed zenpixels `PlaneLayout` with local
+  compatibility types. Its abstraction tests pass on locked zenpixels 0.2.16
+  and committed 0.3.1. The shared-plane migration, PR 108, remains draft with
+  an outdated lockfile. A synthetic scorer still reproduces the default
+  `StatelessSequence` accepting changed-size frames and further work after a
+  failed push, contrary to its contract. The conformance harness reports zero
+  violations when that scorer omits a declared secondary output. Metric
+  arithmetic and numerical gates are unchanged. See the
+  [IQA integration review](docs/ZENCODEC_IQA_REVIEW.md) and
+  [PR review](docs/PR_REVIEW_2026-11-04.md).
 
 - **Workbench worker stopped on the live site (2026-10-22, fixed).** The
   optional `extra-modules.json` hook (`7b95afe7`) parsed Cloudflare Pages'
