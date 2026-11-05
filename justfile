@@ -19,6 +19,15 @@ GMSD_MDSI_TARGETS := env_var_or_default("GMSD_MDSI_TARGETS", "")
 default:
     @just --list
 
+# Consolidated standalone dependency checks; caller supplies run-heavy and TMPDIR.
+maintenance-deps-check:
+    npm --prefix crates/zenfleet-dash/web ci --ignore-scripts
+    npm --prefix crates/zenfleet-dash/web run build
+    uv lock --check --project benchmarks/iqa_compete_2026-10-16/python-env
+    cargo test --locked --manifest-path runner-source/Cargo.toml --features wasm --test wasm_smoke
+    cargo check --locked --manifest-path crates/burn-ranknet-spike/Cargo.toml --all-targets
+    cargo check --locked --manifest-path crates/burn-conv-spike/Cargo.toml
+
 # Canonical by-construction runner transport, archive/receipt negative controls.
 byc-fit-check:
     TMPDIR="$HOME/tmp" PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_byc_fit scripts.jobsys.test_fit_tools scripts.jobsys.test_registered_program
