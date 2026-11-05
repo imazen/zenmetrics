@@ -3,7 +3,9 @@
 The PR 109 packed path now borrows the caller's frame descriptor slice through
 `TightFrames::Borrowed`. Strided inputs retain packing and exact-minimum extent
 support. V0/v1 kernels and score arithmetic are unchanged. The existing four
-stride tests and 17 library tests pass with unchanged assertions.
+stride tests and 17 library tests pass with unchanged assertions. The complete
+26-test libvmaf parity panel, two CAMBI map tests, 170 CVVDP tests and 86
+CVVDP doctests also pass. Strict library Clippy passes for VMAF and CVVDP.
 
 The retained workload is `crates/vmaf/examples/stride_cost.rs`; the profiler
 runner is `scripts/ci/profile-vmaf-ingress.sh` (also exposed in the justfile).
