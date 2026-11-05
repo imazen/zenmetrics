@@ -2,11 +2,12 @@
 
 The dependency updates proposed in PRs 97–103 and 105–107 are applied together,
 without merging their overlapping lockfile branches. PR 101's lucide-react
-1.61.0 is superseded by PR 107's 1.65.0.
+1.61.0 is superseded by PR 107's 1.65.0 manifest floor; npm resolved the
+compatible 1.68.0 release, which is the version used by the passing build.
 
 | Component | Selected update |
 | --- | --- |
-| Fleet dashboard | lucide-react 1.65.0, Vite 8.3.5, Node types 26.6.6 |
+| Fleet dashboard | lucide-react 1.68.0 (manifest ^1.65.0), Vite 8.3.5, Node types 26.6.6 |
 | Burn RankNet spike | burn 0.22.1, forust-ml 0.8.0, rustls 0.23.46 |
 | Burn convolution spike | rustls 0.23.46 |
 | Benchmark Python environment | filelock 4.2.1, setuptools 84.1.0 |
