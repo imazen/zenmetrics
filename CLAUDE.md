@@ -606,6 +606,18 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-11-04 — abstraction compatibility and sequence contract review.**
+  Master's `zenmetrics-abstractions` imports the removed root
+  `zenpixels::PlaneLayout`: an isolated build with committed zenpixels 0.3.1
+  fails with E0432. The unmerged `feat/zenpixels-planes` abstraction source
+  passes 35 unit tests and one doctest against that dependency; whole-branch
+  and codec integration remain unqualified. A synthetic scorer reproduces the
+  default `StatelessSequence` accepting changed-size frames and further work
+  after a failed push, contrary to its contract. The conformance harness also
+  reports zero violations when that scorer omits a declared secondary output. No metric arithmetic, numerical gate or
+  public API was changed. Scope and proposed repairs:
+  [the IQA integration review](docs/ZENCODEC_IQA_REVIEW.md).
+
 - **Workbench worker stopped on the live site (2026-10-22, fixed).** The
   optional `extra-modules.json` hook (`7b95afe7`) parsed Cloudflare Pages'
   answer to the missing file, the index page with 200 and `text/html`, as

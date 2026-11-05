@@ -943,6 +943,9 @@ caveats: [benchmarks/cpu_metrics_1t8t_2026-10-09.md](benchmarks/cpu_metrics_1t8t
 
 ## Using it as a library
 
+[Metric contract and proposed zencodec IQA integration](docs/ZENCODEC_IQA_REVIEW.md)
+reviews the existing abstractions, current pixel compatibility and migration gates.
+
 - [`zenmetrics-api`](crates/zenmetrics-api/README.md): one `MetricKind`
   enum and one `Metric` type over every per-crate scorer, CPU or GPU.
 - [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/README.md):
