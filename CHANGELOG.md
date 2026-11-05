@@ -107,7 +107,7 @@ Workspace conventions per the global rules:
   (`40590360`). Preserve the selected Margarine frontend's error interface and
   compile it in the standalone gate (`1d4dd5a4`). Validate current fast-ssim2
   native diffmap/component maps through cold and prepared-reference calls,
-  correcting the original pre-map dependency pin.
+  correcting the original pre-map dependency pin (`977a114a`).
 
 - Native HDR chroma view generation, exact natural SSIMULACRA2 reference reuse,
   and atomic AVIF/PQ16/label publication through the existing zenfleet view

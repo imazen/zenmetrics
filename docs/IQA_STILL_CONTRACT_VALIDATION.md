@@ -89,8 +89,8 @@ The [Linux x64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502
 and [Linux aarch64 panel](https://github.com/imazen/zenmetrics/actions/runs/41988502159/job/127114853279)
 both pass the original native controls and strict lint at source `40590360`;
 those historical panels predate the SSIMULACRA2 map correction. The corrected
-source-pinned panel passes on native aarch64 Linux with strict Clippy; the
-existing CI matrix repeats it on x64 and aarch64.
+source-pinned panel at `977a114a` passes on native x64 and aarch64 Linux with
+strict Clippy. The existing CI matrix repeats it on both architectures.
 
 This is interface and forwarding validation on native x86 and ARM Linux. It does not
 requalify metric algorithms against published reference goldens, establish
