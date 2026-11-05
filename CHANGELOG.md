@@ -101,6 +101,10 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- Add standalone native forwarding/conformance validation for zenpixels-iqa
+  with serving Zensim A, Butteraugli, fast-ssim2 and selected Margarine. Keep
+  source pins and frozen vendor identity explicit; no consumer migration.
+
 - Native HDR chroma view generation, exact natural SSIMULACRA2 reference reuse,
   and atomic AVIF/PQ16/label publication through the existing zenfleet view
   protocol (`5b4f5373`, `2d2a3194`, `c375a124`). The publication fixture also

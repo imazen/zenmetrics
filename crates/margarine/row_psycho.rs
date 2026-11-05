@@ -557,7 +557,7 @@ pub(super) fn compute(
         Err(std::env::VarError::NotPresent) => 512,
         Err(error) => return Err(error.into()),
     };
-    compute_geometry(a, b, rows, columns, params)
+    compute_geometry(a, b, rows, columns, params).map_err(|e| e as Box<dyn Error>)
 }
 
 pub(super) fn compute_geometry(
@@ -566,7 +566,7 @@ pub(super) fn compute_geometry(
     rows: usize,
     columns: usize,
     params: &ButteraugliParams,
-) -> Result<diff::InternalResult, Box<dyn Error>> {
+) -> Result<diff::InternalResult, Box<dyn Error + Send + Sync>> {
     if columns == 0 || !columns.is_multiple_of(4) {
         return Err("tile columns must be a positive multiple of four".into());
     }

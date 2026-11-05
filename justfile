@@ -2798,3 +2798,13 @@ hdr-native-worker-build target_dir:
     test "$(hostname)" != dev
     TMPDIR="$HOME/tmp" CARGO_TARGET_DIR={{target_dir}} cargo test --manifest-path tools/chroma-fleet/Cargo.toml -p zenfleet-worker --lib native_hdr_staging_tests
     CARGO_TARGET_DIR={{target_dir}} cargo build --release --manifest-path tools/chroma-fleet/Cargo.toml --bin zenfleet-worker
+
+# Native controls for the still-image zenpixels-iqa contract.
+iqa-native-check:
+    cargo test --locked --manifest-path tools/iqa-contract-validation/Cargo.toml -- --test-threads=1
+    cargo clippy --locked --manifest-path tools/iqa-contract-validation/Cargo.toml --all-targets -- -D warnings
+
+# Selected Margarine kernels, with their own frozen teacher dependency graph.
+iqa-margarine-check:
+    cargo run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml
+    cargo clippy --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation -- -D warnings
