@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "confirmation": {
+    "margin_pct": 1.0,
+    "control_margin_pct": 1.0,
+    "family_confidence": 0.95,
+    "scope": "vmaf-packed-stride-320x240-v0-v1-default-release",
+    "accept": "non_inferiority"
+  },
+  "baseline": {
+    "id": "master-packed",
+    "program": "binaries/vmaf-master",
+    "args": [
+      "${model}",
+      "320",
+      "240",
+      "1000"
+    ],
+    "cwd": "/home/lilith/tmp/zenmetrics-pr-followup-20261104",
+    "env": {
+      "OMP_NUM_THREADS": "1",
+      "RAYON_NUM_THREADS": "1"
+    },
+    "timeout_seconds": 60,
+    "revision": "b50fea22 default release; retained stride_cost harness with absent strides field removed"
+  },
+  "candidates": [
+    {
+      "id": "stride-packed",
+      "program": "binaries/vmaf-after",
+      "args": [
+        "${model}",
+        "320",
+        "240",
+        "1000"
+      ],
+      "cwd": "/home/lilith/tmp/zenmetrics-pr-followup-20261104",
+      "env": {
+        "OMP_NUM_THREADS": "1",
+        "RAYON_NUM_THREADS": "1"
+      },
+      "timeout_seconds": 60,
+      "revision": "ef6c166f VMAF source, default release"
+    }
+  ],
+  "cases": [
+    {
+      "id": "v0-320x240",
+      "fields": {
+        "model": "v0"
+      },
+      "inputs": {}
+    },
+    {
+      "id": "v1-320x240",
+      "fields": {
+        "model": "v1"
+      },
+      "inputs": {}
+    }
+  ],
+  "metric": {
+    "extract": {
+      "kind": "wall"
+    },
+    "stream": "stdout",
+    "unit": "ns",
+    "expected": 1,
+    "divide_by": 1000.0,
+    "resolution": 2.0
+  },
+  "check": {
+    "kind": "files",
+    "paths": [
+      "stdout.txt"
+    ]
+  },
+  "warmup": "No excluded warmup. Fresh process constructs one scorer then executes 1000 whole score calls; fixture, launch and completion polling are included. Compared stdout contains exact score bits and work count.",
+  "blocks": 5,
+  "aa": true,
+  "clean_env": false,
+  "env": {},
+  "record_env": [],
+  "deadline_seconds": 300,
+  "settle_ms": 0,
+  "seed": 11
+}

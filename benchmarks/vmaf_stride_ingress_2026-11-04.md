@@ -46,9 +46,9 @@ V0 `405851b6f92274b9`, V1 `4058f3a2e3d333ac`.
 | v1 | 3 | 5725027252 | 5725078317 | 1152731679 | 1182730337 |
 
 This counter panel establishes neither a wall-time speedup nor default-build
-non-inferiority. The historical PR note's default-build slowdown remains
-unqualified by a retained zenbench A/B wall-time acceptance run. Do not use its
-forced-alignment measurements as acceptance for ordinary builds.
+non-inferiority. The historical PR note's default-build slowdown remains unqualified by a passing wall-time acceptance
+run. The retained confirmation below is invalid on resource observations. Do
+not use forced-alignment measurements as acceptance for ordinary builds.
 
 Full artifacts remain under `$HOME/tmp/zenmetrics-pr-followup-20261104/` on the
 review machine, including binary hashes, raw counters and heaptrack traces in
@@ -77,3 +77,43 @@ WGPU controls; they do not qualify CUDA or discrete GPU performance.
 Commands and full output are retained in `pr109-gpu-stride.log` and
 `pr109-other-gpu-stride.log` beside the profiling artifacts. The latter wrapper
 receipt is `run-heavy: done rc=0 86s | peak-RSS 2.15GiB | min-avail 15735MiB | peak-load 5.14`.
+
+## Default-release wall confirmation
+
+A frozen zenbench `56d5a77` confirmation compared master `b50fea22` to the
+packed-path correction, at 320x240 for v0 and v1. Both binaries use the same
+retained workload; only the absent `strides` fields were removed for master.
+Each fresh process creates one scorer and executes 1000 calls; outer wall time
+includes fixture setup, launch and completion polling. Five blocks include
+baseline/candidate/A-A for both cases: all 30 invocations completed and all
+exact stdout/score-bit checks pass.
+
+The frozen non-inferiority margin is 1%, A/A control margin 1%, family
+confidence 95%, and seed 11. The declared two-nanosecond timing resolution
+covers the measured one-nanosecond CLOCK_MONOTONIC resolution and float
+conversion; polling overhead remains part of the explicit measured operation.
+
+**Not accepted.** 26 of 30 invocations include unclean resource observations.
+Zenbench returns exit 2 and every candidate/control verdict is `invalid`.
+The concurrent CPU observations and unresolved A/A equivalence do not qualify
+the default packed path as non-inferior. Do not promote the diagnostic latency
+estimates or replace the unchanged acceptance conditions with an alignment flag.
+
+The [selected CSV](vmaf_stride_wall_2026-11-04.csv) retains these invalid
+verdicts. The [portable plan](vmaf_stride_wall_2026-11-04.plan.json) substitutes
+relative binary paths; copy the two frozen binaries to its `binaries/` directory
+before reproduction. The executed absolute-path plan and complete packet remain
+in `$HOME/tmp/zenmetrics-pr-followup-20261104/wall-confirm/` on the review host.
+The original packet SHA-256 is `bcf42f119b42600e33cccc725019b8e1905d8f5cc2853dcc92fecd09874a11d4`
+and experiment fingerprint is `8b948fa6f4af4f5e8a8ad077e98d1f3c5d75ff43f5caf1551c1b8bee2f257bb3`.
+Run the portable plan through run-heavy with `zenbench pair PLAN --mode confirm
+--output NEW_DIRECTORY --wait 60`; changing paths produces a new identity.
+The retained workload later receives only an equivalent integer-divisibility
+style correction for strict Clippy; measured binaries remain bound to the
+recorded source revisions and hashes.
+
+Resource receipt: `run-heavy: done rc=2 154s | peak-RSS 0.04GiB | min-avail 18972MiB | peak-load 3.28`.
+
+PR 109 remains draft until an eligible default-build confirmation passes.
+CUDA execution also remains unqualified; the software-WGPU tests above are
+exact stride-equivalence controls, not CUDA numerical qualification.

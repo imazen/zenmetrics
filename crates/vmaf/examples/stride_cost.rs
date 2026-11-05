@@ -8,7 +8,13 @@ fn main() {
     let width: usize = args.get(2).expect("width").parse().unwrap();
     let height: usize = args.get(3).expect("height").parse().unwrap();
     let calls: usize = args.get(4).expect("calls").parse().unwrap();
-    assert!(width >= 64 && height >= 64 && width % 2 == 0 && height % 2 == 0 && calls > 0);
+    assert!(
+        width >= 64
+            && height >= 64
+            && width.is_multiple_of(2)
+            && height.is_multiple_of(2)
+            && calls > 0
+    );
     let y: Vec<_> = (0..width * height)
         .map(|i| (16 + ((i % width) * 3 + (i / width) * 5) % 220) as u16)
         .collect();
