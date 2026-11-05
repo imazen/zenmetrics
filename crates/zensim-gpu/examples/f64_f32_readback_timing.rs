@@ -67,13 +67,24 @@ fn main() {
         let mut dm = Vec::new();
         // Warm up (JIT compile + allocations + first sync).
         for _ in 0..10 {
-            let _ =
-                gpu.score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut dm);
+            let _ = gpu.score_from_linear_planes_with_diffmap(
+                [&rr, &rg, &rb],
+                w,
+                [&dr, &dg, &db],
+                w,
+                &mut dm,
+            );
         }
         let t = Instant::now();
         for _ in 0..iters {
             let _ = gpu
-                .score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut dm)
+                .score_from_linear_planes_with_diffmap(
+                    [&rr, &rg, &rb],
+                    w,
+                    [&dr, &dg, &db],
+                    w,
+                    &mut dm,
+                )
                 .expect("score");
         }
         let avg_ms = t.elapsed().as_secs_f64() * 1000.0 / iters as f64;

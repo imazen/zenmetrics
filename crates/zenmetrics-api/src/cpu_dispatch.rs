@@ -1471,7 +1471,12 @@ fn compute_cvvdp_linear(
     let (rr, rg, rb) = deinterleave_f32(r);
     let (dr, dg, db) = deinterleave_f32(d);
     let v = c
-        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, width as usize)
+        .score_from_linear_planes(
+            [&rr, &rg, &rb],
+            width as usize,
+            [&dr, &dg, &db],
+            width as usize,
+        )
         .map_err(|e| Error::Metric {
             kind: "cvvdp",
             message: format!("cvvdp score_from_linear_planes: {e}"),

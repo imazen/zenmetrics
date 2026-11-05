@@ -1941,6 +1941,49 @@ impl<R: Runtime> Zensim<R> {
         Ok([plan.pad(r, 1), plan.pad(g, 1), plan.pad(b, 1)])
     }
 
+    /// Strided linear planes ready for the row readers, and their stride. The
+    /// CPU reader takes the planes where they are when each spans `stride *
+    /// height` samples, the extent it requires. A plane is packed tight only
+    /// when it stops short of that, the instance pads, or the GPU diffmap path
+    /// (tight uploads) is on.
+    fn prep_strided_planes<'a>(
+        &self,
+        planes: [&'a [f32]; 3],
+        stride: usize,
+    ) -> Result<([std::borrow::Cow<'a, [f32]>; 3], usize)> {
+        use std::borrow::Cow;
+        let (lw, lh) = self.pad.logical();
+        let (lw, lh) = (lw as usize, lh as usize);
+        for plane in planes {
+            zenmetrics_gpu_core::check_strided_plane(plane.len(), lw, lh, stride)
+                .map_err(|(expected, got)| Error::DimensionMismatch { expected, got })?;
+        }
+        let padded = (self.width as usize, self.height as usize) != (lw, lh);
+        let reach = stride.checked_mul(lh);
+        if !padded
+            && !gpu_diffmap_enabled()
+            && planes.iter().all(|p| reach.is_some_and(|n| p.len() >= n))
+        {
+            return Ok((planes.map(Cow::Borrowed), stride));
+        }
+        let plan = self.pad;
+        let prepared = planes.map(|plane| -> Cow<'a, [f32]> {
+            let tight: Cow<'a, [f32]> = if stride == lw {
+                Cow::Borrowed(&plane[..lw * lh])
+            } else {
+                let mut out = Vec::new();
+                zenmetrics_gpu_core::tight_plane(&mut out, plane, lw, lh, stride);
+                Cow::Owned(out)
+            };
+            if padded {
+                Cow::Owned(plan.pad(&tight, 1).into_owned())
+            } else {
+                tight
+            }
+        });
+        Ok((prepared, self.width as usize))
+    }
+
     fn upload_u8(&mut self, is_a: bool, srgb: &[u8]) {
         // Reflect-pad a sub-MIN_PAD_DIM logical input up to the padded
         // extent `pack_scratch` is sized for (no-op borrow at ≥min).
@@ -2634,8 +2677,8 @@ impl<R: Runtime> Zensim<R> {
                 )
             };
             let score = self.gpu_diffmap_linear_into(
-                Some([&rp[0], &rp[1], &rp[2]]),
-                [&dp[0], &dp[1], &dp[2]],
+                Some([&*rp[0], &*rp[1], &*rp[2]]),
+                [&*dp[0], &*dp[1], &*dp[2]],
                 true,
                 diffmap_out,
             );
@@ -2736,7 +2779,7 @@ impl<R: Runtime> Zensim<R> {
             ]
         };
         let score =
-            self.gpu_diffmap_linear_into(None, [&dp[0], &dp[1], &dp[2]], false, diffmap_out);
+            self.gpu_diffmap_linear_into(None, [&*dp[0], &*dp[1], &*dp[2]], false, diffmap_out);
         if let Some(state) = self.diffmap_state.as_mut() {
             state.dist_linear_planes = dp;
         }
@@ -2769,30 +2812,42 @@ impl<R: Runtime> Zensim<R> {
     /// - [`Error::DimensionMismatch`] if any plane's length differs
     ///   from `width × height`.
     /// - [`Error::InvalidImageSize`] on shape failure.
+    ///
+    /// The planes share a stride in samples, at least the width; a tight image passes
+    /// its width. Padding is never read, and a plane needs `(height - 1) * stride +
+    /// width` samples.
     pub fn score_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<f32> {
-        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent the
-        // pipeline runs at (no-op borrow at ≥min).
-        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
-        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
-        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
-        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
+        let (rp, rs) = self.prep_strided_planes(ref_planes, ref_stride)?;
+        let (dp, ds) = self.prep_strided_planes(dist_planes, dist_stride)?;
+        self.score_prepared_linear_planes(
+            [&*rp[0], &*rp[1], &*rp[2]],
+            rs,
+            [&*dp[0], &*dp[1], &*dp[2]],
+            ds,
+        )
+    }
+
+    fn score_prepared_linear_planes(
+        &mut self,
+        [ref_r, ref_g, ref_b]: [&[f32]; 3],
+        ref_stride: usize,
+        [dist_r, dist_g, dist_b]: [&[f32]; 3],
+        stride: usize,
+    ) -> Result<f32> {
         let w = self.width as usize;
         let h = self.height as usize;
 
         self.ensure_diffmap_state()?;
-        let stride = w;
         let state = self.diffmap_state.as_mut().expect("ensured");
         let pre = state
             .cpu_zensim
-            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, ref_stride)
             .map_err(map_zensim_error)?;
         // Reuse the CPU `compute_with_ref` (no diffmap) — it is the
         // cheapest path that returns a `ZensimResult`.
@@ -2816,34 +2871,48 @@ impl<R: Runtime> Zensim<R> {
 
     /// As [`Self::score_from_linear_planes`], plus a per-pixel diffmap.
     #[allow(clippy::too_many_arguments)]
+    ///
+    /// The planes share a stride in samples, at least the width; a tight image passes
+    /// its width. Padding is never read, and a plane needs `(height - 1) * stride +
+    /// width` samples.
     pub fn score_from_linear_planes_with_diffmap(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        // Reflect-pad sub-MIN_PAD_DIM planes (no-op ≥min); crop the
-        // diffmap back to logical on return.
+        let (rp, rs) = self.prep_strided_planes(ref_planes, ref_stride)?;
+        let (dp, ds) = self.prep_strided_planes(dist_planes, dist_stride)?;
+        self.score_prepared_linear_planes_diffmap(
+            [&*rp[0], &*rp[1], &*rp[2]],
+            rs,
+            [&*dp[0], &*dp[1], &*dp[2]],
+            ds,
+            diffmap_out,
+        )
+    }
+
+    fn score_prepared_linear_planes_diffmap(
+        &mut self,
+        [ref_r, ref_g, ref_b]: [&[f32]; 3],
+        ref_stride: usize,
+        [dist_r, dist_g, dist_b]: [&[f32]; 3],
+        stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
         let plan = self.pad;
-        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
-        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
-        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
-        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
             self.ensure_diffmap_state()?;
-            let stride = w;
             let state = self.diffmap_state.as_mut().expect("ensured");
             let pre = state
                 .cpu_zensim
-                .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+                .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, ref_stride)
                 .map_err(map_zensim_error)?;
             let res = state
                 .cpu_zensim
@@ -2891,20 +2960,28 @@ impl<R: Runtime> Zensim<R> {
     ///   from `width × height`.
     /// - [`Error::InvalidImageSize`] on shape failure inside zensim
     ///   CPU.
+    ///
+    /// The planes share a stride in samples, at least the width; a tight image passes
+    /// its width. Padding is never read, and a plane needs `(height - 1) * stride +
+    /// width` samples.
     pub fn warm_reference_from_linear_planes(
         &mut self,
-        ref_r: &[f32],
-        ref_g: &[f32],
-        ref_b: &[f32],
+        ref_planes: [&[f32]; 3],
+        ref_stride: usize,
     ) -> Result<()> {
-        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent.
-        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
-        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
+        let (rp, rs) = self.prep_strided_planes(ref_planes, ref_stride)?;
+        self.warm_prepared_linear_planes([&*rp[0], &*rp[1], &*rp[2]], rs)
+    }
+
+    fn warm_prepared_linear_planes(
+        &mut self,
+        [ref_r, ref_g, ref_b]: [&[f32]; 3],
+        stride: usize,
+    ) -> Result<()> {
         let w = self.width as usize;
         let h = self.height as usize;
 
         self.ensure_diffmap_state()?;
-        let stride = w;
         {
             let state = self.diffmap_state.as_mut().expect("ensured");
             let pre = state
@@ -2934,20 +3011,28 @@ impl<R: Runtime> Zensim<R> {
     /// - [`Error::NoCachedReference`] if the warm reference is
     ///   missing.
     /// - [`Error::InvalidImageSize`] on shape failure.
+    ///
+    /// The planes share a stride in samples, at least the width; a tight image passes
+    /// its width. Padding is never read, and a plane needs `(height - 1) * stride +
+    /// width` samples.
     pub fn score_from_linear_planes_with_warm_ref(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
     ) -> Result<f32> {
-        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent.
-        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
-        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
+        let (dp, ds) = self.prep_strided_planes(dist_planes, dist_stride)?;
+        self.score_prepared_with_warm_ref([&*dp[0], &*dp[1], &*dp[2]], ds)
+    }
+
+    fn score_prepared_with_warm_ref(
+        &mut self,
+        [dist_r, dist_g, dist_b]: [&[f32]; 3],
+        stride: usize,
+    ) -> Result<f32> {
         let w = self.width as usize;
         let h = self.height as usize;
 
         self.ensure_diffmap_state()?;
-        let stride = w;
         let state = self.diffmap_state.as_mut().expect("ensured");
         let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
         let res = state
@@ -2966,25 +3051,33 @@ impl<R: Runtime> Zensim<R> {
 
     /// As [`Self::score_from_linear_planes_with_warm_ref`], plus a
     /// per-pixel diffmap.
+    ///
+    /// The planes share a stride in samples, at least the width; a tight image passes
+    /// its width. Padding is never read, and a plane needs `(height - 1) * stride +
+    /// width` samples.
     pub fn score_from_linear_planes_with_warm_ref_diffmap(
         &mut self,
-        dist_r: &[f32],
-        dist_g: &[f32],
-        dist_b: &[f32],
+        dist_planes: [&[f32]; 3],
+        dist_stride: usize,
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        // Reflect-pad sub-MIN_PAD_DIM planes (no-op ≥min); crop the
-        // diffmap back to logical on return.
+        let (dp, ds) = self.prep_strided_planes(dist_planes, dist_stride)?;
+        self.score_prepared_with_warm_ref_diffmap([&*dp[0], &*dp[1], &*dp[2]], ds, diffmap_out)
+    }
+
+    fn score_prepared_with_warm_ref_diffmap(
+        &mut self,
+        [dist_r, dist_g, dist_b]: [&[f32]; 3],
+        stride: usize,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
         let plan = self.pad;
-        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
-        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
             self.ensure_diffmap_state()?;
-            let stride = w;
             let state = self.diffmap_state.as_mut().expect("ensured");
             let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
             let res = state

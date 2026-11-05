@@ -145,7 +145,7 @@ fn linear_planes_entry_matches_srgb_byte_entry() {
     let mut cv2 = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
     let jod_byte = cv1.score(&r, &d).unwrap();
     let jod_lin = cv2
-        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, w)
+        .score_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
         .unwrap();
     let diff = (jod_byte - jod_lin).abs();
     assert!(diff < 1e-5, "byte={jod_byte} linear={jod_lin} diff={diff}");

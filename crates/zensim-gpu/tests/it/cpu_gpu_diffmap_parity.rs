@@ -263,7 +263,13 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
             // GPU path: one-shot linear-planes-with-diffmap.
             let mut gpu_dm = Vec::new();
             let gpu_score = gpu
-                .score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut gpu_dm)
+                .score_from_linear_planes_with_diffmap(
+                    [&rr, &rg, &rb],
+                    wu,
+                    [&dr, &dg, &db],
+                    wu,
+                    &mut gpu_dm,
+                )
                 .expect("gpu score_from_linear_planes_with_diffmap");
 
             // CPU canonical.
@@ -388,15 +394,21 @@ fn gpu_warm_ref_diffmap_matches_one_shot() {
     // Cold one-shot.
     let mut cold_dm = Vec::new();
     let cold_score = z
-        .score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut cold_dm)
+        .score_from_linear_planes_with_diffmap(
+            [&rr, &rg, &rb],
+            w as usize,
+            [&dr, &dg, &db],
+            w as usize,
+            &mut cold_dm,
+        )
         .expect("cold");
 
     // Warm-ref.
-    z.warm_reference_from_linear_planes(&rr, &rg, &rb)
+    z.warm_reference_from_linear_planes([&rr, &rg, &rb], w as usize)
         .expect("warm_reference");
     let mut warm_dm = Vec::new();
     let warm_score = z
-        .score_from_linear_planes_with_warm_ref_diffmap(&dr, &dg, &db, &mut warm_dm)
+        .score_from_linear_planes_with_warm_ref_diffmap([&dr, &dg, &db], w as usize, &mut warm_dm)
         .expect("warm");
 
     assert_eq!(cold_dm.len(), warm_dm.len());

@@ -281,7 +281,7 @@ fn invariant_5_warm_ref_byte_equivalent() {
         lin_b[i] = srgb_to_lin(p[2]);
     }
     z_warm
-        .warm_reference_from_linear_planes(&lin_r, &lin_g, &lin_b)
+        .warm_reference_from_linear_planes([&lin_r, &lin_g, &lin_b], w)
         .expect("warm_reference_from_linear_planes");
     // Use the sRGB-byte warm path with the SAME ref bytes:
     z_warm.set_reference(&img).expect("set_reference");
@@ -377,7 +377,7 @@ fn linear_planes_score_close_to_srgb_score() {
         .expect("srgb");
     let mut lin_dm = Vec::new();
     let lin_score = z
-        .score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut lin_dm)
+        .score_from_linear_planes_with_diffmap([&rr, &rg, &rb], w, [&dr, &dg, &db], w, &mut lin_dm)
         .expect("linear");
 
     // The only divergence between the two paths is the f32 LUT
@@ -439,15 +439,15 @@ fn warm_reference_from_linear_planes_returns_correct_score() {
     };
 
     let mut z = make_zensim(w as u32, h as u32);
-    z.warm_reference_from_linear_planes(&rr, &rg, &rb)
+    z.warm_reference_from_linear_planes([&rr, &rg, &rb], w)
         .expect("warm_reference");
     let warm_score = z
-        .score_from_linear_planes_with_warm_ref(&dr, &dg, &db)
+        .score_from_linear_planes_with_warm_ref([&dr, &dg, &db], w)
         .expect("warm_score");
 
     // Compare against the cold one-shot:
     let cold_score = z
-        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+        .score_from_linear_planes([&rr, &rg, &rb], w, [&dr, &dg, &db], w)
         .expect("cold");
 
     assert!(
@@ -490,6 +490,6 @@ fn no_warm_ref_returns_no_cached_reference_error() {
     assert!(err.is_err(), "expected NoCachedReference error");
 
     // Linear-planes warm variant too.
-    let err2 = z.score_from_linear_planes_with_warm_ref(&rr, &rg, &rb);
+    let err2 = z.score_from_linear_planes_with_warm_ref([&rr, &rg, &rb], w);
     assert!(err2.is_err(), "expected NoCachedReference error");
 }

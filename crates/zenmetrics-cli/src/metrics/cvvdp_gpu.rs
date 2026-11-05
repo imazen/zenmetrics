@@ -458,7 +458,12 @@ fn score_pair_cached_linear_planes_gpu<R: Runtime>(
     // cvvdp-gpu's typed scorer assumes tight W×H planes (no padded_width arg);
     // the explicit length check above guarantees that.
     let jod = c
-        .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+        .score_from_linear_planes(
+            [ref_r, ref_g, ref_b],
+            w as usize,
+            [dis_r, dis_g, dis_b],
+            w as usize,
+        )
         .map_err(|e| format!("Cvvdp::score_from_linear_planes: {e}"))? as f64;
     if !jod.is_finite() {
         return Err(format!("cvvdp produced non-finite JOD: {jod}").into());

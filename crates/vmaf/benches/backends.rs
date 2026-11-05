@@ -60,6 +60,7 @@ fn yuv(frame: &Frame) -> Yuv420Frame<'_> {
         y: &frame.planes[0],
         u: &frame.planes[1],
         v: &frame.planes[2],
+        strides: [WIDTH, WIDTH / 2, WIDTH / 2],
     }
 }
 

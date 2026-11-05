@@ -1,4 +1,5 @@
 use crate::adm::ADM_MIN_DIM;
+use crate::score::TightFrames;
 use crate::{
     Error, PoolingMethod, VmafV0Features, VmafV0Model, VmafV0Variant, Yuv420Frame,
     adm2_v0_from_luma, motion_sad, motion2_v0_from_luma, pool_v1_scores, vif_v0_from_luma,
@@ -216,6 +217,10 @@ impl VmafV0Scorer {
                 "reference/distorted frame count mismatch or empty",
             ));
         }
+        let reference = TightFrames::new(reference, self.width, self.height)?;
+        let distorted = TightFrames::new(distorted, self.width, self.height)?;
+        let reference = reference.frames();
+        let distorted = distorted.frames();
         for frame in reference.iter().chain(distorted.iter()) {
             self.validate_frame(frame)?;
         }
@@ -243,7 +248,7 @@ impl VmafV0Scorer {
         }
         reference
             .iter()
-            .zip(distorted)
+            .zip(distorted.iter())
             .zip(motion)
             .map(|((reference, distorted), motion2)| {
                 self.score_frame(reference, distorted, motion2)
@@ -285,6 +290,10 @@ impl VmafV0Stream {
             .seen
             .checked_add(1)
             .ok_or(Error::InvalidInput("frame count overflow"))?;
+        let (width, height) = (self.scorer.width, self.scorer.height);
+        let reference = reference.tight(width, height)?;
+        let distorted = distorted.tight(width, height)?;
+        let (reference, distorted) = (reference.frame(), distorted.frame());
         let features = self.scorer.extract_features(&reference, &distorted)?;
         let raw = if let Some(previous) = &self.previous_reference {
             let sad = motion_sad(

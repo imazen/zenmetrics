@@ -130,7 +130,7 @@ fn cpu_hdrvdp3_requires_explicit_params_and_nits() {
 
     // Display-relative linear planes → loud error.
     let err = m
-        .compute_from_linear_planes(&r, &r, &r, &d, &d, &d)
+        .compute_from_linear_planes([&r, &r, &r], w as usize, [&d, &d, &d], w as usize)
         .expect_err("linear planes must error");
     let msg = err.to_string();
     assert!(

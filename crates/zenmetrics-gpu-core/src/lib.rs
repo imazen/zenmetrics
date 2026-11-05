@@ -282,6 +282,58 @@ pub fn reflect_index(i: usize, n: usize) -> usize {
     k
 }
 
+/// A `width` x `height` plane with rows `stride` samples apart, as tight samples:
+/// the plane itself when `stride == width`, otherwise packed into `scratch`, which
+/// callers keep across calls. Check the geometry with [`check_strided_plane`] first.
+pub fn tight_plane<'a, T: Copy>(
+    scratch: &'a mut Vec<T>,
+    plane: &'a [T],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> &'a [T] {
+    let n = width * height;
+    if stride == width {
+        return &plane[..n];
+    }
+    scratch.clear();
+    scratch.reserve(n);
+    for row in 0..height {
+        let start = row * stride;
+        scratch.extend_from_slice(&plane[start..start + width]);
+    }
+    scratch
+}
+
+/// Why [`check_strided_plane`] refused: `(expected, got)` samples.
+pub type StridedPlaneMisfit = (usize, usize);
+
+/// Check a plane of `len` samples against a `width` x `height` image with rows
+/// `stride` samples apart: the stride must reach the width, and the plane needs
+/// `(height - 1) * stride + width` samples, since the last row needs no padding.
+/// A misfit reports the width and stride, or the samples needed and supplied.
+pub fn check_strided_plane(
+    len: usize,
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<(), StridedPlaneMisfit> {
+    if stride < width {
+        return Err((width, stride));
+    }
+    let needed = match height.checked_sub(1) {
+        None => 0,
+        Some(rows) => rows
+            .checked_mul(stride)
+            .and_then(|start| start.checked_add(width))
+            .ok_or((usize::MAX, len))?,
+    };
+    if len < needed {
+        return Err((needed, len));
+    }
+    Ok(())
+}
+
 /// Reflect(mirror)-pad an interleaved buffer of `ch`-element pixels from a
 /// logical `lw × lh` extent up to a padded `pw × ph` extent, using
 /// [`reflect_index`] on each axis. Used for `RGB8` (`ch = 3`) and single

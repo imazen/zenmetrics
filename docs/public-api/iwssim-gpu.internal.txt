@@ -13,35 +13,39 @@
 #   pub types (struct/enum/trait/alias)         2
 #   pub consts/statics                          2
 #   free functions                              1
-#   inherent methods                           31
+#   inherent methods                           35
 #   re-exports                                  2
-#   trait roster entries (type × trait)         6
+#   trait roster entries (type × trait)         7
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                            4
+#   (root)                            3
 #   memory_mode                       2
-#   pipeline                         31
+#   pipeline                         36
 #   session                           3
 
-## items (39 lines)
+## items (43 lines)
 
 pub const pipeline::STRIP_DEFAULT_BODY: u32
 pub const pipeline::STRIP_DEFAULT_HALO: u32
-pub fn IwssimStrategy::assert_fields_are_eq(&self)
 pub fn memory_mode::MemoryMode::assert_fields_are_eq(&self)
 pub fn memory_mode::ResolvedMode::assert_fields_are_eq(&self)
 pub fn pipeline::Iwssim<R>::clear_reference(&mut self)
 pub fn pipeline::Iwssim<R>::clear_reference_stripped(&mut self)
 pub fn pipeline::Iwssim<R>::compute_gray(&mut self, &[f32], &[f32]) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_gray_stripped(&mut self, &[f32], &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_gray_stripped_with_stop(&mut self, &[f32], &[f32], &dyn enough::Stop) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_rgb(&mut self, &[u8], &[u8]) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_rgb_stripped(&mut self, &[u8], &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_stripped_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped(&mut self, &[u8]) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped_native(&mut self, &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped_native_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_with_reference(&mut self, &[f32]) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::compute_with_reference_stripped(&mut self, &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_with_reference_stripped_with_stop(&mut self, &[f32], &dyn enough::Stop) -> Result<GpuIwssimResult>
 pub fn pipeline::Iwssim<R>::dimensions(&self) -> (u32, u32)
 pub fn pipeline::Iwssim<R>::has_cached_reference_stripped(&self) -> bool
 pub fn pipeline::Iwssim<R>::has_reference(&self) -> bool
@@ -66,7 +70,7 @@ pub struct Iwssim<R: cubecl_runtime::runtime::Runtime> [also: pipeline]
 pub use session::cleanup_stream
 pub use session::stream_reserved_bytes
 
-## trait impls (6 types)
+## trait impls (7 types)
 
 GpuIwssimResult: TrivialClone
 IwssimConfig: TrivialClone
@@ -74,8 +78,9 @@ IwssimParams: TrivialClone
 IwssimStrategy: TrivialClone
 memory_mode::MemoryMode: TrivialClone
 memory_mode::ResolvedMode: TrivialClone
+memory_mode::ScoreResourceEstimate: TrivialClone
 
 ## auto traits
 
 0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-pipeline::Iwssim<R>: !RefUnwindSafe !UnwindSafe
+pipeline::Iwssim<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

@@ -17,5 +17,5 @@
 ## items (3 lines)
 
 pub fn ButteraugliOpaque::compute_from_linear_interleaved(&mut self, &[f32], &[f32]) -> Result<(zenmetrics_gpu_core::Score, f64)>
-pub fn ButteraugliOpaque::compute_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<(zenmetrics_gpu_core::Score, f64)>
+pub fn ButteraugliOpaque::compute_from_linear_planes(&mut self, [&[f32]; 3], usize, [&[f32]; 3], usize) -> Result<(zenmetrics_gpu_core::Score, f64)>
 pub fn ButteraugliOpaque::compute_pixels_display(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>, f32) -> Result<(zenmetrics_gpu_core::Score, f64)>

@@ -12,6 +12,7 @@ mod parity_against_host_scalar;
 mod parity_corpus;
 mod pixels_integration;
 mod simd_equivalence;
+mod strided_linear_planes;
 mod strip_parity;
 mod strip_stub;
 mod upstream_parity_extended;

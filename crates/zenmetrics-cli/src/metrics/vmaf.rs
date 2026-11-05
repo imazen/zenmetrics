@@ -58,11 +58,13 @@ pub fn score(
         y: &ry,
         u: &ru,
         v: &rv,
+        strides: [w, w / 2, w / 2],
     }];
     let distorted = [vmaf::Yuv420Frame {
         y: &dy,
         u: &du,
         v: &dv,
+        strides: [w, w / 2, w / 2],
     }];
     let v0 = |variant| -> Result<f64, Box<dyn std::error::Error>> {
         let frames = vmaf::score_v0_420(&reference, &distorted, w, h, 8, variant)?;

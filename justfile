@@ -2798,3 +2798,10 @@ hdr-native-worker-build target_dir:
     test "$(hostname)" != dev
     TMPDIR="$HOME/tmp" CARGO_TARGET_DIR={{target_dir}} cargo test --manifest-path tools/chroma-fleet/Cargo.toml -p zenfleet-worker --lib native_hdr_staging_tests
     CARGO_TARGET_DIR={{target_dir}} cargo build --release --manifest-path tools/chroma-fleet/Cargo.toml --bin zenfleet-worker
+
+# Retained, timer-free whole-call VMAF allocation/counter workload.
+vmaf-stride-cost-build:
+    just snap-cargo @ build --release -p vmaf --example stride_cost
+
+vmaf-stride-cost-profile before after output:
+    bash scripts/ci/profile-vmaf-ingress.sh '{{before}}' '{{after}}' '{{output}}'
