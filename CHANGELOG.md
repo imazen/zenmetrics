@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.
+
 - zenmetrics-api: SSIMULACRA2's HDR feeding on `Backend::Cpu` is fast-ssim2 0.9.1's native absolute-light path
   (`hdr::HdrFeeding::NativeNits`, `Metric::compute_native_nits_interleaved_multi`: `compute_ssimulacra2` on an
   `RGBF32_LINEAR` slice with a 1 cd/m² diffuse white; UPIQ-380 pooled SROCC 0.765 against 0.704 for the deprecated

@@ -1237,7 +1237,8 @@ fn yuv420_image(
     width: u32,
     height: u32,
 ) -> Result<zenmetrics_abstractions::Image<'_>, String> {
-    use za::zenpixels::{ChannelType, PixelDescriptor, PixelSlice, PlaneLayout};
+    use za::PlaneLayout;
+    use za::zenpixels::{ChannelType, PixelDescriptor, PixelSlice};
     use zenmetrics_abstractions as za;
     let plane = |p, w: u32, h: u32| {
         PixelSlice::new(p, w, h, w as usize, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
