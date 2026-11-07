@@ -1,8 +1,8 @@
 # Still-image IQA contract validation — 2026-11-05
 
-The shared core is [zenpsychovisual-api, review 111](https://github.com/imazen/zenpixels/pull/111),
+The shared core is [zenpsy-api, review 111](https://github.com/imazen/zenpixels/pull/111),
 a standalone package in the zenpixels repository. Consumers import
-`zenpsychovisual_api` and may alias it locally as `iqa`.
+`zenpsy_api` and may alias it locally as `iqa`.
 The [zencodec adapter, review 196](https://github.com/imazen/zencodec/pull/196)
 only maps resolved outputs; metric implementations do not acquire a codec
 runtime. Existing zenmetrics-abstractions consumers are not migrated here.
@@ -11,7 +11,7 @@ Video sessions/timing remain in the existing abstraction.
 ## Frozen native inputs and implementations
 
 Both standalone harnesses pin the renamed core and its pixel types together at
-[c5552470](https://github.com/imazen/zenpixels/commit/c5552470016090e3e2be92e368d1afdde83198d6).
+[41c3cffe](https://github.com/imazen/zenpixels/commit/41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6).
 All four native adapters pass again on x64 with that source, including actual
 SSIMULACRA2 cached maps and the original selected Margarine frontend. The
 standalone manifests and lockfiles bind the exact dependency graph:
