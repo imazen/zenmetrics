@@ -2799,7 +2799,7 @@ hdr-native-worker-build target_dir:
     TMPDIR="$HOME/tmp" CARGO_TARGET_DIR={{target_dir}} cargo test --manifest-path tools/chroma-fleet/Cargo.toml -p zenfleet-worker --lib native_hdr_staging_tests
     CARGO_TARGET_DIR={{target_dir}} cargo build --release --manifest-path tools/chroma-fleet/Cargo.toml --bin zenfleet-worker
 
-# Native controls for the still-image zenpsychovisual-api contract.
+# Native controls for the still-image zenpsy-api contract.
 iqa-native-check:
     cargo test --locked --manifest-path tools/iqa-contract-validation/Cargo.toml -- --test-threads=1
     cargo clippy --locked --manifest-path tools/iqa-contract-validation/Cargo.toml --all-targets -- -D warnings

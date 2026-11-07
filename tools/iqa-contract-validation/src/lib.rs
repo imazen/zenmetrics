@@ -6,7 +6,7 @@ use iqa::{
     MetricResult, ResultMetricExt, ScoreKind, ScoreSpec, WarmReference,
 };
 use std::borrow::Cow;
-use zenpsychovisual_api as iqa;
+use zenpsy_api as iqa;
 
 /// Native evaluation with stable owned scalar/map data.
 struct NativeEval {

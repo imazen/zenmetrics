@@ -1,7 +1,7 @@
 use iqa::zenpixels::{PixelDescriptor, PixelSlice};
 use iqa::{ErrorKind, EvalOpts, Image, Metric};
 use iqa_contract_validation::{Butter, Ssim2, Zen, fixture};
-use zenpsychovisual_api as iqa;
+use zenpsy_api as iqa;
 fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> Image<'_> {
     PixelSlice::new(
         bytes,
