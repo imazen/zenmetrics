@@ -606,6 +606,14 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ## Known Bugs
 
+- **2026-11-07 — AOM SDR sweep sequence/container color mismatch (open).**
+  Full-range BT.601 input is wrapped with full-range NCLX, but the retained
+  oracle-bootstrap sequence OBU declares limited range. Independent decode
+  reproduces the pixel effect; both artifact regression tests fail on the AOM
+  witness and pass on the SVT control. See
+  [reproduction and acceptance gate](docs/AVIF_AOM_COLOR_REGRESSION.md).
+  Do not use affected quality scores for picker tuning before repair/rescoring.
+
 - Fixed IQA Margarine error bridging (2026-11-05): strengthening the existing
   geometry entry's boxed error broke the selected command's `?` conversion.
   Preserve that legacy entry and use a separate private Send+Sync entry for

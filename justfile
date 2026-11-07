@@ -2809,3 +2809,8 @@ iqa-margarine-check:
     cargo check --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bins
     cargo run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation
     cargo clippy --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation -- -D warnings
+
+# Explicit external-decoder gate; accepts a fresh encode or a hash-pinned witness.
+# Archived AOM witness is expected to fail until tested against a repaired artifact.
+avif-color-regression avif *options:
+    python3 scripts/jobsys/check_avif_color_signaling.py '{{avif}}' {{options}}
