@@ -1,5 +1,7 @@
 # AOM sweep color-signaling regression
 
+Tracking: [zenmetrics #112](https://github.com/imazen/zenmetrics/issues/112).
+
 The SDR `aom-rs` sweep arm converts RGB to **full-range BT.601 YCbCr**, but
 its oracle-bootstrap sequence OBU declares limited range and omits the color
 description. The AVIF container is separately tagged BT.709/sRGB/BT.601/full.
