@@ -163,7 +163,7 @@ fn resource_fallback_keeps_completed_prefix_and_real_preparation() {
     });
     let c = counter.clone();
     executor.register_prepared("second", move || {
-        Ok(control(None, c.clone(), Backend::Gpu { api: "control" }))
+        Ok(control(None, c.clone(), Backend::gpu("control")))
     });
     let (r, ds) = inputs();
     let report = executor
@@ -182,12 +182,12 @@ fn resource_fallback_keeps_completed_prefix_and_real_preparation() {
         [(0, 11.0), (1, 22.0), (2, 33.0)]
     );
     assert_eq!(
-        report.completed[0].identity.implementation().backend,
+        report.completed[0].identity.implementation().backend(),
         Backend::Cpu
     );
     assert_eq!(
-        report.completed[1].identity.implementation().backend,
-        Backend::Gpu { api: "control" }
+        report.completed[1].identity.implementation().backend(),
+        Backend::gpu("control")
     );
     let error = report.attempts[0].error.as_ref().unwrap();
     assert_eq!(error.error().kind(), ErrorKind::Resource);

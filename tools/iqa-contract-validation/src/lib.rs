@@ -6,6 +6,7 @@ use iqa::{
     PrepareReference, ResultMetricExt, Score, ScoreSpec, WarmReference,
 };
 use zenpsy_api as iqa;
+mod planar;
 
 /// Typed native assessment, retaining the original result without map copies.
 pub struct Assessment<T, const N: usize> {
@@ -132,15 +133,19 @@ fn butter_result(
         values: [native.score, native.pnorm_3],
         native,
         specs: [
-            ScoreSpec::new("max", Direction::Lower).with_perfect(0.0),
-            ScoreSpec::new("pnorm3", Direction::Lower).with_perfect(0.0),
+            ScoreSpec::new("max", Direction::Lower)
+                .with_perfect(0.0)
+                .with_unit("butteraugli"),
+            ScoreSpec::new("pnorm3", Direction::Lower)
+                .with_perfect(0.0)
+                .with_unit("butteraugli"),
         ],
     }
 }
 impl Metric for Butter {
     type Output = Assessment<butteraugli::ButteraugliResult, 2>;
     fn id(&self) -> MetricId {
-        id("butteraugli", "0.9.4", "31687022")
+        id("butteraugli", "0.9.4", "f223ca9e")
             .with_config("intensity_target", 80)
             .with_config("hf_asymmetry", 1)
             .with_config("xmul", 1)
@@ -270,7 +275,7 @@ pub struct Zen {
 pub struct ZenWarm(zensim::PrecomputedReference);
 fn zensim(opts: EvalOpts<'_>) -> MetricResult<zensim::Zensim> {
     let shared = opts
-        .pulse
+        .pulse()
         .share()
         .metric_err("zensim", ErrorKind::UnsupportedRequest)?;
     Ok(zensim::Zensim::new(zensim::ZensimProfile::latest())
@@ -421,19 +426,23 @@ fn plane(values: &[f32], w: usize, h: usize, stride: usize) -> AnyPlane<'_> {
     AnyPlane::F32(PlaneRef::new(values, w, h, stride).expect("native map geometry"))
 }
 fn error_map(key: impl Into<std::borrow::Cow<'static, str>>) -> ScoreSpec {
-    let mut spec = ScoreSpec::new("diffmap", Direction::Lower).with_perfect(0.0);
-    spec.key = key.into();
-    spec
+    ScoreSpec::new("diffmap", Direction::Lower)
+        .with_perfect(0.0)
+        .with_key(key)
 }
 impl NativeMaps for butteraugli::ButteraugliResult {
     fn map_specs(&self) -> Vec<ScoreSpec> {
-        self.diffmap.iter().map(|_| error_map("diffmap")).collect()
+        self.diffmap
+            .iter()
+            .map(|_| error_map("diffmap").with_unit("butteraugli"))
+            .collect()
     }
     fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
         self.diffmap.iter().map(|m| {
             (
                 plane(m.buf(), m.width(), m.height(), m.stride()),
-                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32)
+                    .expect("native map geometry"),
             )
         })
     }
@@ -454,7 +463,8 @@ impl NativeMaps for ZenNative {
         map.into_iter().map(|m| {
             (
                 plane(m.diffmap(), m.width(), m.height(), m.width()),
-                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32)
+                    .expect("native map geometry"),
             )
         })
     }
@@ -485,12 +495,10 @@ impl NativeMaps for SsimNative {
         };
         map.into_iter().flat_map(|m| {
             m.scales.iter().enumerate().flat_map(move |(s, level)| {
-                let grid = iqa::MapGrid::new(m.width as u32, m.height as u32).with_cells(
-                    0,
-                    0,
-                    1 << s,
-                    1 << s,
-                );
+                let grid = iqa::MapGrid::new(m.width as u32, m.height as u32)
+                    .expect("native map geometry")
+                    .with_cells(0, 0, 1 << s, 1 << s)
+                    .expect("native map geometry");
                 [&level.ssim, &level.artifact, &level.detail_lost]
                     .into_iter()
                     .flat_map(move |term| {

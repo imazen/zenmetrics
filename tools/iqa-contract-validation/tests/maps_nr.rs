@@ -74,13 +74,19 @@ fn three_native_results_expose_original_map_planes_through_stacked_erasure() {
                         for (c, values) in ["x", "y", "b"].into_iter().zip(data) {
                             let m = planes[at];
                             at += 1;
-                            assert_eq!(m.spec.key, format!("{term}_{c}_{s}"));
+                            assert_eq!(m.spec.key(), format!("{term}_{c}_{s}"));
                             assert_eq!(pointer(m), values.as_ptr());
                             assert_eq!(
                                 (m.values.width(), m.values.height()),
                                 (level.width, level.height)
                             );
-                            assert_eq!(m.grid, MapGrid::new(w, h).with_cells(0, 0, 1 << s, 1 << s));
+                            assert_eq!(
+                                m.grid,
+                                MapGrid::new(w, h)
+                                    .expect("native map geometry")
+                                    .with_cells(0, 0, 1 << s, 1 << s)
+                                    .expect("native map geometry")
+                            );
                         }
                     }
                 }
@@ -96,7 +102,7 @@ fn three_native_results_expose_original_map_planes_through_stacked_erasure() {
                 );
             }
             for m in planes {
-                assert_eq!((m.grid.input_width, m.grid.input_height), (w, h));
+                assert_eq!((m.grid.input_width(), m.grid.input_height()), (w, h));
             }
         }
     }
@@ -132,7 +138,7 @@ impl NoReferenceMetric for Piqe {
         let native = legacy::NoReferenceMetric::evaluate_image(
             &mut self.0,
             legacy::Image::from(p.clone()),
-            legacy::EvalOpts::new().with_pulse(opts.pulse),
+            legacy::EvalOpts::new().with_pulse(opts.pulse()),
         )
         .metric_err_with("piqe", |e| match e.error().kind() {
             legacy::ErrorKind::UnsupportedInput => ErrorKind::UnsupportedInput,
@@ -187,9 +193,7 @@ fn real_piqe_one_image_paired_and_cached_results_keep_native_score_bits() {
                 expected
             );
             assert_eq!(
-                out.scores()
-                    .map(|s| s.spec.key.as_ref())
-                    .collect::<Vec<_>>(),
+                out.scores().map(|s| s.spec.key()).collect::<Vec<_>>(),
                 ["piqe", "piqe_ref"]
             );
             assert_eq!(out.maps().count(), 0);

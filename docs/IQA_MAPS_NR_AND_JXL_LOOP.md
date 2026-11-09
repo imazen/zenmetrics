@@ -1,5 +1,10 @@
 # Maps, no-reference metrics and JXL iteration — 2026-11-09
 
+This records the landed PR 131 integration and its initial encoder audit. The
+[forward-compatibility follow-up](ZENPSY_FORWARD_COMPATIBILITY.md) updates the
+current pin and implements shared planar ingress, owned preparation and native
+lending. Copy limitations below describe the audited original revisions.
+
 The map/NR contract in [zenpixels PR 131](https://github.com/imazen/zenpixels/pull/131)
 has landed. This integration pins zenpixels and zenpsy-api together at
 [`d234f3c6`](https://github.com/imazen/zenpixels/commit/d234f3c63efca06d5d7d52cb39b6c1f92961e98f).

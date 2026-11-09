@@ -7,14 +7,14 @@ license = "MIT OR Apache-2.0"
 [workspace]
 [dependencies]
 zenmetrics-orchestrator = { path = "../../crates/zenmetrics-orchestrator", default-features = false, features = ["psy"] }
-zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "d234f3c63efca06d5d7d52cb39b6c1f92961e98f", version = "0.1.0" }
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "20cbfe10cfed18b90ce9c6d986d6aed4e7510b24", version = "0.1.0" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "5475929d22306846cfe533312a110dbf7d3669e9", default-features = false, features = ["zenpixels"] }
-butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "31687022761bf5b401a9f1e0ed6e6dd407afee70", default-features = false }
+butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "f223ca9e4b606f51010b22bbb8fd8680f3cc5677", default-features = false }
 fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "6d27c728a4094cbbcf5f04e3b61859f062951f2e", default-features = false }
 bytemuck = "1.25.2"
 piqe = { path = "../../crates/piqe", default-features = false }
 zenmetrics-abstractions = { path = "../../crates/zenmetrics-abstractions", default-features = false }
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "d234f3c63efca06d5d7d52cb39b6c1f92961e98f" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "20cbfe10cfed18b90ce9c6d986d6aed4e7510b24" }
 [profile.dev]
 opt-level = 1

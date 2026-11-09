@@ -68,12 +68,12 @@ dependencies = [
 [[package]]
 name = "butteraugli"
 version = "0.9.4"
-source = "git+https://github.com/imazen/butteraugli?rev=31687022761bf5b401a9f1e0ed6e6dd407afee70#31687022761bf5b401a9f1e0ed6e6dd407afee70"
+source = "git+https://github.com/imazen/butteraugli?rev=f223ca9e4b606f51010b22bbb8fd8680f3cc5677#f223ca9e4b606f51010b22bbb8fd8680f3cc5677"
 dependencies = [
- "archmage 0.9.30",
+ "archmage 0.9.31-beta.1",
  "enough",
  "imgref",
- "magetypes 0.9.30",
+ "magetypes 0.9.31-beta.1",
  "rgb",
 ]
 
@@ -770,7 +770,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.3.1"
-source = "git+https://github.com/imazen/zenpixels?rev=d234f3c63efca06d5d7d52cb39b6c1f92961e98f#d234f3c63efca06d5d7d52cb39b6c1f92961e98f"
+source = "git+https://github.com/imazen/zenpixels?rev=20cbfe10cfed18b90ce9c6d986d6aed4e7510b24#20cbfe10cfed18b90ce9c6d986d6aed4e7510b24"
 dependencies = [
  "bytemuck",
  "whereat",
@@ -790,7 +790,7 @@ dependencies = [
 [[package]]
 name = "zenpsy-api"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenpixels?rev=d234f3c63efca06d5d7d52cb39b6c1f92961e98f#d234f3c63efca06d5d7d52cb39b6c1f92961e98f"
+source = "git+https://github.com/imazen/zenpixels?rev=20cbfe10cfed18b90ce9c6d986d6aed4e7510b24#20cbfe10cfed18b90ce9c6d986d6aed4e7510b24"
 dependencies = [
  "how-far",
  "whereat",

@@ -38,7 +38,7 @@ impl Evaluation for Native {
             iqa::MapView::new(
                 &SPEC,
                 iqa::zenpixels::plane::AnyPlane::F32(plane),
-                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32).unwrap(),
             )
         })
     }
@@ -229,7 +229,7 @@ fn main() {
                 plane.strided_samples().as_ptr(),
                 out.original.diffmap.as_ref().unwrap().data().as_ptr()
             );
-            assert_eq!(generic.grid, iqa::MapGrid::new(w, h));
+            assert_eq!(generic.grid, iqa::MapGrid::new(w, h).unwrap());
             assert_eq!(
                 plane
                     .rows()

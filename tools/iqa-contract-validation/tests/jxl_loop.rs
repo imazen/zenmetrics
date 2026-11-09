@@ -74,7 +74,7 @@ fn jxl_shape_keeps_float_inputs_and_reuses_map_export_storage() {
         let borrowed = MapView::new(
             &SPEC,
             AnyPlane::F32(PlaneRef::new(&map[..], w, h, w).unwrap()),
-            MapGrid::new(w as u32, h as u32),
+            MapGrid::new(w as u32, h as u32).expect("native map geometry"),
         );
         let AnyPlane::F32(view) = borrowed.values else {
             panic!("native f32 map")
