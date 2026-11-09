@@ -13,6 +13,17 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-orchestrator: reuse shared zenpsy-api erased metric/prepared wrappers;
+  validate heterogeneous native collections, nested native-result access and
+  erased HDR scoring (`1f8d1346`).
+
+- zenmetrics-orchestrator: add opt-in `psy` execution with typed native assessments,
+  all named scores, real prepared-reference batches, actual implementation
+  provenance and explicit resource-only fallback (`5ad5f4f1`).
+- Validate the reduced zenpsy contract against native Zensim/Butteraugli/SSIMULACRA2
+  and selected Margarine, including PQ/HLG/absolute-linear HDR, native diagnostics
+  by explicit opt-in and i686 cross execution (`f637f09b`).
+
 - Sweep validation: add explicit AVIF color-declaration and decode-identity regression gates, with hash-pinned AOM failure and SVT control reproduction; production range-signaling defect remains open ([#112](https://github.com/imazen/zenmetrics/issues/112), `6940e1da`).
 
 - zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.

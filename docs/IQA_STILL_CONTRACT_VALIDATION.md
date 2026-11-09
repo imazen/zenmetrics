@@ -1,4 +1,90 @@
-# Still-image IQA contract validation — 2026-11-05
+# Minimal typed IQA contract validation — 2026-11-09
+
+The current [zenpsy-api review](https://github.com/imazen/zenpixels/pull/111)
+uses a typed `Metric::Output: Evaluation`, named score views and an optional
+`PrepareReference` extension. The reviewed core/pixel pin is
+[2ee9fd21](https://github.com/imazen/zenpixels/commit/2ee9fd219fad403d09ef5f595f5504af8add3da1).
+The [codec bridge](https://github.com/imazen/zencodec/pull/196) forwards that
+concrete output without boxing or losing native fields. Callers can instead
+wrap metrics in `Erased` for a heterogeneous array, retaining the original
+native assessment behind `ErasedEvaluation::native`.
+
+## Current measured coverage
+
+The serving Zensim, Butteraugli and fast-ssim2 source pins in the historical
+source table below are unchanged. Their typed adapters preserve native scalar
+bits across cold, strided and actual prepared calls at 64x64, 97x73 and 131x129.
+Butteraugli's max/pnorm3 and selected Margarine's max/p1/p2/p3/p6 remain separate
+named outputs. Native result objects remain directly accessible.
+
+Zensim additionally matches independent direct `compute_hdr` calls exactly at
+97x73 for all nine combinations of PQ, HLG and absolute-linear light with
+BT.709, Display P3 and BT.2020 primaries. Strided repeats match exactly; a
+mismatched transfer declaration refuses. The linear fixture is in cd/m²;
+PQ/HLG fixtures use explicit native display parameters. This validation adapter
+refuses attached overriding colour contexts on its HDR path. It does not
+qualify all HDR input formats, viewing conditions or prepared HDR scoring.
+
+Diagnostics are off by default. Explicit small witness tests retain exact
+native Zensim/Butteraugli maps and every SSIMULACRA2 component/grid, including
+5x3 and 130x9 edge cases. These are in-memory fixtures only; no maps are saved.
+The native Butteraugli prepared API returns its internal pooling map even when
+`compute_diffmap` is false; the adapter drops that scratch before returning a
+score-only assessment. Selected Margarine pools its five scalars from internal
+map scratch, likewise dropped unless diagnostics were requested. Neither
+adapter copies or persists diagnostic arrays during routine scoring.
+
+Margarine still uses the frozen selected kernel and teacher. Its five scalar
+and opt-in native map outputs match direct calls at all three geometries,
+including padded rows. Its original selected frontend compiles, and the boxed
+error-allocation retention control passes. There is no synthesized preparation.
+
+Heterogeneous native arrays additionally execute all three typed metrics without
+the orchestrator, preserving exact scalar bits and original native downcast
+targets through stacked erasure. A collection of all three actual prepared
+references matches those cold results on two repeated candidate rounds. The
+nine Zensim HDR controls also run through stacked erasure. Selected Margarine
+continues to execute through the runtime cold registration.
+
+## Orchestration boundary
+
+The opt-in `zenmetrics-orchestrator/psy` path consumes the actual core. It
+registers worker-local factories, uses the core's shared `Erased` and
+`DynPrepareReference` wrappers at its collection boundary,
+retains every named score and actual implementation identity, and prepares a
+reference once for each prepared batch attempt. Real controls cover all four
+methods: three native prepared implementations and cold selected Margarine.
+Synthetic failures verify resource-only explicit fallback, preservation of a
+completed prefix, refusal to change effective scoring configuration, original
+error causes/traces, and no retry after cancellation or computation failures.
+Routine batches refuse diagnostic requests before constructing a scorer.
+
+This is an additive backend-neutral route. The legacy GPU worker pool, chooser,
+benchmark cache, CLI and existing zenmetrics-abstractions consumers have not
+been migrated. There is no new GPU numerical qualification, performance claim,
+video contract, native planar view abstraction or no-reference interface.
+The [residual surface audit](ZENPSY_RESIDUAL_SURFACES.md) identifies actual
+consumers of those remaining contracts and the migration gates.
+
+## Reproduction
+
+- `just iqa-native-check`: native scalar/stride/preparation, opt-in diagnostics,
+  Zensim HDR, runtime registration/fallback and strict lint controls.
+- `just iqa-margarine-check`: original selected frontend, frozen vendor check,
+  exact native selected-kernel and runtime cold-registration controls.
+- `just iqa-cross-check`: the same native/runtime panel and selected Margarine
+  through i686 Cross.
+- Core: `just iqa-check` and `just iqa-portability-check` in zenpixels.
+- Codec adapter: the same recipes in zencodec.
+
+Current local native validation passes on Linux x64 and i686 through cross. Core and codec adapter pass
+Rust 1.88, no_std, WASM and freestanding ARM checks, tests/doctests and strict
+Clippy/Rustdoc. Native algorithm/reference parity, every model and every input
+format remain outside these integration checks. Historical observations below
+retain their original source identities and scope; they are not current
+minimal-contract coverage claims.
+
+# Historical rich-contract validation — 2026-11-05
 
 The shared core is [zenpsy-api, review 111](https://github.com/imazen/zenpixels/pull/111),
 a standalone package in the zenpixels repository. Consumers import

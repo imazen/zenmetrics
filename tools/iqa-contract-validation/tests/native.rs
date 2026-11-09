@@ -1,8 +1,8 @@
 use iqa::zenpixels::{PixelDescriptor, PixelSlice};
-use iqa::{ErrorKind, EvalOpts, Image, Metric};
-use iqa_contract_validation::{Butter, Ssim2, Zen, fixture};
+use iqa::{EvalOpts, Evaluation, Metric, PrepareReference};
+use iqa_contract_validation::{Butter, Ssim2, SsimNative, Zen, ZenNative, fixture};
 use zenpsy_api as iqa;
-fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> Image<'_> {
+fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelSlice<'_> {
     PixelSlice::new(
         bytes,
         w,
@@ -11,136 +11,135 @@ fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> Image<'_> {
         PixelDescriptor::RGB8_SRGB,
     )
     .unwrap()
-    .into()
 }
-fn bits(e: &iqa::Evaluated) -> Vec<u64> {
-    e.result.scores().map(|(_, v)| v.to_bits()).collect()
+fn bits(e: &impl Evaluation) -> Vec<u64> {
+    e.scores().map(|s| s.value.to_bits()).collect()
 }
-#[test]
-fn three_native_implementations_conform_and_preserve_strided_cold_warm_bits() {
+fn check_native<M: PrepareReference>(mut m: M)
+where
+    M::Output: std::fmt::Debug,
+{
     for (w, h) in [(64, 64), (97, 73), (131, 129)] {
         let r = fixture(w, h, 0, false);
         let d = fixture(w, h, 0, true);
         let rp = fixture(w, h, 9, false);
         let dp = fixture(w, h, 15, true);
-        for mut m in [
-            Box::new(Butter) as Box<dyn Metric>,
-            Box::new(Zen),
-            Box::new(Ssim2),
-        ] {
-            let name = m.id().family();
-            let ri = image(&r, w, h, 0);
-            let di = image(&d, w, h, 0);
-            let violations = iqa::conformance::check(m.as_mut(), &ri, &di);
-            assert!(violations.is_empty(), "{name} {w}x{h}: {violations:#?}");
-            let cold = iqa::score(m.as_mut(), ri.clone(), di.clone(), EvalOpts::new()).unwrap();
-            let padded = iqa::score(
-                m.as_mut(),
-                image(&rp, w, h, 9),
-                image(&dp, w, h, 15),
-                EvalOpts::new(),
-            )
-            .unwrap();
-            assert_eq!(
-                bits(&cold),
-                bits(&padded),
-                "{name}: active rows must ignore padding"
-            );
-            assert_eq!(cold.id.canonical(), padded.id.canonical());
-            let mut warm =
-                iqa::prepare_reference(m.as_mut(), image(&rp, w, h, 9), EvalOpts::new()).unwrap();
-            let warm = warm.score(image(&dp, w, h, 15), EvalOpts::new()).unwrap();
-            assert_eq!(
-                bits(&cold),
-                bits(&warm),
-                "{name}: real warm work must preserve cold bits"
-            );
-        }
+        let cold = iqa::score(
+            &mut m,
+            &image(&r, w, h, 0),
+            &image(&d, w, h, 0),
+            EvalOpts::new(),
+        )
+        .unwrap();
+        let padded = iqa::score(
+            &mut m,
+            &image(&rp, w, h, 9),
+            &image(&dp, w, h, 15),
+            EvalOpts::new(),
+        )
+        .unwrap();
+        assert_eq!(bits(&cold), bits(&padded), "{} stride", m.id().family());
+        let mut warm =
+            iqa::prepare_reference(&mut m, &image(&rp, w, h, 9), EvalOpts::new()).unwrap();
+        assert_eq!(
+            bits(&cold),
+            bits(&warm.score(&image(&dp, w, h, 15), EvalOpts::new()).unwrap())
+        );
     }
 }
 #[test]
-fn wrapper_scores_and_maps_match_direct_native_calls() {
+fn typed_cold_strided_and_actual_prepared_results_agree() {
+    check_native(Butter);
+    check_native(Ssim2);
+    check_native(Zen::default());
+}
+#[test]
+fn native_scalars_and_opt_in_maps_survive_without_repackaging() {
     let (w, h) = (97, 73);
     let r = fixture(w, h, 0, false);
     let d = fixture(w, h, 0, true);
-    let rp = PixelSlice::new(&r, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
-    let dp = PixelSlice::new(&d, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
-    let ss = fast_ssim2::compute_ssimulacra2(&rp, &dp).unwrap();
-    let wrapped = iqa::score(
-        &mut Ssim2,
-        rp.clone().into(),
-        dp.clone().into(),
-        EvalOpts::new(),
-    )
-    .unwrap();
-    assert_eq!(wrapped.result.score().to_bits(), ss.to_bits());
-    let native = butteraugli::butteraugli(
-        butteraugli::Img::new(
-            bytemuck::cast_slice::<u8, butteraugli::RGB8>(&r),
-            w as usize,
-            h as usize,
-        ),
-        butteraugli::Img::new(
-            bytemuck::cast_slice::<u8, butteraugli::RGB8>(&d),
-            w as usize,
-            h as usize,
-        ),
+    let ri = image(&r, w, h, 0);
+    let di = image(&d, w, h, 0);
+    let mut b = Butter;
+    let cold = iqa::score(&mut b, &ri, &di, EvalOpts::new()).unwrap();
+    assert!(
+        cold.native.diffmap.is_none(),
+        "routine scoring must not allocate a diagnostic result"
+    );
+    let opts = EvalOpts::new().with_native_map();
+    let out = iqa::score(&mut b, &ri, &di, opts).unwrap();
+    let rgb = |bytes: &[u8]| bytemuck::cast_slice::<u8, butteraugli::RGB8>(bytes).to_vec();
+    let rb = rgb(&r);
+    let db = rgb(&d);
+    let direct = butteraugli::butteraugli(
+        butteraugli::Img::new(rb.as_slice(), w as usize, h as usize),
+        butteraugli::Img::new(db.as_slice(), w as usize, h as usize),
         &butteraugli::ButteraugliParams::default().with_compute_diffmap(true),
     )
     .unwrap();
-    let wrapped = iqa::score(
-        &mut Butter,
-        rp.clone().into(),
-        dp.clone().into(),
-        EvalOpts::new().with_native_map(),
-    )
-    .unwrap();
+    assert_eq!(bits(&out), [direct.score, direct.pnorm_3].map(f64::to_bits));
+    let expected = direct
+        .diffmap
+        .unwrap()
+        .pixels()
+        .map(f32::to_bits)
+        .collect::<Vec<_>>();
     assert_eq!(
-        bits(&wrapped),
-        vec![native.score.to_bits(), native.pnorm_3.to_bits()]
-    );
-    assert_eq!(
-        wrapped
-            .result
-            .map()
-            .unwrap()
-            .values()
-            .iter()
-            .map(|v| v.to_bits())
-            .collect::<Vec<_>>(),
-        native
+        out.native
             .diffmap
             .unwrap()
             .pixels()
             .map(f32::to_bits)
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
+        expected
     );
-    let z = zensim::Zensim::new(zensim::ZensimProfile::latest()).with_parallel(false);
-    let native = z
-        .compute_with_diffmap(
-            &zensim::ZenpixelsSource::try_from_slice(&rp).unwrap(),
-            &zensim::ZenpixelsSource::try_from_slice(&dp).unwrap(),
-            zensim::DiffmapOptions::default(),
-        )
-        .unwrap();
-    let wrapped = iqa::score(
-        &mut Zen,
-        rp.into(),
-        dp.into(),
-        EvalOpts::new().with_native_map(),
-    )
-    .unwrap();
-    assert_eq!(wrapped.result.score().to_bits(), native.score().to_bits());
+    let mut warm = iqa::prepare_reference(&mut b, &ri, opts).unwrap();
     assert_eq!(
-        wrapped
-            .result
-            .map()
+        warm.score(&di, opts)
             .unwrap()
-            .values()
+            .native
+            .diffmap
+            .unwrap()
+            .pixels()
+            .map(f32::to_bits)
+            .collect::<Vec<_>>(),
+        expected
+    );
+    let source_r = zensim::ZenpixelsSource::try_from_slice(&ri).unwrap();
+    let source_d = zensim::ZenpixelsSource::try_from_slice(&di).unwrap();
+    let direct = zensim::Zensim::new(zensim::ZensimProfile::latest())
+        .with_parallel(false)
+        .compute_with_diffmap(&source_r, &source_d, zensim::DiffmapOptions::default())
+        .unwrap();
+    let out = iqa::score(&mut Zen::default(), &ri, &di, opts).unwrap();
+    let ZenNative::Map(native) = out.native else {
+        panic!("requested native map missing")
+    };
+    assert_eq!(native.score().to_bits(), direct.score().to_bits());
+    assert_eq!(
+        native
+            .diffmap()
             .iter()
             .map(|v| v.to_bits())
             .collect::<Vec<_>>(),
+        direct
+            .diffmap()
+            .iter()
+            .map(|v| v.to_bits())
+            .collect::<Vec<_>>()
+    );
+    let mut z = Zen::default();
+    let mut warm = iqa::prepare_reference(&mut z, &ri, EvalOpts::new()).unwrap();
+    let ZenNative::Map(native) = warm.score(&di, opts).unwrap().native else {
+        panic!("prepared native map missing")
+    };
+    assert_eq!(
         native
+            .diffmap()
+            .iter()
+            .map(|v| v.to_bits())
+            .collect::<Vec<_>>(),
+        direct
             .diffmap()
             .iter()
             .map(|v| v.to_bits())
@@ -148,34 +147,61 @@ fn wrapper_scores_and_maps_match_direct_native_calls() {
     );
 }
 #[test]
-fn geometry_remains_classified_native_causes_remain_typed() {
-    let r = fixture(64, 64, 0, false);
-    let ri = image(&r, 64, 64, 0);
-    let e = iqa::score(
-        &mut Butter,
-        ri.clone(),
-        ri.clone(),
-        EvalOpts::new().with_max_pixels(4095),
-    )
-    .unwrap_err();
-    assert_eq!(e.error().kind(), ErrorKind::Resource);
-    // A valid packed view below Butteraugli's warm-reference minimum reaches the
-    // native constructor: its original error is retained, not reduced to text.
-    let tiny = [1u8; 3];
-    let tiny = image(&tiny, 1, 1, 0);
-    let e = match iqa::prepare_reference(&mut Butter, tiny, EvalOpts::new()) {
-        Err(e) => e,
-        Ok(_) => panic!("native tiny-reference admission changed"),
-    };
-    assert!(
-        std::error::Error::source(e.error())
-            .unwrap()
-            .is::<butteraugli::ButteraugliError>()
-    );
-    assert!(!e.is_empty());
+fn ssim2_preserves_every_native_component_and_grid_on_edges_and_prepared_calls() {
+    for (w, h) in [(64, 64), (97, 73), (131, 129), (5, 3), (130, 9)] {
+        let r = fixture(w, h, 0, false);
+        let d = fixture(w, h, 0, true);
+        let rp = fixture(w, h, 9, false);
+        let dp = fixture(w, h, 15, true);
+        let ri = image(&r, w, h, 0);
+        let di = image(&d, w, h, 0);
+        let opts = EvalOpts::new().with_native_map();
+        let direct = fast_ssim2::compute_ssimulacra2_maps(&ri, &di).unwrap();
+        let scalar = fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap();
+        assert_eq!(direct.score.to_bits(), scalar.to_bits());
+        let mut m = Ssim2;
+        let cold = iqa::score(&mut m, &ri, &di, opts).unwrap();
+        let strided =
+            iqa::score(&mut m, &image(&rp, w, h, 9), &image(&dp, w, h, 15), opts).unwrap();
+        let mut warm = iqa::prepare_reference(&mut m, &ri, EvalOpts::new()).unwrap();
+        let prepared = warm.score(&image(&dp, w, h, 15), opts).unwrap();
+        for e in [cold, strided, prepared] {
+            assert_eq!(e.values[0].to_bits(), scalar.to_bits());
+            let SsimNative::Maps(n) = e.native else {
+                panic!("native map missing")
+            };
+            assert_eq!((n.width, n.height), (direct.width, direct.height));
+            assert_eq!(
+                n.diffmap().iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                direct
+                    .diffmap()
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(n.scales.len(), direct.scales.len());
+            for (s, d) in n.scales.iter().zip(&direct.scales) {
+                assert_eq!((s.width, s.height), (d.width, d.height));
+                for (a, b) in [&s.ssim, &s.artifact, &s.detail_lost].into_iter().zip([
+                    &d.ssim,
+                    &d.artifact,
+                    &d.detail_lost,
+                ]) {
+                    for (a, b) in a.iter().zip(b) {
+                        assert_eq!(
+                            a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
-#[test]
-fn cancellation_during_native_work_keeps_the_first_reason() {
+fn cancellation<M: Metric>(mut m: M)
+where
+    M::Output: std::fmt::Debug,
+{
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -206,130 +232,176 @@ fn cancellation_during_native_work_keeps_the_first_reason() {
             Ok(iqa::how_far::SharedPulse::new(self.clone()))
         }
     }
+
     let r = fixture(131, 129, 0, false);
     let d = fixture(131, 129, 0, true);
-    for mut m in [
-        Box::new(Butter) as Box<dyn Metric>,
-        Box::new(Zen),
-        Box::new(Ssim2),
+    for maps in [false, true] {
+        let count = Arc::new(AtomicUsize::new(0));
+        let pulse = Budget(count.clone());
+        let opts = EvalOpts::new().with_pulse(&pulse);
+        let opts = if maps { opts.with_native_map() } else { opts };
+        let e = iqa::score(
+            &mut m,
+            &image(&r, 131, 129, 0),
+            &image(&d, 131, 129, 0),
+            opts,
+        )
+        .unwrap_err();
+        assert_eq!(
+            iqa::stop_reason(&e),
+            Some(iqa::how_far::StopReason::TimedOut)
+        );
+        assert!(
+            std::error::Error::source(e.error()).is_some(),
+            "native cause must survive"
+        );
+        assert!(count.load(Ordering::SeqCst) > 3);
+    }
+}
+#[test]
+fn cancellation_reaches_all_three_native_kernels_and_keeps_causes() {
+    cancellation(Butter);
+    cancellation(Ssim2);
+    cancellation(Zen::default());
+}
+#[test]
+fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
+    use iqa::zenpixels::{AlphaMode, ColorPrimaries, TransferFunction};
+    use zensim::HdrEncoding;
+    let (w, h) = (97, 73);
+    for encoding in [
+        HdrEncoding::Linear,
+        HdrEncoding::Pq { peak_nits: 1000.0 },
+        HdrEncoding::Hlg {
+            peak_nits: 1000.0,
+            ambient_lux: 5.0,
+        },
     ] {
-        for maps in [false, true] {
-            let count = Arc::new(AtomicUsize::new(0));
-            let pulse = Budget(count.clone());
-            let opts = EvalOpts::new().with_pulse(&pulse);
-            let opts = if maps { opts.with_native_map() } else { opts };
-            let e = iqa::score(
-                m.as_mut(),
-                image(&r, 131, 129, 0),
-                image(&d, 131, 129, 0),
-                opts,
+        let (transfer, gain) = match encoding {
+            HdrEncoding::Linear => (TransferFunction::Linear, 1000.0),
+            HdrEncoding::Pq { .. } => (TransferFunction::Pq, 1.0),
+            HdrEncoding::Hlg { .. } => (TransferFunction::Hlg, 1.0),
+            _ => unreachable!(),
+        };
+        for primaries in [
+            ColorPrimaries::Bt709,
+            ColorPrimaries::DisplayP3,
+            ColorPrimaries::Bt2020,
+        ] {
+            let desc = PixelDescriptor::RGBAF32_LINEAR
+                .with_transfer(transfer)
+                .with_primaries(primaries)
+                .with_alpha(Some(AlphaMode::Opaque));
+            let make = |padding: usize, dist: bool| {
+                let stride = w as usize * 4 + padding;
+                let mut v = vec![12345.0f32; (h as usize - 1) * stride + w as usize * 4];
+                for y in 0..h as usize {
+                    for x in 0..w as usize {
+                        for c in 0..3 {
+                            let base = ((x * 31 + y * 47 + c * 63 + (x * y) % 71) % 700 + 50)
+                                as f32
+                                / 1000.0;
+                            v[y * stride + x * 4 + c] = (base
+                                + if dist && (x + 3 * y + c) % 7 == 0 {
+                                    0.025
+                                } else {
+                                    0.0
+                                })
+                                * gain;
+                        }
+                        v[y * stride + x * 4 + 3] = 1.0;
+                    }
+                }
+                v
+            };
+            let r = make(0, false);
+            let d = make(0, true);
+            let rp = make(4, false);
+            let dp = make(8, true);
+            let ri = hdr_view(&r, w, h, 0, desc);
+            let di = hdr_view(&d, w, h, 0, desc);
+            let direct = zensim::Zensim::new(zensim::ZensimProfile::latest())
+                .with_parallel(false)
+                .compute_hdr(
+                    &zensim::StridedBytes::try_with_alpha_mode(
+                        bytemuck::cast_slice(&r),
+                        w as usize,
+                        h as usize,
+                        w as usize * 16,
+                        zensim::PixelFormat::LinearF32Rgba,
+                        zensim::AlphaMode::Opaque,
+                    )
+                    .unwrap()
+                    .with_color_primaries(match primaries {
+                        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
+                        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+                        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+                        _ => unreachable!(),
+                    }),
+                    &zensim::StridedBytes::try_with_alpha_mode(
+                        bytemuck::cast_slice(&d),
+                        w as usize,
+                        h as usize,
+                        w as usize * 16,
+                        zensim::PixelFormat::LinearF32Rgba,
+                        zensim::AlphaMode::Opaque,
+                    )
+                    .unwrap()
+                    .with_color_primaries(match primaries {
+                        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
+                        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+                        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+                        _ => unreachable!(),
+                    }),
+                    encoding,
+                )
+                .unwrap();
+            let mut m = Zen {
+                hdr: Some(encoding),
+            };
+            let out = iqa::score(&mut m, &ri, &di, EvalOpts::new()).unwrap();
+            let padded = iqa::score(
+                &mut m,
+                &hdr_view(&rp, w, h, 4, desc),
+                &hdr_view(&dp, w, h, 8, desc),
+                EvalOpts::new(),
             )
-            .unwrap_err();
+            .unwrap();
+            assert_eq!(out.values[0].to_bits(), direct.score().to_bits());
+            assert_eq!(bits(&out), bits(&padded));
+            let mut erased: Box<iqa::DynMetric<'_>> =
+                Box::new(iqa::Erased::new(iqa::Erased::new(Zen {
+                    hdr: Some(encoding),
+                })));
+            let erased = iqa::score(&mut erased, &ri, &di, EvalOpts::new()).unwrap();
             assert_eq!(
-                iqa::stop_reason(&e),
-                Some(iqa::how_far::StopReason::TimedOut),
-                "{}",
-                m.id().family()
+                erased
+                    .native::<iqa_contract_validation::Assessment<ZenNative, 1>>()
+                    .unwrap()
+                    .values[0]
+                    .to_bits(),
+                direct.score().to_bits()
             );
-            assert!(
-                std::error::Error::source(e.error()).is_some(),
-                "native cancellation must retain its typed cause"
-            );
-            assert!(count.load(Ordering::SeqCst) > 3);
+            let wrong = PixelSlice::new(
+                bytemuck::cast_slice(&r),
+                w,
+                h,
+                w as usize * 16,
+                desc.with_transfer(TransferFunction::Srgb),
+            )
+            .unwrap();
+            assert!(iqa::score(&mut m, &wrong, &wrong, EvalOpts::new()).is_err());
         }
     }
 }
 
-/// Every native term, including coarse grids, survives both the core and the
-/// actual cached-reference path. Odd, padded and sub-8 inputs exercise edges.
-#[test]
-fn ssim2_native_maps_match_direct_strided_and_prepared_calls() {
-    for (w, h) in [(64, 64), (97, 73), (131, 129), (5, 3), (130, 9)] {
-        let r = fixture(w, h, 0, false);
-        let d = fixture(w, h, 0, true);
-        let rp = fixture(w, h, 9, false);
-        let dp = fixture(w, h, 15, true);
-        let ri = image(&r, w, h, 0);
-        let di = image(&d, w, h, 0);
-        let native =
-            fast_ssim2::compute_ssimulacra2_maps(ri.as_packed().unwrap(), di.as_packed().unwrap())
-                .unwrap();
-        let scalar =
-            fast_ssim2::compute_ssimulacra2(ri.as_packed().unwrap(), di.as_packed().unwrap())
-                .unwrap();
-        assert_eq!(native.score.to_bits(), scalar.to_bits());
-        let opts = EvalOpts::new().with_native_map();
-        let cold = iqa::score(&mut Ssim2, ri, di, opts).unwrap();
-        let strided =
-            iqa::score(&mut Ssim2, image(&rp, w, h, 9), image(&dp, w, h, 15), opts).unwrap();
-        let mut metric = Ssim2;
-        let mut warm =
-            iqa::prepare_reference(&mut metric, image(&rp, w, h, 9), EvalOpts::new()).unwrap();
-        let prepared = warm.score(image(&dp, w, h, 15), opts).unwrap();
-        let fused = native.diffmap();
-        for evaluated in [&cold, &strided, &prepared] {
-            assert_eq!(evaluated.result.score().to_bits(), scalar.to_bits());
-            let maps = evaluated.result.maps();
-            assert_eq!(maps.len(), 1 + 9 * native.scales.len());
-            assert_eq!(maps[0].name, "diffmap");
-            assert_eq!(
-                maps[0].geometry,
-                iqa::MapGeometry::identity(w, h).with_support(iqa::Support::Global)
-            );
-            assert_map_bits(&maps[0], &fused);
-            for (s, scale) in native.scales.iter().enumerate() {
-                for (t, (term, planes)) in [
-                    ("ssim", &scale.ssim),
-                    ("artifact", &scale.artifact),
-                    ("detail_lost", &scale.detail_lost),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    for (c, (channel, values)) in
-                        ["x", "y", "b"].into_iter().zip(planes).enumerate()
-                    {
-                        let map = &maps[1 + s * 9 + t * 3 + c];
-                        assert_eq!(map.name, format!("{term}_{channel}_{s}"));
-                        let cell = 1 << s;
-                        let geometry = iqa::MapGeometry::grid(
-                            w,
-                            h,
-                            0,
-                            0,
-                            cell,
-                            cell,
-                            scale.width as u32,
-                            scale.height as u32,
-                        );
-                        let geometry = if w < 8 || h < 8 {
-                            geometry.with_support(iqa::Support::Global)
-                        } else {
-                            geometry.with_halo(5 * cell, 5 * cell)
-                        };
-                        assert_eq!(map.geometry, geometry);
-                        assert_map_bits(map, values);
-                    }
-                }
-            }
-        }
-        let identity =
-            iqa::score(&mut Ssim2, image(&r, w, h, 0), image(&r, w, h, 0), opts).unwrap();
-        assert!(
-            identity
-                .result
-                .maps()
-                .iter()
-                .all(|m| m.values().iter().all(|&v| v == 0.0))
-        );
-    }
-}
-fn assert_map_bits(map: &iqa::MapView<'_>, expected: &[f32]) {
-    assert_eq!(map.polarity, iqa::MapPolarity::Difference);
-    assert_eq!(
-        map.values().iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-        expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-        "{}",
-        map.name
-    );
+fn hdr_view(v: &[f32], w: u32, h: u32, padding: usize, desc: PixelDescriptor) -> PixelSlice<'_> {
+    PixelSlice::new(
+        bytemuck::cast_slice(v),
+        w,
+        h,
+        (w as usize * 4 + padding) * 4,
+        desc,
+    )
+    .unwrap()
 }

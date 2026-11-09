@@ -1,67 +1,42 @@
-//! Native implementation adapters used only to validate the unpublished IQA contract.
+//! Source-pinned native adapters for the minimal typed IQA contract.
 #![forbid(unsafe_code)]
-use iqa::zenpixels::{PixelBuffer, PixelSlice};
+use iqa::zenpixels::{PixelDescriptor, PixelSlice};
 use iqa::{
-    ErrorKind, EvalOpts, Evaluation, Image, Implementation, InputFormat, Metric, MetricId,
-    MetricResult, ResultMetricExt, ScoreKind, ScoreSpec, WarmReference,
+    Direction, ErrorKind, EvalOpts, Evaluation, Implementation, Metric, MetricId, MetricResult,
+    PrepareReference, ResultMetricExt, Score, ScoreSpec, WarmReference,
 };
-use std::borrow::Cow;
 use zenpsy_api as iqa;
 
-/// Native evaluation with stable owned scalar/map data.
-struct NativeEval {
-    scores: Vec<(Cow<'static, str>, f64)>,
-    map: Option<PixelBuffer>,
+/// Typed native assessment, retaining the original result without map copies.
+pub struct Assessment<T, const N: usize> {
+    pub native: T,
+    pub values: [f64; N],
+    specs: [ScoreSpec; N],
 }
-impl Evaluation for NativeEval {
-    fn score(&self) -> f64 {
-        self.scores[0].1
-    }
-    fn scores(&self) -> iqa::Scores<'_> {
-        Box::new(self.scores.iter().cloned())
-    }
-    fn map(&self) -> Option<iqa::MapView<'_>> {
-        self.map.as_ref().map(|m| {
-            iqa::MapView::new(
-                "difference",
-                m.as_slice(),
-                iqa::MapPolarity::Difference,
-                iqa::MapGeometry::identity(m.width(), m.height()),
-            )
-            .unwrap()
-        })
-    }
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+impl<T, const N: usize> std::fmt::Debug for Assessment<T, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Assessment")
+            .field("values", &self.values)
+            .finish_non_exhaustive()
     }
 }
-/// Bind native outputs and optional native map to a requested serving geometry.
-fn result(
-    scores: &[(&str, f64)],
-    map: Option<(&[f32], u32, u32)>,
-    opts: EvalOpts<'_>,
-) -> MetricResult<Box<dyn Evaluation>> {
-    let map = match map {
-        Some((m, w, h)) => Some(iqa::gray_f32_buffer(m, w, h)?),
-        None => None,
-    };
-    let e: Box<dyn Evaluation> = Box::new(NativeEval {
-        scores: scores
+impl<T, const N: usize> Evaluation for Assessment<T, N> {
+    fn scores(&self) -> impl Iterator<Item = Score<'_>> {
+        self.specs
             .iter()
-            .map(|(k, v)| (Cow::Owned((*k).into()), *v))
-            .collect(),
-        map,
-    });
-    if let Some(request) = opts.map {
-        iqa::apply_map_request(e, request)
-    } else {
-        Ok(e)
+            .zip(self.values)
+            .map(|(s, v)| Score::new(s, v))
+    }
+}
+fn one<T>(native: T, value: f64) -> Assessment<T, 1> {
+    Assessment {
+        native,
+        values: [value],
+        specs: [ScoreSpec::new("score", Direction::Higher).with_perfect(100.0)],
     }
 }
 fn id(family: &'static str, version: &'static str, source: &'static str) -> MetricId {
-    MetricId::new(family, Implementation::new(family, version, 1))
-        .with_reference(source)
-        .with_config("adapter", "native-sdr-control-v1")
+    MetricId::new(family, Implementation::new(family, version, 1)).with_reference(source)
 }
 fn butter_error(e: &butteraugli::ButteraugliError) -> ErrorKind {
     match e {
@@ -75,312 +50,176 @@ fn ssim_error(e: &fast_ssim2::Ssimulacra2Error) -> ErrorKind {
         _ => ErrorKind::Backend,
     }
 }
-fn zensim_error(e: &zensim::ZensimError) -> ErrorKind {
+fn zen_error(e: &zensim::ZensimError) -> ErrorKind {
     match e {
         zensim::ZensimError::Cancelled { reason: r } => ErrorKind::Stopped(*r),
         _ => ErrorKind::Backend,
     }
 }
-fn pixel<'a>(image: &'a Image<'_>) -> MetricResult<&'a PixelSlice<'a>> {
-    iqa::rgb8_view(image)?;
-    Ok(image.as_packed().expect("packed view validated"))
+fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<butteraugli::ImgRef<'a, butteraugli::RGB8>> {
+    if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
+        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
+    }
+    Ok(butteraugli::Img::new_stride(
+        bytemuck::cast_slice(p.as_strided_bytes()),
+        p.width() as usize,
+        p.rows() as usize,
+        p.stride() / 3,
+    ))
 }
-fn rgb<'a>(p: &'a iqa::Rgb8In<'_>) -> butteraugli::ImgRef<'a, butteraugli::RGB8> {
-    // PixelSlice already enforces a pixel-aligned row stride. Cast alignment is 1.
-    butteraugli::Img::new_stride(
-        bytemuck::cast_slice(p.pixels),
-        p.width,
-        p.height,
-        p.stride / 3,
-    )
+fn packed_rgb8(p: &PixelSlice<'_>) -> MetricResult<Vec<u8>> {
+    rgb8(p)?;
+    Ok((0..p.rows())
+        .flat_map(|y| p.row(y).iter().copied())
+        .collect())
 }
-/// Butteraugli native scalar pair and optional full-resolution difference map.
+/// Butteraugli's two scores and its original optional diagnostic result.
 pub struct Butter;
+pub struct ButterWarm(butteraugli::ButteraugliReference);
+fn butter_result(
+    native: butteraugli::ButteraugliResult,
+) -> Assessment<butteraugli::ButteraugliResult, 2> {
+    Assessment {
+        values: [native.score, native.pnorm_3],
+        native,
+        specs: [
+            ScoreSpec::new("max", Direction::Lower).with_perfect(0.0),
+            ScoreSpec::new("pnorm3", Direction::Lower).with_perfect(0.0),
+        ],
+    }
+}
 impl Metric for Butter {
+    type Output = Assessment<butteraugli::ButteraugliResult, 2>;
     fn id(&self) -> MetricId {
         id("butteraugli", "0.9.4", "31687022")
             .with_config("intensity_target", 80)
             .with_config("hf_asymmetry", 1)
             .with_config("xmul", 1)
     }
-    fn outputs(&self) -> Cow<'static, [ScoreSpec]> {
-        Cow::Owned(vec![
-            ScoreSpec::new("max", ScoreKind::Difference),
-            ScoreSpec::new("pnorm3", ScoreKind::Difference),
-        ])
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        iqa::is_rgb8_srgb(f)
-    }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &PixelSlice<'_>,
+        d: &PixelSlice<'_>,
         opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
-        let (r, d) = iqa::rgb8_pair(&r, &d)?;
-        let native = butteraugli::butteraugli_with_stop(
-            rgb(&r),
-            rgb(&d),
-            &butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.map.is_some()),
+    ) -> MetricResult<Self::Output> {
+        butteraugli::butteraugli_with_stop(
+            rgb8(r)?,
+            rgb8(d)?,
+            &butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.diagnostics()),
             opts.stop(),
         )
-        .metric_err_with("butteraugli", butter_error)?;
-        butter_result(native, opts)
+        .metric_err_with("butteraugli", butter_error)
+        .map(butter_result)
     }
-    fn warm_reference<'m>(
-        &'m mut self,
-        r: Image<'_>,
+}
+impl PrepareReference for Butter {
+    type Prepared<'a> = ButterWarm;
+    fn warm_reference(
+        &mut self,
+        r: &PixelSlice<'_>,
         opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn WarmReference + 'm>> {
+    ) -> MetricResult<ButterWarm> {
         opts.checkpoint()?;
-        let r = iqa::rgb8_view(&r)?;
-        let native = butteraugli::ButteraugliReference::new(
-            &iqa::contiguous_rgb8(&r),
-            r.width,
-            r.height,
-            butteraugli::ButteraugliParams::default().with_compute_diffmap(true),
+        let n = butteraugli::ButteraugliReference::new(
+            &packed_rgb8(r)?,
+            r.width() as usize,
+            r.rows() as usize,
+            butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.diagnostics()),
         )
         .metric_err_with("butteraugli", butter_error)?;
-        Ok(Box::new(ButterWarm(native)))
+        Ok(ButterWarm(n))
     }
 }
-fn butter_result(
-    native: butteraugli::ButteraugliResult,
-    opts: EvalOpts<'_>,
-) -> MetricResult<Box<dyn Evaluation>> {
-    let vals = native
-        .diffmap
-        .as_ref()
-        .map(|m| m.pixels().collect::<Vec<f32>>());
-    let map = native
-        .diffmap
-        .as_ref()
-        .zip(vals.as_ref())
-        .map(|(m, v)| (v.as_slice(), m.width() as u32, m.height() as u32));
-    result(
-        &[("max", native.score), ("pnorm3", native.pnorm_3)],
-        map,
-        opts,
-    )
-}
-struct ButterWarm(butteraugli::ButteraugliReference);
 impl WarmReference for ButterWarm {
-    fn evaluate(&mut self, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>> {
-        let d = iqa::rgb8_view(&d)?;
-        let native = self
+    type Output = Assessment<butteraugli::ButteraugliResult, 2>;
+    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+        let mut n = self
             .0
-            .compare_with_stop(&iqa::contiguous_rgb8(&d), opts.stop())
+            .compare_with_stop(&packed_rgb8(d)?, opts.stop())
             .metric_err_with("butteraugli", butter_error)?;
-        butter_result(native, opts)
-    }
-    fn reuses_reference_work(&self) -> bool {
-        true
+        // The native warm API returns its pooling map even when compute_diffmap
+        // is false. It is algorithm scratch; do not retain it as diagnostics.
+        if !opts.diagnostics() {
+            n.diffmap = None;
+        }
+        Ok(butter_result(n))
     }
 }
-/// SSIMULACRA2 native scalar, fused diffmap and per-scale spatial terms.
+/// SSIMULACRA2 keeps its scalar or complete native maps, without regridding.
+pub enum SsimNative {
+    Scalar(f64),
+    Maps(fast_ssim2::Ssimulacra2Maps),
+}
 pub struct Ssim2;
+pub struct SsimWarm(fast_ssim2::Ssimulacra2Reference);
 impl Metric for Ssim2 {
+    type Output = Assessment<SsimNative, 1>;
     fn id(&self) -> MetricId {
         id("ssim2", fast_ssim2::VERSION, "6d27c728")
             .with_config("kernel", "simd")
             .with_config("strips", false)
     }
-    fn outputs(&self) -> Cow<'static, [ScoreSpec]> {
-        Cow::Owned(vec![ScoreSpec::new("score", ScoreKind::Quality100)])
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        iqa::is_rgb8_srgb(f)
-    }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &PixelSlice<'_>,
+        d: &PixelSlice<'_>,
         opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
-        if opts.map.is_some() {
-            let native = fast_ssim2::compute_ssimulacra2_maps_with_config(
-                pixel(&r)?,
-                pixel(&d)?,
-                &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
-            )
-            .metric_err_with("ssim2", ssim_error)?;
-            return ssim_maps(native, opts);
-        }
-        let value = fast_ssim2::compute_ssimulacra2_with_config(
-            pixel(&r)?,
-            pixel(&d)?,
-            &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
-        )
-        .metric_err_with("ssim2", ssim_error)?;
-        result(&[("score", value)], None, opts)
-    }
-    fn warm_reference<'m>(
-        &'m mut self,
-        r: Image<'_>,
-        opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn WarmReference + 'm>> {
-        let native = fast_ssim2::Ssimulacra2Reference::new_with_config(
-            pixel(&r)?,
-            &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
-        )
-        .metric_err_with("ssim2", ssim_error)?;
-        Ok(Box::new(SsimWarm(native)))
-    }
-}
-struct SsimWarm(fast_ssim2::Ssimulacra2Reference);
-impl WarmReference for SsimWarm {
-    fn evaluate(&mut self, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>> {
-        if opts.map.is_some() {
-            let native = self
-                .0
-                .compare_with_maps_with_config(
-                    pixel(&d)?,
-                    &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
-                )
+    ) -> MetricResult<Self::Output> {
+        let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
+        if opts.diagnostics() {
+            let n = fast_ssim2::compute_ssimulacra2_maps_with_config(r, d, &config)
                 .metric_err_with("ssim2", ssim_error)?;
-            return ssim_maps(native, opts);
-        }
-        let value = self
-            .0
-            .compare_with_config(
-                pixel(&d)?,
-                &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
-            )
-            .metric_err_with("ssim2", ssim_error)?;
-        result(&[("score", value)], None, opts)
-    }
-    fn reuses_reference_work(&self) -> bool {
-        true
-    }
-}
-// Mirror the existing browser adapter's native terms and geometry. The primary
-// fused map depends on global L4 normalization; component maps retain their grids.
-const SSIM_MAP_NAMES: [[[&str; 3]; 3]; 6] = [
-    [
-        ["ssim_x_0", "ssim_y_0", "ssim_b_0"],
-        ["artifact_x_0", "artifact_y_0", "artifact_b_0"],
-        ["detail_lost_x_0", "detail_lost_y_0", "detail_lost_b_0"],
-    ],
-    [
-        ["ssim_x_1", "ssim_y_1", "ssim_b_1"],
-        ["artifact_x_1", "artifact_y_1", "artifact_b_1"],
-        ["detail_lost_x_1", "detail_lost_y_1", "detail_lost_b_1"],
-    ],
-    [
-        ["ssim_x_2", "ssim_y_2", "ssim_b_2"],
-        ["artifact_x_2", "artifact_y_2", "artifact_b_2"],
-        ["detail_lost_x_2", "detail_lost_y_2", "detail_lost_b_2"],
-    ],
-    [
-        ["ssim_x_3", "ssim_y_3", "ssim_b_3"],
-        ["artifact_x_3", "artifact_y_3", "artifact_b_3"],
-        ["detail_lost_x_3", "detail_lost_y_3", "detail_lost_b_3"],
-    ],
-    [
-        ["ssim_x_4", "ssim_y_4", "ssim_b_4"],
-        ["artifact_x_4", "artifact_y_4", "artifact_b_4"],
-        ["detail_lost_x_4", "detail_lost_y_4", "detail_lost_b_4"],
-    ],
-    [
-        ["ssim_x_5", "ssim_y_5", "ssim_b_5"],
-        ["artifact_x_5", "artifact_y_5", "artifact_b_5"],
-        ["detail_lost_x_5", "detail_lost_y_5", "detail_lost_b_5"],
-    ],
-];
-struct SsimMaps {
-    score: f64,
-    maps: Vec<(&'static str, PixelBuffer, iqa::MapGeometry)>,
-}
-impl SsimMaps {
-    fn view(&self, index: usize) -> Option<iqa::MapView<'_>> {
-        let (name, pixels, geometry) = self.maps.get(index)?;
-        Some(
-            iqa::MapView::new(
-                name,
-                pixels.as_slice(),
-                iqa::MapPolarity::Difference,
-                *geometry,
-            )
-            .expect("validated native map geometry"),
-        )
-    }
-}
-impl Evaluation for SsimMaps {
-    fn score(&self) -> f64 {
-        self.score
-    }
-    fn scores(&self) -> iqa::Scores<'_> {
-        Box::new(std::iter::once((Cow::Borrowed("score"), self.score)))
-    }
-    fn map(&self) -> Option<iqa::MapView<'_>> {
-        self.view(0)
-    }
-    fn maps(&self) -> Vec<iqa::MapView<'_>> {
-        (0..self.maps.len())
-            .map(|index| self.view(index).unwrap())
-            .collect()
-    }
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-fn ssim_maps(
-    native: fast_ssim2::Ssimulacra2Maps,
-    opts: EvalOpts<'_>,
-) -> MetricResult<Box<dyn Evaluation>> {
-    opts.checkpoint()?;
-    let (w, h) = (native.width as u32, native.height as u32);
-    let mut maps = vec![(
-        "diffmap",
-        iqa::gray_f32_buffer(&native.diffmap(), w, h)?,
-        iqa::MapGeometry::identity(w, h).with_support(iqa::Support::Global),
-    )];
-    for (scale_index, scale) in native.scales.into_iter().enumerate() {
-        let cell = 1 << scale_index;
-        let geometry = iqa::MapGeometry::grid(
-            w,
-            h,
-            0,
-            0,
-            cell,
-            cell,
-            scale.width as u32,
-            scale.height as u32,
-        );
-        let geometry = if w < 8 || h < 8 {
-            geometry.with_support(iqa::Support::Global)
+            let v = n.score;
+            Ok(one(SsimNative::Maps(n), v))
         } else {
-            geometry.with_halo(5 * cell, 5 * cell)
-        };
-        for (term, planes) in [scale.ssim, scale.artifact, scale.detail_lost]
-            .into_iter()
-            .enumerate()
-        {
-            for (channel, values) in planes.into_iter().enumerate() {
-                maps.push((
-                    SSIM_MAP_NAMES[scale_index][term][channel],
-                    iqa::gray_f32_buffer(&values, scale.width as u32, scale.height as u32)?,
-                    geometry,
-                ));
-            }
+            let v = fast_ssim2::compute_ssimulacra2_with_config(r, d, &config)
+                .metric_err_with("ssim2", ssim_error)?;
+            Ok(one(SsimNative::Scalar(v), v))
         }
     }
-    opts.checkpoint()?;
-    let result: Box<dyn Evaluation> = Box::new(SsimMaps {
-        score: native.score,
-        maps,
-    });
-    if let Some(request) = opts.map {
-        iqa::apply_map_request(result, request)
-    } else {
-        Ok(result)
+}
+impl PrepareReference for Ssim2 {
+    type Prepared<'a> = SsimWarm;
+    fn warm_reference(&mut self, r: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<SsimWarm> {
+        fast_ssim2::Ssimulacra2Reference::new_with_config(
+            r,
+            &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
+        )
+        .metric_err_with("ssim2", ssim_error)
+        .map(SsimWarm)
     }
 }
-/// The serving repository's adopted A profile, not the research checkout.
-pub struct Zen;
+impl WarmReference for SsimWarm {
+    type Output = Assessment<SsimNative, 1>;
+    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+        let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
+        if opts.diagnostics() {
+            let n = self
+                .0
+                .compare_with_maps_with_config(d, &config)
+                .metric_err_with("ssim2", ssim_error)?;
+            let v = n.score;
+            Ok(one(SsimNative::Maps(n), v))
+        } else {
+            let v = self
+                .0
+                .compare_with_config(d, &config)
+                .metric_err_with("ssim2", ssim_error)?;
+            Ok(one(SsimNative::Scalar(v), v))
+        }
+    }
+}
+/// Serving Zensim's original structured scalar/diagnostic result.
+pub enum ZenNative {
+    Scalar(zensim::ZensimResult),
+    Map(zensim::DiffmapResult),
+}
+#[derive(Default)]
+pub struct Zen {
+    pub hdr: Option<zensim::HdrEncoding>,
+}
+pub struct ZenWarm(zensim::PrecomputedReference);
 fn zensim(opts: EvalOpts<'_>) -> MetricResult<zensim::Zensim> {
-    // Replace operation-local control on each call; prepared work retains no pulse.
     let shared = opts
         .pulse
         .share()
@@ -389,85 +228,125 @@ fn zensim(opts: EvalOpts<'_>) -> MetricResult<zensim::Zensim> {
         .with_parallel(false)
         .with_stop(shared))
 }
-fn source<'a>(image: &'a Image<'_>) -> MetricResult<zensim::ZenpixelsSource<'a>> {
-    zensim::ZenpixelsSource::try_from_slice(pixel(image)?)
-        .metric_err("zensim", ErrorKind::UnsupportedInput)
-}
 impl Metric for Zen {
+    type Output = Assessment<ZenNative, 1>;
     fn id(&self) -> MetricId {
         id("zensim", "0.3.0", "5475929d")
             .with_config("profile", zensim::ZensimProfile::latest().name())
             .with_config("parallel", false)
-            .with_config("diffmap", "default")
-    }
-    fn outputs(&self) -> Cow<'static, [ScoreSpec]> {
-        Cow::Owned(vec![ScoreSpec::new("score", ScoreKind::Quality100)])
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        iqa::is_rgb8_srgb(f)
+            .with_config("hdr", format!("{:?}", self.hdr))
     }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &PixelSlice<'_>,
+        d: &PixelSlice<'_>,
         opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
+    ) -> MetricResult<Self::Output> {
         let z = zensim(opts)?;
-        let r = source(&r)?;
-        let d = source(&d)?;
-        if opts.map.is_some() {
-            let native = z
+        if let Some(encoding) = self.hdr {
+            if opts.diagnostics() {
+                return iqa::fail(iqa::MetricError::new(ErrorKind::NoMap));
+            }
+            let n = z
+                .compute_hdr(
+                    &hdr_source(r, encoding)?,
+                    &hdr_source(d, encoding)?,
+                    encoding,
+                )
+                .metric_err_with("zensim", zen_error)?;
+            let v = n.score();
+            return Ok(one(ZenNative::Scalar(n), v));
+        }
+        let r = zensim::ZenpixelsSource::try_from_slice(r)
+            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        let d = zensim::ZenpixelsSource::try_from_slice(d)
+            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        if opts.diagnostics() {
+            let n = z
                 .compute_with_diffmap(&r, &d, zensim::DiffmapOptions::default())
-                .metric_err_with("zensim", zensim_error)?;
-            result(
-                &[("score", native.score())],
-                Some((
-                    native.diffmap(),
-                    native.width() as u32,
-                    native.height() as u32,
-                )),
-                opts,
-            )
+                .metric_err_with("zensim", zen_error)?;
+            let v = n.score();
+            Ok(one(ZenNative::Map(n), v))
         } else {
-            let native = z.compute(&r, &d).metric_err_with("zensim", zensim_error)?;
-            result(&[("score", native.score())], None, opts)
+            let n = z.compute(&r, &d).metric_err_with("zensim", zen_error)?;
+            let v = n.score();
+            Ok(one(ZenNative::Scalar(n), v))
         }
     }
-    fn warm_reference<'m>(
-        &'m mut self,
-        r: Image<'_>,
-        opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn WarmReference + 'm>> {
-        let native = zensim(opts)?
-            .precompute_reference(&source(&r)?)
-            .metric_err_with("zensim", zensim_error)?;
-        Ok(Box::new(ZenWarm(native)))
+}
+impl PrepareReference for Zen {
+    type Prepared<'a> = ZenWarm;
+    fn warm_reference(&mut self, r: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<ZenWarm> {
+        if self.hdr.is_some() {
+            return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedRequest));
+        }
+        let source = zensim::ZenpixelsSource::try_from_slice(r)
+            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        zensim(opts)?
+            .precompute_reference(&source)
+            .metric_err_with("zensim", zen_error)
+            .map(ZenWarm)
     }
 }
-struct ZenWarm(zensim::PrecomputedReference);
 impl WarmReference for ZenWarm {
-    fn evaluate(&mut self, d: Image<'_>, opts: EvalOpts<'_>) -> MetricResult<Box<dyn Evaluation>> {
+    type Output = Assessment<ZenNative, 1>;
+    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
         let z = zensim(opts)?;
-        let d = source(&d)?;
-        if opts.map.is_some() {
+        let d = zensim::ZenpixelsSource::try_from_slice(d)
+            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        if opts.diagnostics() {
             let n = z
                 .compute_with_ref_and_diffmap(&self.0, &d, zensim::DiffmapOptions::default())
-                .metric_err_with("zensim", zensim_error)?;
-            result(
-                &[("score", n.score())],
-                Some((n.diffmap(), n.width() as u32, n.height() as u32)),
-                opts,
-            )
+                .metric_err_with("zensim", zen_error)?;
+            let v = n.score();
+            Ok(one(ZenNative::Map(n), v))
         } else {
             let n = z
                 .compute_with_ref(&self.0, &d)
-                .metric_err_with("zensim", zensim_error)?;
-            result(&[("score", n.score())], None, opts)
+                .metric_err_with("zensim", zen_error)?;
+            let v = n.score();
+            Ok(one(ZenNative::Scalar(n), v))
         }
     }
-    fn reuses_reference_work(&self) -> bool {
-        true
+}
+/// Explicit HDR ingress. Linear samples are absolute cd/m², never normalized
+/// relative light. The validation adapter refuses attached override contexts.
+pub fn hdr_source<'a>(
+    p: &'a PixelSlice<'_>,
+    encoding: zensim::HdrEncoding,
+) -> MetricResult<zensim::StridedBytes<'a>> {
+    use iqa::zenpixels::{AlphaMode, ColorPrimaries, PixelFormat, SignalRange, TransferFunction};
+    let desc = p.descriptor();
+    let transfer = match encoding {
+        zensim::HdrEncoding::Linear => TransferFunction::Linear,
+        zensim::HdrEncoding::Pq { .. } => TransferFunction::Pq,
+        zensim::HdrEncoding::Hlg { .. } => TransferFunction::Hlg,
+        _ => return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput)),
+    };
+    if desc.pixel_format() != PixelFormat::RgbaF32
+        || desc.transfer() != transfer
+        || desc.alpha() != Some(AlphaMode::Opaque)
+        || desc.signal_range != SignalRange::Full
+        || p.color_context().is_some()
+    {
+        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
     }
+    let primaries = match desc.primaries {
+        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
+        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+        _ => return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput)),
+    };
+    zensim::StridedBytes::try_with_alpha_mode(
+        p.as_strided_bytes(),
+        p.width() as usize,
+        p.rows() as usize,
+        p.stride(),
+        zensim::PixelFormat::LinearF32Rgba,
+        zensim::AlphaMode::Opaque,
+    )
+    .map(|s| s.with_color_primaries(primaries))
+    .metric_err_with("zensim", zen_error)
 }
 /// Deterministic textured native samples; padding is a distinct poison value.
 pub fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {

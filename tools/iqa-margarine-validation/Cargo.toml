@@ -9,7 +9,8 @@ license = "BSD-3-Clause"
 name = "iqa-margarine-validation"
 path = "../../crates/margarine/iqa_contract.rs"
 [dependencies]
-zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6", version = "0.1.0" }
+zenmetrics-orchestrator = { path = "../../crates/zenmetrics-orchestrator", default-features = false, features = ["psy"] }
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "2ee9fd219fad403d09ef5f595f5504af8add3da1", version = "0.1.0" }
 butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "13c49cbcab6e2b2bb65f60e3cb28344463bacbf7", features = ["internals"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "bmp"] }
 archmage = "0.9.29"
@@ -19,7 +20,7 @@ rgb = "0.8.53"
 enough = "0.4.5"
 rayon = { version = "1.12.0", optional = true }
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "41c3cffe7763fb6a20e958b04e9cefb3ec4d82f6" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "2ee9fd219fad403d09ef5f595f5504af8add3da1" }
 [profile.dev]
 opt-level = 1
 [features]

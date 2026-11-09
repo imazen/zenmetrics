@@ -22,6 +22,10 @@
 
 #![forbid(unsafe_code)]
 
+/// Backend-neutral execution of typed zenpsy metrics, without GPU dependencies.
+#[cfg(feature = "psy")]
+pub mod psy;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};

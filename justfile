@@ -2814,3 +2814,8 @@ iqa-margarine-check:
 # Archived AOM witness is expected to fail until tested against a repaired artifact.
 avif-color-regression avif *options:
     python3 scripts/jobsys/check_avif_color_signaling.py '{{avif}}' {{options}}
+
+# Portable typed native/orchestration integration, matching CI.
+iqa-cross-check:
+    cross test --locked --manifest-path tools/iqa-contract-validation/Cargo.toml --target i686-unknown-linux-gnu -- --test-threads=1
+    cross run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation --target i686-unknown-linux-gnu

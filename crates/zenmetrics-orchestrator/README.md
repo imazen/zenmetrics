@@ -466,3 +466,13 @@ side-by-side code samples.
 
 Dual-licensed under AGPL-3.0 or LicenseRef-Imazen-Commercial; see the
 workspace root `LICENSE-AGPL3` and `COMMERCIAL.md` for details.
+
+## Typed metric contracts
+
+The opt-in `psy` feature adds a backend-neutral `ContractExecutor` over
+`zenpsy-api`, without enabling the GPU umbrella. It preserves typed native
+results at its runtime boundary, every named score and actual implementation
+identity, and supports real prepared-reference batches. Resource fallback is
+explicit; routine batches are score-only.
+
+See [typed execution](docs/TYPED_METRICS.md) for scope and registration.
