@@ -12,6 +12,7 @@ pub struct Assessment<T, const N: usize> {
     pub native: T,
     pub values: [f64; N],
     specs: [ScoreSpec; N],
+    map_specs: Vec<ScoreSpec>,
 }
 impl<T, const N: usize> std::fmt::Debug for Assessment<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,17 +21,32 @@ impl<T, const N: usize> std::fmt::Debug for Assessment<T, N> {
             .finish_non_exhaustive()
     }
 }
-impl<T, const N: usize> Evaluation for Assessment<T, N> {
+impl<T: NativeMaps, const N: usize> Evaluation for Assessment<T, N> {
     fn scores(&self) -> impl Iterator<Item = Score<'_>> {
         self.specs
             .iter()
             .zip(self.values)
             .map(|(s, v)| Score::new(s, v))
     }
+    fn maps(&self) -> impl Iterator<Item = iqa::MapView<'_>> {
+        self.map_specs
+            .iter()
+            .zip(self.native.map_planes())
+            .map(|(spec, (values, grid))| iqa::MapView::new(spec, values, grid))
+    }
 }
-fn one<T>(native: T, value: f64) -> Assessment<T, 1> {
+/// Borrowed native map storage behind the concrete assessment.
+pub trait NativeMaps {
+    fn map_specs(&self) -> Vec<ScoreSpec>;
+    fn map_planes(
+        &self,
+    ) -> impl Iterator<Item = (iqa::zenpixels::plane::AnyPlane<'_>, iqa::MapGrid)>;
+}
+fn one<T: NativeMaps>(native: T, value: f64) -> Assessment<T, 1> {
+    let map_specs = native.map_specs();
     Assessment {
         native,
+        map_specs,
         values: [value],
         specs: [ScoreSpec::new("score", Direction::Higher).with_perfect(100.0)],
     }
@@ -79,7 +95,9 @@ pub struct ButterWarm(butteraugli::ButteraugliReference);
 fn butter_result(
     native: butteraugli::ButteraugliResult,
 ) -> Assessment<butteraugli::ButteraugliResult, 2> {
+    let map_specs = native.map_specs();
     Assessment {
+        map_specs,
         values: [native.score, native.pnorm_3],
         native,
         specs: [
@@ -365,4 +383,91 @@ pub fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
         }
     }
     p
+}
+
+use iqa::zenpixels::plane::{AnyPlane, PlaneRef};
+fn plane(values: &[f32], w: usize, h: usize, stride: usize) -> AnyPlane<'_> {
+    AnyPlane::F32(PlaneRef::new(values, w, h, stride).expect("native map geometry"))
+}
+fn error_map(key: impl Into<std::borrow::Cow<'static, str>>) -> ScoreSpec {
+    let mut spec = ScoreSpec::new("diffmap", Direction::Lower).with_perfect(0.0);
+    spec.key = key.into();
+    spec
+}
+impl NativeMaps for butteraugli::ButteraugliResult {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        self.diffmap.iter().map(|_| error_map("diffmap")).collect()
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        self.diffmap.iter().map(|m| {
+            (
+                plane(m.buf(), m.width(), m.height(), m.stride()),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+            )
+        })
+    }
+}
+impl NativeMaps for ZenNative {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        if matches!(self, Self::Map(_)) {
+            vec![error_map("diffmap")]
+        } else {
+            vec![]
+        }
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        let map = match self {
+            Self::Map(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter().map(|m| {
+            (
+                plane(m.diffmap(), m.width(), m.height(), m.width()),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+            )
+        })
+    }
+}
+impl NativeMaps for SsimNative {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        let map = match self {
+            Self::Maps(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter()
+            .flat_map(|m| m.scales.iter().enumerate())
+            .flat_map(|(s, _)| {
+                ["ssim", "artifact", "detail_lost"]
+                    .into_iter()
+                    .flat_map(move |term| {
+                        ["x", "y", "b"]
+                            .into_iter()
+                            .map(move |c| error_map(format!("{term}_{c}_{s}")))
+                    })
+            })
+            .collect()
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        let map = match self {
+            Self::Maps(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter().flat_map(|m| {
+            m.scales.iter().enumerate().flat_map(move |(s, level)| {
+                let grid = iqa::MapGrid::new(m.width as u32, m.height as u32).with_cells(
+                    0,
+                    0,
+                    1 << s,
+                    1 << s,
+                );
+                [&level.ssim, &level.artifact, &level.detail_lost]
+                    .into_iter()
+                    .flat_map(move |term| {
+                        term.iter().map(move |values| {
+                            (plane(values, level.width, level.height, level.width), grid)
+                        })
+                    })
+            })
+        })
+    }
 }

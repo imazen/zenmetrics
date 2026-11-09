@@ -29,6 +29,19 @@ impl Evaluation for Native {
             .zip(self.values)
             .map(|(s, v)| Score::new(s, v))
     }
+    fn maps(&self) -> impl Iterator<Item = iqa::MapView<'_>> {
+        static SPEC: ScoreSpec = ScoreSpec::new("diffmap", Direction::Lower).with_perfect(0.0);
+        self.original.diffmap.iter().map(|m| {
+            let plane =
+                iqa::zenpixels::plane::PlaneRef::new(m.data(), m.width(), m.height(), m.stride())
+                    .unwrap();
+            iqa::MapView::new(
+                &SPEC,
+                iqa::zenpixels::plane::AnyPlane::F32(plane),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32),
+            )
+        })
+    }
 }
 fn rows<'a>(p: &'a PixelSlice<'_>) -> MetricResult<ingress::EncodedRows<'a>> {
     if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
@@ -207,6 +220,23 @@ fn main() {
             assert_eq!(
                 out.scores().map(|s| s.value.to_bits()).collect::<Vec<_>>(),
                 expected
+            );
+            let generic = out.maps().next().unwrap();
+            let iqa::zenpixels::plane::AnyPlane::F32(plane) = generic.values else {
+                panic!("native f32 map")
+            };
+            assert_eq!(
+                plane.strided_samples().as_ptr(),
+                out.original.diffmap.as_ref().unwrap().data().as_ptr()
+            );
+            assert_eq!(generic.grid, iqa::MapGrid::new(w, h));
+            assert_eq!(
+                plane
+                    .rows()
+                    .flatten()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                expected_map
             );
             let map = out.original.diffmap.unwrap();
             assert_eq!((map.width(), map.height()), (w as usize, h as usize));
