@@ -63,7 +63,7 @@ remain in the same gate.
 | SSIMULACRA2 | Owned native warm state plus reusable RGBA float packing | Native component maps are retained. A fused map is not silently generated. No zero-copy planar claim. |
 | Selected Margarine | Existing explicit packed native bridge | Frozen vendor, teacher and kernels unchanged; five scalar outputs/maps match at 64×64, 97×73 and 131×129. No new planar zero-copy claim. |
 
-The JXL follow-up adapts owned planar preparation and lends a qualified native
+[JXL PR 143](https://github.com/imazen/jxl-encoder/pull/143) adapts owned planar preparation and lends a qualified native
 Butteraugli-distance map directly into its existing block reducer. Its real
 97×73 encode matches native backend bytes, scalar bits, maps and block distances.
 An untraced control refuses owned-map export; requested traces deliberately keep
@@ -83,7 +83,8 @@ memory/format boundaries; this native adapter does not make that route zero-copy
   scalar/map witnesses; strict Clippy.
 - `just iqa-cross-check`: the same standalone native and Margarine i686 controls.
 - JXL's `just psy-loop-check`: actual encode/trace/refusal and legacy callback
-  controls, strict Clippy. Its recorded CI sibling cohort is used locally.
+  controls, strict Clippy. Its recorded CI sibling cohort is used locally; existing
+  fixed-point, feature hash, Libjxl byte-lock and divergence gates also pass.
 - Core checks: no-default/std tests, Clippy/rustdoc, Rust 1.88, WASM,
   freestanding ARM and i686; codec bridge checks the corresponding core pin.
 
