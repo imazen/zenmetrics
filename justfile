@@ -773,6 +773,10 @@ checkpoint-browser-build output:
 browser-coverage-check:
     python3 scripts/checkpoint/test_browser_coverage.py
 
+# Score-only JXL trace iteration routing for the browser metric catalog.
+browser-loop-score-check:
+    node scripts/checkpoint/test_loop_scores.mjs
+
 # Private model exports and native baseline are supplied explicitly by the caller.
 browser-local-weights-check site models native report:
     python3 scripts/checkpoint/check-local-weights.py "{{site}}" "{{models}}" "{{native}}" "{{report}}"
