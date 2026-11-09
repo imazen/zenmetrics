@@ -777,6 +777,10 @@ browser-coverage-check:
 browser-loop-score-check:
     node scripts/checkpoint/test_loop_scores.mjs
 
+# Real trace-player UI with an explicit RPC oracle, without metric/model loads.
+browser-loop-ui-check *options:
+    python3 scripts/checkpoint/test_loop_ui.py {{options}}
+
 # Private model exports and native baseline are supplied explicitly by the caller.
 browser-local-weights-check site models native report:
     python3 scripts/checkpoint/check-local-weights.py "{{site}}" "{{models}}" "{{native}}" "{{report}}"

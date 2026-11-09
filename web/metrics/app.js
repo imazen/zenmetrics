@@ -554,10 +554,11 @@ async function scoreLoopTrace(){
         const tr=body.insertRow();tr.dataset.iteration=String(row.index);tr.dataset.metric=metric;
         tr.insertCell().textContent=String(row.index+1);tr.insertCell().textContent=metric;
         const values=row.score?.values||[{column:row.score?.metric||metric,value:row.score?.score}];
-        tr.insertCell().textContent=row.error||values.map(v=>`${v.column}: ${typeof v.value==='number'?v.value.toPrecision(7):String(v.value)}`).join(' / ');
+        tr.insertCell().textContent=row.error||values.map(v=>`${v.column}: ${String(v.value)}`).join(' / ');
+        tr.dataset.scores=JSON.stringify(values,(_key,v)=>typeof v==='number'&&!Number.isFinite(v)?String(v):v);
         if(row.error)tr.dataset.error=row.error;
         tr.onclick=()=>{if(L.trace===trace){loopStop();L.frame=row.index;paintLoop();}};
-        $('loop-score-status').textContent=`${metric}: ${body.rows.length}/${trace.frames.length} stored reconstructions scored`;
+        $('loop-score-status').textContent=`${metric}: ${body.rows.length}/${trace.frames.length} stored reconstructions attempted`;
       },
     });
     if(epoch!==LS.epoch)return;
@@ -569,7 +570,7 @@ async function scoreLoopTrace(){
 $('loop-score').onclick=scoreLoopTrace;
 $('loop-score-stop').onclick=()=>{
   ++LS.epoch;LS.running=false;$('loop-score').disabled=!L.trace;$('loop-score-stop').disabled=true;
-  $('loop-score-status').textContent='Stopped after the current score; no further iterations will be scheduled.';
+  $('loop-score-status').textContent='Stopped scheduling further iterations; the current score may still be finishing.';
 };
 
 function parseTrace(buffer){
@@ -743,7 +744,7 @@ function showTrace(trace,origin){
 async function loadTrace(file){
   if(!file)return;loopStop();++L.epoch;L.queued=false;
   try{const buffer=await file.arrayBuffer();showTrace(parseTrace(buffer),file.name);L.bytes=new Uint8Array(buffer);$('name-trace').textContent=file.name;$('loop-save').disabled=false;loopPlay();}
-  catch(error){L.trace=null;$('loop-info').textContent=error.message;$('loop-info').className='note loopline error';}
+  catch(error){resetTraceScores();L.trace=null;$('loop-info').textContent=error.message;$('loop-info').className='note loopline error';}
 }
 $('trace').onchange=()=>loadTrace($('trace').files[0]);
 $('drop-trace').ondragover=e=>{e.preventDefault();$('drop-trace').classList.add('drag');};

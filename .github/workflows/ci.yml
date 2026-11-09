@@ -22,6 +22,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  browser-trace-controls:
+    name: Browser trace scoring controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Verify score-only catalog routing and real trace-player controls
+        run: |
+          mkdir -p "$HOME/tmp"
+          export TMPDIR="$HOME/tmp"
+          python3 -m pip install playwright==1.63.0
+          python3 -m playwright install --with-deps chromium
+          node scripts/checkpoint/test_loop_scores.mjs
+          python3 scripts/checkpoint/test_loop_ui.py
+
   still-iqa-contract:
     name: Still-image IQA native contracts (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
