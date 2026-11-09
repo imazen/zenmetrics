@@ -1,11 +1,13 @@
-# Minimal typed IQA contract validation — 2026-11-08
+# Minimal typed IQA contract validation — 2026-11-09
 
 The current [zenpsy-api review](https://github.com/imazen/zenpixels/pull/111)
 uses a typed `Metric::Output: Evaluation`, named score views and an optional
 `PrepareReference` extension. The reviewed core/pixel pin is
-[d9cfb73d](https://github.com/imazen/zenpixels/commit/d9cfb73d9195b26101c82b36bbd09aaf425dd073).
+[2ee9fd21](https://github.com/imazen/zenpixels/commit/2ee9fd219fad403d09ef5f595f5504af8add3da1).
 The [codec bridge](https://github.com/imazen/zencodec/pull/196) forwards that
-concrete output without boxing or losing native fields.
+concrete output without boxing or losing native fields. Callers can instead
+wrap metrics in `Erased` for a heterogeneous array, retaining the original
+native assessment behind `ErasedEvaluation::native`.
 
 ## Current measured coverage
 
@@ -37,10 +39,18 @@ and opt-in native map outputs match direct calls at all three geometries,
 including padded rows. Its original selected frontend compiles, and the boxed
 error-allocation retention control passes. There is no synthesized preparation.
 
+Heterogeneous native arrays additionally execute all three typed metrics without
+the orchestrator, preserving exact scalar bits and original native downcast
+targets through stacked erasure. A collection of all three actual prepared
+references matches those cold results on two repeated candidate rounds. The
+nine Zensim HDR controls also run through stacked erasure. Selected Margarine
+continues to execute through the runtime cold registration.
+
 ## Orchestration boundary
 
 The opt-in `zenmetrics-orchestrator/psy` path consumes the actual core. It
-registers worker-local factories, erases native results only at that boundary,
+registers worker-local factories, uses the core's shared `Erased` and
+`DynPrepareReference` wrappers at its collection boundary,
 retains every named score and actual implementation identity, and prepares a
 reference once for each prepared batch attempt. Real controls cover all four
 methods: three native prepared implementations and cold selected Margarine.
@@ -53,6 +63,8 @@ This is an additive backend-neutral route. The legacy GPU worker pool, chooser,
 benchmark cache, CLI and existing zenmetrics-abstractions consumers have not
 been migrated. There is no new GPU numerical qualification, performance claim,
 video contract, native planar view abstraction or no-reference interface.
+The [residual surface audit](ZENPSY_RESIDUAL_SURFACES.md) identifies actual
+consumers of those remaining contracts and the migration gates.
 
 ## Reproduction
 

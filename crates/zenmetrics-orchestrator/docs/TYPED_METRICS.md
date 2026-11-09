@@ -9,7 +9,8 @@ resource admission. Thread-local native results are supported.
 `run` accepts one borrowed, colour-described `PixelSlice` reference and a slice
 of candidates. All strides, formats and contexts pass to the native adapter.
 For a prepared registration, actual preparation runs once and serves the batch.
-The executor stores a common owned score view and retains the entire native
+The executor uses the core's `Erased` and `DynPrepareReference` wrappers. It
+stores a common owned score view and retains the entire native
 assessment, recoverable with `assessment.native::<ConcreteOutput>()`.
 
 `Fallback::Refuse` is the default. `Fallback::Resource` explicitly authorizes
@@ -34,3 +35,19 @@ serving Zensim, plus cold selected Margarine. They do not qualify GPU arithmetic
 or measure scheduling performance.
 
 Validation and exact source pins: [native contract report](../../../docs/IQA_STILL_CONTRACT_VALIDATION.md).
+
+For running several different metrics, use a collection of
+`Box<zenpsy_api::DynMetric<'_>>` containing `zenpsy_api::Erased::new(metric)`
+and call `zenpsy_api::score` for each member. Prepared collections use
+`Box<dyn zenpsy_api::DynPrepareReference>`. These need no executor. Wrapper
+stacks keep the original concrete assessment as the native downcast target.
+
+One executor's registrations are alternative implementations of the same
+effective metric, in fallback order; `run` selects one, not all registrations.
+Use one executor per metric when a multi-metric run also needs fallback.
+The local erased result does not promise Send/Sync. Prepare and consume native
+results on their executing worker, or send an owned scalar projection.
+
+See the [remaining abstraction surfaces](../../../docs/ZENPSY_RESIDUAL_SURFACES.md)
+for video, planar, no-reference and generic map consumers that remain on the
+legacy contract.

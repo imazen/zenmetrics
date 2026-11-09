@@ -13,6 +13,10 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-orchestrator: reuse shared zenpsy-api erased metric/prepared wrappers;
+  validate heterogeneous native collections, nested native-result access and
+  erased HDR scoring (`1f8d1346`).
+
 - zenmetrics-orchestrator: add opt-in `psy` execution with typed native assessments,
   all named scores, real prepared-reference batches, actual implementation
   provenance and explicit resource-only fallback (`5ad5f4f1`).
