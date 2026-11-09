@@ -2823,3 +2823,8 @@ avif-color-regression avif *options:
 iqa-cross-check:
     cross test --locked --manifest-path tools/iqa-contract-validation/Cargo.toml --target i686-unknown-linux-gnu -- --test-threads=1
     cross run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation --target i686-unknown-linux-gnu
+
+# Validate only byte-row admission; no metric scoring or diagnostic maps.
+iqa-byte-stride-check:
+    cargo test --manifest-path tools/iqa-contract-validation/Cargo.toml --lib rgb8_stride
+    cargo clippy --manifest-path tools/iqa-contract-validation/Cargo.toml --lib -- -D warnings
