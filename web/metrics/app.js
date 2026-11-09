@@ -1,3 +1,4 @@
+import {scoreTraceIterations} from './loop-scores.js';
 const $ = id => document.getElementById(id);
 let worker;
 const localFiles=new Map();
@@ -118,7 +119,7 @@ function restartWorker(message) {
 function rpc(data, deadline=120) {
   return new Promise((resolve,reject)=>{
     const id=++S.id;
-    const request={resolve,reject,revision:S.revision,start:performance.now(),kind:data.type};
+    const request={resolve,reject,revision:S.revision,start:performance.now(),kind:data.type,quiet:!!data.quiet};
     request.timer=setTimeout(()=>restartWorker(`Job exceeded the ${deadline} second browser deadline.`),deadline*1000);
     requests.set(id,request);$('cancel').disabled=false;$('job-progress').hidden=false;
     worker.postMessage({...data,id});
@@ -149,7 +150,7 @@ function startWorker() {
     }
     const request=requests.get(data.id);if(!request){if(data.type==='error'){S.ready=false;$('compare').disabled=true;status(data.message,true);}return;}
     if(data.type==='control'){const control=new Int32Array(data.buffer,data.offset,4);(request.controls??=[]).push(control);request.control=control;if(request.cancelled)Atomics.store(control,0,1);return;}
-    if(data.type==='score'){if(!request.cancelled&&request.revision===S.revision)showScore(data);return;}
+    if(data.type==='score'){if(!request.quiet&&!request.cancelled&&request.revision===S.revision)showScore(data);return;}
     finishRequest(data.id,data.type==='error'?new Error(request.cancelled?'Cancelled':data.message):null,data);
     if(data.fatal)restartWorker('WASM runtime failed; starting a fresh worker.');
   };
@@ -450,6 +451,7 @@ checkGpu().then(gpu=>{$('capabilities').textContent=`${crossOriginIsolated?'Shar
 // reference image, encoded live in the worker or read from a saved .ltrace.
 // `epoch` counts what the player shows; a trace file opened during an
 // encode supersedes it, so the encode's frames and result are dropped.
+const LS={epoch:0,running:false};
 const L={trace:null,frame:0,timer:null,running:false,queued:false,bytes:null,live:[],epoch:0};
 // The loop steers with the metric and map selected above, put on
 // butteraugli's scale (scale · error^exponent); fitted defaults per map.
@@ -514,7 +516,7 @@ async function runLoop(){
   const steer=builtin?null:{metric:route,map,scale,exponent,display:$('display').value};
   const steering=builtin?'butteraugli (built-in)':`${route} · ${map||'default map'} · scale ${scale} · exponent ${exponent}`;
   const r=S.reference,distance=Number($('loop-distance').value),effort=Number($('loop-effort').value),iters=Number($('loop-iters').value);
-  L.running=true;L.queued=false;L.liveTarget=distance;L.live=[];L.trace=null;loopStop();const epoch=L.runEpoch=++L.epoch;
+  L.running=true;L.queued=false;L.liveTarget=distance;L.live=[];L.trace=null;resetTraceScores();loopStop();const epoch=L.runEpoch=++L.epoch;
   for(const id of ['loop-prev','loop-play','loop-next','loop-frame','loop-save'])$(id).disabled=true;
   $('loop-run').disabled=true;$('loop-info').className='note loopline';
   $('loop-info').textContent=`Encoding ${r.width}×${r.height} at distance ${distance}, effort ${effort}, steered by ${steering}…`;
@@ -533,6 +535,44 @@ async function runLoop(){
 }
 $('loop-run').onclick=runLoop;
 $('loop-save').onclick=()=>{if(L.bytes)save(L.bytes,'application/octet-stream','loop.ltrace');};
+function resetTraceScores(){
+  ++LS.epoch;LS.running=false;
+  $('loop-score').disabled=true;$('loop-score-stop').disabled=true;
+  $('loop-score-status').textContent='';$('loop-score-table').tBodies[0].replaceChildren();
+}
+async function scoreLoopTrace(){
+  if(!L.trace||LS.running||!S.ready)return;
+  const trace=L.trace,metric=$('metric').value,epoch=++LS.epoch,revision=S.revision;
+  const settings={profile:$('zensim-model').value,display:$('display').value,ep:epFor(metric)};
+  LS.running=true;$('loop-score').disabled=true;$('loop-score-stop').disabled=false;
+  const body=$('loop-score-table').tBodies[0];body.replaceChildren();
+  $('loop-score-status').textContent=`Scoring ${trace.frames.length} stored sRGB8 reconstructions with ${metric}…`;
+  try{
+    const result=await scoreTraceIterations(trace,metric,(...args)=>scoreFor(...args,settings),{
+      isCancelled:()=>epoch!==LS.epoch||trace!==L.trace||revision!==S.revision||!S.ready,
+      onResult:row=>{
+        const tr=body.insertRow();tr.dataset.iteration=String(row.index);tr.dataset.metric=metric;
+        tr.insertCell().textContent=String(row.index+1);tr.insertCell().textContent=metric;
+        const values=row.score?.values||[{column:row.score?.metric||metric,value:row.score?.score}];
+        tr.insertCell().textContent=row.error||values.map(v=>`${v.column}: ${String(v.value)}`).join(' / ');
+        tr.dataset.scores=JSON.stringify(values,(_key,v)=>typeof v==='number'&&!Number.isFinite(v)?String(v):v);
+        if(row.error)tr.dataset.error=row.error;
+        tr.onclick=()=>{if(L.trace===trace){loopStop();L.frame=row.index;paintLoop();}};
+        $('loop-score-status').textContent=`${metric}: ${body.rows.length}/${trace.frames.length} stored reconstructions attempted`;
+      },
+    });
+    if(epoch!==LS.epoch)return;
+    const failed=result.rows.filter(r=>r.error).length;
+    $('loop-score-status').textContent=`${result.stopped?'Stopped':'Finished'} ${metric}: ${result.rows.length}/${trace.frames.length} attempted, ${failed} failed. Scores describe stored sRGB8 reconstructions; steering is unchanged.`;
+  }catch(error){if(epoch===LS.epoch)$('loop-score-status').textContent=`Trace scoring failed: ${error.message}`;}
+  finally{if(epoch===LS.epoch){LS.running=false;$('loop-score').disabled=!L.trace;$('loop-score-stop').disabled=true;}}
+}
+$('loop-score').onclick=scoreLoopTrace;
+$('loop-score-stop').onclick=()=>{
+  ++LS.epoch;LS.running=false;$('loop-score').disabled=!L.trace;$('loop-score-stop').disabled=true;
+  $('loop-score-status').textContent='Stopped scheduling further iterations; the current score may still be finishing.';
+};
+
 function parseTrace(buffer){
   const bytes=new Uint8Array(buffer),magic='JXLTRACE1\n';
   for(let i=0;i<magic.length;i++)if(bytes[i]!==magic.charCodeAt(i))throw new Error('Not a jxl-encoder loop trace');
@@ -697,14 +737,14 @@ function loopPlay(){
   L.timer=setTimeout(tick,wait());
 }
 function showTrace(trace,origin){
-  loopStop();L.trace=trace;L.frame=0;L.origin=origin;
+  resetTraceScores();loopStop();L.trace=trace;L.frame=0;L.origin=origin;
   for(const id of ['loop-prev','loop-play','loop-next','loop-frame'])$(id).disabled=false;
-  $('loop-frame').max=L.trace.frames.length-1;paintLoop();
+  $('loop-frame').max=L.trace.frames.length-1;$('loop-score').disabled=false;paintLoop();
 }
 async function loadTrace(file){
   if(!file)return;loopStop();++L.epoch;L.queued=false;
   try{const buffer=await file.arrayBuffer();showTrace(parseTrace(buffer),file.name);L.bytes=new Uint8Array(buffer);$('name-trace').textContent=file.name;$('loop-save').disabled=false;loopPlay();}
-  catch(error){L.trace=null;$('loop-info').textContent=error.message;$('loop-info').className='note loopline error';}
+  catch(error){resetTraceScores();L.trace=null;$('loop-info').textContent=error.message;$('loop-info').className='note loopline error';}
 }
 $('trace').onchange=()=>loadTrace($('trace').files[0]);
 $('drop-trace').ondragover=e=>{e.preventDefault();$('drop-trace').classList.add('drag');};
@@ -724,11 +764,11 @@ const J={rows:[],running:false,stop:false,epoch:0,metric:null};
 function primaryValue(score){const v=(score.values||[{column:score.metric,value:score.score}])[0];return {column:v.column,value:typeof v.value==='number'?v.value:Number(v.value)};}
 // One score of `metric` for a pair, without a map: the CPU modules, or the
 // learned-metric runtime for NN metrics.
-async function scoreFor(metric,reference,distorted,width,height){
+async function scoreFor(metric,reference,distorted,width,height,settings={}){
   const entry=S.coverage.get(metric);
   if(entry?.status==='unavailable')throw new Error(`${metric} is not runnable in the browser: ${entry.reason}`);
-  if(entry?.status?.startsWith('nn-'))return learnedScore(metric,reference,distorted,width,height);
-  const result=await rpc({type:'compare',metric,mapMetric:null,zensimProfile:$('zensim-model').value,reference,distorted,width,height,display:$('display').value},300);
+  if(entry?.status?.startsWith('nn-'))return learnedScore(metric,reference,distorted,width,height,settings.ep);
+  const result=await rpc({type:'compare',metric,mapMetric:null,zensimProfile:settings.profile??$('zensim-model').value,reference,distorted,width,height,display:settings.display??$('display').value,quiet:true},300);
   return result.score;
 }
 function drawJxlChart(){
@@ -833,9 +873,9 @@ $('local-load').onclick=async()=>{
     S.revision++;compare();
   }catch(error){status(error.message,true);}
 };
-async function learnedScore(metric,reference,distorted,width,height){
+async function learnedScore(metric,reference,distorted,width,height,ep=epFor(metric)){
   await loadSelectedWeights(metric);
-  const result=await rpc({type:'nn',metric,ep:epFor(metric),reference,distorted,width,height},900);
+  const result=await rpc({type:'nn',metric,ep,reference,distorted,width,height,quiet:true},900);
   return result.score;
 }
 async function compareLearned(metric,entry){

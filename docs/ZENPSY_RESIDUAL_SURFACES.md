@@ -20,14 +20,24 @@ and caller audit, not new numerical or performance qualification. Review links:
 [codec bridge](https://github.com/imazen/zencodec/pull/196),
 [native integration](https://github.com/imazen/zenmetrics/pull/113).
 
+The subsequent [maps/NR review](https://github.com/imazen/zenpixels/pull/131)
+has landed on zenpixels `d234f3c6`. Its common map views and one-image/paired
+contracts address those two core API gaps; production consumers in this
+inventory still use the legacy interfaces. The [follow-up report](IQA_MAPS_NR_AND_JXL_LOOP.md)
+records native bridges, workbench iteration scoring and remaining zero-copy
+limits. The [forward-compatibility follow-up](ZENPSY_FORWARD_COMPATIBILITY.md) adds standard
+PlanarSlice ingress and owned prepared/lending work in review. It does not
+migrate the legacy production packages. The table below preserves the consumer inventory while updating the
+required migration work.
+
 ## Contracts with current consumers
 
 | Remaining surface | Actual caller or implementation | Placement and migration gate |
 | --- | --- | --- |
 | Temporal sessions: push/finish, delayed frame outputs, frame indices/rate, clip pooling and failure state | [VMAF](../crates/vmaf/src/metric.rs) declares stateful history/latency and returns delayed frames; [CVVDP](../crates/cvvdp/src/pipeline.rs) pools a clip into JOD and requires a positive frame rate. | Keep a video extension or legacy compatibility layer. Compose still metrics over frames, but retain a distinct native temporal implementation for these two metrics. Preserve delayed output ordering, final drain and failure behavior. VMAF's current still `evaluate` itself drives a one-frame sequence, so removing the sequence trait would also require refactoring that adapter. |
-| Native planar image input and significant-bit/range metadata | VMAF's `accepts` and `input_from` consume native YCbCr 4:2:0 U8/U16 planes. The [browser](../crates/zenmetrics-browser/src/lib.rs) builds planar input for its video metric routes. | Put shared plane views in zenpixels, then migrate ingress with exact native score/stride tests. The minimal core's packed `PixelSlice` does not replace the current `Image::Planar`; converting to RGB would change the input contract. No codec runtime is needed for an already-decoded plane view. |
-| One-image/no-reference scoring and optional paired reference/distorted views | [CLI classical NR](../crates/zenmetrics-cli/src/metrics/nr.rs) wraps PIQE, NIQE and BRISQUE in `PairedNoReference`; [CLI NN](../crates/zenmetrics-cli/src/metrics/nn.rs) similarly wraps ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ and WaDIQaM NR variants. | Keep an optional no-reference trait and pairing adapter. The current two-input full-reference trait is not a one-image interface. Preserve both named results where the CLI exposes reference and distorted scores. |
-| Generic diagnostic map iteration, native grid geometry, support and polarity | Browser `evaluation_maps` consumes `&dyn Evaluation` and visits every published `MapView` without knowing the concrete metric result. Coarse, cropped and padded maps need their actual geometry. | Keep an optional map extension plus display/resampling tools. Native downcasting alone would require a browser branch per native assessment. Diagnostics remain off by default; the four-method validation retains native diagnostics only on explicitly requested small witnesses. |
+| Native planar image input and significant-bit/range metadata | VMAF's `accepts` and `input_from` consume native YCbCr 4:2:0 U8/U16 planes. The [browser](../crates/zenmetrics-browser/src/lib.rs) builds planar input for its video metric routes. | The reviewed zenpixels `PlanarSlice` and optional zenpsy planar traits now provide shared ingress. Migrate VMAF/browser adapters with exact native score/stride tests; converting native YCbCr to RGB would change their input contract. No codec runtime is needed for an already-decoded plane view. |
+| One-image/no-reference scoring and optional paired reference/distorted views | [CLI classical NR](../crates/zenmetrics-cli/src/metrics/nr.rs) wraps PIQE, NIQE and BRISQUE in `PairedNoReference`; [CLI NN](../crates/zenmetrics-cli/src/metrics/nn.rs) similarly wraps ARNIQA, MANIQA, LIQE, MUSIQ, HyperIQA, PaQ-2-PiQ and WaDIQaM NR variants. | The merged `NoReferenceMetric` and `PairedNoReference` now provide these contracts. Migrate the production NR implementations and CLI callers; the PIQE bridge currently validates the new API only. Preserve both named results where the CLI exposes reference and distorted scores. |
+| Generic diagnostic map iteration, native grid geometry, support and polarity | Browser `evaluation_maps` consumes `&dyn Evaluation` and visits every published `MapView` without knowing the concrete metric result. Coarse, cropped and padded maps need their actual geometry. | The merged `Evaluation::maps` and borrowed `MapView` now provide generic native planes/placement. Migrate the browser and its legacy map adapters; keep display/resampling and richer native support metadata outside the scoring core. Diagnostics remain off by default; the four-method validation retains native diagnostics only on explicitly requested small witnesses. |
 | Bound-preserving worker/model storage | CLI NN and PyIQA model caches store `Mutex<HashMap<_, Box<dyn Metric>>>` in `OnceLock`. Benchmark callbacks also use Send trait objects. | Preserve Send where a concrete caller needs it. The local core intentionally adds no global Send/Sync requirement. An erased scorer can carry `+ Send` when its native scorer does, but `ErasedEvaluation` and dynamically prepared objects do not promise Send. Prepare/consume on the executing worker and transfer owned scalar views, or introduce a separate bound-preserving wrapper when a real migration requires transport of native results. |
 | Existing identity/column compatibility and conformance controls | The old [identity API](../crates/zenmetrics-abstractions/src/identity.rs) exposes canonical text, fingerprints and qualified columns; metric tests pin those outputs. Many ports call the [conformance harness](../crates/zenmetrics-abstractions/src/conformance.rs). | Keep compatibility serialization and validation during migration. Do not silently rename stored identities or drop regression coverage. Hashing, column naming and conformance machinery can live outside the minimal scoring core. The CLI also has its own `MetricKind` column mapping; this audit does not claim every writer uses `MetricId::column`. |
 
@@ -79,8 +89,8 @@ cpu-profile benchmark package. These are direct packages, not a count of
 individual methods inside the NN bundles.
 
 Migrate packed full-reference scalar adapters first, comparing every named
-native scalar and actual prepared path. Add the no-reference and diagnostic
-extensions when moving their current callers. Migrate shared planar views and
+native scalar and actual prepared path. Use the new no-reference and diagnostic
+contracts when moving their current callers. Migrate shared planar views and
 the two temporal implementations with their own native controls. Keep the old
 facade until all 22 packages and their conformance/identity callers have moved;
 then remove redundant compatibility types.

@@ -773,6 +773,14 @@ checkpoint-browser-build output:
 browser-coverage-check:
     python3 scripts/checkpoint/test_browser_coverage.py
 
+# Score-only JXL trace iteration routing for the browser metric catalog.
+browser-loop-score-check:
+    node scripts/checkpoint/test_loop_scores.mjs
+
+# Real trace-player UI with an explicit RPC oracle, without metric/model loads.
+browser-loop-ui-check *options:
+    python3 scripts/checkpoint/test_loop_ui.py {{options}}
+
 # Private model exports and native baseline are supplied explicitly by the caller.
 browser-local-weights-check site models native report:
     python3 scripts/checkpoint/check-local-weights.py "{{site}}" "{{models}}" "{{native}}" "{{report}}"
@@ -2819,3 +2827,8 @@ avif-color-regression avif *options:
 iqa-cross-check:
     cross test --locked --manifest-path tools/iqa-contract-validation/Cargo.toml --target i686-unknown-linux-gnu -- --test-threads=1
     cross run --locked --manifest-path tools/iqa-margarine-validation/Cargo.toml --bin iqa-margarine-validation --target i686-unknown-linux-gnu
+
+# Validate only byte-row admission; no metric scoring or diagnostic maps.
+iqa-byte-stride-check:
+    cargo test --manifest-path tools/iqa-contract-validation/Cargo.toml --lib rgb8_stride
+    cargo clippy --manifest-path tools/iqa-contract-validation/Cargo.toml --lib -- -D warnings

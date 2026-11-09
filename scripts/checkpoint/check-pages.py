@@ -849,6 +849,22 @@ try:
         assert info.startswith('Frame 2 of 2') and text('#ls-next') == 'none: final pass, score only', (info, text('#ls-next'))
         page.locator('#loop-layer').select_option('recon')
         assert loop_px(3, 3) == [210, 110, 60, 255]
+        # The selected metric can observe saved iterations independently of
+        # the metric/map that steered the encode. No diagnostic maps requested.
+        page.locator('#loop-auto').uncheck()
+        page.locator('#metric').select_option('psnr')
+        page.locator('#loop-score').click()
+        page.wait_for_function("document.getElementById('loop-score-status').textContent.startsWith('Finished psnr:')", timeout=60000)
+        scored_rows = page.locator('#loop-score-table tbody tr')
+        assert scored_rows.count() == 2
+        for row in scored_rows.all():
+            assert row.get_attribute('data-metric') == 'psnr'
+            assert row.get_attribute('data-error') is None
+            native_scores = json.loads(row.get_attribute('data-scores'))
+            assert native_scores and all(math.isfinite(float(v['value'])) for v in native_scores)
+        scored_rows.nth(0).click()
+        assert page.locator('#loop-frame').input_value() == '0'
+        result['loop_native_scores'] = True
         page.locator('#trace').set_input_files({'name': 'bad.ltrace', 'mimeType': 'application/octet-stream', 'buffer': b'nope'})
         page.wait_for_function("document.getElementById('loop-info').textContent.includes('Not a jxl-encoder loop trace')", timeout=10000)
         result['loop_player'] = True

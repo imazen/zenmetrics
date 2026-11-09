@@ -9,7 +9,7 @@ fn image(bytes: &[u8], padding: usize) -> PixelSlice<'_> {
 }
 fn scores(e: &impl Evaluation) -> Vec<(String, u64)> {
     e.scores()
-        .map(|s| (s.spec.key.to_string(), s.value.to_bits()))
+        .map(|s| (s.spec.key().to_string(), s.value.to_bits()))
         .collect()
 }
 #[test]

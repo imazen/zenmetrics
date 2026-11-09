@@ -6,12 +6,14 @@ use iqa::{
     PrepareReference, ResultMetricExt, Score, ScoreSpec, WarmReference,
 };
 use zenpsy_api as iqa;
+mod planar;
 
 /// Typed native assessment, retaining the original result without map copies.
 pub struct Assessment<T, const N: usize> {
     pub native: T,
     pub values: [f64; N],
     specs: [ScoreSpec; N],
+    map_specs: Vec<ScoreSpec>,
 }
 impl<T, const N: usize> std::fmt::Debug for Assessment<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,17 +22,32 @@ impl<T, const N: usize> std::fmt::Debug for Assessment<T, N> {
             .finish_non_exhaustive()
     }
 }
-impl<T, const N: usize> Evaluation for Assessment<T, N> {
+impl<T: NativeMaps, const N: usize> Evaluation for Assessment<T, N> {
     fn scores(&self) -> impl Iterator<Item = Score<'_>> {
         self.specs
             .iter()
             .zip(self.values)
             .map(|(s, v)| Score::new(s, v))
     }
+    fn maps(&self) -> impl Iterator<Item = iqa::MapView<'_>> {
+        self.map_specs
+            .iter()
+            .zip(self.native.map_planes())
+            .map(|(spec, (values, grid))| iqa::MapView::new(spec, values, grid))
+    }
 }
-fn one<T>(native: T, value: f64) -> Assessment<T, 1> {
+/// Borrowed native map storage behind the concrete assessment.
+pub(crate) trait NativeMaps {
+    fn map_specs(&self) -> Vec<ScoreSpec>;
+    fn map_planes(
+        &self,
+    ) -> impl Iterator<Item = (iqa::zenpixels::plane::AnyPlane<'_>, iqa::MapGrid)>;
+}
+fn one<T: NativeMaps>(native: T, value: f64) -> Assessment<T, 1> {
+    let map_specs = native.map_specs();
     Assessment {
         native,
+        map_specs,
         values: [value],
         specs: [ScoreSpec::new("score", Direction::Higher).with_perfect(100.0)],
     }
@@ -56,19 +73,50 @@ fn zen_error(e: &zensim::ZensimError) -> ErrorKind {
         _ => ErrorKind::Backend,
     }
 }
-fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<butteraugli::ImgRef<'a, butteraugli::RGB8>> {
+fn validate_rgb8(p: &PixelSlice<'_>) -> MetricResult<()> {
     if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
         return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
     }
-    Ok(butteraugli::Img::new_stride(
-        bytemuck::cast_slice(p.as_strided_bytes()),
-        p.width() as usize,
-        p.rows() as usize,
-        p.stride() / 3,
-    ))
+    Ok(())
+}
+struct RgbRows<'a> {
+    pixels: std::borrow::Cow<'a, [butteraugli::RGB8]>,
+    width: usize,
+    height: usize,
+    stride: usize,
+}
+impl RgbRows<'_> {
+    fn as_imgref(&self) -> butteraugli::ImgRef<'_, butteraugli::RGB8> {
+        butteraugli::Img::new_stride(&*self.pixels, self.width, self.height, self.stride)
+    }
+}
+fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<RgbRows<'a>> {
+    validate_rgb8(p)?;
+    let width = p.width() as usize;
+    let (pixels, stride) = if p.stride().is_multiple_of(3) {
+        (
+            std::borrow::Cow::Borrowed(bytemuck::cast_slice(p.as_strided_bytes())),
+            p.stride() / 3,
+        )
+    } else {
+        let pixels = (0..p.rows())
+            .flat_map(|y| {
+                bytemuck::cast_slice::<u8, butteraugli::RGB8>(p.row(y))
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        (std::borrow::Cow::Owned(pixels), width)
+    };
+    Ok(RgbRows {
+        pixels,
+        width,
+        height: p.rows() as usize,
+        stride,
+    })
 }
 fn packed_rgb8(p: &PixelSlice<'_>) -> MetricResult<Vec<u8>> {
-    rgb8(p)?;
+    validate_rgb8(p)?;
     Ok((0..p.rows())
         .flat_map(|y| p.row(y).iter().copied())
         .collect())
@@ -79,19 +127,25 @@ pub struct ButterWarm(butteraugli::ButteraugliReference);
 fn butter_result(
     native: butteraugli::ButteraugliResult,
 ) -> Assessment<butteraugli::ButteraugliResult, 2> {
+    let map_specs = native.map_specs();
     Assessment {
+        map_specs,
         values: [native.score, native.pnorm_3],
         native,
         specs: [
-            ScoreSpec::new("max", Direction::Lower).with_perfect(0.0),
-            ScoreSpec::new("pnorm3", Direction::Lower).with_perfect(0.0),
+            ScoreSpec::new("max", Direction::Lower)
+                .with_perfect(0.0)
+                .with_unit("butteraugli"),
+            ScoreSpec::new("pnorm3", Direction::Lower)
+                .with_perfect(0.0)
+                .with_unit("butteraugli"),
         ],
     }
 }
 impl Metric for Butter {
     type Output = Assessment<butteraugli::ButteraugliResult, 2>;
     fn id(&self) -> MetricId {
-        id("butteraugli", "0.9.4", "31687022")
+        id("butteraugli", "0.9.4", "f223ca9e")
             .with_config("intensity_target", 80)
             .with_config("hf_asymmetry", 1)
             .with_config("xmul", 1)
@@ -103,8 +157,8 @@ impl Metric for Butter {
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         butteraugli::butteraugli_with_stop(
-            rgb8(r)?,
-            rgb8(d)?,
+            rgb8(r)?.as_imgref(),
+            rgb8(d)?.as_imgref(),
             &butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.diagnostics()),
             opts.stop(),
         )
@@ -221,7 +275,7 @@ pub struct Zen {
 pub struct ZenWarm(zensim::PrecomputedReference);
 fn zensim(opts: EvalOpts<'_>) -> MetricResult<zensim::Zensim> {
     let shared = opts
-        .pulse
+        .pulse()
         .share()
         .metric_err("zensim", ErrorKind::UnsupportedRequest)?;
     Ok(zensim::Zensim::new(zensim::ZensimProfile::latest())
@@ -365,4 +419,127 @@ pub fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
         }
     }
     p
+}
+
+use iqa::zenpixels::plane::{AnyPlane, PlaneRef};
+fn plane(values: &[f32], w: usize, h: usize, stride: usize) -> AnyPlane<'_> {
+    AnyPlane::F32(PlaneRef::new(values, w, h, stride).expect("native map geometry"))
+}
+fn error_map(key: impl Into<std::borrow::Cow<'static, str>>) -> ScoreSpec {
+    ScoreSpec::new("diffmap", Direction::Lower)
+        .with_perfect(0.0)
+        .with_key(key)
+}
+impl NativeMaps for butteraugli::ButteraugliResult {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        self.diffmap
+            .iter()
+            .map(|_| error_map("diffmap").with_unit("butteraugli"))
+            .collect()
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        self.diffmap.iter().map(|m| {
+            (
+                plane(m.buf(), m.width(), m.height(), m.stride()),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32)
+                    .expect("native map geometry"),
+            )
+        })
+    }
+}
+impl NativeMaps for ZenNative {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        if matches!(self, Self::Map(_)) {
+            vec![error_map("diffmap")]
+        } else {
+            vec![]
+        }
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        let map = match self {
+            Self::Map(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter().map(|m| {
+            (
+                plane(m.diffmap(), m.width(), m.height(), m.width()),
+                iqa::MapGrid::new(m.width() as u32, m.height() as u32)
+                    .expect("native map geometry"),
+            )
+        })
+    }
+}
+impl NativeMaps for SsimNative {
+    fn map_specs(&self) -> Vec<ScoreSpec> {
+        let map = match self {
+            Self::Maps(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter()
+            .flat_map(|m| m.scales.iter().enumerate())
+            .flat_map(|(s, _)| {
+                ["ssim", "artifact", "detail_lost"]
+                    .into_iter()
+                    .flat_map(move |term| {
+                        ["x", "y", "b"]
+                            .into_iter()
+                            .map(move |c| error_map(format!("{term}_{c}_{s}")))
+                    })
+            })
+            .collect()
+    }
+    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+        let map = match self {
+            Self::Maps(m) => Some(m),
+            _ => None,
+        };
+        map.into_iter().flat_map(|m| {
+            m.scales.iter().enumerate().flat_map(move |(s, level)| {
+                let grid = iqa::MapGrid::new(m.width as u32, m.height as u32)
+                    .expect("native map geometry")
+                    .with_cells(0, 0, 1 << s, 1 << s)
+                    .expect("native map geometry");
+                [&level.ssim, &level.artifact, &level.detail_lost]
+                    .into_iter()
+                    .flat_map(move |term| {
+                        term.iter().map(move |values| {
+                            (plane(values, level.width, level.height, level.width), grid)
+                        })
+                    })
+            })
+        })
+    }
+}
+
+#[cfg(test)]
+mod stride_tests {
+    use super::*;
+    #[test]
+    fn rgb8_stride_preserves_pixels_and_borrows_representable_rows() {
+        for padding in 0..6 {
+            let stride = 9 + padding;
+            let mut data = vec![0xFE; stride * 3];
+            for y in 0..3 {
+                for x in 0..9 {
+                    data[y * stride + x] = (y * 9 + x) as u8;
+                }
+            }
+            let input = PixelSlice::new(&data, 3, 3, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+            let rows = rgb8(&input).unwrap();
+            assert_eq!(
+                matches!(rows.pixels, std::borrow::Cow::Borrowed(_)),
+                padding % 3 == 0
+            );
+            if padding % 3 == 0 {
+                assert_eq!(rows.pixels.as_ptr().cast::<u8>(), data.as_ptr());
+            }
+            let image = rows.as_imgref();
+            let actual: Vec<u8> = image
+                .rows()
+                .flat_map(|row| bytemuck::cast_slice::<_, u8>(row).iter().copied())
+                .collect();
+            assert_eq!(actual, (0..27).collect::<Vec<u8>>());
+            assert_eq!(packed_rgb8(&input).unwrap(), actual);
+        }
+    }
 }

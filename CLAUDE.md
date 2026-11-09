@@ -2457,3 +2457,23 @@ recorded the map-byte SHA256 as the source SHA256. Full source-identity readback
 rejected the first production sample before scaling. The executor now retains
 reference bytes separately; the real diagnostic proof checks both source-file
 and reference-pixel hashes. Rejected receipts remain immutable and excluded.
+
+### RGB row-pitch validation (2026-11-09)
+
+The typed IQA validation adapter formerly divided a byte stride by three.
+With sample-aligned RGB8 rows, that truncated the row pitch. The adapter now
+borrows whole-pixel pitches and compacts other pitches before constructing
+imgref. `just iqa-byte-stride-check` checks six padding values, all visible
+samples and borrowed allocation identity; it performs no metric scoring or
+diagnostic-map generation. The standalone validation graph pins zenpixels
+1dd1a147, which combines the typed IQA contract and sample-aligned row support.
+The root workspace lock and native metric source pins are unchanged.
+
+### Known Bugs: checkpoint selector fixture checkout (2026-11-09, fixed)
+
+Checkpoint packaging still searched the former zensim checkout after the CI
+sibling pin moved the research source to zensimx. The selected fixture exists
+at the unchanged pinned revision 2ac9f073; its SHA256 is
+`cd1098b450ef6941b6925b24bcbd129715b6f07c4fe84838a92e13ab364ddea6`.
+Packaging now resolves the current checkout path. Fixture bytes, checkpoint
+inputs, compiler requirements and numerical acceptance remain unchanged.

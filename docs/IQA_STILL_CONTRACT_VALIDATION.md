@@ -3,7 +3,7 @@
 The current [zenpsy-api review](https://github.com/imazen/zenpixels/pull/111)
 uses a typed `Metric::Output: Evaluation`, named score views and an optional
 `PrepareReference` extension. The reviewed core/pixel pin is
-[2ee9fd21](https://github.com/imazen/zenpixels/commit/2ee9fd219fad403d09ef5f595f5504af8add3da1).
+[d234f3c6](https://github.com/imazen/zenpixels/commit/d234f3c63efca06d5d7d52cb39b6c1f92961e98f).
 The [codec bridge](https://github.com/imazen/zencodec/pull/196) forwards that
 concrete output without boxing or losing native fields. Callers can instead
 wrap metrics in `Erased` for a heterogeneous array, retaining the original
@@ -45,6 +45,13 @@ targets through stacked erasure. A collection of all three actual prepared
 references matches those cold results on two repeated candidate rounds. The
 nine Zensim HDR controls also run through stacked erasure. Selected Margarine
 continues to execute through the runtime cold registration.
+
+The merged map/NR extension additionally forwards original native map planes
+through common borrowed views and validates real PIQE one-image, paired and
+prepared results. Its [native and JXL/workbench report](IQA_MAPS_NR_AND_JXL_LOOP.md)
+distinguishes borrowed views, reusable buffers and remaining internal/browser
+copies. The byte-stride compatibility patch from `4ecbfd85` is integrated;
+whole-pixel pitches borrow, other RGB8 pitches compact active rows.
 
 ## Orchestration boundary
 

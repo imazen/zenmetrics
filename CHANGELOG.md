@@ -13,6 +13,15 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Workbench: score each stored JXL iteration with any runnable selected metric,
+  retaining all named native values independently of encoder steering; add
+  asynchronous UI/routing and immutable asset controls (`87a6b3c2`, `2d4dc7b9`).
+- IQA: consume merged map/NR contracts from zenpixels `d234f3c6`; validate original
+  map storage, actual PIQE one-image/paired/prepared results and the existing
+  planar JXL-shaped native route (`120703b1`, `fa191ebf`).
+- Preserve RGB8 byte row pitches in native validation: borrow representable
+  imgref strides and compact partial-pixel padding (`4ecbfd85`).
+
 - zenmetrics-orchestrator: reuse shared zenpsy-api erased metric/prepared wrappers;
   validate heterogeneous native collections, nested native-result access and
   erased HDR scoring (`1f8d1346`).

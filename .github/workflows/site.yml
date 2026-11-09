@@ -24,6 +24,8 @@ on:
       - 'web/codecs/**'
       - 'scripts/checkpoint/*pages.py'
       - 'scripts/checkpoint/test_browser_coverage.py'
+      - 'scripts/checkpoint/test_loop_scores.mjs'
+      - 'scripts/checkpoint/test_loop_ui.py'
       - 'scripts/checkpoint/vendor-ort.py'
       - 'crates/zenmetrics-nn/src/**'
       - 'benchmarks/browser_nn_2026-10-17/**'
@@ -47,7 +49,9 @@ jobs:
         with:
           python-version: '3.13'
       - name: Check browser catalog coverage
-        run: python3 scripts/checkpoint/test_browser_coverage.py
+        run: |
+          python3 scripts/checkpoint/test_browser_coverage.py
+          node scripts/checkpoint/test_loop_scores.mjs
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-10-06
@@ -80,6 +84,7 @@ jobs:
         run: |
           python -m pip install playwright==1.63.0
           python -m playwright install --with-deps chromium
+          python scripts/checkpoint/test_loop_ui.py
           cargo run --locked --release -p zenmetrics-browser --example browser_oracle > "$HOME/tmp/browser-oracle.json"
           # Learned metrics run on Chromium's SwiftShader WebGPU adapter. The
           # default subset covers every model kind (pair graph, no-reference,
