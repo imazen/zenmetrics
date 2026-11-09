@@ -60,10 +60,12 @@ video contract, native planar view abstraction or no-reference interface.
   Zensim HDR, runtime registration/fallback and strict lint controls.
 - `just iqa-margarine-check`: original selected frontend, frozen vendor check,
   exact native selected-kernel and runtime cold-registration controls.
+- `just iqa-cross-check`: the same native/runtime panel and selected Margarine
+  through i686 Cross.
 - Core: `just iqa-check` and `just iqa-portability-check` in zenpixels.
 - Codec adapter: the same recipes in zencodec.
 
-Current local native validation is Linux x64. Core and codec adapter pass
+Current local native validation passes on Linux x64 and i686 through cross. Core and codec adapter pass
 Rust 1.88, no_std, WASM and freestanding ARM checks, tests/doctests and strict
 Clippy/Rustdoc. Native algorithm/reference parity, every model and every input
 format remain outside these integration checks. Historical observations below
