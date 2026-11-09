@@ -44,7 +44,7 @@ def main():
     runner_revision = subprocess.check_output(['git', '-C', str(args.runner_source), 'rev-parse', 'HEAD'], text=True).strip()
     if runner_revision != config['benchmark_runner']['commit']:
         parser.error('Benchmark runner source differs from the checkpoint pin')
-    bake = root.parent / 'zensim/zensim/weights/d_sdr_add156_id100_negrich_dial_byid_2026-09-06.bin'
+    bake = root.parent / 'zensimx/zensim/weights/d_sdr_add156_id100_negrich_dial_byid_2026-09-06.bin'
     if not bake.is_file():
         parser.error('Pinned zensim selector fixture is missing')
     gpu_expectation = os.environ.get('ZENMETRICS_TEST_GPU')
