@@ -1,65 +1,50 @@
-//! Validation-only bridge to the selected native kernels; never a published API.
+//! Validation bridge for the selected native kernels, preserving native data.
 #![forbid(unsafe_code)]
 #![allow(dead_code, deprecated)]
 #![allow(clippy::manual_midpoint, clippy::chunks_exact_to_as_chunks)]
 include!("kernel.rs");
-use iqa::zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use iqa::zenpixels::{PixelDescriptor, PixelSlice};
 use iqa::{
-    ErrorKind, EvalOpts, Evaluation, Image, Implementation, InputFormat, Metric, MetricError,
-    MetricId, MetricResult, ScoreKind, ScoreSpec,
+    Direction, ErrorKind, EvalOpts, Evaluation, Implementation, Metric, MetricError, MetricId,
+    MetricResult, Score, ScoreSpec,
 };
-use std::borrow::Cow;
 use zenpsy_api as iqa;
-
 struct Margarine;
 struct Native {
-    scores: Vec<(Cow<'static, str>, f64)>,
-    map: PixelBuffer,
+    original: diff::InternalResult,
+    values: [f64; 5],
+    specs: [ScoreSpec; 5],
+}
+impl std::fmt::Debug for Native {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Native")
+            .field("values", &self.values)
+            .finish_non_exhaustive()
+    }
 }
 impl Evaluation for Native {
-    fn score(&self) -> f64 {
-        self.scores[0].1
-    }
-    fn scores(&self) -> iqa::Scores<'_> {
-        Box::new(self.scores.iter().cloned())
-    }
-    fn map(&self) -> Option<iqa::MapView<'_>> {
-        Some(
-            iqa::MapView::new(
-                "difference",
-                self.map.as_slice(),
-                iqa::MapPolarity::Difference,
-                iqa::MapGeometry::identity(self.map.width(), self.map.height()),
-            )
-            .unwrap(),
-        )
-    }
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn scores(&self) -> impl Iterator<Item = Score<'_>> {
+        self.specs
+            .iter()
+            .zip(self.values)
+            .map(|(s, v)| Score::new(s, v))
     }
 }
-fn rows<'a>(v: &'a iqa::Rgb8In<'_>) -> ingress::EncodedRows<'a> {
-    ingress::EncodedRows::new(
-        ingress::Samples::U8(v.pixels),
-        v.width,
-        v.height,
-        v.stride,
+fn rows<'a>(p: &'a PixelSlice<'_>) -> MetricResult<ingress::EncodedRows<'a>> {
+    if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
+        return iqa::fail(MetricError::new(ErrorKind::UnsupportedInput));
+    }
+    Ok(ingress::EncodedRows::new(
+        ingress::Samples::U8(p.as_strided_bytes()),
+        p.width() as usize,
+        p.rows() as usize,
+        p.stride(),
         3,
     )
-    .unwrap()
-}
-fn native(r: &Image<'_>, d: &Image<'_>) -> diff::InternalResult {
-    let (r, d) = iqa::rgb8_pair(r, d).unwrap();
-    row_psycho::compute_geometry(
-        &rows(&r),
-        &rows(&d),
-        128,
-        512,
-        &ButteraugliParams::default(),
-    )
-    .unwrap()
+    .unwrap())
 }
 impl Metric for Margarine {
+    type Output = Native;
     fn id(&self) -> MetricId {
         MetricId::new("margarine", Implementation::new("margarine", "0.0.0", 1))
             .with_reference("zenmetrics b50fea22 selected simd-row-malta")
@@ -68,68 +53,41 @@ impl Metric for Margarine {
             .with_config("pooling", "max,p1,p2,p3,p6")
             .with_config("native_uhf", false)
     }
-    fn outputs(&self) -> Cow<'static, [ScoreSpec]> {
-        Cow::Owned(
-            ["max", "p1", "p2", "p3", "p6"]
-                .map(|key| ScoreSpec::new(key, ScoreKind::Difference))
-                .to_vec(),
-        )
-    }
-    fn accepts(&self, f: &InputFormat) -> bool {
-        iqa::is_rgb8_srgb(f)
-    }
     fn evaluate(
         &mut self,
-        r: Image<'_>,
-        d: Image<'_>,
+        r: &PixelSlice<'_>,
+        d: &PixelSlice<'_>,
         opts: EvalOpts<'_>,
-    ) -> MetricResult<Box<dyn Evaluation>> {
+    ) -> MetricResult<Native> {
         opts.checkpoint()?;
-        let (r, d) = iqa::rgb8_pair(&r, &d)?;
-        let r = ingress::EncodedRows::new(
-            ingress::Samples::U8(r.pixels),
-            r.width,
-            r.height,
-            r.stride,
-            3,
+        let mut original = row_psycho::compute_geometry_send(
+            &rows(r)?,
+            &rows(d)?,
+            128,
+            512,
+            &ButteraugliParams::default(),
         )
-        .expect("shared RGB input admission validated row geometry");
-        let d = ingress::EncodedRows::new(
-            ingress::Samples::U8(d.pixels),
-            d.width,
-            d.height,
-            d.stride,
-            3,
-        )
-        .expect("shared RGB input admission validated row geometry");
-        // The selected kernel has no Pulse argument. Boundaries remain cooperative;
-        // no claim of cancellation within its native call is made.
-        let n = row_psycho::compute_geometry_send(&r, &d, 128, 512, &ButteraugliParams::default())
-            .map_err(|e| {
-                iqa::whereat::at(MetricError::new(ErrorKind::Backend).with_boxed_detail(e))
-            })?;
+        .map_err(|e| iqa::whereat::at(MetricError::new(ErrorKind::Backend).with_boxed_detail(e)))?;
         opts.checkpoint()?;
-        let map = n.diffmap.as_ref().unwrap();
-        let scores = [
-            ("max", n.score),
-            ("p1", pnorm(map, 1.0)),
-            ("p2", pnorm(map, 2.0)),
-            ("p3", n.pnorm_3),
-            ("p6", pnorm(map, 6.0)),
-        ]
-        .map(|(k, v)| (Cow::Borrowed(k), v))
-        .to_vec();
-        let values: Vec<f32> = (0..map.height())
-            .flat_map(|y| map.row(y).iter().copied())
-            .collect();
-        let e: Box<dyn Evaluation> = Box::new(Native {
-            scores,
-            map: iqa::gray_f32_buffer(&values, map.width() as u32, map.height() as u32)?,
-        });
-        match opts.map {
-            Some(request) => iqa::apply_map_request(e, request),
-            None => Ok(e),
+        // The selected kernel pools these scalars from its internal map. Do not
+        // copy or retain that scratch as a diagnostic result unless requested.
+        let map = original.diffmap.as_ref().unwrap();
+        let values = [
+            original.score,
+            pnorm(map, 1.0),
+            pnorm(map, 2.0),
+            original.pnorm_3,
+            pnorm(map, 6.0),
+        ];
+        if !opts.diagnostics() {
+            original.diffmap = None;
         }
+        Ok(Native {
+            original,
+            values,
+            specs: ["max", "p1", "p2", "p3", "p6"]
+                .map(|k| ScoreSpec::new(k, Direction::Lower).with_perfect(0.0)),
+        })
     }
 }
 fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
@@ -149,7 +107,7 @@ fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
     }
     p
 }
-fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> Image<'_> {
+fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelSlice<'_> {
     PixelSlice::new(
         bytes,
         w,
@@ -158,16 +116,12 @@ fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> Image<'_> {
         PixelDescriptor::RGB8_SRGB,
     )
     .unwrap()
-    .into()
 }
 fn main() {
     assert_eq!(CANDIDATE, "simd-row-malta");
-    // The selected private kernel now exposes a Send+Sync cause so the IQA
-    // envelope can retain its allocation, rather than flattening it to text.
     let sample = fixture(64, 64, 0, false);
     let sample_image = image(&sample, 64, 64, 0);
-    let sample_view = iqa::rgb8_view(&sample_image).unwrap();
-    let sample_rows = rows(&sample_view);
+    let sample_rows = rows(&sample_image).unwrap();
     let error = row_psycho::compute_geometry_send(
         &sample_rows,
         &sample_rows,
@@ -182,7 +136,6 @@ fn main() {
     let retained =
         std::error::Error::source(&envelope).unwrap() as *const dyn std::error::Error as *const ();
     assert_eq!(original, retained);
-
     for (w, h) in [(64, 64), (97, 73), (131, 129)] {
         let r = fixture(w, h, 0, false);
         let d = fixture(w, h, 0, true);
@@ -190,10 +143,15 @@ fn main() {
         let dp = fixture(w, h, 15, true);
         let ri = image(&r, w, h, 0);
         let di = image(&d, w, h, 0);
-        iqa::conformance::assert_conforms(&mut Margarine, &ri, &di);
-        let direct = native(&ri, &di);
+        let direct = row_psycho::compute_geometry(
+            &rows(&ri).unwrap(),
+            &rows(&di).unwrap(),
+            128,
+            512,
+            &ButteraugliParams::default(),
+        )
+        .unwrap();
         let map = direct.diffmap.as_ref().unwrap();
-        let out = iqa::score(&mut Margarine, ri, di, EvalOpts::new().with_native_map()).unwrap();
         let expected = [
             direct.score,
             pnorm(map, 1.0),
@@ -202,48 +160,65 @@ fn main() {
             pnorm(map, 6.0),
         ]
         .map(f64::to_bits);
-        assert_eq!(
-            out.result
-                .scores()
-                .map(|(_, v)| v.to_bits())
-                .collect::<Vec<_>>(),
-            expected
-        );
-        let padded = iqa::score(
-            &mut Margarine,
-            image(&rp, w, h, 9),
-            image(&dp, w, h, 15),
-            EvalOpts::new().with_native_map(),
-        )
-        .unwrap();
-        assert_eq!(
-            padded
-                .result
-                .scores()
-                .map(|(_, v)| v.to_bits())
-                .collect::<Vec<_>>(),
-            expected
-        );
-        let expected_map: Vec<_> = (0..map.height())
-            .flat_map(|y| map.row(y).iter().map(|v| v.to_bits()))
-            .collect();
-        for e in [&out, &padded] {
+        let scalar = iqa::score(&mut Margarine, &ri, &di, EvalOpts::new()).unwrap();
+        assert_eq!(scalar.values.map(f64::to_bits), expected);
+        assert!(scalar.original.diffmap.is_none());
+        let mut executor = zenmetrics_orchestrator::psy::ContractExecutor::default();
+        executor.register("selected-margarine", || Ok(Margarine));
+        let report = executor
+            .run(
+                &ri,
+                &[di.clone(), di.clone()],
+                EvalOpts::new(),
+                zenmetrics_orchestrator::psy::Fallback::Refuse,
+            )
+            .ok()
+            .unwrap();
+        assert!(report.is_complete());
+        assert!(!report.attempts[0].prepared);
+        for result in report.completed {
             assert_eq!(
-                e.result
-                    .map()
-                    .unwrap()
-                    .values()
+                result
+                    .assessment
+                    .scores
                     .iter()
-                    .map(|v| v.to_bits())
+                    .map(|s| s.value.to_bits())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert!(
+                result
+                    .assessment
+                    .native::<Native>()
+                    .unwrap()
+                    .original
+                    .diffmap
+                    .is_none()
+            );
+            assert_eq!(result.identity, Margarine.id());
+        }
+
+        let expected_map = (0..map.height())
+            .flat_map(|y| map.row(y).iter().map(|v| v.to_bits()))
+            .collect::<Vec<_>>();
+        for (r, d) in [(ri, di), (image(&rp, w, h, 9), image(&dp, w, h, 15))] {
+            let out =
+                iqa::score(&mut Margarine, &r, &d, EvalOpts::new().with_native_map()).unwrap();
+            assert_eq!(
+                out.scores().map(|s| s.value.to_bits()).collect::<Vec<_>>(),
+                expected
+            );
+            let map = out.original.diffmap.unwrap();
+            assert_eq!((map.width(), map.height()), (w as usize, h as usize));
+            assert_eq!(
+                (0..map.height())
+                    .flat_map(|y| map.row(y).iter().map(|v| v.to_bits()))
                     .collect::<Vec<_>>(),
                 expected_map
             );
         }
-        assert!(
-            iqa::prepare_reference(&mut Margarine, image(&r, w, h, 0), EvalOpts::new()).is_err()
-        );
         println!(
-            "PASS selected Margarine {w}x{h}: five native scalar bits, map bits, stride, conformance; preparation explicitly unsupported"
+            "PASS selected Margarine {w}x{h}: five scalar bits, opt-in native map bits, stride; score-only results retain no map"
         );
     }
 }
