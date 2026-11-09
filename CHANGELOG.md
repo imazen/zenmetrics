@@ -13999,3 +13999,8 @@ canonical comparison.
 - CI builds the new `cvvdp-gpu` crate alongside the existing four
   `-gpu` crates under `wgpu` (per-platform) and as part of the
   `i686-unknown-linux-gnu` cross-compile sanity job.
+
+### Typed IQA adapter correction (2026-11-09)
+
+- Preserve RGB8 byte row pitches in the standalone native validation adapter;
+  borrow representable imgref strides and compact partial-pixel padding.

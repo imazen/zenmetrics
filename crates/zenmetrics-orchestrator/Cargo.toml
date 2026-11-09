@@ -81,7 +81,7 @@ cpu-iwssim = ["bench", "dep:iwssim"]
 cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
 [dependencies]
-zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "2ee9fd219fad403d09ef5f595f5504af8add3da1", version = "0.1.0", optional = true }
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "1dd1a1477052e0f4fc22e52a4eb545290dd90420", version = "0.1.0", optional = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 # Phase 7.6 Layer 4 — observable VRAM budget at instance swap. The

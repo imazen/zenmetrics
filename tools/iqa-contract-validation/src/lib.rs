@@ -56,19 +56,50 @@ fn zen_error(e: &zensim::ZensimError) -> ErrorKind {
         _ => ErrorKind::Backend,
     }
 }
-fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<butteraugli::ImgRef<'a, butteraugli::RGB8>> {
+fn validate_rgb8(p: &PixelSlice<'_>) -> MetricResult<()> {
     if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
         return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
     }
-    Ok(butteraugli::Img::new_stride(
-        bytemuck::cast_slice(p.as_strided_bytes()),
-        p.width() as usize,
-        p.rows() as usize,
-        p.stride() / 3,
-    ))
+    Ok(())
+}
+struct RgbRows<'a> {
+    pixels: std::borrow::Cow<'a, [butteraugli::RGB8]>,
+    width: usize,
+    height: usize,
+    stride: usize,
+}
+impl RgbRows<'_> {
+    fn as_imgref(&self) -> butteraugli::ImgRef<'_, butteraugli::RGB8> {
+        butteraugli::Img::new_stride(&*self.pixels, self.width, self.height, self.stride)
+    }
+}
+fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<RgbRows<'a>> {
+    validate_rgb8(p)?;
+    let width = p.width() as usize;
+    let (pixels, stride) = if p.stride().is_multiple_of(3) {
+        (
+            std::borrow::Cow::Borrowed(bytemuck::cast_slice(p.as_strided_bytes())),
+            p.stride() / 3,
+        )
+    } else {
+        let pixels = (0..p.rows())
+            .flat_map(|y| {
+                bytemuck::cast_slice::<u8, butteraugli::RGB8>(p.row(y))
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        (std::borrow::Cow::Owned(pixels), width)
+    };
+    Ok(RgbRows {
+        pixels,
+        width,
+        height: p.rows() as usize,
+        stride,
+    })
 }
 fn packed_rgb8(p: &PixelSlice<'_>) -> MetricResult<Vec<u8>> {
-    rgb8(p)?;
+    validate_rgb8(p)?;
     Ok((0..p.rows())
         .flat_map(|y| p.row(y).iter().copied())
         .collect())
@@ -103,8 +134,8 @@ impl Metric for Butter {
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         butteraugli::butteraugli_with_stop(
-            rgb8(r)?,
-            rgb8(d)?,
+            rgb8(r)?.as_imgref(),
+            rgb8(d)?.as_imgref(),
             &butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.diagnostics()),
             opts.stop(),
         )
@@ -365,4 +396,37 @@ pub fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
         }
     }
     p
+}
+
+#[cfg(test)]
+mod stride_tests {
+    use super::*;
+    #[test]
+    fn rgb8_stride_preserves_pixels_and_borrows_representable_rows() {
+        for padding in 0..6 {
+            let stride = 9 + padding;
+            let mut data = vec![0xFE; stride * 3];
+            for y in 0..3 {
+                for x in 0..9 {
+                    data[y * stride + x] = (y * 9 + x) as u8;
+                }
+            }
+            let input = PixelSlice::new(&data, 3, 3, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+            let rows = rgb8(&input).unwrap();
+            assert_eq!(
+                matches!(rows.pixels, std::borrow::Cow::Borrowed(_)),
+                padding % 3 == 0
+            );
+            if padding % 3 == 0 {
+                assert_eq!(rows.pixels.as_ptr().cast::<u8>(), data.as_ptr());
+            }
+            let image = rows.as_imgref();
+            let actual: Vec<u8> = image
+                .rows()
+                .flat_map(|row| bytemuck::cast_slice::<_, u8>(row).iter().copied())
+                .collect();
+            assert_eq!(actual, (0..27).collect::<Vec<u8>>());
+            assert_eq!(packed_rgb8(&input).unwrap(), actual);
+        }
+    }
 }
