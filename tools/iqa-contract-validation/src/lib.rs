@@ -36,7 +36,7 @@ impl<T: NativeMaps, const N: usize> Evaluation for Assessment<T, N> {
     }
 }
 /// Borrowed native map storage behind the concrete assessment.
-pub trait NativeMaps {
+pub(crate) trait NativeMaps {
     fn map_specs(&self) -> Vec<ScoreSpec>;
     fn map_planes(
         &self,

@@ -131,7 +131,20 @@ impl NoReferenceMetric for Piqe {
             legacy::Image::from(p.clone()),
             legacy::EvalOpts::new().with_pulse(opts.pulse),
         )
-        .metric_err_with("piqe", |_| ErrorKind::InvalidInput)?;
+        .metric_err_with("piqe", |e| match e.error().kind() {
+            legacy::ErrorKind::UnsupportedInput => ErrorKind::UnsupportedInput,
+            legacy::ErrorKind::DimensionMismatch => ErrorKind::DimensionMismatch,
+            legacy::ErrorKind::TooSmall => ErrorKind::TooSmall,
+            legacy::ErrorKind::InvalidInput => ErrorKind::InvalidInput,
+            legacy::ErrorKind::Degenerate => ErrorKind::Degenerate,
+            legacy::ErrorKind::InvalidConfig => ErrorKind::InvalidConfig,
+            legacy::ErrorKind::NoMap => ErrorKind::NoMap,
+            legacy::ErrorKind::UnsupportedRequest => ErrorKind::UnsupportedRequest,
+            legacy::ErrorKind::Stopped(r) => ErrorKind::Stopped(r),
+            legacy::ErrorKind::Resource => ErrorKind::Resource,
+            legacy::ErrorKind::Internal => ErrorKind::Internal,
+            _ => ErrorKind::Backend,
+        })?;
         Ok(PiqeResult { native })
     }
 }
@@ -180,5 +193,29 @@ fn real_piqe_one_image_paired_and_cached_results_keep_native_score_bits() {
             let n = out.native::<PairedEvaluation<PiqeResult>>().unwrap();
             assert_eq!(n.reference().native.score().to_bits(), expected[1]);
         }
+    }
+}
+
+#[test]
+fn piqe_native_refusals_keep_classification_and_original_cause() {
+    let small = fixture(4, 4, 0, false);
+    let unsupported = vec![0u8; 4 * 4 * 3 * 4];
+    let image_float = PixelSlice::new(
+        &unsupported,
+        4,
+        4,
+        4 * 3 * 4,
+        PixelDescriptor::RGBF32_LINEAR,
+    )
+    .unwrap();
+    for (input, kind) in [
+        (image(&small, 4, 4, 0), ErrorKind::TooSmall),
+        (image_float, ErrorKind::UnsupportedInput),
+    ] {
+        let error = score_image(&mut Piqe(piqe::Piqe::new()), &input, EvalOpts::new())
+            .err()
+            .unwrap();
+        assert_eq!(error.error().kind(), kind);
+        assert!(std::error::Error::source(error.error()).is_some());
     }
 }
