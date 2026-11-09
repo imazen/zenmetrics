@@ -29,6 +29,9 @@ publish = false
 # `cpu-*` features) explicitly.
 default = []
 
+# Backend-neutral typed IQA execution; does not enable the GPU umbrella.
+psy = ["dep:zenpsy-api"]
+
 # Phase 2 bench runner. Pulls in zenmetrics-api (umbrella) + cvvdp-gpu
 # (direct, for the StripPair backend that the umbrella doesn't surface).
 # Default ships the CUDA backend — Phase 6 will widen this to WGPU/HIP.
@@ -78,6 +81,7 @@ cpu-iwssim = ["bench", "dep:iwssim"]
 cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
 [dependencies]
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "d9cfb73d9195b26101c82b36bbd09aaf425dd073", version = "0.1.0", optional = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 # Phase 7.6 Layer 4 — observable VRAM budget at instance swap. The
