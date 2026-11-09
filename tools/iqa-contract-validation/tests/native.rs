@@ -369,6 +369,19 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
             .unwrap();
             assert_eq!(out.values[0].to_bits(), direct.score().to_bits());
             assert_eq!(bits(&out), bits(&padded));
+            let mut erased: Box<iqa::DynMetric<'_>> =
+                Box::new(iqa::Erased::new(iqa::Erased::new(Zen {
+                    hdr: Some(encoding),
+                })));
+            let erased = iqa::score(&mut erased, &ri, &di, EvalOpts::new()).unwrap();
+            assert_eq!(
+                erased
+                    .native::<iqa_contract_validation::Assessment<ZenNative, 1>>()
+                    .unwrap()
+                    .values[0]
+                    .to_bits(),
+                direct.score().to_bits()
+            );
             let wrong = PixelSlice::new(
                 bytemuck::cast_slice(&r),
                 w,

@@ -1,4 +1,5 @@
-//! Runtime erasure belongs here, outside the metric contract. Factories run on
+//! Shared erased wrappers normalize results; orchestration owns factories and
+//! fallback policy. Factories run on
 //! the calling worker, so even thread-local native scorers are supported.
 //!
 //! Register caller-selected implementations in preference order. A batch shares
@@ -7,7 +8,6 @@
 //! actual implementation of every result. Cancellation and computation failures
 //! stop the batch. Existing GPU admission/benchmark scheduling remains separate.
 use iqa::{whereat::At, zenpixels::PixelSlice};
-use std::any::Any;
 use zenpsy_api::{
     self as iqa, ErrorKind, EvalOpts, Evaluation, Metric, MetricError, MetricId, MetricResult,
     PrepareReference, ScoreSpec,
@@ -27,12 +27,12 @@ pub struct OutputScore {
 pub struct Assessment {
     /// All named scalar outputs, in native order.
     pub scores: Vec<OutputScore>,
-    native: Box<dyn Any>,
+    native: iqa::ErasedEvaluation,
 }
 impl Assessment {
     /// Recover the concrete native assessment, when the caller knows its type.
     pub fn native<T: 'static>(&self) -> Option<&T> {
-        self.native.downcast_ref()
+        self.native.native()
     }
 }
 /// One completed candidate, bound to its actual successful implementation.
@@ -99,7 +99,7 @@ trait Driver {
         opts: EvalOpts<'_>,
     ) -> Partial;
 }
-fn erase<T: Evaluation + 'static>(native: T) -> Assessment {
+fn erase(native: iqa::ErasedEvaluation) -> Assessment {
     let scores = native
         .scores()
         .map(|s| OutputScore {
@@ -107,12 +107,9 @@ fn erase<T: Evaluation + 'static>(native: T) -> Assessment {
             value: s.value,
         })
         .collect();
-    Assessment {
-        scores,
-        native: Box::new(native),
-    }
+    Assessment { scores, native }
 }
-fn collect<T: Evaluation + 'static>(calls: impl Iterator<Item = MetricResult<T>>) -> Partial {
+fn collect(calls: impl Iterator<Item = MetricResult<iqa::ErasedEvaluation>>) -> Partial {
     let mut outputs = Vec::new();
     for result in calls {
         match result {
@@ -130,11 +127,8 @@ fn collect<T: Evaluation + 'static>(calls: impl Iterator<Item = MetricResult<T>>
         error: None,
     }
 }
-struct Cold<M>(M);
-impl<M: Metric> Driver for Cold<M>
-where
-    M::Output: 'static,
-{
+struct Cold(Box<iqa::DynMetric<'static>>);
+impl Driver for Cold {
     fn id(&self) -> MetricId {
         self.0.id()
     }
@@ -142,17 +136,14 @@ where
         collect(ds.iter().map(|d| iqa::score(&mut self.0, r, d, opts)))
     }
 }
-struct Prepared<M>(M);
-impl<M: PrepareReference> Driver for Prepared<M>
-where
-    M::Output: 'static,
-{
+struct Prepared(Box<dyn iqa::DynPrepareReference>);
+impl Driver for Prepared {
     fn id(&self) -> MetricId {
         self.0.id()
     }
     fn run(&mut self, r: &PixelSlice<'_>, ds: &[PixelSlice<'_>], opts: EvalOpts<'_>) -> Partial {
-        match iqa::prepare_reference(&mut self.0, r, opts) {
-            Ok(mut warm) => collect(ds.iter().map(|d| warm.score(d, opts))),
+        match self.0.prepare(r, opts) {
+            Ok(mut warm) => collect(ds.iter().map(|d| warm.evaluate(d, opts))),
             Err(error) => Partial {
                 outputs: Vec::new(),
                 error: Some(error),
@@ -183,7 +174,9 @@ impl ContractExecutor {
         self.registrations.push(Registration {
             name: name.into(),
             prepared: false,
-            factory: Box::new(move || factory().map(|m| Box::new(Cold(m)) as Box<dyn Driver>)),
+            factory: Box::new(move || {
+                factory().map(|m| Box::new(Cold(Box::new(iqa::Erased::new(m)))) as Box<dyn Driver>)
+            }),
         });
     }
     /// Register actual native reference reuse. One preparation serves the
@@ -197,7 +190,10 @@ impl ContractExecutor {
         self.registrations.push(Registration {
             name: name.into(),
             prepared: true,
-            factory: Box::new(move || factory().map(|m| Box::new(Prepared(m)) as Box<dyn Driver>)),
+            factory: Box::new(move || {
+                factory()
+                    .map(|m| Box::new(Prepared(Box::new(iqa::Erased::new(m)))) as Box<dyn Driver>)
+            }),
         });
     }
     /// Run score-only work. Completed candidates survive resource fallback and

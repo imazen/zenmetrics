@@ -7,12 +7,12 @@ license = "MIT OR Apache-2.0"
 [workspace]
 [dependencies]
 zenmetrics-orchestrator = { path = "../../crates/zenmetrics-orchestrator", default-features = false, features = ["psy"] }
-zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "d9cfb73d9195b26101c82b36bbd09aaf425dd073", version = "0.1.0" }
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "2ee9fd219fad403d09ef5f595f5504af8add3da1", version = "0.1.0" }
 zensim = { git = "https://github.com/imazen/zensim", rev = "5475929d22306846cfe533312a110dbf7d3669e9", default-features = false, features = ["zenpixels"] }
 butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "31687022761bf5b401a9f1e0ed6e6dd407afee70", default-features = false }
 fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "6d27c728a4094cbbcf5f04e3b61859f062951f2e", default-features = false }
 bytemuck = "1.25.2"
 [patch.crates-io]
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "d9cfb73d9195b26101c82b36bbd09aaf425dd073" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "2ee9fd219fad403d09ef5f595f5504af8add3da1" }
 [profile.dev]
 opt-level = 1
