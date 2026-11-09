@@ -27,7 +27,8 @@ candidate outputs followed by reference outputs with `_ref` keys and retains
 both native assessments. Actual preparation evaluates the reference once,
 sharing it across results; only candidate diagnostic maps are requested.
 The real PIQE bridge preserves direct native score bits for one-image, paired
-and prepared calls at 64×64, 97×73 and 131×129 with padded rows. It is a
+and prepared calls at 64×64, 97×73 and 131×129 with padded rows. Attached
+overriding color contexts are explicitly refused by this bridge. It is a
 validation bridge over the unchanged legacy PIQE implementation, not a migration
 of that package's production API.
 

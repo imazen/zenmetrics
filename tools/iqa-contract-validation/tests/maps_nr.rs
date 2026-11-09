@@ -123,6 +123,9 @@ impl NoReferenceMetric for Piqe {
         opts: EvalOpts<'_>,
     ) -> MetricResult<PiqeResult> {
         opts.checkpoint()?;
+        if p.color_context().is_some() {
+            return fail(MetricError::new(ErrorKind::UnsupportedInput));
+        }
         if opts.diagnostics() {
             return fail(MetricError::new(ErrorKind::UnsupportedRequest));
         }
@@ -218,4 +221,16 @@ fn piqe_native_refusals_keep_classification_and_original_cause() {
         assert_eq!(error.error().kind(), kind);
         assert!(std::error::Error::source(error.error()).is_some());
     }
+}
+
+#[test]
+fn piqe_bridge_refuses_overriding_color_context_without_reinterpretation() {
+    let bytes = fixture(64, 64, 0, false);
+    let p = image(&bytes, 64, 64, 0).with_color_context(std::sync::Arc::new(
+        iqa::zenpixels::ColorContext::from_icc(vec![1, 2, 3]),
+    ));
+    let error = score_image(&mut Piqe(piqe::Piqe::new()), &p, EvalOpts::new())
+        .err()
+        .unwrap();
+    assert_eq!(error.error().kind(), ErrorKind::UnsupportedInput);
 }
