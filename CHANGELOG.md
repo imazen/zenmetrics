@@ -16,6 +16,7 @@ Workspace conventions per the global rules:
 - Sweep validation: add explicit AVIF color-declaration and decode-identity regression gates, with hash-pinned AOM failure and SVT control reproduction; production range-signaling defect remains open ([#112](https://github.com/imazen/zenmetrics/issues/112), `6940e1da`).
 
 - zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.
+- zenmetrics-abstractions: the local plane types are replaced by re-exports of zenpixels 0.3.1 `plane::{PlanarLayout, PlaneSpec, PlaneRole, PlaneEncoding}` and `sample::{ChromaSubsampling, ChromaSiting}`; `PlaneLayout::ycbcr_420`/`gray` become `ycbcr_420_layout`/`gray_layout`. The workspace zenpixels patch moves to `5bf81d64` (feat/plane-types).
 
 - zenmetrics-api: SSIMULACRA2's HDR feeding on `Backend::Cpu` is fast-ssim2 0.9.1's native absolute-light path
   (`hdr::HdrFeeding::NativeNits`, `Metric::compute_native_nits_interleaved_multi`: `compute_ssimulacra2` on an
