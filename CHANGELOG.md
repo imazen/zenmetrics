@@ -13,6 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- Workspace, `margarine`, and `iqa-margarine-validation`: upgrade `archmage`, `archmage-macros`, and `magetypes` to `0.9.33`, advance the `zensim` sibling pin in `ci/sibling-pins.tsv` (`abec986d`), migrate deprecated `magetypes` `mul_add` calls to `mul_add_relaxed` across `brisque`, `hdrvdp`, `iwssim`, `mdctpsnr`, and `nlpd`, and add `CROSS_CONTAINER_OPTS: --security-opt seccomp=unconfined` to the `checkpoint` and `margarine` `cross` CI jobs (`7b38eb5f`).
+
 - Sweep validation: add explicit AVIF color-declaration and decode-identity regression gates, with hash-pinned AOM failure and SVT control reproduction; production range-signaling defect remains open ([#112](https://github.com/imazen/zenmetrics/issues/112), `6940e1da`).
 
 - zenmetrics-abstractions: planar inputs use a local `PlaneLayout` / `PlaneSpec` / `PlaneRole` instead of zenpixels 0.2's `planar::PlaneLayout`, which zenpixels 0.3 removes; `PlaneSemantic::ChromaCb/ChromaCr` become `PlaneRole::Cb/Cr`, and callers import `zenmetrics_abstractions::PlaneLayout` (`ac844219`). Builds and tests on zenpixels 0.2.16 and 0.3.1.
