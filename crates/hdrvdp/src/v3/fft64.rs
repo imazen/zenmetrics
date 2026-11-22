@@ -226,7 +226,10 @@ fn fft8_inner<const RELAXED: bool>(
                 // rounding instead of two.
                 let (tre, tim) = if RELAXED {
                     let nwim = f64x8::splat_t(token, -wi);
-                    (vim.mul_add(nwim, vre * wre), vre.mul_add(wim, vim * wre))
+                    (
+                        vim.mul_add_relaxed(nwim, vre * wre),
+                        vre.mul_add_relaxed(wim, vim * wre),
+                    )
                 } else {
                     (vre * wre - vim * wim, vre * wim + vim * wre)
                 };
@@ -279,7 +282,10 @@ fn blue8_in_inner<const RELAXED: bool>(
         let ci = f64x8::splat_t(token, chirp_im[k]);
         let (tre, tim) = if RELAXED {
             let nci = f64x8::splat_t(token, -chirp_im[k]);
-            (xim.mul_add(nci, xre * cr), xre.mul_add(ci, xim * cr))
+            (
+                xim.mul_add_relaxed(nci, xre * cr),
+                xre.mul_add_relaxed(ci, xim * cr),
+            )
         } else {
             (xre * cr - xim * ci, xre * ci + xim * cr)
         };
@@ -318,7 +324,10 @@ fn blue8_bf_inner<const RELAXED: bool>(
         let bi = f64x8::splat_t(token, bf_im[k]);
         let (tre, tim) = if RELAXED {
             let nbi = f64x8::splat_t(token, -bf_im[k]);
-            (xi.mul_add(nbi, xr * br), xr.mul_add(nbi, xi * nbr))
+            (
+                xi.mul_add_relaxed(nbi, xr * br),
+                xr.mul_add_relaxed(nbi, xi * nbr),
+            )
         } else {
             (xr * br - xi * bi, xi * nbr - xr * bi)
         };
@@ -354,7 +363,10 @@ fn blue8_out_inner<const RELAXED: bool>(
         let ci = f64x8::splat_t(token, chirp_im[k]);
         let (tre, tim) = if RELAXED {
             let nci = f64x8::splat_t(token, -chirp_im[k]);
-            (is.mul_add(nci, rs * cr), rs.mul_add(ci, is * cr))
+            (
+                is.mul_add_relaxed(nci, rs * cr),
+                rs.mul_add_relaxed(ci, is * cr),
+            )
         } else {
             (rs * cr - is * ci, rs * ci + is * cr)
         };

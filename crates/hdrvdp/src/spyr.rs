@@ -200,7 +200,7 @@ fn corr_row1_t<const RELAXED: bool>(
                 let wv = f32x8::splat_t(token, w);
                 let pv = f32x8::load_t(token, (&prow[kx..kx + 8]).try_into().unwrap());
                 av = if RELAXED {
-                    wv.mul_add(pv, av)
+                    wv.mul_add_relaxed(pv, av)
                 } else {
                     av + wv * pv
                 };
@@ -275,7 +275,7 @@ fn corr_rows_t<const RELAXED: bool>(
                     ],
                 );
                 av = if RELAXED {
-                    wv.mul_add(pv, av)
+                    wv.mul_add_relaxed(pv, av)
                 } else {
                     av + wv * pv
                 };
@@ -337,7 +337,7 @@ fn upconv_row_t<const RELAXED: bool>(
                     .unwrap(),
             );
             av = if RELAXED {
-                wv.mul_add(pv, av)
+                wv.mul_add_relaxed(pv, av)
             } else {
                 av + wv * pv
             };

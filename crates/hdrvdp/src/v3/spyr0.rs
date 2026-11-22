@@ -57,7 +57,7 @@ fn corr8_inner<const RELAXED: bool>(
                 let t = f64x8::load_t(token, (&row[x0 + kx..x0 + kx + 8]).try_into().unwrap());
                 let c = f64x8::splat_t(token, frow[kx]);
                 acc = if RELAXED {
-                    c.mul_add(t, acc)
+                    c.mul_add_relaxed(t, acc)
                 } else {
                     acc + c * t
                 };
@@ -88,7 +88,7 @@ fn corr8_inner<const RELAXED: bool>(
             let t = f64x8::load_t(token, (&w[kx * 8..kx * 8 + 8]).try_into().unwrap());
             let c = f64x8::splat_t(token, frow[kx]);
             acc = if RELAXED {
-                c.mul_add(t, acc)
+                c.mul_add_relaxed(t, acc)
             } else {
                 acc + c * t
             };
@@ -135,10 +135,10 @@ fn corr32_inner<const RELAXED: bool>(
                 (&row[x0 + kx + 24..x0 + kx + 32]).try_into().unwrap(),
             );
             if RELAXED {
-                a0 = c.mul_add(t0, a0);
-                a1 = c.mul_add(t1, a1);
-                a2 = c.mul_add(t2, a2);
-                a3 = c.mul_add(t3, a3);
+                a0 = c.mul_add_relaxed(t0, a0);
+                a1 = c.mul_add_relaxed(t1, a1);
+                a2 = c.mul_add_relaxed(t2, a2);
+                a3 = c.mul_add_relaxed(t3, a3);
             } else {
                 a0 += c * t0;
                 a1 += c * t1;
@@ -741,7 +741,7 @@ fn up8_phase_inner<const RELAXED: bool>(
             let c = f64x8::splat_t(token, frow[kx0 + t * step]);
             let w = f64x8::load_t(token, (&brow[base + t..base + t + 8]).try_into().unwrap());
             acc = if RELAXED {
-                c.mul_add(w, acc)
+                c.mul_add_relaxed(w, acc)
             } else {
                 acc + c * w
             };

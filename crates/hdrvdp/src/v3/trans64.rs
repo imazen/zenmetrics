@@ -46,25 +46,25 @@ fn two_pow_k<T: F64x8Backend>(token: T, k: f64x8<T>) -> f64x8<T> {
 fn exp8<T: F64x8Backend>(token: T, x: f64x8<T>) -> f64x8<T> {
     let k = (x * f64x8::splat_t(token, std::f64::consts::LOG2_E)).round();
     // ln2 = LN2_HI + LN2_LO to 26 decimal digits.
-    let r = k.mul_add(f64x8::splat_t(token, -0.693_147_180_369_123_816), x);
-    let r = k.mul_add(f64x8::splat_t(token, -0.000_000_000_190_821_492_927), r);
+    let r = k.mul_add_relaxed(f64x8::splat_t(token, -0.693_147_180_369_123_816), x);
+    let r = k.mul_add_relaxed(f64x8::splat_t(token, -0.000_000_000_190_821_492_927), r);
     // Taylor for exp(r), r ∈ [−0.3466, 0.3466]: the r¹⁵/15! tail is
     // ≈ 1e-19 — well under f64 epsilon.
     let mut p = f64x8::splat_t(token, 1.147_074_559_772_972_5e-11); // 1/14!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.605_904_383_682_161_3e-10)); // 1/13!
-    p = p.mul_add(r, f64x8::splat_t(token, 2.087_675_698_786_81e-9)); // 1/12!
-    p = p.mul_add(r, f64x8::splat_t(token, 2.505_210_838_544_172e-8)); // 1/11!
-    p = p.mul_add(r, f64x8::splat_t(token, 2.755_731_922_398_589e-7)); // 1/10!
-    p = p.mul_add(r, f64x8::splat_t(token, 2.755_731_922_398_589_3e-6)); // 1/9!
-    p = p.mul_add(r, f64x8::splat_t(token, 2.480_158_730_158_73e-5)); // 1/8!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.984_126_984_126_984e-4)); // 1/7!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.388_888_888_888_889e-3)); // 1/6!
-    p = p.mul_add(r, f64x8::splat_t(token, 8.333_333_333_333_333e-3)); // 1/5!
-    p = p.mul_add(r, f64x8::splat_t(token, 4.166_666_666_666_666_4e-2)); // 1/4!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.666_666_666_666_666_7e-1)); // 1/3!
-    p = p.mul_add(r, f64x8::splat_t(token, 5.0e-1)); // 1/2!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.0)); // 1/1!
-    p = p.mul_add(r, f64x8::splat_t(token, 1.0)); // 1/0!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.605_904_383_682_161_3e-10)); // 1/13!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 2.087_675_698_786_81e-9)); // 1/12!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 2.505_210_838_544_172e-8)); // 1/11!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 2.755_731_922_398_589e-7)); // 1/10!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 2.755_731_922_398_589_3e-6)); // 1/9!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 2.480_158_730_158_73e-5)); // 1/8!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.984_126_984_126_984e-4)); // 1/7!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.388_888_888_888_889e-3)); // 1/6!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 8.333_333_333_333_333e-3)); // 1/5!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 4.166_666_666_666_666_4e-2)); // 1/4!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.666_666_666_666_666_7e-1)); // 1/3!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 5.0e-1)); // 1/2!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.0)); // 1/1!
+    p = p.mul_add_relaxed(r, f64x8::splat_t(token, 1.0)); // 1/0!
     let res = p * two_pow_k(token, k);
     let under = k.simd_lt(f64x8::splat_t(token, -1021.5));
     let over = k.simd_gt(f64x8::splat_t(token, 1023.5));
@@ -111,15 +111,15 @@ fn ln8<T: F64x8Backend>(token: T, x: f64x8<T>) -> f64x8<T> {
     let zz = z * z;
     // 2·atanh(z) = 2z·(1 + z²/3 + z⁴/5 + … + z¹⁶/17).
     let mut p = f64x8::splat_t(token, 1.0 / 17.0);
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 15.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 13.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 11.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 9.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 7.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 5.0));
-    p = p.mul_add(zz, f64x8::splat_t(token, 1.0 / 3.0));
-    p = p.mul_add(zz, one);
-    let res = (z + z).mul_add(p, e * f64x8::splat_t(token, std::f64::consts::LN_2));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 15.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 13.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 11.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 9.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 7.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 5.0));
+    p = p.mul_add_relaxed(zz, f64x8::splat_t(token, 1.0 / 3.0));
+    p = p.mul_add_relaxed(zz, one);
+    let res = (z + z).mul_add_relaxed(p, e * f64x8::splat_t(token, std::f64::consts::LN_2));
 
     // Edge lanes: the mantissa/exponent trick computes finite garbage on
     // them, so libm results are blended in — `0 → −∞`, `x < 0 → NaN`,
@@ -340,11 +340,13 @@ fn masked_e_inner(
         let nv = f64x8::load_t(token, n[a..b].try_into().unwrap());
         let smv = f64x8::load_t(token, sm[a..b].try_into().unwrap());
         let xnv = f64x8::load_t(token, xn[a..b].try_into().unwrap());
-        let n_mask = kxn.mul_add(
+        let n_mask = kxn.mul_add_relaxed(
             abs_pow8(token, xnv, qv),
-            ks.mul_add(abs_pow8(token, smv, qv), kxo),
+            ks.mul_add_relaxed(abs_pow8(token, smv, qv), kxo),
         );
-        let den = n_mask.mul_add(n_mask, raw_pow8(token, nv, p2v)).sqrt();
+        let den = n_mask
+            .mul_add_relaxed(n_mask, raw_pow8(token, nv, p2v))
+            .sqrt();
         (ev / den).store((&mut out[a..b]).try_into().unwrap());
     }
 }

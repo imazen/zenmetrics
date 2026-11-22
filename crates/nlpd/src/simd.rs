@@ -8,7 +8,7 @@ fn squared_difference_inner(token: Token, a: &[f32], b: &[f32]) -> f64 {
     let mut sum = f32x8::zero_t(token);
     for (aa, bb) in ac.iter().zip(bc) {
         let d = f32x8::load_t(token, aa) - f32x8::load_t(token, bb);
-        sum = d.mul_add(d, sum);
+        sum = d.mul_add_relaxed(d, sum);
     }
     let mut result = sum.to_array().into_iter().map(f64::from).sum::<f64>();
     for (&a, &b) in at.iter().zip(bt) {
@@ -47,7 +47,7 @@ fn filter5_vertical_inner(
         for (i, chunk) in dst_chunks.iter_mut().enumerate() {
             let mut sum = f32x8::zero_t(token);
             for k in 0..5 {
-                sum = f32x8::load_t(token, &row_parts[k].0[i]).mul_add(weights[k], sum);
+                sum = f32x8::load_t(token, &row_parts[k].0[i]).mul_add_relaxed(weights[k], sum);
             }
             sum.store(chunk);
         }
@@ -494,7 +494,7 @@ fn normalize_filtered_inner(
                         let mut sum = f32x8::zero_t(token);
                         for k in 0..5 {
                             let values = &row_parts[k].0[i];
-                            sum = f32x8::load_t(token, values).mul_add(weights[k], sum);
+                            sum = f32x8::load_t(token, values).mul_add_relaxed(weights[k], sum);
                         }
                         let values = &original_parts.0[i];
                         (f32x8::load_t(token, values) - sum).store(chunk);
@@ -520,7 +520,7 @@ fn normalize_filtered_inner(
                             let mut sum = f32x8::zero_t(token);
                             for k in 0..5 {
                                 let values = &row_parts[k].0[i];
-                                sum = f32x8::load_t(token, values).mul_add(weights[k], sum);
+                                sum = f32x8::load_t(token, values).mul_add_relaxed(weights[k], sum);
                             }
                             sum.store(chunk);
                         }

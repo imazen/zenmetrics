@@ -181,8 +181,8 @@ ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
 # Common deps.
-archmage = { version = "0.9.32", features = ["macros", "avx512"] }
-magetypes = { version = "0.9.32", features = ["avx512"] }
+archmage = { version = "0.9.33", features = ["macros", "avx512"] }
+magetypes = { version = "0.9.33", features = ["avx512"] }
 bytemuck = "1"
 clap = { version = "4", default-features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
 csv = "1"
@@ -311,9 +311,6 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f62
 # Equivalent git ref (use when the sibling checkout is gone):
 #   { git = "https://github.com/imazen/zensimx", rev = "<commit>" }
 zensim = { path = "../zensimx/zensim" }
-# 0.9.31-beta lives as a direct git dep in [workspace.dependencies] (see
-# above) — a [patch] here would force single-source resolution and fail:
-# the prerelease can't satisfy sibling crates' ^0.9.x reqs.
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no

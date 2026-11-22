@@ -246,7 +246,7 @@ fn lut_plane_inner(
         let av = f32x8::from_array_t(token, a);
         let bv = f32x8::from_array_t(token, b);
         (bv - av)
-            .mul_add(t, av)
+            .mul_add_relaxed(t, av)
             .store((&mut out[i..i + 8]).try_into().unwrap());
         i += 8;
     }

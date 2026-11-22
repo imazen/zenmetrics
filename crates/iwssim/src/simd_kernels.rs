@@ -215,7 +215,7 @@ fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
     for (cc, ic) in cs_chunks.iter().zip(iw_chunks.iter()) {
         let c_v = f32x8::load_t(token, cc);
         let i_v = f32x8::load_t(token, ic);
-        acc_csiw = c_v.mul_add(i_v, acc_csiw);
+        acc_csiw = c_v.mul_add_relaxed(i_v, acc_csiw);
         acc_iw += i_v;
     }
     let mut sum_csiw = 0.0_f64;
@@ -270,7 +270,7 @@ fn weighted_sum_pair_iw_strided_inner(
             }
             f32x8::load_t(token, &lanes)
         };
-        acc_csiw = c_v.mul_add(i_v, acc_csiw);
+        acc_csiw = c_v.mul_add_relaxed(i_v, acc_csiw);
         acc_iw += i_v;
     }
     let mut sum_csiw = 0.0_f64;
@@ -415,9 +415,9 @@ fn quad_form_row_inner(
         for i in 0..big_n {
             let mut inner = f32x8::zero_t(token);
             for j in 0..big_n {
-                inner = yv[j].mul_add(cinv_v[i * big_n + j], inner);
+                inner = yv[j].mul_add_relaxed(cinv_v[i * big_n + j], inner);
             }
-            acc = yv[i].mul_add(inner, acc);
+            acc = yv[i].mul_add_relaxed(inner, acc);
         }
         (acc / nfv).store((&mut out[x..x + 8]).try_into().unwrap());
     }
@@ -531,7 +531,7 @@ fn ssim_gauss_h_inner(
                     .try_into()
                     .unwrap();
                 let v = f32x8::load_t(token, arr);
-                acc = v.mul_add(k_v[k], acc);
+                acc = v.mul_add_relaxed(k_v[k], acc);
             }
             let dst_slot: &mut [f32; 8] = (&mut dst[out_row_off + ox..out_row_off + ox + 8])
                 .try_into()
@@ -590,7 +590,7 @@ fn ssim_gauss_product_h_inner(
         for (i, chunk) in chunks.iter_mut().enumerate() {
             let mut sum = f32x8::zero_t(token);
             for k in 0..11 {
-                sum = f32x8::load_t(token, &taps[k].0[i]).mul_add(weights[k], sum);
+                sum = f32x8::load_t(token, &taps[k].0[i]).mul_add_relaxed(weights[k], sum);
             }
             sum.store(chunk);
         }
@@ -666,10 +666,10 @@ fn ssim_gauss_v_inner(
             let mut a2 = f32x8::zero_t(token);
             let mut a3 = f32x8::zero_t(token);
             for k in 0..11 {
-                a0 = s[k].mul_add(k_v[k], a0);
-                a1 = s[k + 1].mul_add(k_v[k], a1);
-                a2 = s[k + 2].mul_add(k_v[k], a2);
-                a3 = s[k + 3].mul_add(k_v[k], a3);
+                a0 = s[k].mul_add_relaxed(k_v[k], a0);
+                a1 = s[k + 1].mul_add_relaxed(k_v[k], a1);
+                a2 = s[k + 2].mul_add_relaxed(k_v[k], a2);
+                a3 = s[k + 3].mul_add_relaxed(k_v[k], a3);
             }
             a0.store((&mut dst[oy * w + x..oy * w + x + 8]).try_into().unwrap());
             a1.store(
@@ -714,7 +714,7 @@ fn ssim_gauss_v_inner(
                     .try_into()
                     .unwrap();
                 let v = f32x8::load_t(token, arr);
-                acc = v.mul_add(k_v[k], acc);
+                acc = v.mul_add_relaxed(k_v[k], acc);
             }
             let dst_slot: &mut [f32; 8] = (&mut dst[out_row_off + x..out_row_off + x + 8])
                 .try_into()
@@ -1002,9 +1002,9 @@ fn box_gain_row_inner(
                 let yv = f32x8::load_t(token, (&y[off..off + 8]).try_into().unwrap());
                 sx += xv;
                 sy += yv;
-                sxx = xv.mul_add(xv, sxx);
-                syy = yv.mul_add(yv, syy);
-                sxy = xv.mul_add(yv, sxy);
+                sxx = xv.mul_add_relaxed(xv, sxx);
+                syy = yv.mul_add_relaxed(yv, syy);
+                sxy = xv.mul_add_relaxed(yv, sxy);
             }
         }
         let mx = sx * inv9;
@@ -1194,7 +1194,7 @@ fn corr_dn_h_inner(
             for t in 0..BINOM5_LEN {
                 let off = c - BINOM5_RADIUS as usize + t;
                 let v = f32x8::load_t(token, (&row[off..off + 8]).try_into().unwrap());
-                acc = v.mul_add(k[t], acc);
+                acc = v.mul_add_relaxed(k[t], acc);
             }
             acc.store((&mut corr_row[c..c + 8]).try_into().unwrap());
             c += 8;
@@ -1244,7 +1244,7 @@ fn corr_dn_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
             for t in 0..BINOM5_LEN {
                 let off = ys[t] * w + x;
                 let v = f32x8::load_t(token, (&src[off..off + 8]).try_into().unwrap());
-                acc = v.mul_add(k[t], acc);
+                acc = v.mul_add_relaxed(k[t], acc);
             }
             acc.store((&mut dst_row[x..x + 8]).try_into().unwrap());
         }
@@ -1308,8 +1308,11 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
                     token,
                     (&src[rc * w + x..rc * w + x + 8]).try_into().unwrap(),
                 );
-                let acc_e = cv.mul_add(k4, b.mul_add(k2, a.mul_add(k0, f32x8::zero_t(token))));
-                let acc_o = cv.mul_add(k3, b.mul_add(k1, f32x8::zero_t(token)));
+                let acc_e = cv.mul_add_relaxed(
+                    k4,
+                    b.mul_add_relaxed(k2, a.mul_add_relaxed(k0, f32x8::zero_t(token))),
+                );
+                let acc_o = cv.mul_add_relaxed(k3, b.mul_add_relaxed(k1, f32x8::zero_t(token)));
                 acc_e.store((&mut dst[dst_e + x..dst_e + x + 8]).try_into().unwrap());
                 acc_o.store((&mut dst[dst_o + x..dst_o + x + 8]).try_into().unwrap());
             }
@@ -1345,14 +1348,14 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
                     token,
                     (&src[rb * w + x..rb * w + x + 8]).try_into().unwrap(),
                 );
-                let mut acc = a.mul_add(ka, f32x8::zero_t(token));
-                acc = b.mul_add(kb, acc);
+                let mut acc = a.mul_add_relaxed(ka, f32x8::zero_t(token));
+                acc = b.mul_add_relaxed(kb, acc);
                 if oy.is_multiple_of(2) {
                     let cv = f32x8::load_t(
                         token,
                         (&src[rc * w + x..rc * w + x + 8]).try_into().unwrap(),
                     );
-                    acc = cv.mul_add(kc, acc);
+                    acc = cv.mul_add_relaxed(kc, acc);
                 }
                 acc.store((&mut dst_row[x..x + 8]).try_into().unwrap());
             }
@@ -1464,11 +1467,11 @@ fn up_conv_h_inner(
             let b = f32x8::load_t(token, (&row[m..m + 8]).try_into().unwrap());
             let c = f32x8::load_t(token, (&row[m + 1..m + 9]).try_into().unwrap());
             // Ascending-tap accumulation order (modulo FMA).
-            let mut ev = a.mul_add(k0, f32x8::zero_t(token));
-            ev = b.mul_add(k2, ev);
-            ev = c.mul_add(k4, ev);
-            let mut ov = b.mul_add(k1, f32x8::zero_t(token));
-            ov = c.mul_add(k3, ov);
+            let mut ev = a.mul_add_relaxed(k0, f32x8::zero_t(token));
+            ev = b.mul_add_relaxed(k2, ev);
+            ev = c.mul_add_relaxed(k4, ev);
+            let mut ov = b.mul_add_relaxed(k1, f32x8::zero_t(token));
+            ov = c.mul_add_relaxed(k3, ov);
             let mut ea = [0.0_f32; 8];
             let mut oa = [0.0_f32; 8];
             ev.store(&mut ea);
@@ -1549,12 +1552,12 @@ fn infow_kernel<T: magetypes::simd::backends::F32x8Convert>(
         let gv = F32x8::<T>::load_t(token, (&g[i..i + 8]).try_into().unwrap());
         let vvv = F32x8::<T>::load_t(token, (&vv[i..i + 8]).try_into().unwrap());
         let ssv = F32x8::<T>::load_t(token, (&ss[i..i + 8]).try_into().unwrap());
-        let one_plus_g2 = gv.mul_add(gv, one);
+        let one_plus_g2 = gv.mul_add_relaxed(gv, one);
         let common_num = (vvv + one_plus_g2 * s2v) * ssv;
         let sn2_vv = s2v * vvv;
         let mut acc = zero;
         for lv in lamv.iter().take(lambdas.len()) {
-            let arg = common_num.mul_add(*lv, sn2_vv) * inv_s4v;
+            let arg = common_num.mul_add_relaxed(*lv, sn2_vv) * inv_s4v;
             acc += (one + arg).log2_midp();
         }
         // `acc >= tol → acc else 0` — matches `if acc >= TOL`.

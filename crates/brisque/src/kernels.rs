@@ -91,10 +91,10 @@ macro_rules! conv7_cols_body {
                     let kv = $F32::splat_t($token, $k[i * 7 + j]);
                     let xv =
                         $F32::load_t($token, &$x[base + j..base + j + $LANES].try_into().unwrap());
-                    a = kv.mul_add(xv, a);
+                    a = kv.mul_add_relaxed(xv, a);
                     // x² conv reads xv·xv — identical product bits to the
                     // old materialized x² plane.
-                    b = kv.mul_add(xv * xv, b);
+                    b = kv.mul_add_relaxed(xv * xv, b);
                 }
             }
             a.store((&mut $mu[c0..c0 + $LANES]).try_into().unwrap());
@@ -211,7 +211,7 @@ macro_rules! luma_cols_body {
             // m01 = r*0.299 + g*0.587 stays two roundings (mul, then add) —
             // the oracle does not fuse it — then one FMA and ties-even round.
             let m01 = r * c0299 + g * c0587;
-            let y = b.mul_add(c0114, m01).round();
+            let y = b.mul_add_relaxed(c0114, m01).round();
             y.store((&mut $out[x0..x0 + $LANES]).try_into().unwrap());
         }
         luma_cols_scalar($rgb, chunks * $LANES, n, $out);

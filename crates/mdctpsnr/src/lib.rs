@@ -663,9 +663,9 @@ fn compute_lowpass_v3(token: X64V3Token, mask_obj: &mut BandMask) {
                 for i in 0..MASK_SIZE {
                     let ring = &mask_obj.in_ring[i];
                     let r = |j: usize| V::load_t(token, ring[k0 + j..][..8].first_chunk().unwrap());
-                    let t = r(4).mul_add(V::splat_t(token, cf[i][4]), {
-                        r(0).mul_add(V::splat_t(token, cf[i][0]), r(1) * cf[i][1])
-                    }) + r(2).mul_add(V::splat_t(token, cf[i][2]), r(3) * cf[i][3]);
+                    let t = r(4).mul_add_relaxed(V::splat_t(token, cf[i][4]), {
+                        r(0).mul_add_relaxed(V::splat_t(token, cf[i][0]), r(1) * cf[i][1])
+                    }) + r(2).mul_add_relaxed(V::splat_t(token, cf[i][2]), r(3) * cf[i][3]);
                     acc += t;
                 }
                 acc.store(out[k0..][..8].first_chunk_mut().unwrap());
@@ -1545,19 +1545,19 @@ fn aan_1d_x8(token: X64V3Token, b: &[f32x8<X64V3Token>; 8]) -> [f32x8<X64V3Token
     out[4] = tmp10 - tmp11;
 
     let z1n = tmp1 + (tmp13 - tmp2);
-    out[2] = z1n.mul_add(s22, tmp13);
-    out[6] = (-z1n).mul_add(s22, tmp13);
+    out[2] = z1n.mul_add_relaxed(s22, tmp13);
+    out[6] = (-z1n).mul_add_relaxed(s22, tmp13);
 
     let o10 = b[3] + (tmp5 - b[4]);
     let o11 = tmp6 + tmp5;
     let o12 = tmp6 + tmp7;
 
     let z5 = (o10 - o12) * C1;
-    let z2 = o10.mul_add(c2v, z5);
-    let z4 = o12.mul_add(c3v, z5);
+    let z2 = o10.mul_add_relaxed(c2v, z5);
+    let z4 = o12.mul_add_relaxed(c3v, z5);
 
-    let z11 = o11.mul_add(s22, tmp7);
-    let z13 = (-o11).mul_add(s22, tmp7);
+    let z11 = o11.mul_add_relaxed(s22, tmp7);
+    let z13 = (-o11).mul_add_relaxed(s22, tmp7);
 
     out[5] = z13 + z2;
     out[3] = z13 - z2;
@@ -1607,19 +1607,19 @@ fn aan_1d_x8_neon(token: NeonToken, b: &[f32x8<NeonToken>; 8]) -> [f32x8<NeonTok
     out[4] = tmp10 - tmp11;
 
     let z1n = tmp1 + (tmp13 - tmp2);
-    out[2] = z1n.mul_add(s22, tmp13);
-    out[6] = (-z1n).mul_add(s22, tmp13);
+    out[2] = z1n.mul_add_relaxed(s22, tmp13);
+    out[6] = (-z1n).mul_add_relaxed(s22, tmp13);
 
     let o10 = b[3] + (tmp5 - b[4]);
     let o11 = tmp6 + tmp5;
     let o12 = tmp6 + tmp7;
 
     let z5 = (o10 - o12) * C1;
-    let z2 = o10.mul_add(c2v, z5);
-    let z4 = o12.mul_add(c3v, z5);
+    let z2 = o10.mul_add_relaxed(c2v, z5);
+    let z4 = o12.mul_add_relaxed(c3v, z5);
 
-    let z11 = o11.mul_add(s22, tmp7);
-    let z13 = (-o11).mul_add(s22, tmp7);
+    let z11 = o11.mul_add_relaxed(s22, tmp7);
+    let z13 = (-o11).mul_add_relaxed(s22, tmp7);
 
     out[5] = z13 + z2;
     out[3] = z13 - z2;
@@ -1649,7 +1649,7 @@ fn run_dct_soa8_neon(token: NeonToken, comp: &mut Component, i0: usize) {
     for y in 0..8 {
         for x in 0..8 {
             let w = WINDOW[y][x];
-            b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
+            b[y][x] = b[y][x].mul_add_relaxed(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
     // Pass 1 (vertical): `vx[x][k]` — built by `from_fn`, see the x86
@@ -1714,7 +1714,7 @@ fn run_dct_soa8(token: X64V3Token, comp: &mut Component, i0: usize) {
     for y in 0..8 {
         for x in 0..8 {
             let w = WINDOW[y][x];
-            b[y][x] = b[y][x].mul_add(V::splat_t(token, w), avg * (1.0 - w));
+            b[y][x] = b[y][x].mul_add_relaxed(V::splat_t(token, w), avg * (1.0 - w));
         }
     }
     // Pass 1 (vertical): `aan_1d` per column — `vx[x][k]` lane `j` is

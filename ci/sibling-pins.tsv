@@ -127,7 +127,7 @@ ravif	https://github.com/imazen/cavif-rs.git	../ravif	cb06487cfc8013413f5cb268a9
 # `feature-rev` arm needs `FormulaRevision::Rev7` (the `rowlanes`
 # era, landed bad544a3) — 96c3c9bb tops out at Rev5. Also pulls the
 # Rev6 `globaff`/ringhpm-era groundwork the Rev7 measure builds on.
-zensim	https://github.com/imazen/zensimx.git	../zensimx	f3bc01a9ac8fd664c4798250aab628c6e050243c	-
+zensim	https://github.com/imazen/zensimx.git	../zensimx	abec986d1000472c62334272aee165438e693028	-
 # butteraugli's local layout is a Cargo workspace at
 # ~/work/butteraugli/ with the package at
 # ~/work/butteraugli/butteraugli/. The workspace's
