@@ -7,7 +7,7 @@
 
 use brisque::{Brisque, JND};
 use std::io::BufRead;
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use za::{ErrorKind, EvalOpts, Image, NoReferenceMetric};
 use zenmetrics_abstractions as za;
 
@@ -23,7 +23,7 @@ fn score_path(path: &std::path::Path) -> (u32, u32, Result<f64, ErrorKind>) {
         .unwrap_or_else(|e| panic!("decode {path}: {e}"))
         .to_rgb8();
     let (w, h) = img.dimensions();
-    let slice = PixelSlice::new(&img, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let slice = PixelView::new(&img, w, h, w as usize * 3, &formats::RGB8_SRGB).unwrap();
     let r = match Brisque::new().evaluate_image(Image::from(slice), EvalOpts::new()) {
         Ok(eval) => Ok(eval.score()),
         Err(e) => Err(e.error().kind()),

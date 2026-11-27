@@ -197,6 +197,9 @@ impl Topiq {
     }
 }
 
+za::impl_zenpsy_metric!(Topiq);
+za::impl_zenpsy_prepare_reference!(Topiq);
+
 impl za::Metric for Topiq {
     fn id(&self) -> za::MetricId {
         let col = self.variant.column();

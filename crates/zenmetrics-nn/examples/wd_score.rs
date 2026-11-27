@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{Engine, WassersteinDistortion};
 
@@ -28,8 +28,7 @@ fn load(path: &str) -> (Vec<u8>, usize, usize) {
 }
 fn image(data: &[u8], w: usize, h: usize) -> Image<'_> {
     Image::from(
-        PixelSlice::new(data, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
-            .expect("pixel view"),
+        PixelView::new(data, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).expect("pixel view"),
     )
 }
 fn main() {

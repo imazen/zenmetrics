@@ -2,7 +2,7 @@
 //! reusable export buffer. This is not a claim that the kernel exports no copy.
 use zenpsy_api::{
     Direction, MapGrid, MapView, ScoreSpec,
-    zenpixels::plane::{AnyPlane, PlaneRef},
+    zenpixels::{PlaneFormat, PlaneRole, PlaneView, SampleStride, SampleType},
 };
 
 #[test]
@@ -73,17 +73,26 @@ fn jxl_shape_keeps_float_inputs_and_reuses_map_export_storage() {
         assert_eq!(map.as_ptr(), allocation);
         let borrowed = MapView::new(
             &SPEC,
-            AnyPlane::F32(PlaneRef::new(&map[..], w, h, w).unwrap()),
+            PlaneView::from_samples_strided(
+                &map[..],
+                w as u32,
+                h as u32,
+                SampleStride(w),
+                PlaneFormat::new(PlaneRole::Y, SampleType::F32),
+            )
+            .unwrap(),
             MapGrid::new(w as u32, h as u32).expect("native map geometry"),
         );
-        let AnyPlane::F32(view) = borrowed.values else {
-            panic!("native f32 map")
-        };
-        assert_eq!(view.strided_samples().as_ptr(), allocation);
+        assert_eq!(borrowed.values.format().sample, SampleType::F32);
+        assert_eq!(borrowed.values.data().as_ptr(), allocation as *const u8);
         assert_eq!(
-            view.rows()
-                .flatten()
-                .map(|v| v.to_bits())
+            (0..borrowed.values.height())
+                .flat_map(|y| borrowed
+                    .values
+                    .row_as::<f32>(y)
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.to_bits()))
                 .collect::<Vec<_>>(),
             expected
                 .diffmap

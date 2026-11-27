@@ -3,7 +3,7 @@
 //! local change can reach.
 
 use nlpd::Nlpd;
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{self as za, Metric as _};
 
 fn textured(w: usize, h: usize, seed: u32) -> Vec<u8> {
@@ -11,7 +11,7 @@ fn textured(w: usize, h: usize, seed: u32) -> Vec<u8> {
 }
 
 fn image(px: &[u8], w: usize, h: usize, stride: usize) -> za::Image<'_> {
-    PixelSlice::new(px, w as u32, h as u32, stride, PixelDescriptor::RGB8_SRGB)
+    PixelView::new(px, w as u32, h as u32, stride, &formats::RGB8_SRGB)
         .unwrap()
         .into()
 }

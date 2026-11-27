@@ -249,6 +249,9 @@ impl Ckdn {
     }
 }
 
+za::impl_zenpsy_metric!(Ckdn);
+za::impl_zenpsy_prepare_reference!(Ckdn);
+
 impl za::Metric for Ckdn {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

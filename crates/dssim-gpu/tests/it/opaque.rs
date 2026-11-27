@@ -76,14 +76,14 @@ fn opaque_srgb_u8_matches_typed() {
 #[cfg(feature = "pixels")]
 #[test]
 fn opaque_pixels_handles_stride() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let w = 64_u32;
     let h = 64_u32;
     let tight = make_image(w, h, 11);
     let dist_tight = make_image(w, h, 23);
 
-    let descriptor = PixelDescriptor::RGB8_SRGB;
+    let descriptor = &formats::RGB8_SRGB;
     let row_bytes = w as usize * 3;
 
     // Build a strided buffer with padding that keeps pixel alignment
@@ -104,18 +104,17 @@ fn opaque_pixels_handles_stride() {
     let mut opaque = DssimOpaque::new(BACKEND_E, w, h, DssimParams::DEFAULT).expect("opaque new");
 
     // Tight slice path.
-    let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref slice");
+    let r_tight = PixelView::new(&tight, w, h, row_bytes, descriptor).expect("tight ref slice");
     let d_tight =
-        PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist slice");
+        PixelView::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist slice");
     let tight_score = opaque
         .compute_pixels(r_tight, d_tight)
         .expect("tight compute_pixels");
 
     // Strided slice path.
-    let r_padded =
-        PixelSlice::new(&padded_ref, w, h, stride, descriptor).expect("padded ref slice");
+    let r_padded = PixelView::new(&padded_ref, w, h, stride, descriptor).expect("padded ref slice");
     let d_padded =
-        PixelSlice::new(&padded_dis, w, h, stride, descriptor).expect("padded dist slice");
+        PixelView::new(&padded_dis, w, h, stride, descriptor).expect("padded dist slice");
     let padded_score = opaque
         .compute_pixels(r_padded, d_padded)
         .expect("padded compute_pixels");

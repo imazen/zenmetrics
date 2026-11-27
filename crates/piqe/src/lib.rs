@@ -60,7 +60,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use za::zenpixels::PixelDescriptor;
+use za::zenpixels::{PixelFormat, formats};
 use zenmetrics_abstractions as za;
 
 mod kernels;
@@ -130,7 +130,7 @@ impl za::NoReferenceMetric for Piqe {
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
         let d = format.packed();
-        d == Some(PixelDescriptor::RGB8_SRGB) || d == Some(PixelDescriptor::GRAY8)
+        d == Some(&formats::RGB8_SRGB) || d == Some(&formats::GRAY8_SRGB)
     }
 
     fn evaluate_image(
@@ -156,22 +156,24 @@ impl za::NoReferenceMetric for Piqe {
     }
 }
 
-/// Borrow the packed slice when its descriptor is `desc`.
+za::impl_zenpsy_no_reference!(Piqe);
+
+/// Borrow the packed view when its format is `desc`.
 fn packed_as<'a>(
     image: &'a za::Image<'a>,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
 ) -> Option<(&'a [u8], usize, usize, usize)> {
     let za::Image::Packed(s) = image else {
         return None;
     };
-    if s.descriptor() != desc {
+    if s.format() != desc {
         return None;
     }
     Some((
         s.as_strided_bytes(),
         s.width() as usize,
-        s.rows() as usize,
-        s.stride(),
+        s.height() as usize,
+        s.stride_bytes(),
     ))
 }
 
@@ -179,7 +181,7 @@ fn packed_as<'a>(
 /// RGB8 image (15-bit fixed point, bit-exact vs `cv2.cvtColor`), or the
 /// `GRAY8` plane verbatim.
 fn gray_u8(image: &za::Image<'_>) -> za::MetricResult<(Vec<u8>, usize, usize)> {
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::RGB8_SRGB) {
         let mut gray = Vec::with_capacity(w * h);
         for y in 0..h {
             let row = &px[y * stride..y * stride + w * 3];
@@ -194,7 +196,7 @@ fn gray_u8(image: &za::Image<'_>) -> za::MetricResult<(Vec<u8>, usize, usize)> {
         }
         return Ok((gray, w, h));
     }
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::GRAY8) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::GRAY8_SRGB) {
         let mut gray = Vec::with_capacity(w * h);
         for y in 0..h {
             gray.extend_from_slice(&px[y * stride..y * stride + w]);
@@ -203,7 +205,7 @@ fn gray_u8(image: &za::Image<'_>) -> za::MetricResult<(Vec<u8>, usize, usize)> {
     }
     za::fail(za::unsupported(
         &image.format(),
-        "packed RGB8_SRGB or GRAY8",
+        "packed RGB8_SRGB or GRAY8_SRGB",
     ))
 }
 

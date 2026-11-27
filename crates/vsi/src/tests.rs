@@ -377,7 +377,7 @@ fn fixed_factor_matches_auto_and_strided() {
 
 #[test]
 fn downscale_identity_preserves_auto_and_distinguishes_factors() {
-    use zenmetrics_abstractions::Metric as _;
+    use zenmetrics_abstractions::{Metric as _, MetricIdExt as _};
     // Auto fingerprint from base 765a2f9c's identity fields and FNV-1a encoding.
     let auto = Vsi::default().id().fingerprint();
     assert_eq!(auto, 0x57ad6b5bda41d80a);

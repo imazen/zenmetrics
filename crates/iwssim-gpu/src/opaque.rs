@@ -8,7 +8,7 @@ use crate::pipeline::Iwssim;
 use crate::{IwssimConfig, IwssimStrategy, NUM_SCALES, Result};
 
 #[cfg(feature = "pixels")]
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// The backend selector and uniform score type are shared verbatim
 /// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
@@ -430,7 +430,7 @@ impl IwssimOpaque {
 
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -509,22 +509,24 @@ impl IwssimOpaque {
 }
 
 #[cfg(feature = "pixels")]
-pub(crate) fn to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    expected_w: u32,
-    expected_h: u32,
-) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+pub(crate) fn to_srgb_rgb8(s: &PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         let expected = (expected_w as usize) * (expected_h as usize) * 3;
-        let got = (s.width() as usize) * (s.rows() as usize) * 3;
+        let got = (s.width() as usize) * (s.height() as usize) * 3;
         return Err(Error::DimensionMismatch { expected, got });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w as usize) * (expected_h as usize) * 3,
+                got: (s.width() as usize) * (s.height() as usize) * 3,
+            });
     }
     zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
-        got: (s.width() as usize) * (s.rows() as usize) * 3,
+        got: (s.width() as usize) * (s.height() as usize) * 3,
     })
 }

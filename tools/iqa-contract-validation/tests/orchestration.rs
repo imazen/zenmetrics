@@ -3,19 +3,12 @@ use std::{cell::Cell, rc::Rc};
 use zenmetrics_orchestrator::psy::{ContractExecutor, Fallback};
 use zenpsy_api::{
     self as iqa,
-    zenpixels::{PixelDescriptor, PixelSlice},
+    zenpixels::{PixelView, formats},
     *,
 };
 
-fn image(bytes: &[u8], w: u32, h: u32, pad: usize) -> PixelSlice<'_> {
-    PixelSlice::new(
-        bytes,
-        w,
-        h,
-        w as usize * 3 + pad,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .unwrap()
+fn image(bytes: &[u8], w: u32, h: u32, pad: usize) -> PixelView<'_> {
+    PixelView::new(bytes, w, h, w as usize * 3 + pad, &formats::RGB8_SRGB).unwrap()
 }
 fn real<M: PrepareReference + 'static>(factory: fn() -> M)
 where
@@ -98,8 +91,8 @@ impl Metric for Control {
     }
     fn evaluate(
         &mut self,
-        _: &PixelSlice<'_>,
-        d: &PixelSlice<'_>,
+        _: &PixelView<'_>,
+        d: &PixelView<'_>,
         _: EvalOpts<'_>,
     ) -> MetricResult<ResultData> {
         self.calls += 1;
@@ -115,14 +108,14 @@ impl Metric for Control {
 }
 impl PrepareReference for Control {
     type Prepared<'a> = &'a mut Self;
-    fn warm_reference(&mut self, _: &PixelSlice<'_>, _: EvalOpts<'_>) -> MetricResult<&mut Self> {
+    fn warm_reference(&mut self, _: &PixelView<'_>, _: EvalOpts<'_>) -> MetricResult<&mut Self> {
         self.prepared.set(self.prepared.get() + 1);
         Ok(self)
     }
 }
 impl WarmReference for &mut Control {
     type Output = ResultData;
-    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<ResultData> {
+    fn evaluate(&mut self, d: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<ResultData> {
         Metric::evaluate(*self, d, d, opts)
     }
 }
@@ -139,7 +132,7 @@ fn control(
         config: "same",
     }
 }
-fn inputs() -> (PixelSlice<'static>, Vec<PixelSlice<'static>>) {
+fn inputs() -> (PixelView<'static>, Vec<PixelView<'static>>) {
     (
         image(&[0; 12], 2, 2, 0),
         vec![

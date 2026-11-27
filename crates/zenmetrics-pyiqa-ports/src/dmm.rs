@@ -372,6 +372,7 @@ impl Port for DmmPyiqa {
 }
 
 impl_metric!(DmmPyiqa);
+zenmetrics_abstractions::impl_zenpsy_prepare_reference!(DmmPyiqa);
 
 #[cfg(test)]
 mod tests {

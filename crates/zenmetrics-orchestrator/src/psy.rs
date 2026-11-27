@@ -7,7 +7,7 @@
 //! Resource fallback is explicit, preserves completed results and records the
 //! actual implementation of every result. Cancellation and computation failures
 //! stop the batch. Existing GPU admission/benchmark scheduling remains separate.
-use iqa::{whereat::At, zenpixels::PixelSlice};
+use iqa::{whereat::At, zenpixels::PixelView};
 use zenpsy_api::{
     self as iqa, ErrorKind, EvalOpts, Evaluation, Metric, MetricError, MetricId, MetricResult,
     PrepareReference, ScoreSpec,
@@ -94,8 +94,8 @@ trait Driver {
     fn id(&self) -> MetricId;
     fn run(
         &mut self,
-        reference: &PixelSlice<'_>,
-        candidates: &[PixelSlice<'_>],
+        reference: &PixelView<'_>,
+        candidates: &[PixelView<'_>],
         opts: EvalOpts<'_>,
     ) -> Partial;
 }
@@ -132,7 +132,7 @@ impl Driver for Cold {
     fn id(&self) -> MetricId {
         self.0.id()
     }
-    fn run(&mut self, r: &PixelSlice<'_>, ds: &[PixelSlice<'_>], opts: EvalOpts<'_>) -> Partial {
+    fn run(&mut self, r: &PixelView<'_>, ds: &[PixelView<'_>], opts: EvalOpts<'_>) -> Partial {
         collect(ds.iter().map(|d| iqa::score(&mut self.0, r, d, opts)))
     }
 }
@@ -141,7 +141,7 @@ impl Driver for Prepared {
     fn id(&self) -> MetricId {
         self.0.id()
     }
-    fn run(&mut self, r: &PixelSlice<'_>, ds: &[PixelSlice<'_>], opts: EvalOpts<'_>) -> Partial {
+    fn run(&mut self, r: &PixelView<'_>, ds: &[PixelView<'_>], opts: EvalOpts<'_>) -> Partial {
         match self.0.prepare(r, opts) {
             Ok(mut warm) => collect(ds.iter().map(|d| warm.evaluate(d, opts))),
             Err(error) => Partial {
@@ -204,8 +204,8 @@ impl ContractExecutor {
     #[track_caller]
     pub fn run(
         &mut self,
-        r: &PixelSlice<'_>,
-        ds: &[PixelSlice<'_>],
+        r: &PixelView<'_>,
+        ds: &[PixelView<'_>],
         opts: EvalOpts<'_>,
         fallback: Fallback,
     ) -> MetricResult<BatchReport> {

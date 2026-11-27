@@ -554,6 +554,8 @@ impl Fsim {
     }
 }
 
+za::impl_zenpsy_metric!(Fsim);
+
 impl za::Metric for Fsim {
     fn id(&self) -> za::MetricId {
         let id = za::MetricId::new("fsim", za::implementation!(SCORE_REVISION))
@@ -585,14 +587,27 @@ impl za::Metric for Fsim {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
+        let (rp, dp, stride) = if r.stride == d.stride {
+            (
+                alloc::borrow::Cow::Borrowed(r.pixels),
+                alloc::borrow::Cow::Borrowed(d.pixels),
+                r.stride,
+            )
+        } else {
+            (
+                za::contiguous_rgb8(&r),
+                za::contiguous_rgb8(&d),
+                r.width * 3,
+            )
+        };
         if let Some(req) = opts.map {
             let dm = self
-                .diffmap_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+                .diffmap_rgb8(&rp, &dp, r.width, r.height, stride)
                 .metric_err_with("fsim", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
         let s = self
-            .score_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+            .score_rgb8(&rp, &dp, r.width, r.height, stride)
             .metric_err_with("fsim", Error::kind)?;
         Ok(alloc::boxed::Box::new(
             za::ScalarEval::single("fsimc", s.fsimc).with("fsim", s.fsim),

@@ -204,6 +204,8 @@ impl Musiq {
     }
 }
 
+za::impl_zenpsy_no_reference!(Musiq);
+
 impl za::NoReferenceMetric for Musiq {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

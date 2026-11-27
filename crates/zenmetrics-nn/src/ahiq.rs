@@ -309,6 +309,9 @@ impl Ahiq {
     }
 }
 
+za::impl_zenpsy_metric!(Ahiq);
+za::impl_zenpsy_prepare_reference!(Ahiq);
+
 impl za::Metric for Ahiq {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(
@@ -544,12 +547,12 @@ mod tests {
 
     fn image(px: &[u8], w: usize, h: usize) -> za::Image<'_> {
         za::Image::from(
-            za::zenpixels::PixelSlice::new(
+            za::zenpixels::PixelView::new(
                 px,
                 w as u32,
                 h as u32,
                 w * 3,
-                za::zenpixels::PixelDescriptor::RGB8_SRGB,
+                &za::zenpixels::formats::RGB8_SRGB,
             )
             .unwrap(),
         )

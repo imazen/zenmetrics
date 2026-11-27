@@ -713,6 +713,9 @@ impl Afine {
     }
 }
 
+za::impl_zenpsy_metric!(Afine);
+za::impl_zenpsy_prepare_reference!(Afine);
+
 impl za::Metric for Afine {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

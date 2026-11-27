@@ -138,6 +138,8 @@ impl Maniqa {
     }
 }
 
+za::impl_zenpsy_no_reference!(Maniqa);
+
 impl za::NoReferenceMetric for Maniqa {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

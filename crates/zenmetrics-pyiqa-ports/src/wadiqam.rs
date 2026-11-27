@@ -201,6 +201,7 @@ impl Port for WadiqamPyiqa {
 }
 
 impl_metric!(WadiqamPyiqa);
+zenmetrics_abstractions::impl_zenpsy_prepare_reference!(WadiqamPyiqa);
 
 #[cfg(test)]
 mod tests {

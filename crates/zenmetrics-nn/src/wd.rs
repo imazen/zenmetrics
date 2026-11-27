@@ -220,6 +220,9 @@ impl WassersteinDistortion {
     }
 }
 
+za::impl_zenpsy_metric!(WassersteinDistortion);
+za::impl_zenpsy_prepare_reference!(WassersteinDistortion);
+
 impl za::Metric for WassersteinDistortion {
     fn id(&self) -> za::MetricId {
         za::MetricId::new("wd", za::implementation!(1)).with_reference(format!(

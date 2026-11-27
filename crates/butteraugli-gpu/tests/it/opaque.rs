@@ -61,14 +61,14 @@ fn opaque_srgb_u8_matches_typed() {
 #[cfg(feature = "pixels")]
 #[test]
 fn opaque_pixels_handles_stride() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let w = 64_u32;
     let h = 64_u32;
     let tight = make_image(w, h, 11);
     let dist_tight = make_image(w, h, 23);
 
-    let descriptor = PixelDescriptor::RGB8_SRGB;
+    let descriptor = &formats::RGB8_SRGB;
     let row_bytes = w as usize * 3;
 
     // Padding aligned to bpp=3.
@@ -88,14 +88,14 @@ fn opaque_pixels_handles_stride() {
     let mut opaque =
         ButteraugliOpaque::new(BACKEND_E, w, h, ButteraugliParams::default()).expect("opaque new");
 
-    let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
-    let d_tight = PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
+    let r_tight = PixelView::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
+    let d_tight = PixelView::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
     let tight_score = opaque
         .compute_pixels(r_tight, d_tight)
         .expect("tight compute_pixels");
 
-    let r_padded = PixelSlice::new(&padded_ref, w, h, stride, descriptor).expect("padded ref");
-    let d_padded = PixelSlice::new(&padded_dis, w, h, stride, descriptor).expect("padded dist");
+    let r_padded = PixelView::new(&padded_ref, w, h, stride, descriptor).expect("padded ref");
+    let d_padded = PixelView::new(&padded_dis, w, h, stride, descriptor).expect("padded dist");
     let padded_score = opaque
         .compute_pixels(r_padded, d_padded)
         .expect("padded compute_pixels");
@@ -120,7 +120,7 @@ fn opaque_pixels_handles_stride() {
 #[cfg(all(feature = "pixels", feature = "internals"))]
 #[test]
 fn unified_compute_pixels_display_one_image_two_descriptors() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let (w, h) = (64_u32, 64_u32);
     let ref_u8 = make_image(w, h, 0);
@@ -160,15 +160,15 @@ fn unified_compute_pixels_display_one_image_two_descriptors() {
     let peak = 80.0_f32;
     let (s_sdr, p_sdr) = opaque
         .compute_pixels_display(
-            PixelSlice::new(&ref_u8, w, h, row_u8, PixelDescriptor::RGB8_SRGB).unwrap(),
-            PixelSlice::new(&dis_u8, w, h, row_u8, PixelDescriptor::RGB8_SRGB).unwrap(),
+            PixelView::new(&ref_u8, w, h, row_u8, &formats::RGB8_SRGB).unwrap(),
+            PixelView::new(&dis_u8, w, h, row_u8, &formats::RGB8_SRGB).unwrap(),
             peak,
         )
         .expect("sdr descriptor");
     let (s_lin, p_lin) = opaque
         .compute_pixels_display(
-            PixelSlice::new(&ref_lin, w, h, row_f32, PixelDescriptor::RGBF32_LINEAR).unwrap(),
-            PixelSlice::new(&dis_lin, w, h, row_f32, PixelDescriptor::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&ref_lin, w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&dis_lin, w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
             peak,
         )
         .expect("linear descriptor");

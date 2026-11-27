@@ -296,6 +296,9 @@ fn tap_distance(r: &Tap, d: &Tap, lin: &[f32]) -> f64 {
     acc.iter().map(|&v| f64::from(v)).sum::<f64>() / plane as f64
 }
 
+za::impl_zenpsy_metric!(Lpips);
+za::impl_zenpsy_prepare_reference!(Lpips);
+
 impl za::Metric for Lpips {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(self.net.column(), za::implementation!(SCORE_REVISION)).with_reference(

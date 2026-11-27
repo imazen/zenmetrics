@@ -6,7 +6,7 @@
 
 use piqe::{JND, Piqe};
 use std::io::BufRead;
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use za::{EvalOpts, Image, NoReferenceMetric};
 use zenmetrics_abstractions as za;
 
@@ -22,7 +22,7 @@ fn score_path(path: &std::path::Path) -> f64 {
         .unwrap_or_else(|e| panic!("decode {path}: {e}"))
         .to_rgb8();
     let (w, h) = img.dimensions();
-    let slice = PixelSlice::new(&img, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let slice = PixelView::new(&img, w, h, w as usize * 3, &formats::RGB8_SRGB).unwrap();
     Piqe::new()
         .evaluate_image(Image::from(slice), EvalOpts::new())
         .unwrap_or_else(|e| panic!("piqe {path}: {e}"))

@@ -3,7 +3,9 @@
 #![allow(dead_code, deprecated)]
 #![allow(clippy::manual_midpoint, clippy::chunks_exact_to_as_chunks)]
 include!("kernel.rs");
-use iqa::zenpixels::{PixelDescriptor, PixelSlice};
+use iqa::zenpixels::{
+    PixelView, PlaneFormat, PlaneRole, PlaneView, SampleStride, SampleType, formats,
+};
 use iqa::{
     Direction, ErrorKind, EvalOpts, Evaluation, Implementation, Metric, MetricError, MetricId,
     MetricResult, Score, ScoreSpec,
@@ -32,26 +34,31 @@ impl Evaluation for Native {
     fn maps(&self) -> impl Iterator<Item = iqa::MapView<'_>> {
         static SPEC: ScoreSpec = ScoreSpec::new("diffmap", Direction::Lower).with_perfect(0.0);
         self.original.diffmap.iter().map(|m| {
-            let plane =
-                iqa::zenpixels::plane::PlaneRef::new(m.data(), m.width(), m.height(), m.stride())
-                    .unwrap();
+            let plane = PlaneView::from_samples_strided(
+                m.data(),
+                m.width() as u32,
+                m.height() as u32,
+                SampleStride(m.stride()),
+                PlaneFormat::new(PlaneRole::Y, SampleType::F32),
+            )
+            .unwrap();
             iqa::MapView::new(
                 &SPEC,
-                iqa::zenpixels::plane::AnyPlane::F32(plane),
+                plane,
                 iqa::MapGrid::new(m.width() as u32, m.height() as u32).unwrap(),
             )
         })
     }
 }
-fn rows<'a>(p: &'a PixelSlice<'_>) -> MetricResult<ingress::EncodedRows<'a>> {
-    if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
+fn rows<'a>(p: &'a PixelView<'_>) -> MetricResult<ingress::EncodedRows<'a>> {
+    if p.format() != &formats::RGB8_SRGB {
         return iqa::fail(MetricError::new(ErrorKind::UnsupportedInput));
     }
     Ok(ingress::EncodedRows::new(
         ingress::Samples::U8(p.as_strided_bytes()),
         p.width() as usize,
-        p.rows() as usize,
-        p.stride(),
+        p.height() as usize,
+        p.stride_bytes(),
         3,
     )
     .unwrap())
@@ -68,8 +75,8 @@ impl Metric for Margarine {
     }
     fn evaluate(
         &mut self,
-        r: &PixelSlice<'_>,
-        d: &PixelSlice<'_>,
+        r: &PixelView<'_>,
+        d: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Native> {
         opts.checkpoint()?;
@@ -120,15 +127,8 @@ fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
     }
     p
 }
-fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelSlice<'_> {
-    PixelSlice::new(
-        bytes,
-        w,
-        h,
-        w as usize * 3 + padding,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .unwrap()
+fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelView<'_> {
+    PixelView::new(bytes, w, h, w as usize * 3 + padding, &formats::RGB8_SRGB).unwrap()
 }
 fn main() {
     assert_eq!(CANDIDATE, "simd-row-malta");
@@ -222,19 +222,20 @@ fn main() {
                 expected
             );
             let generic = out.maps().next().unwrap();
-            let iqa::zenpixels::plane::AnyPlane::F32(plane) = generic.values else {
-                panic!("native f32 map")
-            };
+            assert_eq!(generic.values.format().sample, SampleType::F32);
             assert_eq!(
-                plane.strided_samples().as_ptr(),
-                out.original.diffmap.as_ref().unwrap().data().as_ptr()
+                generic.values.data().as_ptr(),
+                out.original.diffmap.as_ref().unwrap().data().as_ptr() as *const u8
             );
             assert_eq!(generic.grid, iqa::MapGrid::new(w, h).unwrap());
             assert_eq!(
-                plane
-                    .rows()
-                    .flatten()
-                    .map(|v| v.to_bits())
+                (0..generic.values.height())
+                    .flat_map(|y| generic
+                        .values
+                        .row_as::<f32>(y)
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.to_bits()))
                     .collect::<Vec<_>>(),
                 expected_map
             );

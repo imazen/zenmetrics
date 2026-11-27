@@ -5,7 +5,7 @@ use crate::error::Error;
 use crate::memory_mode::MemoryMode;
 
 #[cfg(feature = "pixels")]
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 #[cfg(all(feature = "cpu-cvvdp", not(feature = "cvvdp")))]
 use cvvdp as cvvdp_gpu;
@@ -780,22 +780,22 @@ impl Metric {
     ///   feeding ([`crate::hdr::hdr_feeding`]) at [`display_peak`](Self::display_peak):
     ///   SSIM-family → pu-rescale u8; cvvdp/butteraugli → display-relative linear
     ///   planes. No silent SDR collapse.
-    pub fn compute_pixels_multi(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Scores> {
+    pub fn compute_pixels_multi(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Scores> {
         let (w, h) = self.inner.dims();
-        if r.width() != w || r.rows() != h {
+        if r.width() != w || r.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (r.width(), r.rows()),
+                got: (r.width(), r.height()),
             });
         }
-        if d.width() != w || d.rows() != h {
+        if d.width() != w || d.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (d.width(), d.rows()),
+                got: (d.width(), d.height()),
             });
         }
-        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
-            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        let both_srgb8 = r.format() == &zenpixels::formats::RGB8_SRGB
+            && d.format() == &zenpixels::formats::RGB8_SRGB;
         if both_srgb8 {
             let rb = crate::hdr::slice_to_srgb8(&r, w, h)?;
             let db = crate::hdr::slice_to_srgb8(&d, w, h)?;
@@ -880,9 +880,9 @@ impl Metric {
     /// path delegates to the inner native single-score `compute_pixels`, so a
     /// validated SDR score is byte-for-byte preserved; HDR returns the primary
     /// of the multi-score.
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
-        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
-            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
+        let both_srgb8 = r.format() == &zenpixels::formats::RGB8_SRGB
+            && d.format() == &zenpixels::formats::RGB8_SRGB;
         if both_srgb8 {
             return self.inner.compute_pixels(r, d);
         }
@@ -899,12 +899,12 @@ impl Metric {
     #[cfg(feature = "pixels")]
     pub fn compute_pixels_with_stop(
         &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
+        r: PixelView<'_>,
+        d: PixelView<'_>,
         stop: &dyn enough::Stop,
     ) -> Result<Score> {
-        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
-            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        let both_srgb8 = r.format() == &zenpixels::formats::RGB8_SRGB
+            && d.format() == &zenpixels::formats::RGB8_SRGB;
         if both_srgb8 {
             return self.inner.compute_pixels_with_stop(r, d, stop);
         }
@@ -2402,21 +2402,21 @@ impl MetricInner {
     /// inputs. Per-crate conversion semantics apply — see each
     /// metric crate's `compute_pixels` docs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
         // Validate dims before dispatch — every per-crate impl does
         // this internally, but doing it here lets us surface a uniform
         // `DimensionMismatch` rather than a crate-specific error.
         let (w, h) = self.dims();
-        if r.width() != w || r.rows() != h {
+        if r.width() != w || r.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (r.width(), r.rows()),
+                got: (r.width(), r.height()),
             });
         }
-        if d.width() != w || d.rows() != h {
+        if d.width() != w || d.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (d.width(), d.rows()),
+                got: (d.width(), d.height()),
             });
         }
         match self {
@@ -2502,21 +2502,21 @@ impl MetricInner {
     #[cfg(feature = "pixels")]
     pub fn compute_pixels_with_stop(
         &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
+        r: PixelView<'_>,
+        d: PixelView<'_>,
         stop: &dyn enough::Stop,
     ) -> Result<Score> {
         let (w, h) = self.dims();
-        if r.width() != w || r.rows() != h {
+        if r.width() != w || r.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (r.width(), r.rows()),
+                got: (r.width(), r.height()),
             });
         }
-        if d.width() != w || d.rows() != h {
+        if d.width() != w || d.height() != h {
             return Err(Error::DimensionMismatch {
                 expected: (w, h),
-                got: (d.width(), d.rows()),
+                got: (d.width(), d.height()),
             });
         }
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
@@ -2937,39 +2937,47 @@ impl MetricInner {
 // ---------------------------------------------------------------
 
 #[cfg(feature = "pixels")]
-fn to_srgb_rgb8(s: &PixelSlice<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+fn to_srgb_rgb8(s: &PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         return Err(Error::DimensionMismatch {
             expected: (expected_w, expected_h),
-            got: (s.width(), s.rows()),
+            got: (s.width(), s.height()),
         });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w, expected_h),
+                got: (s.width(), s.height()),
+            });
     }
     convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w, expected_h),
-        got: (s.width(), s.rows()),
+        got: (s.width(), s.height()),
     })
 }
 
 #[cfg(feature = "pixels")]
 fn convert_to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
+    s: &PixelView<'_>,
+    target: &zenpixels::PixelFormat,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    use zenpixels_convert::{ConvertPolicy, RowPlan};
+    let policy = ConvertPolicy::permissive();
+    let plan = RowPlan::build(s.format(), target, &policy, None).map_err(|e| e.decompose().0)?;
     let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let h = s.height();
+    let row_bytes = (w as usize) * target.layout.bytes_per_pixel();
     let mut out = vec![0u8; row_bytes * (h as usize)];
     for y in 0..h {
         let src_row = s.row(y);
         let start = (y as usize) * row_bytes;
         let dst_row = &mut out[start..start + row_bytes];
-        convert_row(&plan, src_row, dst_row, w);
+        plan.convert_row(src_row, dst_row, w)
+            .map_err(|e| e.decompose().0)?;
     }
     Ok(out)
 }
@@ -3488,13 +3496,10 @@ pub fn resolve_memory_mode(
 pub fn score(
     kind: MetricKind,
     backend: Backend,
-    reference: PixelSlice<'_>,
-    distorted: PixelSlice<'_>,
+    reference: PixelView<'_>,
+    distorted: PixelView<'_>,
 ) -> Result<Score> {
-    // `PixelSlice` is a move-only borrow-wrapper (the pixel bytes live in the
-    // caller's buffer, not here), so the front door takes it by value and
-    // hands it straight to `compute_pixels` — no pixel copy.
-    let (w, h) = (reference.width(), reference.rows());
+    let (w, h) = (reference.width(), reference.height());
     let mode = resolve_memory_mode(kind, w, h, Reuse::OneOff, Priority::Speed);
     let mut metric =
         Metric::new_with_memory_mode(kind, backend, w, h, MetricParams::default_for(kind), mode)?;
@@ -3518,7 +3523,7 @@ pub struct Warm {
 impl Warm {
     /// Score `distorted` against the warmed reference (must match the
     /// reference's dimensions).
-    pub fn score(&mut self, distorted: PixelSlice<'_>) -> Result<Score> {
+    pub fn score(&mut self, distorted: PixelView<'_>) -> Result<Score> {
         let dist = to_srgb_rgb8(&distorted, self.width, self.height)?;
         self.metric.compute_with_reference_srgb_u8(&dist)
     }
@@ -3538,9 +3543,9 @@ impl Warm {
 pub fn warm_reference(
     kind: MetricKind,
     backend: Backend,
-    reference: PixelSlice<'_>,
+    reference: PixelView<'_>,
 ) -> Result<Warm> {
-    let (w, h) = (reference.width(), reference.rows());
+    let (w, h) = (reference.width(), reference.height());
     let mode = resolve_memory_mode(kind, w, h, Reuse::Warm, Priority::Speed);
     let mut metric =
         Metric::new_with_memory_mode(kind, backend, w, h, MetricParams::default_for(kind), mode)?;

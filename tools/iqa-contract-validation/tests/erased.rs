@@ -2,10 +2,10 @@
 use iqa_contract_validation::{Assessment, Butter, Ssim2, SsimNative, Zen, ZenNative, fixture};
 use zenpsy_api::{
     self as iqa, DynMetric, DynPrepareReference, Erased, EvalOpts, Evaluation, MetricResult,
-    zenpixels::{PixelDescriptor, PixelSlice},
+    zenpixels::{PixelView, formats},
 };
-fn image(bytes: &[u8], padding: usize) -> PixelSlice<'_> {
-    PixelSlice::new(bytes, 97, 73, 97 * 3 + padding, PixelDescriptor::RGB8_SRGB).unwrap()
+fn image(bytes: &[u8], padding: usize) -> PixelView<'_> {
+    PixelView::new(bytes, 97, 73, 97 * 3 + padding, &formats::RGB8_SRGB).unwrap()
 }
 fn scores(e: &impl Evaluation) -> Vec<(String, u64)> {
     e.scores()

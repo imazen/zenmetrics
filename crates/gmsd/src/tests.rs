@@ -367,9 +367,9 @@ fn pixels_rgb8_equals_rgb8_entry() {
             .collect()
     };
     let (ra, rb) = (to_rgb(&a), to_rgb(&b));
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let pa = zenpixels::PixelSlice::new(&ra, w as u32, h as u32, w * 3, desc).unwrap();
-    let pb = zenpixels::PixelSlice::new(&rb, w as u32, h as u32, w * 3, desc).unwrap();
+    let desc = &zenpixels::formats::RGB8_SRGB;
+    let pa = zenpixels::PixelView::new(&ra, w as u32, h as u32, w * 3, desc).unwrap();
+    let pb = zenpixels::PixelView::new(&rb, w as u32, h as u32, w * 3, desc).unwrap();
     assert_eq!(
         gmsd_pixels(&pa, &pb).unwrap(),
         gmsd_rgb8(&ra, &rb, w, h, w * 3).unwrap()

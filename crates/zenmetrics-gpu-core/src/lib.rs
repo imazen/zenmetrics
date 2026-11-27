@@ -206,20 +206,22 @@ pub struct Score {
 /// `zenpixels_convert` row conversion.
 #[cfg(feature = "pixels")]
 pub fn convert_to_srgb_rgb8(
-    s: &zenpixels::PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
+    s: &zenpixels::PixelView<'_>,
+    target: &zenpixels::PixelFormat,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    use zenpixels_convert::{ConvertPolicy, RowPlan};
+    let policy = ConvertPolicy::permissive();
+    let plan = RowPlan::build(s.format(), target, &policy, None).map_err(|e| e.decompose().0)?;
     let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let h = s.height();
+    let row_bytes = (w as usize) * target.layout.bytes_per_pixel();
     let mut out = vec![0u8; row_bytes * (h as usize)];
     for y in 0..h {
         let src_row = s.row(y);
         let start = (y as usize) * row_bytes;
         let dst_row = &mut out[start..start + row_bytes];
-        convert_row(&plan, src_row, dst_row, w);
+        plan.convert_row(src_row, dst_row, w)
+            .map_err(|e| e.decompose().0)?;
     }
     Ok(out)
 }
@@ -416,19 +418,26 @@ impl PadPlan {
 /// interleaved `[R,G,B, …]` of length `width·height·3`.
 #[cfg(feature = "pixels")]
 pub fn convert_to_linear_f32(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
 ) -> core::result::Result<Vec<f32>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let target = zenpixels::PixelDescriptor::RGBF32_LINEAR;
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    use zenpixels_convert::{ConvertPolicy, DiffuseWhite, GamutPolicy, HlgRendering, RowPlan};
+    let target = &zenpixels::formats::RGBF32_LINEAR;
+    // DiffuseWhite(10_000.0) gives pq_scale = 10_000 / 10_000 = 1.0, so PQ
+    // decodes to [0, 1] = 10_000 cd/m² matching the metric linear-scale convention.
+    let policy = ConvertPolicy::permissive()
+        .with_gamut(GamutPolicy::PreserveExtended)
+        .with_sdr_white(DiffuseWhite::new(10_000.0).expect("valid diffuse white"))
+        .with_hlg_rendering(HlgRendering::REFERENCE_1000_NIT);
+    let plan = RowPlan::build(s.format(), target, &policy, None).map_err(|e| e.decompose().0)?;
     let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let h = s.height();
+    let row_bytes = (w as usize) * target.layout.bytes_per_pixel();
     let mut out = vec![0u8; row_bytes * (h as usize)];
     for y in 0..h {
         let src_row = s.row(y);
         let start = (y as usize) * row_bytes;
-        convert_row(&plan, src_row, &mut out[start..start + row_bytes], w);
+        plan.convert_row(src_row, &mut out[start..start + row_bytes], w)
+            .map_err(|e| e.decompose().0)?;
     }
     // Reinterpret the f32 bytes without an alignment assumption.
     Ok(out

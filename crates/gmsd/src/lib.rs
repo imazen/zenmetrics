@@ -229,6 +229,8 @@ const SCORE_REVISION: u32 = 1;
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Gmsd;
 
+za::impl_zenpsy_metric!(Gmsd);
+
 impl za::Metric for Gmsd {
     fn id(&self) -> za::MetricId {
         za::MetricId::new("gmsd", za::implementation!(SCORE_REVISION))
@@ -257,12 +259,35 @@ impl za::Metric for Gmsd {
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
         if let Some(req) = opts.map {
-            let (_, dm) = gmsd_rgb8_with_diffmap(r.pixels, d.pixels, r.width, r.height, r.stride)
+            let n = r.width * r.height;
+            let (mut rg, mut dg) = (alloc::vec![0.0f32; n], alloc::vec![0.0f32; n]);
+            rgb8_to_gray(r.pixels, r.width, r.height, r.stride, &mut rg)
                 .metric_err_with("gmsd", Error::kind)?;
+            rgb8_to_gray(d.pixels, d.width, d.height, d.stride, &mut dg)
+                .metric_err_with("gmsd", Error::kind)?;
+            let (_, dm) = gmsd_with_diffmap(
+                GrayImage::packed(&rg, r.width, r.height).metric_err_with("gmsd", Error::kind)?,
+                GrayImage::packed(&dg, d.width, d.height).metric_err_with("gmsd", Error::kind)?,
+            )
+            .metric_err_with("gmsd", Error::kind)?;
             return za::apply_map_request(alloc::boxed::Box::new(dm), req);
         }
-        let s = gmsd_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
-            .metric_err_with("gmsd", Error::kind)?;
+        check_rgb8(r.pixels, r.width, r.height, r.stride).metric_err_with("gmsd", Error::kind)?;
+        check_rgb8(d.pixels, d.width, d.height, d.stride).metric_err_with("gmsd", Error::kind)?;
+        let s = run_sources(
+            kernel::Source::Rgb8 {
+                data: r.pixels,
+                stride: r.stride,
+            },
+            kernel::Source::Rgb8 {
+                data: d.pixels,
+                stride: d.stride,
+            },
+            r.width,
+            r.height,
+            None,
+        )
+        .metric_err_with("gmsd", Error::kind)?;
         Ok(alloc::boxed::Box::new(
             za::ScalarEval::single("gmsd", s.gmsd).with("mean_gms", s.mean_gms),
         ))
@@ -547,11 +572,11 @@ pub fn ms_gmsdc_rgb8(
 /// row by row; no full-size RGB copy is made.
 #[cfg(feature = "pixels")]
 pub fn gmsd_pixels(
-    reference: &zenpixels::PixelSlice<'_>,
-    distorted: &zenpixels::PixelSlice<'_>,
+    reference: &zenpixels::PixelView<'_>,
+    distorted: &zenpixels::PixelView<'_>,
 ) -> Result<GmsdScore> {
-    let (w, h) = (reference.width() as usize, reference.rows() as usize);
-    let (dw, dh) = (distorted.width() as usize, distorted.rows() as usize);
+    let (w, h) = (reference.width() as usize, reference.height() as usize);
+    let (dw, dh) = (distorted.width() as usize, distorted.height() as usize);
     if (w, h) != (dw, dh) {
         return Err(Error::DimensionMismatch {
             reference: (w, h),
@@ -565,22 +590,24 @@ pub fn gmsd_pixels(
 
 /// Row-wise zenpixels → sRGB RGB8 → BT.601 gray (packed `w · h`).
 #[cfg(feature = "pixels")]
-pub fn pixels_to_gray(s: &zenpixels::PixelSlice<'_>) -> Result<Vec<f32>> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let (w, h) = (s.width() as usize, s.rows() as usize);
+pub fn pixels_to_gray(s: &zenpixels::PixelView<'_>) -> Result<Vec<f32>> {
+    use zenpixels_convert::{ConvertPolicy, RowPlan};
+    let target = &zenpixels::formats::RGB8_SRGB;
+    let (w, h) = (s.width() as usize, s.height() as usize);
     let mut out = alloc::vec![0.0f32; w * h];
-    if s.descriptor() == target {
+    if s.format() == target {
         for y in 0..h {
             rgb8_to_gray(s.row(y as u32), w, 1, w * 3, &mut out[y * w..(y + 1) * w])?;
         }
         return Ok(out);
     }
-    let plan = ConvertPlan::new(s.descriptor(), target)
+    let policy = ConvertPolicy::permissive();
+    let plan = RowPlan::build(s.format(), target, &policy, None)
         .map_err(|e| Error::Convert(alloc::format!("{e}")))?;
     let mut rgb = alloc::vec![0u8; w * 3];
     for y in 0..h {
-        convert_row(&plan, s.row(y as u32), &mut rgb, s.width());
+        plan.convert_row(s.row(y as u32), &mut rgb, s.width())
+            .map_err(|e| Error::Convert(alloc::format!("{e}")))?;
         rgb8_to_gray(&rgb, w, 1, w * 3, &mut out[y * w..(y + 1) * w])?;
     }
     Ok(out)

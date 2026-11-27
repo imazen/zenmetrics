@@ -61,14 +61,14 @@ fn opaque_srgb_u8_matches_typed() {
 #[cfg(feature = "pixels")]
 #[test]
 fn opaque_pixels_handles_stride() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let w = 64_u32;
     let h = 64_u32;
     let tight = make_image(w, h, 11);
     let dist_tight = make_image(w, h, 23);
 
-    let descriptor = PixelDescriptor::RGB8_SRGB;
+    let descriptor = &formats::RGB8_SRGB;
     let row_bytes = w as usize * 3;
     let pad = 15usize;
     let stride = row_bytes + pad;
@@ -85,14 +85,14 @@ fn opaque_pixels_handles_stride() {
 
     let mut opaque = Ssim2Opaque::new(BACKEND_E, w, h, Ssim2Params::DEFAULT).expect("opaque new");
 
-    let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
-    let d_tight = PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
+    let r_tight = PixelView::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
+    let d_tight = PixelView::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
     let tight_score = opaque
         .compute_pixels(r_tight, d_tight)
         .expect("tight compute_pixels");
 
-    let r_padded = PixelSlice::new(&padded_ref, w, h, stride, descriptor).expect("padded ref");
-    let d_padded = PixelSlice::new(&padded_dis, w, h, stride, descriptor).expect("padded dist");
+    let r_padded = PixelView::new(&padded_ref, w, h, stride, descriptor).expect("padded ref");
+    let d_padded = PixelView::new(&padded_dis, w, h, stride, descriptor).expect("padded dist");
     let padded_score = opaque
         .compute_pixels(r_padded, d_padded)
         .expect("padded compute_pixels");

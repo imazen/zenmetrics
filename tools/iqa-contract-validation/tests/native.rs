@@ -1,16 +1,14 @@
-use iqa::zenpixels::{PixelDescriptor, PixelSlice};
+use iqa::zenpixels::{
+    AlphaMode, ColorSpace, HlgMode, PixelFormat, PixelView, Primaries, SampleLayout, SignalRange,
+    Transfer, formats,
+};
 use iqa::{EvalOpts, Evaluation, Metric, PrepareReference};
-use iqa_contract_validation::{Butter, Ssim2, SsimNative, Zen, ZenNative, fixture};
+use iqa_contract_validation::{
+    Butter, Ssim2, SsimNative, Zen, ZenNative, fixture, ssim2_slice, zen_source,
+};
 use zenpsy_api as iqa;
-fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelSlice<'_> {
-    PixelSlice::new(
-        bytes,
-        w,
-        h,
-        w as usize * 3 + padding,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .unwrap()
+fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelView<'_> {
+    PixelView::new(bytes, w, h, w as usize * 3 + padding, &formats::RGB8_SRGB).unwrap()
 }
 fn bits(e: &impl Evaluation) -> Vec<u64> {
     e.scores().map(|s| s.value.to_bits()).collect()
@@ -105,8 +103,8 @@ fn native_scalars_and_opt_in_maps_survive_without_repackaging() {
             .collect::<Vec<_>>(),
         expected
     );
-    let source_r = zensim::ZenpixelsSource::try_from_slice(&ri).unwrap();
-    let source_d = zensim::ZenpixelsSource::try_from_slice(&di).unwrap();
+    let source_r = zen_source(&ri).unwrap();
+    let source_d = zen_source(&di).unwrap();
     let direct = zensim::Zensim::new(zensim::ZensimProfile::latest())
         .with_parallel(false)
         .compute_with_diffmap(&source_r, &source_d, zensim::DiffmapOptions::default())
@@ -156,8 +154,10 @@ fn ssim2_preserves_every_native_component_and_grid_on_edges_and_prepared_calls()
         let ri = image(&r, w, h, 0);
         let di = image(&d, w, h, 0);
         let opts = EvalOpts::new().with_native_map();
-        let direct = fast_ssim2::compute_ssimulacra2_maps(&ri, &di).unwrap();
-        let scalar = fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap();
+        let rs02 = ssim2_slice(&ri).unwrap();
+        let ds02 = ssim2_slice(&di).unwrap();
+        let direct = fast_ssim2::compute_ssimulacra2_maps(&rs02, &ds02).unwrap();
+        let scalar = fast_ssim2::compute_ssimulacra2(&rs02, &ds02).unwrap();
         assert_eq!(direct.score.to_bits(), scalar.to_bits());
         let mut m = Ssim2;
         let cold = iqa::score(&mut m, &ri, &di, opts).unwrap();
@@ -266,7 +266,6 @@ fn cancellation_reaches_all_three_native_kernels_and_keeps_causes() {
 }
 #[test]
 fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
-    use iqa::zenpixels::{AlphaMode, ColorPrimaries, TransferFunction};
     use zensim::HdrEncoding;
     let (w, h) = (97, 73);
     for encoding in [
@@ -278,20 +277,22 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
         },
     ] {
         let (transfer, gain) = match encoding {
-            HdrEncoding::Linear => (TransferFunction::Linear, 1000.0),
-            HdrEncoding::Pq { .. } => (TransferFunction::Pq, 1.0),
-            HdrEncoding::Hlg { .. } => (TransferFunction::Hlg, 1.0),
+            HdrEncoding::Linear => (Transfer::Linear, 1000.0),
+            HdrEncoding::Pq { .. } => (Transfer::Pq, 1.0),
+            HdrEncoding::Hlg { .. } => (Transfer::Hlg(HlgMode::Scene), 1.0),
             _ => unreachable!(),
         };
-        for primaries in [
-            ColorPrimaries::Bt709,
-            ColorPrimaries::DisplayP3,
-            ColorPrimaries::Bt2020,
-        ] {
-            let desc = PixelDescriptor::RGBAF32_LINEAR
-                .with_transfer(transfer)
-                .with_primaries(primaries)
-                .with_alpha(Some(AlphaMode::Opaque));
+        for primaries in [Primaries::Bt709, Primaries::DisplayP3, Primaries::Bt2020] {
+            let fmt = PixelFormat::new(
+                SampleLayout::RGBAF32,
+                ColorSpace::Rgb {
+                    primaries,
+                    transfer,
+                    range: SignalRange::Full,
+                    alpha: AlphaMode::Opaque,
+                    white: None,
+                },
+            );
             let make = |padding: usize, dist: bool| {
                 let stride = w as usize * 4 + padding;
                 let mut v = vec![12345.0f32; (h as usize - 1) * stride + w as usize * 4];
@@ -318,8 +319,8 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
             let d = make(0, true);
             let rp = make(4, false);
             let dp = make(8, true);
-            let ri = hdr_view(&r, w, h, 0, desc);
-            let di = hdr_view(&d, w, h, 0, desc);
+            let ri = hdr_view(&r, w, h, 0, &fmt);
+            let di = hdr_view(&d, w, h, 0, &fmt);
             let direct = zensim::Zensim::new(zensim::ZensimProfile::latest())
                 .with_parallel(false)
                 .compute_hdr(
@@ -333,9 +334,9 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
                     )
                     .unwrap()
                     .with_color_primaries(match primaries {
-                        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
-                        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
-                        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+                        Primaries::Bt709 => zensim::ColorPrimaries::Srgb,
+                        Primaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+                        Primaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
                         _ => unreachable!(),
                     }),
                     &zensim::StridedBytes::try_with_alpha_mode(
@@ -348,9 +349,9 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
                     )
                     .unwrap()
                     .with_color_primaries(match primaries {
-                        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
-                        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
-                        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+                        Primaries::Bt709 => zensim::ColorPrimaries::Srgb,
+                        Primaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+                        Primaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
                         _ => unreachable!(),
                     }),
                     encoding,
@@ -362,8 +363,8 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
             let out = iqa::score(&mut m, &ri, &di, EvalOpts::new()).unwrap();
             let padded = iqa::score(
                 &mut m,
-                &hdr_view(&rp, w, h, 4, desc),
-                &hdr_view(&dp, w, h, 8, desc),
+                &hdr_view(&rp, w, h, 4, &fmt),
+                &hdr_view(&dp, w, h, 8, &fmt),
                 EvalOpts::new(),
             )
             .unwrap();
@@ -382,26 +383,36 @@ fn zensim_hdr_preserves_native_pq_hlg_and_absolute_linear_scores_and_stride() {
                     .to_bits(),
                 direct.score().to_bits()
             );
-            let wrong = PixelSlice::new(
-                bytemuck::cast_slice(&r),
-                w,
-                h,
-                w as usize * 16,
-                desc.with_transfer(TransferFunction::Srgb),
-            )
-            .unwrap();
+            let wrong_fmt = PixelFormat::new(
+                SampleLayout::RGBAF32,
+                ColorSpace::Rgb {
+                    primaries,
+                    transfer: Transfer::Srgb,
+                    range: SignalRange::Full,
+                    alpha: AlphaMode::Opaque,
+                    white: None,
+                },
+            );
+            let wrong = PixelView::new(bytemuck::cast_slice(&r), w, h, w as usize * 16, &wrong_fmt)
+                .unwrap();
             assert!(iqa::score(&mut m, &wrong, &wrong, EvalOpts::new()).is_err());
         }
     }
 }
 
-fn hdr_view(v: &[f32], w: u32, h: u32, padding: usize, desc: PixelDescriptor) -> PixelSlice<'_> {
-    PixelSlice::new(
+fn hdr_view<'a>(
+    v: &'a [f32],
+    w: u32,
+    h: u32,
+    padding: usize,
+    fmt: &'a PixelFormat,
+) -> PixelView<'a> {
+    PixelView::new(
         bytemuck::cast_slice(v),
         w,
         h,
         (w as usize * 4 + padding) * 4,
-        desc,
+        fmt,
     )
     .unwrap()
 }

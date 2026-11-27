@@ -652,29 +652,30 @@ impl HdrVdp {
     fn expects(
         &self,
     ) -> Option<(
-        zenpixels::ChannelLayout,
-        zenpixels::TransferFunction,
-        Option<zenpixels::ColorPrimaries>,
+        zenpixels::ChannelOrder,
+        zenpixels::Transfer,
+        Option<zenpixels::Primaries>,
     )> {
-        use zenpixels::{ChannelLayout as L, ColorPrimaries as P, TransferFunction as T};
+        use zenpixels::{ChannelOrder as O, Gamma, Primaries as P, Transfer as T};
         Some(match self.encoding {
-            ColorEncoding::Luminance => (L::Gray, T::Linear, None),
-            ColorEncoding::LumaDisplay => (L::Gray, T::Gamma22, None),
-            ColorEncoding::SrgbDisplay => (L::Rgb, T::Srgb, Some(P::Bt709)),
-            ColorEncoding::RgbBt709 => (L::Rgb, T::Linear, Some(P::Bt709)),
+            ColorEncoding::Luminance => (O::Gray, T::Linear, None),
+            ColorEncoding::LumaDisplay => (O::Gray, T::Gamma(Gamma::GAMMA_2_2), None),
+            ColorEncoding::SrgbDisplay => (O::Rgb, T::Srgb, Some(P::Bt709)),
+            ColorEncoding::RgbBt709 => (O::Rgb, T::Linear, Some(P::Bt709)),
             ColorEncoding::Xyz => return None,
         })
     }
 }
 
-/// Widen a strided f32 slice to packed f64 without reinterpreting casts.
-fn widen_f32(s: &zenpixels::PixelSlice<'_>) -> Vec<f64> {
-    let (w, h) = (s.width() as usize, s.rows() as usize);
-    let ch = s.descriptor().layout().channels();
+/// Widen a strided f32 view to packed f64 without reinterpreting casts.
+fn widen_f32(s: &zenpixels::PixelView<'_>) -> Vec<f64> {
+    let (w, h) = (s.width() as usize, s.height() as usize);
+    let ch = s.format().layout.order.channels();
     let bytes = s.as_strided_bytes();
+    let stride = s.stride_bytes();
     let mut out = Vec::with_capacity(w * h * ch);
     for y in 0..h {
-        let row = &bytes[y * s.stride()..y * s.stride() + w * ch * 4];
+        let row = &bytes[y * stride..y * stride + w * ch * 4];
         out.extend(
             row.as_chunks::<4>()
                 .0
@@ -712,16 +713,41 @@ impl za::Metric for HdrVdp {
     }
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
-        let (Some(d), Some((layout, transfer, primaries))) = (format.packed(), self.expects())
+        let (Some(d), Some((order, transfer, primaries))) = (format.packed(), self.expects())
         else {
             return false;
         };
-        d.channel_type() == zenpixels::ChannelType::F32
-            && d.layout() == layout
-            && d.alpha().is_none()
-            && d.transfer() == transfer
-            && primaries.is_none_or(|p| d.primaries == p)
-            && d.signal_range == zenpixels::SignalRange::Full
+        if d.layout.sample != zenpixels::SampleType::F32
+            || d.layout.order != order
+            || d.layout.packing != zenpixels::BitPacking::Full
+        {
+            return false;
+        }
+        match &d.color {
+            zenpixels::ColorSpace::Gray {
+                transfer: t,
+                range,
+                alpha: zenpixels::AlphaMode::None,
+                ..
+            } => {
+                order == zenpixels::ChannelOrder::Gray
+                    && *t == transfer
+                    && *range == zenpixels::SignalRange::Full
+            }
+            zenpixels::ColorSpace::Rgb {
+                primaries: p,
+                transfer: t,
+                range,
+                alpha: zenpixels::AlphaMode::None,
+                ..
+            } => {
+                order == zenpixels::ChannelOrder::Rgb
+                    && *t == transfer
+                    && primaries.is_none_or(|want| *p == want)
+                    && *range == zenpixels::SignalRange::Full
+            }
+            _ => false,
+        }
     }
 
     fn viewing_conditions(&self) -> Option<za::ViewingConditions> {
@@ -754,7 +780,7 @@ impl za::Metric for HdrVdp {
         let (Some(rs), Some(ds)) = (r.as_packed(), d.as_packed()) else {
             return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("hdrvdp"));
         };
-        let (w, h) = (rs.width() as usize, rs.rows() as usize);
+        let (w, h) = (rs.width() as usize, rs.height() as usize);
         let res = hdrvdp(
             &widen_f32(ds),
             &widen_f32(rs),
@@ -774,6 +800,8 @@ impl za::Metric for HdrVdp {
         }
     }
 }
+
+za::impl_zenpsy_metric!(HdrVdp);
 
 /// The generic surface's evaluation: [`HdrVdpResult`] with its maps
 /// exposed only when requested. `as_any` downcasts to the
@@ -826,8 +854,8 @@ mod metric_trait_tests {
     use super::*;
     use za::Metric as _;
 
-    fn gray(px: &[f32], w: usize, h: usize, d: zenpixels::PixelDescriptor) -> za::Image<'_> {
-        zenpixels::PixelSlice::new(za::bytemuck::cast_slice(px), w as u32, h as u32, w * 4, d)
+    fn gray<'a>(px: &'a [f32], w: usize, h: usize, d: &'a zenpixels::PixelFormat) -> za::Image<'a> {
+        zenpixels::PixelView::new(za::bytemuck::cast_slice(px), w as u32, h as u32, w * 4, d)
             .unwrap()
             .into()
     }
@@ -849,7 +877,7 @@ mod metric_trait_tests {
         assert_eq!(m.id().variant(), Some("v2"));
         assert!((m.viewing_conditions().unwrap().ppd - 30.0).abs() < 1e-6);
         let (r, d) = pair(32, 32);
-        let pd = zenpixels::PixelDescriptor::GRAYF32_LINEAR;
+        let pd = &zenpixels::formats::GRAYF32_LINEAR;
         za::conformance::assert_conforms(&mut m, &gray(&r, 32, 32, pd), &gray(&d, 32, 32, pd));
         let ev = m
             .evaluate(
@@ -867,12 +895,12 @@ mod metric_trait_tests {
     fn hdrvdp_refuses_mislabeled_input() {
         let mut m = HdrVdp::new(Params::new(30.0), ColorEncoding::Luminance);
         let (r, d) = pair(16, 16);
-        let srgb_gray = zenpixels::PixelDescriptor::GRAYF32_LINEAR
-            .with_transfer(zenpixels::TransferFunction::Srgb);
+        let srgb_gray =
+            zenpixels::PixelFormat::GRAYF32_LINEAR.with_transfer(zenpixels::Transfer::Srgb);
         let err = m
             .evaluate(
-                gray(&r, 16, 16, srgb_gray),
-                gray(&d, 16, 16, srgb_gray),
+                gray(&r, 16, 16, &srgb_gray),
+                gray(&d, 16, 16, &srgb_gray),
                 za::EvalOpts::SCORE_ONLY,
             )
             .err()
@@ -880,14 +908,14 @@ mod metric_trait_tests {
         assert_eq!(err.error().kind(), za::ErrorKind::UnsupportedInput);
         let rgb = HdrVdp::new(Params::new(30.0), ColorEncoding::RgbBt709);
         assert!(!rgb.accepts(&za::InputFormat::Packed(
-            zenpixels::PixelDescriptor::GRAYF32_LINEAR
+            zenpixels::PixelFormat::GRAYF32_LINEAR
         )));
         assert!(rgb.accepts(&za::InputFormat::Packed(
-            zenpixels::PixelDescriptor::RGBF32_LINEAR
+            zenpixels::PixelFormat::RGBF32_LINEAR
         )));
         let xyz = HdrVdp::new(Params::new(30.0), ColorEncoding::Xyz);
         assert!(!xyz.accepts(&za::InputFormat::Packed(
-            zenpixels::PixelDescriptor::RGBF32_LINEAR
+            zenpixels::PixelFormat::RGBF32_LINEAR
         )));
     }
 }

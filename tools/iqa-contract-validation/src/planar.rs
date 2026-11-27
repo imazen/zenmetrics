@@ -2,43 +2,54 @@
 //! whose current public input API is packed. No color conversion is implicit.
 use super::*;
 use iqa::zenpixels::{
-    Cicp, ColorContext,
-    hdr::DiffuseWhite,
-    plane::{FloatEncoding, PlanarSlice, PlaneEncoding, PlaneRole},
+    AlphaMode, ColorSpace, DiffuseWhite, PlanarView, PlaneRole, Primaries, SampleType, SignalRange,
+    Transfer, formats,
 };
 use iqa::{EvaluationRef, PlanarMetric, PlanarWarmReference, PreparePlanarReference};
 
 fn unsupported<T>() -> MetricResult<T> {
     iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput))
 }
-fn linear<'a>(image: &PlanarSlice<'a>) -> MetricResult<[butteraugli::ImgRef<'a, f32>; 3]> {
-    let expected = ColorContext::from_cicp(Cicp::new(1, 8, 0, true))
-        .with_diffuse_white(DiffuseWhite::new(80.0));
-    if image.color_context() != &expected
-        || image.alpha_mode().is_some()
-        || image.layout().planes().len() != 3
+fn expected_linear_color() -> ColorSpace {
+    ColorSpace::Rgb {
+        primaries: Primaries::Bt709,
+        transfer: Transfer::Linear,
+        range: SignalRange::Full,
+        alpha: AlphaMode::None,
+        white: Some(DiffuseWhite::new(80.0).expect("valid diffuse white")),
+    }
+}
+fn linear<'a>(image: &PlanarView<'a>) -> MetricResult<[butteraugli::ImgRef<'a, f32>; 3]> {
+    let expected = expected_linear_color();
+    if image.color() != Some(&expected)
+        || !matches!(image.effective_alpha(), None | Some(AlphaMode::None))
+        || image.planes().len() != 3
     {
         return unsupported();
     }
     let mut out = [None; 3];
-    for (spec, plane) in image.layout().planes().iter().zip(image.planes()) {
-        if spec.encoding() != PlaneEncoding::Float(FloatEncoding::NOMINAL) {
+    for p in image.planes() {
+        let fmt = p.format();
+        if fmt.sample != SampleType::F32
+            || fmt.packing.is_packed_word()
+            || fmt.subsampling != (1, 1)
+            || !p.stride_bytes().is_multiple_of(core::mem::size_of::<f32>())
+        {
             return unsupported();
         }
-        let c = match spec.role() {
-            PlaneRole::Red => 0,
-            PlaneRole::Green => 1,
-            PlaneRole::Blue => 2,
+        let c = match fmt.role {
+            PlaneRole::R => 0,
+            PlaneRole::G => 1,
+            PlaneRole::B => 2,
             _ => return unsupported(),
         };
-        let AnyPlane::F32(p) = plane else {
-            return unsupported();
-        };
+        let samples: &'a [f32] = bytemuck::try_cast_slice(p.data())
+            .map_err(|_| iqa::whereat::at(iqa::MetricError::new(ErrorKind::UnsupportedInput)))?;
         out[c] = Some(butteraugli::Img::new_stride(
-            p.into_strided_samples(),
-            p.width(),
-            p.height(),
-            p.stride(),
+            samples,
+            p.width() as usize,
+            p.height() as usize,
+            p.stride_bytes() / core::mem::size_of::<f32>(),
         ));
     }
     let [Some(r), Some(g), Some(b)] = out else {
@@ -49,8 +60,8 @@ fn linear<'a>(image: &PlanarSlice<'a>) -> MetricResult<[butteraugli::ImgRef<'a, 
 impl PlanarMetric for Butter {
     fn evaluate_planar(
         &mut self,
-        r: &PlanarSlice<'_>,
-        d: &PlanarSlice<'_>,
+        r: &PlanarView<'_>,
+        d: &PlanarView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         self.warm_planar_reference(r, opts)?
@@ -61,7 +72,7 @@ impl PreparePlanarReference for Butter {
     type PlanarPrepared = ButterWarm;
     fn warm_planar_reference(
         &mut self,
-        r: &PlanarSlice<'_>,
+        r: &PlanarView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<ButterWarm> {
         opts.checkpoint()?;
@@ -106,7 +117,7 @@ impl PlanarWarmReference for ButterWarm {
     type Output = Assessment<butteraugli::ButteraugliResult, 2>;
     fn evaluate_planar(
         &mut self,
-        d: &PlanarSlice<'_>,
+        d: &PlanarView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         self.0
@@ -124,7 +135,7 @@ impl PlanarWarmReference for ButterWarm {
     }
     fn with_evaluation(
         &mut self,
-        d: &PlanarSlice<'_>,
+        d: &PlanarView<'_>,
         opts: EvalOpts<'_>,
         consume: &mut dyn FnMut(EvaluationRef<'_>),
     ) -> MetricResult<()> {
@@ -145,7 +156,7 @@ impl PlanarWarmReference for ButterWarm {
             .metric_err_with("butteraugli", butter_error)
     }
 }
-fn fill(image: &PlanarSlice<'_>, scratch: &mut Vec<[f32; 4]>) -> MetricResult<()> {
+fn fill(image: &PlanarView<'_>, scratch: &mut Vec<[f32; 4]>) -> MetricResult<()> {
     let p = linear(image)?;
     let (w, h) = (image.width() as usize, image.height() as usize);
     let n = w
@@ -166,13 +177,13 @@ fn fill(image: &PlanarSlice<'_>, scratch: &mut Vec<[f32; 4]>) -> MetricResult<()
     }
     Ok(())
 }
-fn packed<'a>(scratch: &'a [[f32; 4]], image: &PlanarSlice<'_>) -> PixelSlice<'a> {
-    PixelSlice::new(
+fn packed<'a>(scratch: &'a [[f32; 4]], image: &PlanarView<'_>) -> PixelView<'a> {
+    PixelView::new(
         bytemuck::cast_slice(scratch),
         image.width(),
         image.height(),
         image.width() as usize * 16,
-        PixelDescriptor::RGBAF32_LINEAR,
+        &formats::RGBAF32_LINEAR,
     )
     .expect("checked linear RGB storage")
 }
@@ -185,7 +196,7 @@ impl<P: WarmReference> PlanarWarmReference for PackedPlanar<P> {
     type Output = P::Output;
     fn evaluate_planar(
         &mut self,
-        d: &PlanarSlice<'_>,
+        d: &PlanarView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         fill(d, &mut self.scratch)?;
@@ -197,8 +208,8 @@ macro_rules! packed_planar {
         impl PlanarMetric for $metric {
             fn evaluate_planar(
                 &mut self,
-                r: &PlanarSlice<'_>,
-                d: &PlanarSlice<'_>,
+                r: &PlanarView<'_>,
+                d: &PlanarView<'_>,
                 opts: EvalOpts<'_>,
             ) -> MetricResult<Self::Output> {
                 if !($supported)(self) {
@@ -215,7 +226,7 @@ macro_rules! packed_planar {
             type PlanarPrepared = PackedPlanar<$warm>;
             fn warm_planar_reference(
                 &mut self,
-                r: &PlanarSlice<'_>,
+                r: &PlanarView<'_>,
                 opts: EvalOpts<'_>,
             ) -> MetricResult<Self::PlanarPrepared> {
                 if !($supported)(self) {

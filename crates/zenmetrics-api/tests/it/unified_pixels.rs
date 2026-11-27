@@ -13,7 +13,7 @@
 
 use zenmetrics_api::hdr::{HDR_PEAK_NITS, HdrScorer};
 use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelView, formats};
 
 fn gradient_u8(w: u32, h: u32, seed: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity((w * h * 3) as usize);
@@ -74,8 +74,8 @@ fn sdr_srgb8_slice_matches_native_compute_srgb_u8() {
     let mut hs = HdrScorer::new(MetricKind::Butter, Backend::Cuda, w, h, 80.0).expect("scorer");
     let unified = hs
         .compute_pixels_multi(
-            PixelSlice::new(&ref_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
-            PixelSlice::new(&dis_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
+            PixelView::new(&ref_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
+            PixelView::new(&dis_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
         )
         .expect("unified srgb8")
         .primary();
@@ -114,8 +114,8 @@ fn hdr_linear_slice_matches_nits_path() {
     // (b) the unified entry with a linear PixelSlice descriptor.
     let via_pixels = hs
         .compute_pixels_multi(
-            PixelSlice::new(&ref_bytes, w, h, row_f32, PixelDescriptor::RGBF32_LINEAR).unwrap(),
-            PixelSlice::new(&dis_bytes, w, h, row_f32, PixelDescriptor::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&ref_bytes, w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&dis_bytes, w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
         )
         .expect("pixels");
 
@@ -163,8 +163,8 @@ fn ssim2_srgb8_native_and_hdr_integrated_pu() {
         HdrScorer::new(MetricKind::Ssim2, Backend::Cuda, w, h, HDR_PEAK_NITS).expect("scorer");
     let unified_sdr = hs
         .compute_pixels_multi(
-            PixelSlice::new(&ref_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
-            PixelSlice::new(&dis_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
+            PixelView::new(&ref_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
+            PixelView::new(&dis_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
         )
         .expect("unified srgb8")
         .primary();
@@ -186,22 +186,8 @@ fn ssim2_srgb8_native_and_hdr_integrated_pu() {
         .primary();
     let via_pixels = hs
         .compute_pixels_multi(
-            PixelSlice::new(
-                &f32_bytes(&ref_lin),
-                w,
-                h,
-                row_f32,
-                PixelDescriptor::RGBF32_LINEAR,
-            )
-            .unwrap(),
-            PixelSlice::new(
-                &f32_bytes(&dis_lin),
-                w,
-                h,
-                row_f32,
-                PixelDescriptor::RGBF32_LINEAR,
-            )
-            .unwrap(),
+            PixelView::new(&f32_bytes(&ref_lin), w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&f32_bytes(&dis_lin), w, h, row_f32, &formats::RGBF32_LINEAR).unwrap(),
         )
         .expect("pixels")
         .primary();

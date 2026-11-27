@@ -5,9 +5,33 @@
 use alloc::format;
 use alloc::vec::Vec;
 
-use zenpixels::{PixelBuffer, PixelCow, PixelDescriptor, PixelSlice};
+use zenpixels::{PixelBuf, PixelCow, PixelFormat, PixelView, formats};
 
 use crate::error::{ErrorKind, MetricError, MetricResult, fail};
+
+/// Conversion into a [`PixelCow`] for [`MapView::new`].
+pub trait IntoPixelCow<'a> {
+    /// Convert `self` into a borrowed or owned pixel buffer.
+    fn into_pixel_cow(self) -> PixelCow<'a>;
+}
+
+impl<'a> IntoPixelCow<'a> for PixelCow<'a> {
+    fn into_pixel_cow(self) -> PixelCow<'a> {
+        self
+    }
+}
+
+impl<'a> IntoPixelCow<'a> for PixelView<'a> {
+    fn into_pixel_cow(self) -> PixelCow<'a> {
+        PixelCow::Borrowed(self)
+    }
+}
+
+impl IntoPixelCow<'static> for PixelBuf {
+    fn into_pixel_cow(self) -> PixelCow<'static> {
+        PixelCow::Owned(self)
+    }
+}
 
 /// What a map's values mean: direction and semantics.
 #[non_exhaustive]
@@ -327,23 +351,23 @@ impl<'a> MapView<'a> {
     #[track_caller]
     pub fn new(
         name: &'static str,
-        pixels: impl Into<PixelCow<'a>>,
+        pixels: impl IntoPixelCow<'a>,
         polarity: MapPolarity,
         geometry: MapGeometry,
     ) -> MetricResult<Self> {
-        let pixels = pixels.into();
-        let sl = pixels.as_slice();
-        if sl.descriptor() != PixelDescriptor::GRAYF32_LINEAR {
+        let pixels = pixels.into_pixel_cow();
+        let sl = pixels.as_view();
+        if sl.format() != &formats::GRAYF32_LINEAR {
             return fail(
                 MetricError::new(ErrorKind::Internal)
-                    .with_message(format!("map {name}: descriptor {:?}", sl.descriptor())),
+                    .with_message(format!("map {name}: format {:?}", sl.format())),
             );
         }
-        if (sl.width(), sl.rows()) != (geometry.cells_x, geometry.cells_y) {
+        if (sl.width(), sl.height()) != (geometry.cells_x, geometry.cells_y) {
             return fail(MetricError::new(ErrorKind::Internal).with_message(format!(
                 "map {name}: {}x{} values, geometry says {}x{}",
                 sl.width(),
-                sl.rows(),
+                sl.height(),
                 geometry.cells_x,
                 geometry.cells_y
             )));
@@ -370,34 +394,42 @@ impl<'a> MapView<'a> {
     /// The values, row-major and tightly packed: borrowed when the
     /// storage already is, copied otherwise.
     pub fn values(&self) -> alloc::borrow::Cow<'_, [f32]> {
-        f32_values(&self.pixels.as_slice())
+        f32_values(&self.pixels.as_view())
     }
 
     /// An owned copy that no longer borrows the evaluation.
-    pub fn into_owned(self) -> MapView<'static> {
-        MapView {
+    ///
+    /// # Errors
+    /// [`ErrorKind::Resource`] if allocating the owned buffer fails.
+    pub fn into_owned(self) -> MetricResult<MapView<'static>> {
+        let buf = self
+            .pixels
+            .into_owned()
+            .map_err(|e| e.map_error(|b| MetricError::from_detail(ErrorKind::Resource, b)))?;
+        Ok(MapView {
             name: self.name,
-            pixels: PixelCow::Owned(self.pixels.into_owned()),
+            pixels: PixelCow::Owned(buf),
             polarity: self.polarity,
             geometry: self.geometry,
             served: self.served,
-        }
+        })
     }
 }
 
-/// Read a `GRAYF32_LINEAR` slice as packed `f32`s without panicking on
+/// Read a `GRAYF32_LINEAR` view as packed `f32`s without panicking on
 /// stride or alignment.
-fn f32_values<'s>(sl: &PixelSlice<'s>) -> alloc::borrow::Cow<'s, [f32]> {
-    let (w, h) = (sl.width() as usize, sl.rows() as usize);
+fn f32_values<'s>(sl: &PixelView<'s>) -> alloc::borrow::Cow<'s, [f32]> {
+    let (w, h) = (sl.width() as usize, sl.height() as usize);
     if let Some(bytes) = sl.as_contiguous_bytes().and_then(|b| b.get(..w * h * 4))
         && let Ok(v) = bytemuck::try_cast_slice::<u8, f32>(bytes)
     {
         return alloc::borrow::Cow::Borrowed(v);
     }
     let all = sl.as_strided_bytes();
+    let stride = sl.stride_bytes();
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h {
-        let row = &all[y * sl.stride()..y * sl.stride() + w * 4];
+        let row = &all[y * stride..y * stride + w * 4];
         out.extend(
             row.as_chunks::<4>()
                 .0
@@ -526,45 +558,45 @@ pub fn map_subsample_f32(
     Ok((out, wo as u32, ho as u32))
 }
 
-/// View packed `w × h` values as a `GRAYF32_LINEAR` slice.
+/// View packed `w × h` values as a `GRAYF32_LINEAR` [`PixelView`].
 ///
 /// # Errors
 /// [`ErrorKind::Internal`] when `data.len() != w·h`.
 #[track_caller]
-pub fn gray_f32_slice(data: &[f32], w: u32, h: u32) -> MetricResult<PixelSlice<'_>> {
+pub fn gray_f32_slice(data: &[f32], w: u32, h: u32) -> MetricResult<PixelView<'_>> {
     if data.len() != w as usize * h as usize {
         return fail(
             MetricError::new(ErrorKind::Internal)
                 .with_message(format!("map len {} != {w}x{h}", data.len())),
         );
     }
-    PixelSlice::new(
+    PixelView::new(
         bytemuck::cast_slice(data),
         w,
         h,
         w as usize * 4,
-        PixelDescriptor::GRAYF32_LINEAR,
+        &formats::GRAYF32_LINEAR,
     )
     .map_err(|e| e.map_error(|b| MetricError::from_detail(ErrorKind::Internal, b)))
 }
 
-/// Move packed `w × h` values into an owned `GRAYF32_LINEAR` buffer
+/// Move packed `w × h` values into an owned `GRAYF32_LINEAR` [`PixelBuf`]
 /// (aligned by construction; no reinterpreting casts).
 ///
 /// # Errors
 /// [`ErrorKind::Internal`] when `data.len() != w·h`;
 /// [`ErrorKind::Resource`] when the allocation fails.
 #[track_caller]
-pub fn gray_f32_buffer(data: &[f32], w: u32, h: u32) -> MetricResult<PixelBuffer> {
+pub fn gray_f32_buffer(data: &[f32], w: u32, h: u32) -> MetricResult<PixelBuf> {
     if data.len() != w as usize * h as usize {
         return fail(
             MetricError::new(ErrorKind::Internal)
                 .with_message(format!("map len {} != {w}x{h}", data.len())),
         );
     }
-    let mut buf = PixelBuffer::try_new(w, h, PixelDescriptor::GRAYF32_LINEAR)
+    let mut buf = PixelBuf::new(w, h, PixelFormat::GRAYF32_LINEAR)
         .map_err(|e| e.map_error(|b| MetricError::from_detail(ErrorKind::Resource, b)))?;
-    let mut dst = buf.as_slice_mut();
+    let mut dst = buf.as_view_mut();
     for y in 0..h {
         let src = &data[y as usize * w as usize..(y as usize + 1) * w as usize];
         for (o, &v) in dst.row_mut(y).as_chunks_mut::<4>().0.iter_mut().zip(src) {
@@ -633,12 +665,12 @@ mod tests {
     fn strided_map_folds_every_row() {
         // 2x2 map in rows of 3 floats (one padding float per row).
         let backing = [1.0f32, 2.0, 99.0, 3.0, 4.0, 99.0];
-        let sl = PixelSlice::new(
+        let sl = PixelView::new(
             bytemuck::cast_slice(&backing),
             2,
             2,
             12,
-            PixelDescriptor::GRAYF32_LINEAR,
+            &formats::GRAYF32_LINEAR,
         )
         .unwrap();
         let m = MapView::new(
@@ -673,8 +705,6 @@ mod tests {
 
     #[test]
     fn geometry_cells_support_and_subsampling() {
-        // GMSD-like: 2x2 cells from pixel 0, 3 cells across a 7-wide image,
-        // a 3x3 filter on the half-res grid (halo 2 input pixels).
         let g = MapGeometry::grid(7, 4, 0, 0, 2, 2, 3, 2).with_halo(2, 2);
         assert_eq!(
             g.cell_rect(2, 1),
@@ -708,7 +738,6 @@ mod tests {
             })
         );
         assert_eq!(s.support, g.support);
-        // Negative origin clips at the image edge.
         let c = MapGeometry::grid(10, 10, -1, -1, 3, 3, 4, 4);
         assert_eq!(
             c.cell_rect(0, 0),

@@ -632,8 +632,8 @@ impl HdrScorer {
     #[cfg(feature = "pixels")]
     pub fn compute_pixels_multi(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
+        r: zenpixels::PixelView<'_>,
+        d: zenpixels::PixelView<'_>,
     ) -> crate::Result<crate::Scores> {
         // Thin wrapper: the metric's `display_peak` was set to `self.peak_nits`
         // at construction, so `Metric::compute_pixels_multi` applies the same
@@ -647,31 +647,33 @@ impl HdrScorer {
     #[cfg(feature = "pixels")]
     pub fn compute_pixels(
         &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
+        r: zenpixels::PixelView<'_>,
+        d: zenpixels::PixelView<'_>,
     ) -> crate::Result<crate::Score> {
         self.compute_pixels_multi(r, d).map(|s| s.primary_score())
     }
 }
 
-/// Row-wise descriptor conversion via `zenpixels_convert` — the CPU-side
+/// Row-wise format conversion via `zenpixels_convert` — the CPU-side
 /// mirror of `zenmetrics_gpu_core::convert_to_srgb_rgb8`, kept local so
 /// `pixels` does not drag in the cubecl-carrying gpu-core crate.
 #[cfg(feature = "pixels")]
 fn convert_slice(
-    s: &zenpixels::PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
+    s: &zenpixels::PixelView<'_>,
+    target: &zenpixels::PixelFormat,
+    policy: &zenpixels_convert::ConvertPolicy,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    use zenpixels_convert::RowPlan;
+    let plan = RowPlan::build(s.format(), target, policy, None).map_err(|e| e.decompose().0)?;
     let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let h = s.height();
+    let row_bytes = (w as usize) * target.layout.bytes_per_pixel();
     let mut out = vec![0u8; row_bytes * (h as usize)];
     for y in 0..h {
         let src_row = s.row(y);
         let start = (y as usize) * row_bytes;
-        convert_row(&plan, src_row, &mut out[start..start + row_bytes], w);
+        plan.convert_row(src_row, &mut out[start..start + row_bytes], w)
+            .map_err(|e| e.decompose().0)?;
     }
     Ok(out)
 }
@@ -679,9 +681,14 @@ fn convert_slice(
 /// CPU-side mirror of `zenmetrics_gpu_core::convert_to_linear_f32`.
 #[cfg(feature = "pixels")]
 fn convert_slice_linear_f32(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
 ) -> core::result::Result<Vec<f32>, zenpixels_convert::ConvertError> {
-    let out = convert_slice(s, zenpixels::PixelDescriptor::RGBF32_LINEAR)?;
+    use zenpixels_convert::{ConvertPolicy, DiffuseWhite, GamutPolicy, HlgRendering};
+    let policy = ConvertPolicy::permissive()
+        .with_gamut(GamutPolicy::PreserveExtended)
+        .with_sdr_white(DiffuseWhite::new(10_000.0).expect("valid diffuse white"))
+        .with_hlg_rendering(HlgRendering::REFERENCE_1000_NIT);
+    let out = convert_slice(s, &zenpixels::formats::RGBF32_LINEAR, &policy)?;
     Ok(out
         .as_chunks::<4>()
         .0
@@ -690,20 +697,31 @@ fn convert_slice_linear_f32(
         .collect())
 }
 
-/// Convert a slice to packed sRGB8 (validating dims) for the native SDR path.
+/// Extract the transfer curve from a `PixelFormat`'s color space.
+#[cfg(feature = "pixels")]
+fn format_transfer(f: &zenpixels::PixelFormat) -> zenpixels::Transfer {
+    match &f.color {
+        zenpixels::ColorSpace::Rgb { transfer, .. }
+        | zenpixels::ColorSpace::Gray { transfer, .. } => *transfer,
+        _ => zenpixels::Transfer::Unknown,
+    }
+}
+
+/// Convert a view to packed sRGB8 (validating dims) for the native SDR path.
 #[cfg(feature = "pixels")]
 pub(crate) fn slice_to_srgb8(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
     w: u32,
     h: u32,
 ) -> crate::Result<Vec<u8>> {
-    if s.width() != w || s.rows() != h {
+    if s.width() != w || s.height() != h {
         return Err(crate::Error::Metric {
             kind: "pixels",
-            message: format!("slice {}x{} != metric {}x{}", s.width(), s.rows(), w, h),
+            message: format!("slice {}x{} != metric {}x{}", s.width(), s.height(), w, h),
         });
     }
-    convert_slice(s, zenpixels::PixelDescriptor::RGB8_SRGB).map_err(|e| crate::Error::Metric {
+    let policy = zenpixels_convert::ConvertPolicy::permissive();
+    convert_slice(s, &zenpixels::formats::RGB8_SRGB, &policy).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("sRGB8 conversion failed: {e:?}"),
     })
@@ -714,70 +732,55 @@ pub(crate) fn slice_to_srgb8(
 /// into **absolute display luminance (cd/m²)** — the one place the
 /// descriptor-vs-nits scale convention is encoded.
 ///
-/// `convert_to_linear_f32` decodes each descriptor to *its own* linear scale:
+/// `convert_to_linear_f32` decodes each format to *its own* linear scale:
 /// - **PQ** (ST.2084, absolute): `[0,1]` where **1.0 = 10000 cd/m²** (libjxl
 ///   normalization), so the scale to nits is a fixed `10000`.
 /// - **everything relative/scene-referred** (sRGB, BT.709, linear, HLG;
 ///   `reference_white_nits == 1.0`): `[0,1]` display-relative, so `1.0` is the
 ///   display's `peak_nits` — the scale is `peak_nits`.
-///
-/// HLG is treated as relative here (no OOTF) — consistent with its `1.0`
-/// reference white; faithful HLG display-light would need the peak-dependent
-/// OOTF, which no current input path exercises (planar HDR comes from
-/// jxl-encoder as relative linear, per the HDR design).
 #[cfg(feature = "pixels")]
-fn linear_to_nits_scale(transfer: zenpixels::TransferFunction, peak_nits: f32) -> f32 {
+fn linear_to_nits_scale(transfer: zenpixels::Transfer, peak_nits: f32) -> f32 {
     match transfer {
-        zenpixels::TransferFunction::Pq => 10_000.0,
+        zenpixels::Transfer::Pq => 10_000.0,
         _ => peak_nits,
     }
 }
 
-/// Convert a slice to **interleaved** display-relative `[0,1]` linear
-/// (`[R,G,B, …]`) at `peak_nits` — zenpixels-convert applies the descriptor's
-/// transfer, then `linear_to_nits_scale` maps to absolute nits and `÷ peak`
-/// brings it display-relative (content above the display peak clips, matching
-/// [`HdrScorer::compute_multi`]'s LinearPlanes clamp). Interleaved is the
-/// canonical linear transport: native CPU takes it as-is, GPU deinterleaves
-/// inside the interleaved entry.
+/// Convert a view to **interleaved** display-relative `[0,1]` linear
+/// (`[R,G,B, …]`) at `peak_nits`.
 #[cfg(feature = "pixels")]
 pub(crate) fn slice_to_display_relative_linear_interleaved(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
     peak_nits: f32,
 ) -> crate::Result<Vec<f32>> {
     let lin = convert_slice_linear_f32(s).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
-    let rel = peak_nits.recip() * linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    let rel = peak_nits.recip() * linear_to_nits_scale(format_transfer(s.format()), peak_nits);
     Ok(lin.iter().map(|&v| (v * rel).clamp(0.0, 1.0)).collect())
 }
 
-/// Convert a slice to **interleaved absolute-luminance** linear RGB (cd/m²)
-/// for the [`HdrFeeding::IntegratedPuNits`] path: decode to linear via
-/// zenpixels-convert, scale to nits via [`linear_to_nits_scale`] — and stop.
-/// No `÷peak`, no `[0,1]` clamp: the PU21 encode clamps to its
-/// `[0.005, 10000]` cd/m² operating range in-kernel, and the UPIQ-validated
-/// feeding (imazen/zenmetrics#25) was raw unclipped nits.
+/// Convert a view to **interleaved absolute-luminance** linear RGB (cd/m²)
+/// for the [`HdrFeeding::IntegratedPuNits`] path.
 #[cfg(feature = "pixels")]
 pub(crate) fn slice_to_absolute_nits_interleaved(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
     peak_nits: f32,
 ) -> crate::Result<Vec<f32>> {
     let lin = convert_slice_linear_f32(s).map_err(|e| crate::Error::Metric {
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
-    let scale = linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    let scale = linear_to_nits_scale(format_transfer(s.format()), peak_nits);
     Ok(lin.iter().map(|&v| v * scale).collect())
 }
 
-/// Convert a slice to the SSIM-family pu-rescale u8 feeding: decode to linear,
+/// Convert a view to the SSIM-family pu-rescale u8 feeding: decode to linear,
 /// scale to absolute nits via [`linear_to_nits_scale`], then [`to_sdr_u8`].
-/// (Relative descriptors scale by `peak`; PQ by its fixed `10000`.)
 #[cfg(feature = "pixels")]
 pub(crate) fn slice_to_pu_rescaled_u8(
-    s: &zenpixels::PixelSlice<'_>,
+    s: &zenpixels::PixelView<'_>,
     transfer: HdrTransfer,
     peak_nits: f32,
 ) -> crate::Result<Vec<u8>> {
@@ -785,7 +788,7 @@ pub(crate) fn slice_to_pu_rescaled_u8(
         kind: "pixels",
         message: format!("linear conversion failed: {e:?}"),
     })?;
-    let scale = linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    let scale = linear_to_nits_scale(format_transfer(s.format()), peak_nits);
     let nits: Vec<f32> = lin.iter().map(|&v| v * scale).collect();
     Ok(to_sdr_u8(&nits, transfer, peak_nits))
 }
@@ -1070,15 +1073,15 @@ mod tests {
     #[cfg(feature = "pixels")]
     #[test]
     fn linear_to_nits_scale_pq_is_absolute_rest_relative() {
-        use zenpixels::TransferFunction as TF;
+        use zenpixels::{Gamma, HlgMode, Transfer as TF};
         let peak = 600.0;
         assert_eq!(linear_to_nits_scale(TF::Pq, peak), 10_000.0);
         for tf in [
             TF::Srgb,
             TF::Bt709,
             TF::Linear,
-            TF::Hlg,
-            TF::Gamma22,
+            TF::Hlg(HlgMode::Scene),
+            TF::Gamma(Gamma::GAMMA_2_2),
             TF::Unknown,
         ] {
             assert_eq!(

@@ -6,7 +6,7 @@
 
 use piqe::Piqe;
 use za::conformance::{assert_conforms, distort_rgb8, rgb8_image, scores, textured_rgb8};
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use za::{EvalOpts, Image, Metric, NoReferenceMetric, PairedNoReference};
 use zenmetrics_abstractions as za;
 
@@ -24,10 +24,9 @@ fn strided_equals_packed_bit_for_bit() {
     for y in 0..h {
         buf[y * stride..y * stride + w * 3].copy_from_slice(&packed[y * w * 3..(y + 1) * w * 3]);
     }
-    let strided: Image<'_> =
-        PixelSlice::new(&buf, w as u32, h as u32, stride, PixelDescriptor::RGB8_SRGB)
-            .unwrap()
-            .into();
+    let strided: Image<'_> = PixelView::new(&buf, w as u32, h as u32, stride, &formats::RGB8_SRGB)
+        .unwrap()
+        .into();
     let a = evaluate(rgb8_image(&packed, w, h));
     let b = evaluate(strided);
     assert_eq!(a.len(), b.len());

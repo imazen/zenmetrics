@@ -1,13 +1,13 @@
 //! IW-SSIM's per-scale contrast-structure maps on the generic surface.
 
 use iwssim::{Iwssim, IwssimParams};
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{self as za, Metric as _};
 
 const NAMES: [&str; 5] = ["cs_0", "cs_1", "cs_2", "cs_3", "csl_4"];
 
 fn image(px: &[u8], w: usize, h: usize, stride: usize) -> za::Image<'_> {
-    PixelSlice::new(px, w as u32, h as u32, stride, PixelDescriptor::RGB8_SRGB)
+    PixelView::new(px, w as u32, h as u32, stride, &formats::RGB8_SRGB)
         .unwrap()
         .into()
 }

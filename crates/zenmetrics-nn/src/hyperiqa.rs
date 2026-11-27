@@ -149,6 +149,8 @@ impl Hyperiqa {
     }
 }
 
+za::impl_zenpsy_no_reference!(Hyperiqa);
+
 impl za::NoReferenceMetric for Hyperiqa {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

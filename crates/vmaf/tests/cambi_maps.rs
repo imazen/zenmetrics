@@ -7,8 +7,9 @@ use std::ptr;
 
 use vmaf::{ModelVariant, Vmaf};
 use vmaf_head_sys::*;
-use zenmetrics_abstractions::PlaneLayout;
-use zenmetrics_abstractions::zenpixels::{ChannelType, PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{
+    BitPacking, PlanarView, PlaneFormat, PlaneRole, PlaneView, SampleType,
+};
 use zenmetrics_abstractions::{self as za, Metric as _};
 
 const W: usize = 640;
@@ -33,22 +34,30 @@ fn planes(seed: usize) -> [Vec<u16>; 3] {
     [y, c.clone(), c]
 }
 
-fn gray16(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
-    PixelSlice::new(d, w as u32, h as u32, w * 2, PixelDescriptor::GRAY16).unwrap()
+fn plane10(d: &[u8], w: usize, h: usize, role: PlaneRole, sub: (u8, u8)) -> PlaneView<'_> {
+    PlaneView::new(
+        d,
+        w as u32,
+        h as u32,
+        w * 2,
+        PlaneFormat::new(role, SampleType::U16)
+            .with_subsampling(sub.0, sub.1)
+            .with_packing(BitPacking::Lsb { bits: 10 }),
+    )
+    .unwrap()
 }
 
 fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
     za::Image::from(
-        za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U16),
-            vec![
-                gray16(&p[0], W, H),
-                gray16(&p[1], W / 2, H / 2),
-                gray16(&p[2], W / 2, H / 2),
+        PlanarView::new(
+            W as u32,
+            H as u32,
+            &[
+                plane10(&p[0], W, H, PlaneRole::Y, (1, 1)),
+                plane10(&p[1], W / 2, H / 2, PlaneRole::Cb, (2, 2)),
+                plane10(&p[2], W / 2, H / 2, PlaneRole::Cr, (2, 2)),
             ],
         )
-        .unwrap()
-        .with_significant_bits(10)
         .unwrap(),
     )
 }

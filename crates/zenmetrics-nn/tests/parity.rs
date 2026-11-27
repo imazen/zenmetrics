@@ -19,7 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Evaluation, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Afine, Ahiq, Arniqa, Ckdn, DeepDc, Dists, Dmm, Dreamsim, Engine, Hyperiqa, Liqe, Lpips,
@@ -252,7 +252,7 @@ fn score(e: &dyn Evaluation, col: &str) -> f64 {
 }
 
 fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
-    Image::from(PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap())
+    Image::from(PixelView::new(px, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap())
 }
 
 /// Whether `m` is a paired no-reference metric — its outputs carry the

@@ -252,6 +252,7 @@ impl Port for AhiqPyiqa {
 }
 
 impl_metric!(AhiqPyiqa);
+zenmetrics_abstractions::impl_zenpsy_prepare_reference!(AhiqPyiqa);
 
 #[cfg(test)]
 mod tests {

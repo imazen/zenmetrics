@@ -61,7 +61,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use za::zenpixels::PixelDescriptor;
+use za::zenpixels::{PixelFormat, formats};
 use zenmetrics_abstractions as za;
 
 mod kernels;
@@ -144,7 +144,7 @@ impl za::NoReferenceMetric for Niqe {
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
         let d = format.packed();
-        d == Some(PixelDescriptor::RGB8_SRGB) || d == Some(PixelDescriptor::GRAY8)
+        d == Some(&formats::RGB8_SRGB) || d == Some(&formats::GRAY8_SRGB)
     }
 
     fn evaluate_image(
@@ -174,22 +174,24 @@ impl za::NoReferenceMetric for Niqe {
     }
 }
 
-/// Borrow the packed slice when its descriptor is `desc`.
+za::impl_zenpsy_no_reference!(Niqe);
+
+/// Borrow the packed view when its format is `desc`.
 fn packed_as<'a>(
     image: &'a za::Image<'a>,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
 ) -> Option<(&'a [u8], usize, usize, usize)> {
     let za::Image::Packed(s) = image else {
         return None;
     };
-    if s.descriptor() != desc {
+    if s.format() != desc {
         return None;
     }
     Some((
         s.as_strided_bytes(),
         s.width() as usize,
-        s.rows() as usize,
-        s.stride(),
+        s.height() as usize,
+        s.stride_bytes(),
     ))
 }
 
@@ -201,7 +203,7 @@ fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, u
             .with_metric("niqe")
             .with_message(alloc::format!("crop_border={crop} overflows"))
     })?;
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::RGB8_SRGB) {
         let (iw, ih) = (w.saturating_sub(crop2), h.saturating_sub(crop2));
         if iw == 0 || ih == 0 {
             return za::fail(
@@ -237,7 +239,7 @@ fn gray_f64(image: &za::Image<'_>, crop: usize) -> za::MetricResult<(Vec<f64>, u
         }
         return Ok((y, iw, ih));
     }
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::GRAY8) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::GRAY8_SRGB) {
         let (iw, ih) = (w.saturating_sub(crop2), h.saturating_sub(crop2));
         if iw == 0 || ih == 0 {
             return za::fail(

@@ -197,6 +197,9 @@ impl Dreamsim {
     }
 }
 
+za::impl_zenpsy_metric!(Dreamsim);
+za::impl_zenpsy_prepare_reference!(Dreamsim);
+
 impl za::Metric for Dreamsim {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

@@ -1,6 +1,9 @@
 //! Source-pinned native adapters for the minimal typed IQA contract.
 #![forbid(unsafe_code)]
-use iqa::zenpixels::{PixelDescriptor, PixelSlice};
+use iqa::zenpixels::{
+    AlphaMode, ColorSpace, PixelView, PlaneFormat, PlaneRole, PlaneView, Primaries, SampleLayout,
+    SampleStride, SampleType, SignalRange, Transfer, formats,
+};
 use iqa::{
     Direction, ErrorKind, EvalOpts, Evaluation, Implementation, Metric, MetricId, MetricResult,
     PrepareReference, ResultMetricExt, Score, ScoreSpec, WarmReference,
@@ -39,9 +42,7 @@ impl<T: NativeMaps, const N: usize> Evaluation for Assessment<T, N> {
 /// Borrowed native map storage behind the concrete assessment.
 pub(crate) trait NativeMaps {
     fn map_specs(&self) -> Vec<ScoreSpec>;
-    fn map_planes(
-        &self,
-    ) -> impl Iterator<Item = (iqa::zenpixels::plane::AnyPlane<'_>, iqa::MapGrid)>;
+    fn map_planes(&self) -> impl Iterator<Item = (PlaneView<'_>, iqa::MapGrid)>;
 }
 fn one<T: NativeMaps>(native: T, value: f64) -> Assessment<T, 1> {
     let map_specs = native.map_specs();
@@ -73,8 +74,8 @@ fn zen_error(e: &zensim::ZensimError) -> ErrorKind {
         _ => ErrorKind::Backend,
     }
 }
-fn validate_rgb8(p: &PixelSlice<'_>) -> MetricResult<()> {
-    if p.descriptor() != PixelDescriptor::RGB8_SRGB || p.color_context().is_some() {
+fn validate_rgb8(p: &PixelView<'_>) -> MetricResult<()> {
+    if p.format() != &formats::RGB8_SRGB {
         return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
     }
     Ok(())
@@ -87,19 +88,19 @@ struct RgbRows<'a> {
 }
 impl RgbRows<'_> {
     fn as_imgref(&self) -> butteraugli::ImgRef<'_, butteraugli::RGB8> {
-        butteraugli::Img::new_stride(&*self.pixels, self.width, self.height, self.stride)
+        butteraugli::Img::new_stride(&self.pixels, self.width, self.height, self.stride)
     }
 }
-fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<RgbRows<'a>> {
+fn rgb8<'a>(p: &'a PixelView<'_>) -> MetricResult<RgbRows<'a>> {
     validate_rgb8(p)?;
     let width = p.width() as usize;
-    let (pixels, stride) = if p.stride().is_multiple_of(3) {
+    let (pixels, stride) = if p.stride_bytes().is_multiple_of(3) {
         (
             std::borrow::Cow::Borrowed(bytemuck::cast_slice(p.as_strided_bytes())),
-            p.stride() / 3,
+            p.stride_bytes() / 3,
         )
     } else {
-        let pixels = (0..p.rows())
+        let pixels = (0..p.height())
             .flat_map(|y| {
                 bytemuck::cast_slice::<u8, butteraugli::RGB8>(p.row(y))
                     .iter()
@@ -111,15 +112,58 @@ fn rgb8<'a>(p: &'a PixelSlice<'_>) -> MetricResult<RgbRows<'a>> {
     Ok(RgbRows {
         pixels,
         width,
-        height: p.rows() as usize,
+        height: p.height() as usize,
         stride,
     })
 }
-fn packed_rgb8(p: &PixelSlice<'_>) -> MetricResult<Vec<u8>> {
+fn packed_rgb8(p: &PixelView<'_>) -> MetricResult<Vec<u8>> {
     validate_rgb8(p)?;
-    Ok((0..p.rows())
+    Ok((0..p.height())
         .flat_map(|y| p.row(y).iter().copied())
         .collect())
+}
+/// Zero-copy bridge from `zenpixels 0.5` `PixelView` to `fast-ssim2 0.9.1`'s `zenpixels 0.2` `PixelSlice`.
+pub fn ssim2_slice<'a>(p: &'a PixelView<'_>) -> MetricResult<zenpixels_02::PixelSlice<'a>> {
+    let desc = if p.format() == &formats::RGB8_SRGB {
+        zenpixels_02::PixelDescriptor::RGB8_SRGB
+    } else if p.format() == &formats::RGBAF32_LINEAR {
+        zenpixels_02::PixelDescriptor::RGBAF32_LINEAR
+    } else {
+        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
+    };
+    zenpixels_02::PixelSlice::new(
+        p.as_strided_bytes(),
+        p.width(),
+        p.height(),
+        p.stride_bytes(),
+        desc,
+    )
+    .metric_err("ssim2", ErrorKind::UnsupportedInput)
+}
+/// Zero-copy bridge from `zenpixels 0.5` `PixelView` to `zensim::StridedBytes`.
+pub fn zen_source<'a>(p: &'a PixelView<'_>) -> MetricResult<zensim::StridedBytes<'a>> {
+    if p.format() == &formats::RGB8_SRGB {
+        zensim::StridedBytes::try_new(
+            p.as_strided_bytes(),
+            p.width() as usize,
+            p.height() as usize,
+            p.stride_bytes(),
+            zensim::PixelFormat::Srgb8Rgb,
+        )
+        .metric_err_with("zensim", zen_error)
+    } else if p.format() == &formats::RGBAF32_LINEAR {
+        zensim::StridedBytes::try_with_alpha_mode(
+            p.as_strided_bytes(),
+            p.width() as usize,
+            p.height() as usize,
+            p.stride_bytes(),
+            zensim::PixelFormat::LinearF32Rgba,
+            zensim::AlphaMode::Straight,
+        )
+        .metric_err_with("zensim", zen_error)
+    } else {
+        iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput))
+    }
 }
 /// Butteraugli's two scores and its original optional diagnostic result.
 pub struct Butter;
@@ -152,8 +196,8 @@ impl Metric for Butter {
     }
     fn evaluate(
         &mut self,
-        r: &PixelSlice<'_>,
-        d: &PixelSlice<'_>,
+        r: &PixelView<'_>,
+        d: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         butteraugli::butteraugli_with_stop(
@@ -170,14 +214,14 @@ impl PrepareReference for Butter {
     type Prepared<'a> = ButterWarm;
     fn warm_reference(
         &mut self,
-        r: &PixelSlice<'_>,
+        r: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<ButterWarm> {
         opts.checkpoint()?;
         let n = butteraugli::ButteraugliReference::new(
             &packed_rgb8(r)?,
             r.width() as usize,
-            r.rows() as usize,
+            r.height() as usize,
             butteraugli::ButteraugliParams::default().with_compute_diffmap(opts.diagnostics()),
         )
         .metric_err_with("butteraugli", butter_error)?;
@@ -186,7 +230,7 @@ impl PrepareReference for Butter {
 }
 impl WarmReference for ButterWarm {
     type Output = Assessment<butteraugli::ButteraugliResult, 2>;
-    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+    fn evaluate(&mut self, d: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
         let mut n = self
             .0
             .compare_with_stop(&packed_rgb8(d)?, opts.stop())
@@ -215,18 +259,20 @@ impl Metric for Ssim2 {
     }
     fn evaluate(
         &mut self,
-        r: &PixelSlice<'_>,
-        d: &PixelSlice<'_>,
+        r: &PixelView<'_>,
+        d: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
+        let rs = ssim2_slice(r)?;
+        let ds = ssim2_slice(d)?;
         let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
         if opts.diagnostics() {
-            let n = fast_ssim2::compute_ssimulacra2_maps_with_config(r, d, &config)
+            let n = fast_ssim2::compute_ssimulacra2_maps_with_config(&rs, &ds, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             let v = n.score;
             Ok(one(SsimNative::Maps(n), v))
         } else {
-            let v = fast_ssim2::compute_ssimulacra2_with_config(r, d, &config)
+            let v = fast_ssim2::compute_ssimulacra2_with_config(&rs, &ds, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             Ok(one(SsimNative::Scalar(v), v))
         }
@@ -234,9 +280,10 @@ impl Metric for Ssim2 {
 }
 impl PrepareReference for Ssim2 {
     type Prepared<'a> = SsimWarm;
-    fn warm_reference(&mut self, r: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<SsimWarm> {
+    fn warm_reference(&mut self, r: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<SsimWarm> {
+        let rs = ssim2_slice(r)?;
         fast_ssim2::Ssimulacra2Reference::new_with_config(
-            r,
+            &rs,
             &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
         )
         .metric_err_with("ssim2", ssim_error)
@@ -245,19 +292,20 @@ impl PrepareReference for Ssim2 {
 }
 impl WarmReference for SsimWarm {
     type Output = Assessment<SsimNative, 1>;
-    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+    fn evaluate(&mut self, d: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+        let ds = ssim2_slice(d)?;
         let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
         if opts.diagnostics() {
             let n = self
                 .0
-                .compare_with_maps_with_config(d, &config)
+                .compare_with_maps_with_config(&ds, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             let v = n.score;
             Ok(one(SsimNative::Maps(n), v))
         } else {
             let v = self
                 .0
-                .compare_with_config(d, &config)
+                .compare_with_config(&ds, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             Ok(one(SsimNative::Scalar(v), v))
         }
@@ -292,8 +340,8 @@ impl Metric for Zen {
     }
     fn evaluate(
         &mut self,
-        r: &PixelSlice<'_>,
-        d: &PixelSlice<'_>,
+        r: &PixelView<'_>,
+        d: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
         let z = zensim(opts)?;
@@ -311,10 +359,8 @@ impl Metric for Zen {
             let v = n.score();
             return Ok(one(ZenNative::Scalar(n), v));
         }
-        let r = zensim::ZenpixelsSource::try_from_slice(r)
-            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
-        let d = zensim::ZenpixelsSource::try_from_slice(d)
-            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        let r = zen_source(r)?;
+        let d = zen_source(d)?;
         if opts.diagnostics() {
             let n = z
                 .compute_with_diffmap(&r, &d, zensim::DiffmapOptions::default())
@@ -330,12 +376,11 @@ impl Metric for Zen {
 }
 impl PrepareReference for Zen {
     type Prepared<'a> = ZenWarm;
-    fn warm_reference(&mut self, r: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<ZenWarm> {
+    fn warm_reference(&mut self, r: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<ZenWarm> {
         if self.hdr.is_some() {
             return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedRequest));
         }
-        let source = zensim::ZenpixelsSource::try_from_slice(r)
-            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        let source = zen_source(r)?;
         zensim(opts)?
             .precompute_reference(&source)
             .metric_err_with("zensim", zen_error)
@@ -344,10 +389,9 @@ impl PrepareReference for Zen {
 }
 impl WarmReference for ZenWarm {
     type Output = Assessment<ZenNative, 1>;
-    fn evaluate(&mut self, d: &PixelSlice<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
+    fn evaluate(&mut self, d: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
         let z = zensim(opts)?;
-        let d = zensim::ZenpixelsSource::try_from_slice(d)
-            .metric_err("zensim", ErrorKind::UnsupportedInput)?;
+        let d = zen_source(d)?;
         if opts.diagnostics() {
             let n = z
                 .compute_with_ref_and_diffmap(&self.0, &d, zensim::DiffmapOptions::default())
@@ -364,38 +408,45 @@ impl WarmReference for ZenWarm {
     }
 }
 /// Explicit HDR ingress. Linear samples are absolute cd/m², never normalized
-/// relative light. The validation adapter refuses attached override contexts.
+/// relative light. The validation adapter refuses non-matching color spaces.
 pub fn hdr_source<'a>(
-    p: &'a PixelSlice<'_>,
+    p: &'a PixelView<'_>,
     encoding: zensim::HdrEncoding,
 ) -> MetricResult<zensim::StridedBytes<'a>> {
-    use iqa::zenpixels::{AlphaMode, ColorPrimaries, PixelFormat, SignalRange, TransferFunction};
-    let desc = p.descriptor();
-    let transfer = match encoding {
-        zensim::HdrEncoding::Linear => TransferFunction::Linear,
-        zensim::HdrEncoding::Pq { .. } => TransferFunction::Pq,
-        zensim::HdrEncoding::Hlg { .. } => TransferFunction::Hlg,
-        _ => return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput)),
-    };
-    if desc.pixel_format() != PixelFormat::RgbaF32
-        || desc.transfer() != transfer
-        || desc.alpha() != Some(AlphaMode::Opaque)
-        || desc.signal_range != SignalRange::Full
-        || p.color_context().is_some()
-    {
+    let fmt = p.format();
+    if fmt.layout != SampleLayout::RGBAF32 {
         return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
     }
-    let primaries = match desc.primaries {
-        ColorPrimaries::Bt709 => zensim::ColorPrimaries::Srgb,
-        ColorPrimaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
-        ColorPrimaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
+    let ColorSpace::Rgb {
+        primaries,
+        transfer,
+        range: SignalRange::Full,
+        alpha: AlphaMode::Opaque,
+        ..
+    } = fmt.color
+    else {
+        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
+    };
+    let transfer_ok = matches!(
+        (encoding, transfer),
+        (zensim::HdrEncoding::Linear, Transfer::Linear)
+            | (zensim::HdrEncoding::Pq { .. }, Transfer::Pq)
+            | (zensim::HdrEncoding::Hlg { .. }, Transfer::Hlg(_))
+    );
+    if !transfer_ok {
+        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
+    }
+    let primaries = match primaries {
+        Primaries::Bt709 => zensim::ColorPrimaries::Srgb,
+        Primaries::DisplayP3 => zensim::ColorPrimaries::DisplayP3,
+        Primaries::Bt2020 => zensim::ColorPrimaries::Bt2020,
         _ => return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput)),
     };
     zensim::StridedBytes::try_with_alpha_mode(
         p.as_strided_bytes(),
         p.width() as usize,
-        p.rows() as usize,
-        p.stride(),
+        p.height() as usize,
+        p.stride_bytes(),
         zensim::PixelFormat::LinearF32Rgba,
         zensim::AlphaMode::Opaque,
     )
@@ -421,9 +472,15 @@ pub fn fixture(w: u32, h: u32, padding: usize, distorted: bool) -> Vec<u8> {
     p
 }
 
-use iqa::zenpixels::plane::{AnyPlane, PlaneRef};
-fn plane(values: &[f32], w: usize, h: usize, stride: usize) -> AnyPlane<'_> {
-    AnyPlane::F32(PlaneRef::new(values, w, h, stride).expect("native map geometry"))
+fn plane(values: &[f32], w: usize, h: usize, stride: usize) -> PlaneView<'_> {
+    PlaneView::from_samples_strided(
+        values,
+        w as u32,
+        h as u32,
+        SampleStride(stride),
+        PlaneFormat::new(PlaneRole::Y, SampleType::F32),
+    )
+    .expect("native map geometry")
 }
 fn error_map(key: impl Into<std::borrow::Cow<'static, str>>) -> ScoreSpec {
     ScoreSpec::new("diffmap", Direction::Lower)
@@ -437,7 +494,7 @@ impl NativeMaps for butteraugli::ButteraugliResult {
             .map(|_| error_map("diffmap").with_unit("butteraugli"))
             .collect()
     }
-    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+    fn map_planes(&self) -> impl Iterator<Item = (PlaneView<'_>, iqa::MapGrid)> {
         self.diffmap.iter().map(|m| {
             (
                 plane(m.buf(), m.width(), m.height(), m.stride()),
@@ -455,7 +512,7 @@ impl NativeMaps for ZenNative {
             vec![]
         }
     }
-    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+    fn map_planes(&self) -> impl Iterator<Item = (PlaneView<'_>, iqa::MapGrid)> {
         let map = match self {
             Self::Map(m) => Some(m),
             _ => None,
@@ -488,7 +545,7 @@ impl NativeMaps for SsimNative {
             })
             .collect()
     }
-    fn map_planes(&self) -> impl Iterator<Item = (AnyPlane<'_>, iqa::MapGrid)> {
+    fn map_planes(&self) -> impl Iterator<Item = (PlaneView<'_>, iqa::MapGrid)> {
         let map = match self {
             Self::Maps(m) => Some(m),
             _ => None,
@@ -524,7 +581,7 @@ mod stride_tests {
                     data[y * stride + x] = (y * 9 + x) as u8;
                 }
             }
-            let input = PixelSlice::new(&data, 3, 3, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+            let input = PixelView::new(&data, 3, 3, stride, &formats::RGB8_SRGB).unwrap();
             let rows = rgb8(&input).unwrap();
             assert_eq!(
                 matches!(rows.pixels, std::borrow::Cow::Borrowed(_)),

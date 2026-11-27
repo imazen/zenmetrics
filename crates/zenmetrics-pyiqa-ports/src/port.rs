@@ -93,6 +93,8 @@ impl<P: Port> za::WarmReference for WarmPort<'_, P> {
 /// `za::Metric` for a [`Port`] type.
 macro_rules! impl_metric {
     ($t:ty) => {
+        zenmetrics_abstractions::impl_zenpsy_metric!($t);
+
         impl zenmetrics_abstractions::Metric for $t {
             fn id(&self) -> zenmetrics_abstractions::MetricId {
                 use $crate::port::Port as _;

@@ -7,7 +7,7 @@
 #![cfg(feature = "pixels")]
 
 use cvvdp::{Cvvdp, CvvdpParams};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelView, formats};
 
 fn make_bytes(w: usize, h: usize, seed: u32) -> Vec<u8> {
     let mut s = seed;
@@ -29,23 +29,11 @@ fn score_pixels_matches_score_bytes() {
     let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
     let jod_bytes = cv.score(&r, &d).unwrap();
 
-    let row_bytes = (w as usize) * PixelDescriptor::RGB8_SRGB.bytes_per_pixel();
-    let r_slice = PixelSlice::new(
-        &r,
-        w as u32,
-        h as u32,
-        row_bytes,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .expect("ref slice");
-    let d_slice = PixelSlice::new(
-        &d,
-        w as u32,
-        h as u32,
-        row_bytes,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .expect("dist slice");
+    let row_bytes = w * formats::RGB8_SRGB.layout.bytes_per_pixel();
+    let r_slice =
+        PixelView::new(&r, w as u32, h as u32, row_bytes, &formats::RGB8_SRGB).expect("ref slice");
+    let d_slice =
+        PixelView::new(&d, w as u32, h as u32, row_bytes, &formats::RGB8_SRGB).expect("dist slice");
     let mut cv2 = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
     let jod_pixels = cv2.score_pixels(r_slice, d_slice).unwrap();
 

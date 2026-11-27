@@ -19,6 +19,8 @@ mod gpu_concurrency;
 mod multiwarm_pool;
 #[cfg(feature = "cuda")]
 mod no_gpu_fallback;
+#[cfg(feature = "psy")]
+mod psy_contract;
 #[cfg(feature = "cuda")]
 mod reorder;
 #[cfg(feature = "cuda")]

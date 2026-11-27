@@ -177,6 +177,8 @@ fn patches(image: &Prepared, positions: &[(usize, usize)]) -> Vec<f32> {
     out
 }
 
+za::impl_zenpsy_metric!(PieApp);
+
 impl za::Metric for PieApp {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(3)).with_reference(format!(

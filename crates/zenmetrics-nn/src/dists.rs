@@ -339,6 +339,9 @@ impl Dists {
     }
 }
 
+za::impl_zenpsy_metric!(Dists);
+za::impl_zenpsy_prepare_reference!(Dists);
+
 impl za::Metric for Dists {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

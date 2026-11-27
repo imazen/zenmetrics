@@ -13,7 +13,7 @@
 
 use zenmetrics_api::hdr::{HDR_PEAK_NITS, HdrScorer};
 use zenmetrics_api::{Backend, Metric, MetricKind};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelView, formats};
 
 fn gradient_u8(w: u32, h: u32, seed: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity((w * h * 3) as usize);
@@ -46,15 +46,8 @@ fn f32_bytes(vals: &[f32]) -> Vec<u8> {
 
 /// An interleaved-linear-f32 (`RGBF32_LINEAR`) `PixelSlice` over `b`. A `fn` (not
 /// a closure) so the borrow lifetime threads through cleanly.
-fn lin_slice(b: &[u8], w: u32, h: u32) -> PixelSlice<'_> {
-    PixelSlice::new(
-        b,
-        w,
-        h,
-        (w * 3 * 4) as usize,
-        PixelDescriptor::RGBF32_LINEAR,
-    )
-    .unwrap()
+fn lin_slice(b: &[u8], w: u32, h: u32) -> PixelView<'_> {
+    PixelView::new(b, w, h, (w * 3 * 4) as usize, &formats::RGBF32_LINEAR).unwrap()
 }
 
 /// Base `Metric::compute_pixels` on an `RGB8_SRGB` slice is bit-identical to the
@@ -78,8 +71,8 @@ fn base_metric_compute_pixels_sdr_matches_native() {
     let native = m.compute_srgb_u8(&ref_u8, &dis_u8).expect("native").value;
     let via_pixels = m
         .compute_pixels(
-            PixelSlice::new(&ref_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
-            PixelSlice::new(&dis_u8, w, h, row, PixelDescriptor::RGB8_SRGB).unwrap(),
+            PixelView::new(&ref_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
+            PixelView::new(&dis_u8, w, h, row, &formats::RGB8_SRGB).unwrap(),
         )
         .expect("pixels")
         .value;

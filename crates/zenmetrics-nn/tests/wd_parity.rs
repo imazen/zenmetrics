@@ -1,7 +1,7 @@
 //! External Cool-Chic WD goldens, five KonJND-normalized columns. Caller
 //! explicitly supplies models, ladder and engine via `nn-wd-parity`.
 use std::path::{Path, PathBuf};
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{Engine, WassersteinDistortion};
 fn env(name: &str) -> PathBuf {
@@ -34,9 +34,7 @@ fn load(path: &Path) -> (Vec<u8>, usize, usize) {
     (out, w, h)
 }
 fn image(px: &[u8], w: usize, h: usize, stride: usize) -> Image<'_> {
-    Image::from(
-        PixelSlice::new(px, w as u32, h as u32, stride, PixelDescriptor::RGB8_SRGB).unwrap(),
-    )
+    Image::from(PixelView::new(px, w as u32, h as u32, stride, &formats::RGB8_SRGB).unwrap())
 }
 fn jnd(column: &str) -> f64 {
     include_str!("../models/jnd_scale.tsv")

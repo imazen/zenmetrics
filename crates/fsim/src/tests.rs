@@ -313,8 +313,8 @@ fn fsim_diffmap_matches_score_and_is_similarity() {
         zenmetrics_abstractions::MapPolarity::Similarity
     );
     assert_eq!(dm.score(), map_score);
-    let slice = view.pixels.as_slice();
-    assert_eq!((slice.width(), slice.rows()), (dm.width, dm.height));
+    let view_px = view.pixels.as_view();
+    assert_eq!((view_px.width(), view_px.height()), (dm.width, dm.height));
     // Identical inputs → map saturates to 1.
     let (_, dm_id) = crate::fsim_plane_f32_with_diffmap(&r, &r, w, h, w).unwrap();
     assert!(dm_id.map().iter().all(|&v| (v - 1.0).abs() < 1e-4));
@@ -350,7 +350,10 @@ fn metric_trait_object_scores_and_maps() {
         .unwrap();
     assert_eq!(za::conformance::scores(&*ev), named);
     let dm = ev.map().unwrap();
-    assert!(dm.pixels.is_borrowed());
+    assert!(matches!(
+        dm.pixels,
+        zenmetrics_abstractions::zenpixels::PixelCow::Borrowed(_)
+    ));
     assert_eq!(dm.polarity, za::MapPolarity::Similarity);
     assert!(ev.map_score(za::MapFold::Mean).is_ok());
     assert!(ev.map_score(za::MapFold::PNorm { p: 4.0 }).is_ok());
@@ -431,7 +434,7 @@ fn fixed_factor_matches_auto_and_strided() {
 
 #[test]
 fn downscale_identity_preserves_auto_and_distinguishes_factors() {
-    use zenmetrics_abstractions::Metric as _;
+    use zenmetrics_abstractions::{Metric as _, MetricIdExt as _};
     // Auto fingerprint from base 765a2f9c's identity fields and FNV-1a encoding.
     let auto = Fsim::default().id().fingerprint();
     assert_eq!(auto, 0xf2de67b03bafb14e);

@@ -2753,6 +2753,8 @@ impl Error {
 /// Output revision of the generic-surface scorer(s) in this crate.
 const SCORE_REVISION: u32 = 1;
 
+za::impl_zenpsy_metric!(MdctPsnr);
+
 impl za::Metric for MdctPsnr {
     fn id(&self) -> za::MetricId {
         za::MetricId::new("mdctpsnr", za::implementation!(SCORE_REVISION))

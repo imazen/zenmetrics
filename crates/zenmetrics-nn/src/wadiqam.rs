@@ -358,6 +358,9 @@ impl WadiqamFr {
     }
 }
 
+za::impl_zenpsy_metric!(WadiqamFr);
+za::impl_zenpsy_prepare_reference!(WadiqamFr);
+
 impl za::Metric for WadiqamFr {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(self.kind.column(), za::implementation!(SCORE_REVISION)).with_reference(
@@ -505,6 +508,8 @@ impl WadiqamNr {
         Ok(pool(&ya, n))
     }
 }
+
+za::impl_zenpsy_no_reference!(WadiqamNr);
 
 impl za::NoReferenceMetric for WadiqamNr {
     fn id(&self) -> za::MetricId {

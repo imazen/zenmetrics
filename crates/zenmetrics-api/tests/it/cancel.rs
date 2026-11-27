@@ -122,12 +122,11 @@ fn gpu_cached_reference_pre_cancelled_stop_keeps_the_reference() {
 #[cfg(all(any(feature = "cuda", feature = "wgpu"), feature = "pixels"))]
 #[test]
 fn gpu_compute_pixels_with_stop_routes_the_sdr_path() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
     let (r, d) = make_pair();
     let row_bytes = (W as usize) * 3;
-    // `PixelSlice` is a borrow, not `Copy` — rebuild per call.
-    let rs = || PixelSlice::new(&r, W, H, row_bytes, PixelDescriptor::RGB8_SRGB).expect("ref");
-    let ds = || PixelSlice::new(&d, W, H, row_bytes, PixelDescriptor::RGB8_SRGB).expect("dis");
+    let rs = || PixelView::new(&r, W, H, row_bytes, &formats::RGB8_SRGB).expect("ref");
+    let ds = || PixelView::new(&d, W, H, row_bytes, &formats::RGB8_SRGB).expect("dis");
     for kind in gpu_kinds() {
         let mut m = Metric::new(kind, GPU_BACKEND, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: new: {e}"));

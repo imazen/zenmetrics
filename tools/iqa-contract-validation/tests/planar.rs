@@ -2,21 +2,20 @@
 //! packed fallbacks. Diagnostic witnesses are bounded and remain in memory.
 use iqa_contract_validation::{Butter, Ssim2, Zen};
 use zenpsy_api::{
-    zenpixels::{hdr::DiffuseWhite, plane::*, *},
+    zenpixels::{
+        AlphaMode, ColorSpace, DiffuseWhite, PixelView, PlanarView, PlaneFormat, PlaneRole,
+        PlaneView, Primaries, SampleStride, SampleType, SignalRange, Transfer, formats,
+    },
     *,
 };
-fn layout() -> PlanarLayout {
-    PlanarLayout::new(
-        [PlaneRole::Red, PlaneRole::Green, PlaneRole::Blue]
-            .map(|r| PlaneSpec::new(r, PlaneEncoding::Float(FloatEncoding::NOMINAL)))
-            .to_vec(),
-        sample::ChromaSubsampling::Yuv444,
-        sample::ChromaSiting::Unknown,
-    )
-    .unwrap()
-}
-fn color() -> ColorContext {
-    ColorContext::from_cicp(Cicp::new(1, 8, 0, true)).with_diffuse_white(DiffuseWhite::new(80.0))
+fn color() -> ColorSpace {
+    ColorSpace::Rgb {
+        primaries: Primaries::Bt709,
+        transfer: Transfer::Linear,
+        range: SignalRange::Full,
+        alpha: AlphaMode::None,
+        white: Some(DiffuseWhite::new(80.0).unwrap()),
+    }
 }
 fn input(w: usize, h: usize, delta: f32) -> [Vec<f32>; 3] {
     core::array::from_fn(|c| {
@@ -31,8 +30,24 @@ fn input(w: usize, h: usize, delta: f32) -> [Vec<f32>; 3] {
         v
     })
 }
-fn views(v: &[Vec<f32>; 3], w: usize, h: usize) -> [AnyPlane<'_>; 3] {
-    core::array::from_fn(|c| AnyPlane::F32(PlaneRef::new(&v[c][..], w, h, w + c + 3).unwrap()))
+fn views(v: &[Vec<f32>; 3], w: usize, h: usize) -> [PlaneView<'_>; 3] {
+    let roles = [PlaneRole::R, PlaneRole::G, PlaneRole::B];
+    core::array::from_fn(|c| {
+        PlaneView::from_samples_strided(
+            &v[c][..],
+            w as u32,
+            h as u32,
+            SampleStride(w + c + 3),
+            PlaneFormat::new(roles[c], SampleType::F32),
+        )
+        .unwrap()
+    })
+}
+fn plane_bits(p: PlaneView<'_>) -> Vec<u32> {
+    assert_eq!(p.format().sample, SampleType::F32);
+    (0..p.height())
+        .flat_map(|y| p.row_as::<f32>(y).unwrap().iter().map(|v| v.to_bits()))
+        .collect()
 }
 fn scores(e: &impl Evaluation) -> Vec<(String, u64)> {
     e.scores()
@@ -44,14 +59,17 @@ where
     M::Output: 'static,
 {
     let (w, h) = (97, 73);
-    let l = layout();
     let c = color();
     let a = input(w, h, 0.0);
     let b = input(w, h, 0.02);
     let ap = views(&a, w, h);
     let bp = views(&b, w, h);
-    let r = PlanarSlice::new(&ap, &l, w as u32, h as u32, &c, None).unwrap();
-    let d = PlanarSlice::new(&bp, &l, w as u32, h as u32, &c, None).unwrap();
+    let r = PlanarView::new(w as u32, h as u32, &ap)
+        .unwrap()
+        .with_color(c.clone());
+    let d = PlanarView::new(w as u32, h as u32, &bp)
+        .unwrap()
+        .with_color(c);
     // Construct the direct packed oracle independently of the adapter's
     // interleave helper, so channel/stride/transfer mistakes cannot self-agree.
     let packed = |v: &[Vec<f32>; 3]| -> Vec<[f32; 4]> {
@@ -70,13 +88,13 @@ where
     };
     let ar = packed(&a);
     let bd = packed(&b);
-    fn packed_view(v: &[[f32; 4]], w: usize, h: usize) -> PixelSlice<'_> {
-        PixelSlice::new(
+    fn packed_view(v: &[[f32; 4]], w: usize, h: usize) -> PixelView<'_> {
+        PixelView::new(
             bytemuck::cast_slice(v),
             w as u32,
             h as u32,
             w * 16,
-            PixelDescriptor::RGBAF32_LINEAR,
+            &formats::RGBAF32_LINEAR,
         )
         .unwrap()
     }
@@ -118,13 +136,7 @@ where
             )
             .unwrap();
         let map = direct.maps().find(|m| m.spec.key() == key).unwrap();
-        let AnyPlane::F32(p) = map.values else {
-            panic!("f32")
-        };
-        (
-            scores(&direct),
-            p.rows().flatten().map(|v| v.to_bits()).collect::<Vec<_>>(),
-        )
+        (scores(&direct), plane_bits(map.values))
     };
     let cold = score_planar(&mut metric, &r, &d, EvalOpts::new().with_map(key)).unwrap();
     let expected = scores(&cold);
@@ -133,10 +145,7 @@ where
     let output = warm.score(&d, EvalOpts::new().with_map(key)).unwrap();
     assert_eq!(scores(&output), expected);
     let cold_map = cold.maps().find(|m| m.spec.key() == key).unwrap();
-    let AnyPlane::F32(cold_plane) = cold_map.values else {
-        panic!("f32")
-    };
-    let wanted: Vec<u32> = cold_plane.rows().flatten().map(|v| v.to_bits()).collect();
+    let wanted = plane_bits(cold_map.values);
     assert_eq!(wanted, direct_map);
     warm.with_evaluation(&d, EvalOpts::new().with_map(key), |view| {
         let mut got = Vec::new();
@@ -144,20 +153,22 @@ where
         assert_eq!(got, expected);
         view.visit_maps(|m| {
             if m.spec.key() == key {
-                let AnyPlane::F32(p) = m.values else {
-                    panic!("f32")
-                };
-                assert_eq!(
-                    p.rows().flatten().map(|v| v.to_bits()).collect::<Vec<_>>(),
-                    wanted
-                );
+                assert_eq!(plane_bits(m.values), wanted);
             }
         });
         Ok(())
     })
     .unwrap();
-    let changed = ColorContext::from_cicp(Cicp::new(9, 8, 0, true));
-    let wrong = PlanarSlice::new(&bp, &l, w as u32, h as u32, &changed, None).unwrap();
+    let changed = ColorSpace::Rgb {
+        primaries: Primaries::Bt2020,
+        transfer: Transfer::Linear,
+        range: SignalRange::Full,
+        alpha: AlphaMode::None,
+        white: None,
+    };
+    let wrong = PlanarView::new(w as u32, h as u32, &bp)
+        .unwrap()
+        .with_color(changed);
     assert_eq!(
         warm.score(&wrong, EvalOpts::new())
             .err()
@@ -188,11 +199,12 @@ fn zensim_reuses_explicit_interleave_storage_and_preserves_native_map() {
 #[test]
 fn heterogeneous_native_planar_preparation_preserves_all_named_scores() {
     let (w, h) = (97, 73);
-    let l = layout();
     let c = color();
     let input = input(w, h, 0.0);
     let planes = views(&input, w, h);
-    let image = PlanarSlice::new(&planes, &l, w as u32, h as u32, &c, None).unwrap();
+    let image = PlanarView::new(w as u32, h as u32, &planes)
+        .unwrap()
+        .with_color(c);
     let mut metrics: Vec<Box<dyn DynPreparePlanarReference>> = vec![
         Box::new(Erased::new(Butter)),
         Box::new(Erased::new(Ssim2)),

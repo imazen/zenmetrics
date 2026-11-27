@@ -42,8 +42,9 @@ use std::borrow::Cow;
 use std::boxed::Box;
 use std::vec::Vec;
 
-use za::PlaneRole;
-use za::zenpixels::{ChannelType, PixelSlice};
+use za::zenpixels::{BitPacking, PlaneRole, PlaneView, SampleType};
+#[cfg(test)]
+use za::zenpixels::{PlanarView, PlaneFormat};
 use zenmetrics_abstractions as za;
 
 use crate::{Error, ModelVariant, PoolingMethod, VmafFrameResult, VmafV1Stream, Yuv420Frame};
@@ -120,39 +121,42 @@ impl Vmaf {
 }
 
 /// Whether `format` is YCbCr 4:2:0 at a bit depth VMAF scores: U8 with 8
-/// bits, or U16 with 10.
+/// bits, or U16 with 10 LSB-aligned bits.
 fn accepts_format(format: &za::InputFormat) -> bool {
     let za::InputFormat::Planar(p) = format else {
         return false;
     };
-    let planes = p.layout.planes();
+    let planes = &p.planes;
     let shape = [
-        (PlaneRole::Luma, 1, 1),
-        (PlaneRole::Cb, 2, 2),
-        (PlaneRole::Cr, 2, 2),
+        (PlaneRole::Y, (1, 1)),
+        (PlaneRole::Cb, (2, 2)),
+        (PlaneRole::Cr, (2, 2)),
     ];
     planes.len() == 3
         && planes
             .iter()
             .zip(shape)
-            .all(|(d, (s, h, v))| d.role == s && d.h_subsample == h && d.v_subsample == v)
+            .all(|(d, (role, sub))| d.role == role && d.subsampling == sub && d.components == 1)
         && planes
             .iter()
-            .all(|d| d.channel_type == planes[0].channel_type)
+            .all(|d| d.sample == planes[0].sample && d.packing == planes[0].packing)
         && matches!(
-            (planes[0].channel_type, p.significant_bits),
-            (ChannelType::U8, 8) | (ChannelType::U16, 10)
+            (planes[0].sample, planes[0].packing),
+            (
+                SampleType::U8,
+                BitPacking::Full | BitPacking::Lsb { bits: 8 }
+            ) | (SampleType::U16, BitPacking::Lsb { bits: 10 })
         )
 }
 
 /// One plane's samples as packed `u16`.
-fn plane_u16(s: &PixelSlice<'_>) -> Vec<u16> {
-    let (w, h) = (s.width() as usize, s.rows() as usize);
+fn plane_u16(s: &PlaneView<'_>) -> Vec<u16> {
+    let (w, h) = (s.width() as usize, s.height() as usize);
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h as u32 {
         let row = s.row(y);
-        match s.descriptor().channel_type() {
-            ChannelType::U8 => out.extend(row[..w].iter().map(|&v| u16::from(v))),
+        match s.format().sample {
+            SampleType::U8 => out.extend(row[..w].iter().map(|&v| u16::from(v))),
             _ => out.extend(
                 row[..w * 2]
                     .as_chunks::<2>()
@@ -197,13 +201,17 @@ fn frame(img: &za::Image<'_>) -> za::MetricResult<(Frame, (u32, u32, u8))> {
         return za::fail(za::MetricError::new(za::ErrorKind::Internal).with_metric("vmaf"));
     };
     let s = p.planes();
+    let bits = match s[0].format().sample {
+        SampleType::U8 => 8,
+        _ => 10,
+    };
     Ok((
         Frame {
             y: plane_u16(&s[0]),
             u: plane_u16(&s[1]),
             v: plane_u16(&s[2]),
         },
-        (p.width(), p.height(), p.significant_bits()),
+        (p.width(), p.height(), bits),
     ))
 }
 
@@ -282,6 +290,8 @@ impl za::Evaluation for VmafMaps {
         self
     }
 }
+
+za::impl_zenpsy_planar_metric!(Vmaf);
 
 impl za::Metric for Vmaf {
     fn id(&self) -> za::MetricId {
@@ -557,11 +567,7 @@ impl za::Sequence for VmafSequence {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Vec<za::FrameEvaluation>> {
         if self.failed {
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::SequenceOrder)
-                    .with_metric("vmaf")
-                    .with_message("push after a failed push"),
-            );
+            return za::fail(za::sequence_order_error("vmaf", "push after a failed push"));
         }
         let out = self.push_inner(r, d, opts);
         self.failed = out.is_err();
@@ -575,18 +581,13 @@ impl za::Sequence for VmafSequence {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         if self.failed {
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::SequenceOrder)
-                    .with_metric("vmaf")
-                    .with_message("finish after a failed push"),
-            );
+            return za::fail(za::sequence_order_error(
+                "vmaf",
+                "finish after a failed push",
+            ));
         }
         let Some(stream) = self.stream.take() else {
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::SequenceOrder)
-                    .with_metric("vmaf")
-                    .with_message("finish with no frames"),
-            );
+            return za::fail(za::sequence_order_error("vmaf", "finish with no frames"));
         };
         let rest = stream.finish().metric_err_with("vmaf", Error::kind)?;
         let frames = self.ready(rest);
@@ -608,19 +609,40 @@ impl za::Sequence for VmafSequence {
 mod tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
-    use za::zenpixels::PixelDescriptor;
 
     // The libvmaf parity tests' size: above every feature's floor.
     const W: usize = 640;
     const H: usize = 360;
 
-    fn gray8(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
-        PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
+    fn plane8(d: &[u8], w: usize, h: usize, role: PlaneRole, sub: (u8, u8)) -> PlaneView<'_> {
+        PlaneView::new(
+            d,
+            w as u32,
+            h as u32,
+            w,
+            PlaneFormat::new(role, SampleType::U8).with_subsampling(sub.0, sub.1),
+        )
+        .unwrap()
     }
 
-    fn gray16(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
-        PixelSlice::new(d, w as u32, h as u32, w * 2, PixelDescriptor::GRAY16).unwrap()
+    fn plane16(
+        d: &[u8],
+        w: usize,
+        h: usize,
+        role: PlaneRole,
+        sub: (u8, u8),
+        packing: BitPacking,
+    ) -> PlaneView<'_> {
+        PlaneView::new(
+            d,
+            w as u32,
+            h as u32,
+            w * 2,
+            PlaneFormat::new(role, SampleType::U16)
+                .with_subsampling(sub.0, sub.1)
+                .with_packing(packing),
+        )
+        .unwrap()
     }
 
     fn yuv(p: &[Vec<u16>; 3]) -> Yuv420Frame<'_> {
@@ -651,12 +673,13 @@ mod tests {
     }
 
     fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
-        za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
-            vec![
-                gray8(&p[0], W, H),
-                gray8(&p[1], W / 2, H / 2),
-                gray8(&p[2], W / 2, H / 2),
+        PlanarView::new(
+            W as u32,
+            H as u32,
+            &[
+                plane8(&p[0], W, H, PlaneRole::Y, (1, 1)),
+                plane8(&p[1], W / 2, H / 2, PlaneRole::Cb, (2, 2)),
+                plane8(&p[2], W / 2, H / 2, PlaneRole::Cr, (2, 2)),
             ],
         )
         .unwrap()
@@ -723,25 +746,26 @@ mod tests {
             .iter()
             .map(|v| v.iter().flat_map(|s| s.to_ne_bytes()).collect())
             .collect();
-        let planes = || {
-            za::Planes::new(
-                PlaneLayout::ycbcr_420(ChannelType::U16),
-                vec![
-                    gray16(&bytes[0], W, H),
-                    gray16(&bytes[1], W / 2, H / 2),
-                    gray16(&bytes[2], W / 2, H / 2),
+        let planes = |packing: BitPacking| {
+            PlanarView::new(
+                W as u32,
+                H as u32,
+                &[
+                    plane16(&bytes[0], W, H, PlaneRole::Y, (1, 1), packing),
+                    plane16(&bytes[1], W / 2, H / 2, PlaneRole::Cb, (2, 2), packing),
+                    plane16(&bytes[2], W / 2, H / 2, PlaneRole::Cr, (2, 2), packing),
                 ],
             )
             .unwrap()
         };
         let mut m = Vmaf::new(ModelVariant::Standard1080p);
-        let ten: za::Image<'_> = planes().with_significant_bits(10).unwrap().into();
+        let ten: za::Image<'_> = planes(BitPacking::Lsb { bits: 10 }).into();
         assert!(m.accepts(&ten.format()));
         let e = m
             .evaluate(ten.clone(), ten, za::EvalOpts::SCORE_ONLY)
             .unwrap();
         assert!(e.score().is_finite());
-        let sixteen: za::Image<'_> = planes().into();
+        let sixteen: za::Image<'_> = planes(BitPacking::Full).into();
         let err = m
             .evaluate(sixteen.clone(), sixteen, za::EvalOpts::SCORE_ONLY)
             .err()
@@ -758,12 +782,13 @@ mod tests {
             .unwrap();
         fn small(p: &[Vec<u8>; 3]) -> za::Image<'_> {
             za::Image::from(
-                za::Planes::new(
-                    PlaneLayout::ycbcr_420(ChannelType::U8),
-                    vec![
-                        gray8(&p[0], W, H - 2),
-                        gray8(&p[1], W / 2, H / 2 - 1),
-                        gray8(&p[2], W / 2, H / 2 - 1),
+                PlanarView::new(
+                    W as u32,
+                    (H - 2) as u32,
+                    &[
+                        plane8(&p[0], W, H - 2, PlaneRole::Y, (1, 1)),
+                        plane8(&p[1], W / 2, H / 2 - 1, PlaneRole::Cb, (2, 2)),
+                        plane8(&p[2], W / 2, H / 2 - 1, PlaneRole::Cr, (2, 2)),
                     ],
                 )
                 .unwrap(),
@@ -778,7 +803,7 @@ mod tests {
             .push(image(&r), image(&d), za::EvalOpts::SCORE_ONLY)
             .err()
             .unwrap();
-        assert_eq!(e.error().kind(), za::ErrorKind::SequenceOrder);
+        assert!(za::is_sequence_order(e.error()));
     }
 }
 
@@ -786,14 +811,19 @@ mod tests {
 mod map_tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
-    use za::zenpixels::PixelDescriptor;
 
     const W: usize = 640;
     const H: usize = 360;
 
-    fn gray8(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
-        PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
+    fn plane8(d: &[u8], w: usize, h: usize, role: PlaneRole, sub: (u8, u8)) -> PlaneView<'_> {
+        PlaneView::new(
+            d,
+            w as u32,
+            h as u32,
+            w,
+            PlaneFormat::new(role, SampleType::U8).with_subsampling(sub.0, sub.1),
+        )
+        .unwrap()
     }
 
     /// A textured 4:2:0 frame with varied chroma (SPEED reads chroma).
@@ -813,12 +843,13 @@ mod map_tests {
     }
 
     fn image(p: &[Vec<u8>; 3]) -> za::Image<'_> {
-        za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
-            vec![
-                gray8(&p[0], W, H),
-                gray8(&p[1], W / 2, H / 2),
-                gray8(&p[2], W / 2, H / 2),
+        PlanarView::new(
+            W as u32,
+            H as u32,
+            &[
+                plane8(&p[0], W, H, PlaneRole::Y, (1, 1)),
+                plane8(&p[1], W / 2, H / 2, PlaneRole::Cb, (2, 2)),
+                plane8(&p[2], W / 2, H / 2, PlaneRole::Cr, (2, 2)),
             ],
         )
         .unwrap()
@@ -1098,19 +1129,29 @@ mod map_tests {
 mod size_tests {
     use super::*;
     use za::Metric as _;
-    use za::PlaneLayout;
-    use za::zenpixels::PixelDescriptor;
 
     #[test]
     fn below_cambi_minimum_is_too_small() {
         let (w, h) = (64usize, 48usize);
         let (y, c) = (vec![128u8; w * h], vec![128u8; (w / 2) * (h / 2)]);
-        fn g(d: &[u8], w: usize, h: usize) -> PixelSlice<'_> {
-            PixelSlice::new(d, w as u32, h as u32, w, PixelDescriptor::GRAY8).unwrap()
+        fn p(d: &[u8], w: usize, h: usize, role: PlaneRole, sub: (u8, u8)) -> PlaneView<'_> {
+            PlaneView::new(
+                d,
+                w as u32,
+                h as u32,
+                w,
+                PlaneFormat::new(role, SampleType::U8).with_subsampling(sub.0, sub.1),
+            )
+            .unwrap()
         }
-        let img: za::Image<'_> = za::Planes::new(
-            PlaneLayout::ycbcr_420(ChannelType::U8),
-            vec![g(&y, w, h), g(&c, w / 2, h / 2), g(&c, w / 2, h / 2)],
+        let img: za::Image<'_> = PlanarView::new(
+            w as u32,
+            h as u32,
+            &[
+                p(&y, w, h, PlaneRole::Y, (1, 1)),
+                p(&c, w / 2, h / 2, PlaneRole::Cb, (2, 2)),
+                p(&c, w / 2, h / 2, PlaneRole::Cr, (2, 2)),
+            ],
         )
         .unwrap()
         .into();

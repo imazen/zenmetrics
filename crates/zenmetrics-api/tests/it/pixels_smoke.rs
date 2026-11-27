@@ -5,7 +5,7 @@
 #![cfg(all(feature = "pixels", feature = "cuda"))]
 
 use zenmetrics_api::{Backend, Metric, MetricKind};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelView, formats};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -24,12 +24,12 @@ fn make_image() -> Vec<u8> {
 fn run_pixels(kind: MetricKind) -> zenmetrics_api::Score {
     let r_bytes = make_image();
     let d_bytes = make_image();
-    let descriptor = PixelDescriptor::RGB8_SRGB;
+    let descriptor = &formats::RGB8_SRGB;
     let row_bytes = (W as usize) * 3;
     let r_slice =
-        PixelSlice::new(&r_bytes, W, H, row_bytes, descriptor).expect("ref slice construction");
+        PixelView::new(&r_bytes, W, H, row_bytes, descriptor).expect("ref slice construction");
     let d_slice =
-        PixelSlice::new(&d_bytes, W, H, row_bytes, descriptor).expect("dist slice construction");
+        PixelView::new(&d_bytes, W, H, row_bytes, descriptor).expect("dist slice construction");
 
     let params = crate::params_for(kind);
     let mut m = Metric::new(kind, Backend::Cuda, W, H, params)

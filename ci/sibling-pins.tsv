@@ -127,7 +127,13 @@ ravif	https://github.com/imazen/cavif-rs.git	../ravif	cb06487cfc8013413f5cb268a9
 # `feature-rev` arm needs `FormulaRevision::Rev7` (the `rowlanes`
 # era, landed bad544a3) — 96c3c9bb tops out at Rev5. Also pulls the
 # Rev6 `globaff`/ringhpm-era groundwork the Rev7 measure builds on.
-zensim	https://github.com/imazen/zensimx.git	../zensimx	2ac9f07399cfb66330aab279d31087f34fe36f1b	-
+# Bumped from 2ac9f073 (2026-10-27) to 878f5768 (2026-11-23, zensim
+# origin/main) for the zenpixels 0.5 + zenpsy-api migration: 2ac9f073
+# capped `magetypes <= 0.9.31-beta.1`, conflicting with `zenpixels-convert
+# 0.5` (`magetypes 0.9.33`). `abec986d` upgraded zensim to
+# `archmage/magetypes 0.9.33`, `ef588fcc` fixed profile attribution
+# scoring, and `878f5768` landed publication-free leaf dispatch/size cuts.
+zensim	https://github.com/imazen/zensimx.git	../zensimx	878f57688257349c90d08a015fe6444d0d6792bf	-
 # butteraugli's local layout is a Cargo workspace at
 # ~/work/butteraugli/ with the package at
 # ~/work/butteraugli/butteraugli/. The workspace's

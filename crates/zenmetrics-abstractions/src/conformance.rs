@@ -161,15 +161,15 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
                         ),
                     );
                 }
-                let sl = m.pixels.as_slice();
-                if (sl.width(), sl.rows()) != (g.cells_x, g.cells_y) {
+                let sl = m.pixels.as_view();
+                if (sl.width(), sl.height()) != (g.cells_x, g.cells_y) {
                     v(
                         "geometry",
                         format!(
                             "map {}: {}x{} values, geometry {}x{}",
                             m.name,
                             sl.width(),
-                            sl.rows(),
+                            sl.height(),
                             g.cells_x,
                             g.cells_y
                         ),
@@ -208,8 +208,8 @@ pub fn check(metric: &mut dyn Metric, r: &Image<'_>, d: &Image<'_>) -> Vec<Viola
                                 ),
                             );
                         }
-                        let sl = s.pixels.as_slice();
-                        if (sl.width(), sl.rows()) != (s.geometry.cells_x, s.geometry.cells_y) {
+                        let sl = s.pixels.as_view();
+                        if (sl.width(), sl.height()) != (s.geometry.cells_x, s.geometry.cells_y) {
                             v(
                                 "subsampled",
                                 format!("map {}: size disagrees with geometry", s.name),
@@ -497,12 +497,12 @@ pub fn distort_rgb8(src: &[u8], w: usize, h: usize) -> Vec<u8> {
 /// # Panics
 /// When `data` is shorter than `w·h·3`.
 pub fn rgb8_image(data: &[u8], w: usize, h: usize) -> Image<'_> {
-    zenpixels::PixelSlice::new(
+    zenpixels::PixelView::new(
         data,
         w as u32,
         h as u32,
         w * 3,
-        zenpixels::PixelDescriptor::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )
     .expect("packed rgb8 test image")
     .into()
@@ -535,7 +535,7 @@ mod tests {
     use crate::metric::EvalOpts;
     use alloc::boxed::Box;
     use alloc::vec;
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     /// Mean absolute byte difference; no map.
     struct Mad8 {
@@ -604,8 +604,8 @@ mod tests {
     #[test]
     fn simple_metric_conforms_and_missing_checkpoint_is_caught() {
         let (a, b) = (vec![10u8; 12], vec![12u8; 12]);
-        let r = Image::from(PixelSlice::new(&a, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap());
-        let d = Image::from(PixelSlice::new(&b, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap());
+        let r = Image::from(PixelView::new(&a, 2, 2, 6, &formats::RGB8_SRGB).unwrap());
+        let d = Image::from(PixelView::new(&b, 2, 2, 6, &formats::RGB8_SRGB).unwrap());
         assert_conforms(
             &mut Mad8 {
                 forget_checkpoint: false,

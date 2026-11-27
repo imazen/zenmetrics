@@ -350,8 +350,8 @@ fn v3_result_is_a_diffmap() {
     }
     let res = hdrvdp3(&test, &refr, w, h, &par).unwrap();
     let view = res.map().unwrap();
-    let sl = view.pixels.as_slice();
-    assert_eq!((sl.width(), sl.rows()), (w as u32, h as u32));
+    let sl = view.pixels.as_view();
+    assert_eq!((sl.width(), sl.height()), (w as u32, h as u32));
     assert_eq!(
         view.polarity,
         zenmetrics_abstractions::MapPolarity::DetectionProbability

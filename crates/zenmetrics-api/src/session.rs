@@ -556,13 +556,13 @@ macro_rules! impl_session_scoring_surface {
             }
 
             /// Score one reference / distorted pair from
-            /// [`zenpixels::PixelSlice`] inputs. See
+            /// [`zenpixels::PixelView`] inputs. See
             /// [`crate::Metric::compute_pixels`].
             #[cfg(feature = "pixels")]
             pub fn score_pixels(
                 &mut self,
-                r: zenpixels::PixelSlice<'_>,
-                d: zenpixels::PixelSlice<'_>,
+                r: zenpixels::PixelView<'_>,
+                d: zenpixels::PixelView<'_>,
             ) -> Result<crate::Score> {
                 self.scorer.compute_pixels(r, d)
             }

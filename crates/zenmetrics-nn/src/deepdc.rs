@@ -156,6 +156,9 @@ impl DeepDc {
     }
 }
 
+za::impl_zenpsy_metric!(DeepDc);
+za::impl_zenpsy_prepare_reference!(DeepDc);
+
 impl za::Metric for DeepDc {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

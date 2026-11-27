@@ -9,7 +9,7 @@ use crate::pipeline::Ssim2;
 use crate::skipmap::Ssim2Mode;
 
 #[cfg(feature = "pixels")]
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// The backend selector and uniform score type are shared verbatim
 /// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
@@ -384,7 +384,7 @@ impl Ssim2Opaque {
 
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
         let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
         let rp = self.pad_rgb(&ref_buf)?;
@@ -488,22 +488,24 @@ impl Ssim2Opaque {
 }
 
 #[cfg(feature = "pixels")]
-pub(crate) fn to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    expected_w: u32,
-    expected_h: u32,
-) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+pub(crate) fn to_srgb_rgb8(s: &PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         let expected = (expected_w as usize) * (expected_h as usize) * 3;
-        let got = (s.width() as usize) * (s.rows() as usize) * 3;
+        let got = (s.width() as usize) * (s.height() as usize) * 3;
         return Err(Error::DimensionMismatch { expected, got });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w as usize) * (expected_h as usize) * 3,
+                got: (s.width() as usize) * (s.height() as usize) * 3,
+            });
     }
     zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
-        got: (s.width() as usize) * (s.rows() as usize) * 3,
+        got: (s.width() as usize) * (s.height() as usize) * 3,
     })
 }

@@ -209,6 +209,8 @@ impl Liqe {
     }
 }
 
+za::impl_zenpsy_no_reference!(Liqe);
+
 impl za::NoReferenceMetric for Liqe {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

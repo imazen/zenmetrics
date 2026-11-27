@@ -1,6 +1,6 @@
 //! Measure loading and two evaluations at an explicitly requested geometry.
 use std::time::Instant;
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{Engine, PieApp, WeightsConsent};
 fn main() {
@@ -33,16 +33,7 @@ fn main() {
         .map(|(i, &v)| v.wrapping_add((i % 11) as u8))
         .collect();
     let image = |pixels| {
-        Image::from(
-            PixelSlice::new(
-                pixels,
-                w as u32,
-                h as u32,
-                w * 3,
-                PixelDescriptor::RGB8_SRGB,
-            )
-            .unwrap(),
-        )
+        Image::from(PixelView::new(pixels, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap())
     };
     let mut first = None;
     for call in 0..2 {

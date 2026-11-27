@@ -12,7 +12,7 @@ use how_far::{NoPulse, Pulse, Stop, StopReason};
 
 use crate::error::{ErrorKind, MetricError, MetricResult, fail};
 use crate::eval::{Evaluation, ScoreKind, ScoreSpec};
-use crate::identity::MetricId;
+use crate::identity::{MetricId, MetricIdExt as _};
 use crate::input::{Image, InputFormat, OwnedImage, check_same_size};
 use crate::map::MapRequest;
 
@@ -325,7 +325,7 @@ pub trait Metric: Send {
         }
         Ok(Box::new(ColdReplay {
             metric: self,
-            reference: r.to_owned_image(),
+            reference: r.try_to_owned_image()?,
         }))
     }
 
@@ -403,7 +403,7 @@ pub trait Sequence: Send {
     /// # Errors
     /// [`ErrorKind::DimensionMismatch`] when the size changes mid-sequence;
     /// otherwise as [`Metric::evaluate`]. After an error the session is
-    /// unusable: later pushes fail with [`ErrorKind::SequenceOrder`].
+    /// unusable: later pushes fail with [`crate::sequence_order_error`].
     fn push(
         &mut self,
         r: Image<'_>,
@@ -414,7 +414,7 @@ pub trait Sequence: Send {
     /// Flush held-back frames and pool.
     ///
     /// # Errors
-    /// Metric-specific; [`ErrorKind::SequenceOrder`] after a failed push.
+    /// Metric-specific; [`crate::sequence_order_error`] after a failed push.
     fn finish(self: Box<Self>, opts: EvalOpts<'_>) -> MetricResult<SequenceSummary>;
 
     /// Frames pushed so far.

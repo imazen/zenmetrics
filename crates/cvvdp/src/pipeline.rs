@@ -2484,19 +2484,19 @@ impl Cvvdp {
             .store(0, core::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Score from `zenpixels::PixelSlice` references — converts the
-    /// input to the `RGB8_SRGB` descriptor first via
+    /// Score from `zenpixels::PixelView` references — converts the
+    /// input to the `RGB8_SRGB` format first via
     /// `zenpixels_convert`, then dispatches to [`Cvvdp::score`].
     ///
-    /// Use this when the caller already holds a `PixelSlice` (e.g.
+    /// Use this when the caller already holds a `PixelView` (e.g.
     /// from a decoder / processor that emits zenpixels-typed
     /// pixel data). For raw `&[u8]` callers, prefer `score` to
     /// skip the trivial copy.
     #[cfg(feature = "pixels")]
     pub fn score_pixels(
         &mut self,
-        reference: zenpixels::PixelSlice<'_>,
-        distorted: zenpixels::PixelSlice<'_>,
+        reference: zenpixels::PixelView<'_>,
+        distorted: zenpixels::PixelView<'_>,
     ) -> Result<f32> {
         let ref_buf = to_srgb_rgb8(&reference, self.width as u32, self.height as u32)?;
         let dis_buf = to_srgb_rgb8(&distorted, self.width as u32, self.height as u32)?;
@@ -2505,42 +2505,46 @@ impl Cvvdp {
 }
 
 #[cfg(feature = "pixels")]
-fn to_srgb_rgb8(
-    s: &zenpixels::PixelSlice<'_>,
-    expected_w: u32,
-    expected_h: u32,
-) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+fn to_srgb_rgb8(s: &zenpixels::PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         let expected = (expected_w as usize) * (expected_h as usize) * 3;
-        let got = (s.width() as usize) * (s.rows() as usize) * 3;
+        let got = (s.width() as usize) * (s.height() as usize) * 3;
         return Err(Error::DimensionMismatch { expected, got });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w as usize) * (expected_h as usize) * 3,
+                got: (s.width() as usize) * (s.height() as usize) * 3,
+            });
     }
     convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
-        got: (s.width() as usize) * (s.rows() as usize) * 3,
+        got: (s.width() as usize) * (s.height() as usize) * 3,
     })
 }
 
 #[cfg(feature = "pixels")]
 fn convert_to_srgb_rgb8(
-    s: &zenpixels::PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
+    s: &zenpixels::PixelView<'_>,
+    target: &zenpixels::PixelFormat,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    use zenpixels_convert::{ConvertPolicy, RowPlan};
+    let policy = ConvertPolicy::permissive();
+    let plan = RowPlan::build(s.format(), target, &policy, None).map_err(|e| e.decompose().0)?;
     let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let h = s.height();
+    let row_bytes = (w as usize) * target.layout.bytes_per_pixel();
     let mut out = vec![0u8; row_bytes * (h as usize)];
     for y in 0..h {
         let src_row = s.row(y);
         let start = (y as usize) * row_bytes;
         let dst_row = &mut out[start..start + row_bytes];
-        convert_row(&plan, src_row, dst_row, w);
+        plan.convert_row(src_row, dst_row, w)
+            .map_err(|e| e.decompose().0)?;
     }
     Ok(out)
 }
@@ -4365,6 +4369,9 @@ impl Cvvdp {
     }
 }
 
+za::impl_zenpsy_metric!(Cvvdp);
+za::impl_zenpsy_prepare_reference!(Cvvdp);
+
 /// `Cvvdp` implements the generic surface on packed `RGB8_SRGB` (strided
 /// input is repacked), re-planning when the input size differs. Map: the
 /// masked-error diffmap. [`za::Metric::warm_reference`] caches the
@@ -4563,11 +4570,10 @@ impl za::Sequence for CvvdpVideo {
         opts: za::EvalOpts<'_>,
     ) -> za::MetricResult<Vec<za::FrameEvaluation>> {
         if self.failed {
-            return za::fail(
-                za::MetricError::new(za::ErrorKind::SequenceOrder)
-                    .with_metric("cvvdp")
-                    .with_message("push after a failed push"),
-            );
+            return za::fail(za::sequence_order_error(
+                "cvvdp",
+                "push after a failed push",
+            ));
         }
         let out = self.push_inner(r, d, opts);
         self.failed = out.is_err();
@@ -4583,11 +4589,10 @@ impl za::Sequence for CvvdpVideo {
         let scorer = match (self.failed, self.scorer.take()) {
             (false, Some(s)) => s,
             _ => {
-                return za::fail(
-                    za::MetricError::new(za::ErrorKind::SequenceOrder)
-                        .with_metric("cvvdp")
-                        .with_message("finish after a failed push or with no frames"),
-                );
+                return za::fail(za::sequence_order_error(
+                    "cvvdp",
+                    "finish after a failed push or with no frames",
+                ));
             }
         };
         let jod = scorer.finish().metric_err_with("cvvdp", Error::kind)?;

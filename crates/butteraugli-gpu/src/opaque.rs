@@ -17,7 +17,7 @@ use crate::pipeline::Butteraugli;
 use crate::{ButteraugliParams, Result};
 
 #[cfg(feature = "pixels")]
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// The backend selector and uniform score type are shared verbatim
 /// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
@@ -607,13 +607,13 @@ impl ButteraugliOpaque {
     #[cfg(all(feature = "pixels", feature = "internals"))]
     pub fn compute_pixels_display(
         &mut self,
-        ref_px: PixelSlice<'_>,
-        dis_px: PixelSlice<'_>,
+        ref_px: PixelView<'_>,
+        dis_px: PixelView<'_>,
         peak_nits: f32,
     ) -> Result<(Score, f64)> {
         let (w, h) = self.inner.dims();
         let n = (w as usize) * (h as usize);
-        let to_planes = |s: &PixelSlice<'_>| -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+        let to_planes = |s: &PixelView<'_>| -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
             let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|_| {
                 Error::DimensionMismatch {
                     expected: n * 3,
@@ -636,7 +636,7 @@ impl ButteraugliOpaque {
     /// `compute_pixels` for the fast-path / conversion-path
     /// semantics; identical here.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -769,22 +769,24 @@ impl ButteraugliOpaque {
 }
 
 #[cfg(feature = "pixels")]
-pub(crate) fn to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    expected_w: u32,
-    expected_h: u32,
-) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+pub(crate) fn to_srgb_rgb8(s: &PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         let expected = (expected_w as usize) * (expected_h as usize) * 3;
-        let got = (s.width() as usize) * (s.rows() as usize) * 3;
+        let got = (s.width() as usize) * (s.height() as usize) * 3;
         return Err(Error::DimensionMismatch { expected, got });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w as usize) * (expected_h as usize) * 3,
+                got: (s.width() as usize) * (s.height() as usize) * 3,
+            });
     }
     zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
-        got: (s.width() as usize) * (s.rows() as usize) * 3,
+        got: (s.width() as usize) * (s.height() as usize) * 3,
     })
 }

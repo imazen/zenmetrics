@@ -337,6 +337,9 @@ impl Dmm {
     }
 }
 
+za::impl_zenpsy_metric!(Dmm);
+za::impl_zenpsy_prepare_reference!(Dmm);
+
 impl za::Metric for Dmm {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

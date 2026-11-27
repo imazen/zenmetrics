@@ -228,6 +228,8 @@ impl Paq2piq {
     }
 }
 
+za::impl_zenpsy_no_reference!(Paq2piq);
+
 impl za::NoReferenceMetric for Paq2piq {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

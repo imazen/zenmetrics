@@ -499,6 +499,7 @@ impl Port for CwSsimPyiqa {
 }
 
 impl_metric!(CwSsimPyiqa);
+zenmetrics_abstractions::impl_zenpsy_prepare_reference!(CwSsimPyiqa);
 
 #[cfg(test)]
 mod tests {

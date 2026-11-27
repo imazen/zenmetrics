@@ -27,7 +27,7 @@ use crate::{
 };
 
 #[cfg(feature = "pixels")]
-use zenpixels::PixelSlice;
+use zenpixels::PixelView;
 
 /// The backend selector and uniform score type are shared verbatim
 /// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
@@ -771,13 +771,13 @@ impl ZensimOpaque {
         self.inner.compute_features(&r, &d)
     }
 
-    /// Compute the **first 228** features from [`PixelSlice`] inputs.
+    /// Compute the **first 228** features from [`PixelView`] inputs.
     /// Truncates the Extended / WithIw output to the basic block.
     #[cfg(feature = "pixels")]
     pub fn compute_features_pixels(
         &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
+        r: PixelView<'_>,
+        d: PixelView<'_>,
     ) -> Result<[f64; TOTAL_FEATURES]> {
         let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
@@ -808,14 +808,14 @@ impl ZensimOpaque {
     }
 
     /// Compute the regime-appropriate feature vector from
-    /// [`PixelSlice`] inputs. See
+    /// [`PixelView`] inputs. See
     /// [`Self::compute_features_vec_srgb_u8`] for the regime → length
     /// table.
     #[cfg(feature = "pixels")]
     pub fn compute_features_vec_pixels(
         &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
+        r: PixelView<'_>,
+        d: PixelView<'_>,
     ) -> Result<Vec<f64>> {
         let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
@@ -897,23 +897,20 @@ impl ZensimOpaque {
     }
 
     /// Set + upload + pre-build the reference's XYB pyramid from
-    /// [`PixelSlice`] input. Companion to
+    /// [`PixelView`] input. Companion to
     /// [`Self::compute_with_reference_pixels`].
     #[cfg(feature = "pixels")]
-    pub fn set_reference_pixels(&mut self, r: PixelSlice<'_>) -> Result<()> {
+    pub fn set_reference_pixels(&mut self, r: PixelView<'_>) -> Result<()> {
         let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
         let rp = self.pad_rgb(&ref_buf)?;
         self.inner.set_reference(&rp)
     }
 
     /// Compute the raw feature vector against the cached reference from a
-    /// [`PixelSlice`] distortion (zensim-specific). See
+    /// [`PixelView`] distortion (zensim-specific). See
     /// [`Self::compute_features_with_reference_srgb_u8`] for semantics.
     #[cfg(feature = "pixels")]
-    pub fn compute_features_with_reference_pixels(
-        &mut self,
-        d: PixelSlice<'_>,
-    ) -> Result<Vec<f64>> {
+    pub fn compute_features_with_reference_pixels(&mut self, d: PixelView<'_>) -> Result<Vec<f64>> {
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
         let dp = self.pad_rgb(&dis_buf)?;
         self.inner.compute_with_reference_vec(&dp)
@@ -1060,7 +1057,7 @@ impl ZensimOpaque {
     /// dist buffers match byte-for-byte, returns 100.0 without
     /// running the GPU kernel.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelView<'_>, d: PixelView<'_>) -> Result<Score> {
         let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
         if let Some(score) = identity_short_circuit(&ref_buf, &dis_buf) {
@@ -1436,22 +1433,24 @@ fn identity_short_circuit(ref_rgb: &[u8], dis_rgb: &[u8]) -> Option<Score> {
 }
 
 #[cfg(feature = "pixels")]
-pub(crate) fn to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    expected_w: u32,
-    expected_h: u32,
-) -> Result<Vec<u8>> {
-    if s.width() != expected_w || s.rows() != expected_h {
+pub(crate) fn to_srgb_rgb8(s: &PixelView<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.height() != expected_h {
         let expected = (expected_w as usize) * (expected_h as usize) * 3;
-        let got = (s.width() as usize) * (s.rows() as usize) * 3;
+        let got = (s.width() as usize) * (s.height() as usize) * 3;
         return Err(Error::DimensionMismatch { expected, got });
     }
-    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
-    if s.descriptor() == target {
-        return Ok(s.contiguous_bytes().into_owned());
+    let target = &zenpixels::formats::RGB8_SRGB;
+    if s.format() == target {
+        return s
+            .to_contiguous_bytes()
+            .map(|c| c.into_owned())
+            .map_err(|_| Error::DimensionMismatch {
+                expected: (expected_w as usize) * (expected_h as usize) * 3,
+                got: (s.width() as usize) * (s.height() as usize) * 3,
+            });
     }
     zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
-        got: (s.width() as usize) * (s.rows() as usize) * 3,
+        got: (s.width() as usize) * (s.height() as usize) * 3,
     })
 }

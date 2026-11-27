@@ -3,25 +3,19 @@ use iqa_contract_validation::{Assessment, Butter, Ssim2, SsimNative, Zen, ZenNat
 use zenmetrics_abstractions as legacy;
 use zenpsy_api::{
     self as iqa,
-    zenpixels::{PixelDescriptor, PixelSlice, plane::AnyPlane},
+    zenpixels::{
+        AlphaMode, ColorSpace, PixelFormat, PixelView, RenderingIntent, SampleLayout, SampleType,
+        formats,
+    },
     *,
 };
 
-fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelSlice<'_> {
-    PixelSlice::new(
-        bytes,
-        w,
-        h,
-        w as usize * 3 + padding,
-        PixelDescriptor::RGB8_SRGB,
-    )
-    .unwrap()
+fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelView<'_> {
+    PixelView::new(bytes, w, h, w as usize * 3 + padding, &formats::RGB8_SRGB).unwrap()
 }
 fn pointer(map: MapView<'_>) -> *const f32 {
-    let AnyPlane::F32(p) = map.values else {
-        panic!("native f32 map")
-    };
-    p.strided_samples().as_ptr()
+    assert_eq!(map.values.format().sample, SampleType::F32);
+    map.values.data().as_ptr().cast::<f32>()
 }
 #[test]
 fn three_native_results_expose_original_map_planes_through_stacked_erasure() {
@@ -77,7 +71,7 @@ fn three_native_results_expose_original_map_planes_through_stacked_erasure() {
                             assert_eq!(m.spec.key(), format!("{term}_{c}_{s}"));
                             assert_eq!(pointer(m), values.as_ptr());
                             assert_eq!(
-                                (m.values.width(), m.values.height()),
+                                (m.values.width() as usize, m.values.height() as usize),
                                 (level.width, level.height)
                             );
                             assert_eq!(
@@ -125,13 +119,10 @@ impl NoReferenceMetric for Piqe {
     }
     fn evaluate_image(
         &mut self,
-        p: &PixelSlice<'_>,
+        p: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<PiqeResult> {
         opts.checkpoint()?;
-        if p.color_context().is_some() {
-            return fail(MetricError::new(ErrorKind::UnsupportedInput));
-        }
         if opts.diagnostics() {
             return fail(MetricError::new(ErrorKind::UnsupportedRequest));
         }
@@ -140,20 +131,7 @@ impl NoReferenceMetric for Piqe {
             legacy::Image::from(p.clone()),
             legacy::EvalOpts::new().with_pulse(opts.pulse()),
         )
-        .metric_err_with("piqe", |e| match e.error().kind() {
-            legacy::ErrorKind::UnsupportedInput => ErrorKind::UnsupportedInput,
-            legacy::ErrorKind::DimensionMismatch => ErrorKind::DimensionMismatch,
-            legacy::ErrorKind::TooSmall => ErrorKind::TooSmall,
-            legacy::ErrorKind::InvalidInput => ErrorKind::InvalidInput,
-            legacy::ErrorKind::Degenerate => ErrorKind::Degenerate,
-            legacy::ErrorKind::InvalidConfig => ErrorKind::InvalidConfig,
-            legacy::ErrorKind::NoMap => ErrorKind::NoMap,
-            legacy::ErrorKind::UnsupportedRequest => ErrorKind::UnsupportedRequest,
-            legacy::ErrorKind::Stopped(r) => ErrorKind::Stopped(r),
-            legacy::ErrorKind::Resource => ErrorKind::Resource,
-            legacy::ErrorKind::Internal => ErrorKind::Internal,
-            _ => ErrorKind::Backend,
-        })?;
+        .metric_err_with("piqe", |e| e.error().kind())?;
         Ok(PiqeResult { native })
     }
 }
@@ -164,7 +142,7 @@ fn real_piqe_one_image_paired_and_cached_results_keep_native_score_bits() {
         let db = fixture(w, h, 15, true);
         let r = image(&rb, w, h, 9);
         let d = image(&db, w, h, 15);
-        let direct = |p: &PixelSlice<'_>| {
+        let direct = |p: &PixelView<'_>| {
             legacy::NoReferenceMetric::evaluate_image(
                 &mut piqe::Piqe::new(),
                 legacy::Image::from(p.clone()),
@@ -182,6 +160,12 @@ fn real_piqe_one_image_paired_and_cached_results_keep_native_score_bits() {
         .unwrap();
         assert_eq!(
             out.native::<PiqeResult>().unwrap().native.score().to_bits(),
+            expected[0]
+        );
+        // Also verify `piqe::Piqe` executes directly through `zenpsy_api::score_image`.
+        let native_out = score_image(&mut piqe::Piqe::new(), &d, EvalOpts::new()).unwrap();
+        assert_eq!(
+            native_out.scores().next().unwrap().value.to_bits(),
             expected[0]
         );
         let mut paired = Erased::new(PairedNoReference::new(Piqe(piqe::Piqe::new())));
@@ -207,14 +191,8 @@ fn real_piqe_one_image_paired_and_cached_results_keep_native_score_bits() {
 fn piqe_native_refusals_keep_classification_and_original_cause() {
     let small = fixture(4, 4, 0, false);
     let unsupported = vec![0u8; 4 * 4 * 3 * 4];
-    let image_float = PixelSlice::new(
-        &unsupported,
-        4,
-        4,
-        4 * 3 * 4,
-        PixelDescriptor::RGBF32_LINEAR,
-    )
-    .unwrap();
+    let image_float =
+        PixelView::new(&unsupported, 4, 4, 4 * 3 * 4, &formats::RGBF32_LINEAR).unwrap();
     for (input, kind) in [
         (image(&small, 4, 4, 0), ErrorKind::TooSmall),
         (image_float, ErrorKind::UnsupportedInput),
@@ -230,9 +208,23 @@ fn piqe_native_refusals_keep_classification_and_original_cause() {
 #[test]
 fn piqe_bridge_refuses_overriding_color_context_without_reinterpretation() {
     let bytes = fixture(64, 64, 0, false);
-    let p = image(&bytes, 64, 64, 0).with_color_context(std::sync::Arc::new(
-        iqa::zenpixels::ColorContext::from_icc(vec![1, 2, 3]),
-    ));
+    // Minimal structurally valid 132-byte ICC Display/RGB header (tag_count = 0).
+    let mut icc = vec![0u8; 132];
+    icc[0..4].copy_from_slice(&132u32.to_be_bytes());
+    icc[12..16].copy_from_slice(b"mntr");
+    icc[16..20].copy_from_slice(b"RGB ");
+    icc[20..24].copy_from_slice(b"XYZ ");
+    icc[36..40].copy_from_slice(b"acsp");
+    let icc_fmt = PixelFormat::new(
+        SampleLayout::RGB8,
+        ColorSpace::Icc {
+            profile: std::sync::Arc::from(icc),
+            color_channels: 3,
+            alpha: AlphaMode::None,
+            intent: RenderingIntent::RelativeColorimetric,
+        },
+    );
+    let p = PixelView::new(&bytes, 64, 64, 64 * 3, &icc_fmt).unwrap();
     let error = score_image(&mut Piqe(piqe::Piqe::new()), &p, EvalOpts::new())
         .err()
         .unwrap();

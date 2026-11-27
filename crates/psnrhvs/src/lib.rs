@@ -698,6 +698,8 @@ impl Error {
 /// Output revision of the generic-surface scorer(s) in this crate.
 const SCORE_REVISION: u32 = 1;
 
+za::impl_zenpsy_metric!(Psnrhvs);
+
 impl za::Metric for Psnrhvs {
     fn id(&self) -> za::MetricId {
         za::MetricId::new("psnrhvs", za::implementation!(SCORE_REVISION))
@@ -730,10 +732,22 @@ impl za::Metric for Psnrhvs {
         use za::ResultMetricExt as _;
         opts.checkpoint()?;
         let (r, d) = za::rgb8_pair(&r, &d)?;
+        let (rp, dp, stride) = if r.stride == d.stride {
+            (
+                alloc::borrow::Cow::Borrowed(r.pixels),
+                alloc::borrow::Cow::Borrowed(d.pixels),
+                r.stride,
+            )
+        } else {
+            (
+                za::contiguous_rgb8(&r),
+                za::contiguous_rgb8(&d),
+                r.width * 3,
+            )
+        };
         if let Some(req) = opts.map {
-            let (s, planes) =
-                psnrhvs_rgb8_impl(r.pixels, d.pixels, r.width, r.height, r.stride, true)
-                    .metric_err_with("psnrhvs", Error::kind)?;
+            let (s, planes) = psnrhvs_rgb8_impl(&rp, &dp, r.width, r.height, stride, true)
+                .metric_err_with("psnrhvs", Error::kind)?;
             opts.checkpoint()?;
             let Some(planes) = planes else {
                 return za::fail(
@@ -743,7 +757,7 @@ impl za::Metric for Psnrhvs {
             let eval = PsnrhvsMaps::new(s, planes, r.width, r.height);
             return za::apply_map_request(alloc::boxed::Box::new(eval), req);
         }
-        let s = psnrhvs_rgb8(r.pixels, d.pixels, r.width, r.height, r.stride)
+        let s = psnrhvs_rgb8(&rp, &dp, r.width, r.height, stride)
             .metric_err_with("psnrhvs", Error::kind)?;
         Ok(alloc::boxed::Box::new(score_eval(&s)))
     }

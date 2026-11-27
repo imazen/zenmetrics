@@ -194,6 +194,9 @@ rgb = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+zenpsy-api = { git = "https://github.com/imazen/zenpixels", rev = "7fa068834f8074c2630a352b25f355f7c90751f8", default-features = false }
+zenpixels = { version = ">=0.5.0, <0.6.0", default-features = false }
+zenpixels-convert = { version = ">=0.5.0, <0.6.0", default-features = false }
 
 # Release profile — thin LTO + 16 codegen-units + line-tables-only debug.
 #
@@ -292,12 +295,14 @@ codegen-units = 1
 [patch.crates-io]
 # Reviewed effective-dispatch API; publishing remains a separate decision.
 zenquant = { git = "https://github.com/imazen/zenquant", rev = "8ec37ee21f0216cf9b138e407eecc470ee620493" }
-# Temporary until zenpixels-convert >=0.2.17 publishes; then bump the
-# minimum and drop these patches. The 0.2.16 registry release predates the
-# exact U16->U8 narrowing fix already on zenpixels main at e56f626b.
-# Pin both crates to that same source commit so PixelDescriptor types remain unified.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "e56f626b14e6f0211e020159d30b3a48616e88e0" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e56f626b14e6f0211e020159d30b3a48616e88e0" }
+# Pin zenpixels 0.5 Stage D (zenpixels, zenpixels-convert, zenpsy-api) and its
+# matching garb + linear-srgb revisions. Unmigrated crates requiring
+# zenpixels >=0.2.16, <0.4.0 (zenmetrics-cli, zenmetrics-browser, zencodec,
+# fast-ssim2, codecs) coexist cleanly via crates.io 0.2.16 until Phase 2.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7fa068834f8074c2630a352b25f355f7c90751f8" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7fa068834f8074c2630a352b25f355f7c90751f8" }
+garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
 # zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
 # because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
 # 0.2.16 is on crates.io and the zenpng sibling now requires

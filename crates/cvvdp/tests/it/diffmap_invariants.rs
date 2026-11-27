@@ -275,8 +275,8 @@ fn score_and_diffmap_matches_vec_api() {
     assert_eq!(dm.score(), jod as f64);
     assert_eq!(
         (
-            view.pixels.as_slice().width(),
-            view.pixels.as_slice().rows()
+            view.pixels.as_view().width(),
+            view.pixels.as_view().height()
         ),
         (w as u32, h as u32)
     );

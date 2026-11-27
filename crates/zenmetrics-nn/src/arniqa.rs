@@ -224,6 +224,8 @@ impl Arniqa {
     }
 }
 
+za::impl_zenpsy_no_reference!(Arniqa);
+
 impl za::NoReferenceMetric for Arniqa {
     fn id(&self) -> za::MetricId {
         za::MetricId::new(COLUMN, za::implementation!(SCORE_REVISION)).with_reference(format!(

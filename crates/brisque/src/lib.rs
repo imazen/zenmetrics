@@ -60,7 +60,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use za::zenpixels::PixelDescriptor;
+use za::zenpixels::{PixelFormat, formats};
 use zenmetrics_abstractions as za;
 
 mod kernels;
@@ -617,10 +617,10 @@ fn imresize_half(x: &[f32], w: usize, h: usize) -> (Vec<f32>, usize, usize) {
 }
 
 fn gray(image: &za::Image<'_>) -> za::MetricResult<(Vec<f32>, usize, usize)> {
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::RGB8_SRGB) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::RGB8_SRGB) {
         return Ok((kernels::luma_plane(px, w, h, stride), w, h));
     }
-    if let Some((px, w, h, stride)) = packed_as(image, PixelDescriptor::GRAY8) {
+    if let Some((px, w, h, stride)) = packed_as(image, &formats::GRAY8_SRGB) {
         let mut y = Vec::with_capacity(w * h);
         for r in 0..h {
             for c in 0..w {
@@ -631,26 +631,26 @@ fn gray(image: &za::Image<'_>) -> za::MetricResult<(Vec<f32>, usize, usize)> {
     }
     za::fail(za::unsupported(
         &image.format(),
-        "packed RGB8_SRGB or GRAY8",
+        "packed RGB8_SRGB or GRAY8_SRGB",
     ))
 }
 
-/// Borrow the packed slice when its descriptor is `desc`.
+/// Borrow the packed view when its format is `desc`.
 fn packed_as<'a>(
     image: &'a za::Image<'a>,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
 ) -> Option<(&'a [u8], usize, usize, usize)> {
     let za::Image::Packed(s) = image else {
         return None;
     };
-    if s.descriptor() != desc {
+    if s.format() != desc {
         return None;
     }
     Some((
         s.as_strided_bytes(),
         s.width() as usize,
-        s.rows() as usize,
-        s.stride(),
+        s.height() as usize,
+        s.stride_bytes(),
     ))
 }
 
@@ -736,6 +736,8 @@ fn degenerate(msg: &'static str) -> za::MetricResult<Box<dyn za::Evaluation>> {
     )
 }
 
+za::impl_zenpsy_no_reference!(Brisque);
+
 impl za::NoReferenceMetric for Brisque {
     fn id(&self) -> za::MetricId {
         za::MetricId::new("brisque", za::implementation!(SCORE_REVISION))
@@ -750,7 +752,7 @@ impl za::NoReferenceMetric for Brisque {
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
         let d = format.packed();
-        d == Some(PixelDescriptor::RGB8_SRGB) || d == Some(PixelDescriptor::GRAY8)
+        d == Some(&formats::RGB8_SRGB) || d == Some(&formats::GRAY8_SRGB)
     }
 
     fn evaluate_image(

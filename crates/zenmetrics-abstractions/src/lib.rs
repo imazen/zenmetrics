@@ -1,15 +1,13 @@
-//! The object surface every metric crate implements, so consumers
-//! (`zenmetrics-api`, the fleet executors, the browser viewer, batch
-//! scorers) talk to *a* metric instead of N crates.
+//! The object surface every metric crate implements, rebased onto
+//! [`zenpsy_api`] and `zenpixels 0.5`.
 //!
 //! ## The shape
 //!
-//! - [`Metric`] — a configured, `Send` scorer. [`Metric::id`] names it
-//!   completely ([`MetricId`]: family, variant, reproduced reference,
-//!   implementing crate, score revision, backend, configuration) and gives
-//!   every output a fully qualified column name ([`MetricId::column`]).
-//! - [`Metric::evaluate`] takes two [`Image`]s (packed [`zenpixels::PixelSlice`]
-//!   or validated [`Planes`]) and [`EvalOpts`] (map request plus a how-far
+//! - [`Metric`] — a configured, `Send` scorer. [`Metric::id`] returns the
+//!   unified [`zenpsy_api::MetricId`] (extended by [`MetricIdExt`] for stable
+//!   FNV-1a fingerprints and column names).
+//! - [`Metric::evaluate`] takes two [`Image`]s (packed [`zenpixels::PixelView`]
+//!   or [`zenpixels::PlanarView`]) and [`EvalOpts`] (map request plus a how-far
 //!   [`how_far::Pulse`] for cancellation), and returns a
 //!   `Box<dyn Evaluation>`.
 //! - [`Evaluation`] — scores keyed as [`Metric::outputs`] declares, maps as
@@ -21,13 +19,10 @@
 //! - [`Metric::sequence`] — temporal sessions whose results may trail
 //!   their frames ([`Temporal`]).
 //! - [`NoReferenceMetric`] — one image in, a quality estimate out;
-//!   [`PairedNoReference`] runs it as a pair [`Metric`] (distorted image
-//!   under each key, reference under `<key>_ref`).
-//!
-//! Errors are [`MetricResult<T>`] = `Result<T, whereat::At<MetricError>>`:
-//! a located, classified ([`ErrorKind`]) envelope around the metric's own
-//! boxed error. [`conformance::assert_conforms`] checks an implementation
-//! against all of the above.
+//!   [`PairedNoReference`] runs it as a pair [`Metric`].
+//! - [`PsyEval`] / [`PsyWarm`] / `impl_zenpsy_*!` — direct zero-boilerplate
+//!   bridge implementing [`zenpsy_api::Metric`], [`zenpsy_api::NoReferenceMetric`],
+//!   [`zenpsy_api::PrepareReference`], and [`zenpsy_api::PlanarMetric`].
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -42,6 +37,7 @@ mod input;
 mod map;
 mod metric;
 mod no_reference;
+mod psy_bridge;
 
 /// `f32` ↔ byte casts without a per-crate bytemuck dependency.
 pub use bytemuck;
@@ -50,30 +46,39 @@ pub use bytemuck;
 pub use how_far;
 /// Error location tracking.
 pub use whereat;
-/// The pixel crate the signatures are written in.
+/// The pixel crate the signatures are written in (`zenpixels 0.5`).
 pub use zenpixels;
+/// The shared still-image quality contract (`zenpsy-api`).
+pub use zenpsy_api;
 
 pub use error::{
-    ErrorKind, MetricError, MetricResult, ResultMetricExt, fail, find_metric_error, is_stopped,
-    stop_reason,
+    ErrorKind, MetricError, MetricResult, ResultMetricExt, SequenceOrderError, fail,
+    find_metric_error, is_sequence_order, is_stopped, sequence_order_error, stop_reason,
 };
 pub use eval::{
     Evaluation, Extras, Resampled, ScalarEval, ScoreKind, ScoreSpec, Scores, apply_map_request,
 };
-pub use identity::{Backend, Implementation, MetricId, is_sanitized_column};
+pub use identity::{
+    Backend, BackendExt, Implementation, MetricId, MetricIdExt, implementation, is_sanitized_column,
+};
 pub use input::{
-    Image, InputFormat, OwnedImage, PlanarFormat, PlaneLayout, PlaneRole, PlaneSpec, Planes,
-    Rgb8In, check_same_size, contiguous_rgb8, is_rgb8_srgb, rgb8_pair, rgb8_view, unsupported,
+    ChannelOrder, Image, InputFormat, OwnedImage, PlanarBuf, PlanarFormat, PlanarView, PlaneBuf,
+    PlaneFormat, PlaneRole, PlaneView, Primaries, Rgb8In, SampleLayout, Transfer, check_same_size,
+    contiguous_rgb8, is_rgb8_srgb, rgb8_pair, rgb8_view, unsupported,
 };
 pub use map::{
-    MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect, Support,
-    fold_values, gray_f32_buffer, gray_f32_slice, map_fold, map_subsample_f32,
+    IntoPixelCow, MapFold, MapGeometry, MapPolarity, MapReduce, MapRequest, MapView, PixelRect,
+    Support, fold_values, gray_f32_buffer, gray_f32_slice, map_fold, map_subsample_f32,
 };
 pub use metric::{
     AlwaysStop, ColdReplay, EvalOpts, FrameEvaluation, FrameRate, Metric, Sequence, SequenceInfo,
     SequenceSummary, Temporal, ViewingConditions, WarmReference,
 };
 pub use no_reference::{NoReferenceMetric, PairedEval, PairedNoReference, REFERENCE_SUFFIX};
+pub use psy_bridge::{
+    PsyEval, PsyWarm, psy_evaluate, psy_evaluate_image, psy_evaluate_planar, psy_warm_reference,
+    score_spec_to_psy,
+};
 
 #[cfg(test)]
 mod send_tests {
@@ -92,5 +97,7 @@ mod send_tests {
         send::<EvalOpts<'static>>();
         sync::<EvalOpts<'static>>();
         send::<MetricError>();
+        send::<PsyEval>();
+        sync::<PsyEval>();
     }
 }

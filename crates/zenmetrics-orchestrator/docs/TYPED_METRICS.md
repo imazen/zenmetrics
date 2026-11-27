@@ -6,7 +6,7 @@ GPU-umbrella dependency. Register factories with `register` for cold scoring or
 and scorers execute on the calling worker; the caller owns placement and
 resource admission. Thread-local native results are supported.
 
-`run` accepts one borrowed, colour-described `PixelSlice` reference and a slice
+`run` accepts one borrowed, colour-described `PixelView` reference and a slice
 of candidates. All strides, formats and contexts pass to the native adapter.
 For a prepared registration, actual preparation runs once and serves the batch.
 The executor uses the core's `Erased` and `DynPrepareReference` wrappers. It

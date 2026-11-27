@@ -1,7 +1,7 @@
 use brisque::Brisque;
 use std::hint::black_box;
 use std::time::Instant;
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use za::{EvalOpts, Image, NoReferenceMetric};
 use zenmetrics_abstractions as za;
 
@@ -46,7 +46,7 @@ fn main() {
     } else {
         &img
     };
-    let slice = PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let slice = PixelView::new(px, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap();
     let image = Image::from(slice);
     let mut times = Vec::new();
     let mut score = f64::NAN;

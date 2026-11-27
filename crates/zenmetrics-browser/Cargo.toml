@@ -101,8 +101,8 @@ workspace = true
 [dev-dependencies]
 imgref = { workspace = true }
 # The browser_oracle example pins zensim's dispatch tier; this must be the
-# archmage copy zensim links (registry 0.9.30), or the disable has no effect.
-archmage-zensim = { package = "archmage", version = "=0.9.30" }
+# registry archmage copy zensim links (currently 0.9.33), or the disable has no effect.
+archmage-zensim = { package = "archmage", version = ">=0.9.30, <0.10" }
 jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }
 # nn_oracle scores the learned metrics natively on the rten engine.
 zenmetrics-nn = { path = "../zenmetrics-nn" }

@@ -16,7 +16,7 @@
 use std::io::Write as _;
 use std::path::Path;
 
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, Rgb8In};
 use zenmetrics_nn::{Dmm, Engine};
 
@@ -139,9 +139,7 @@ fn main() {
         // this port's own score on the same pair — the pin baseline for
         // rows whose netlib draw lands past the 1e-3 JND gate
         fn im(px: &[u8], w: usize, h: usize) -> Image<'_> {
-            Image::from(
-                PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB).unwrap(),
-            )
+            Image::from(PixelView::new(px, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap())
         }
         let s = m
             .evaluate(

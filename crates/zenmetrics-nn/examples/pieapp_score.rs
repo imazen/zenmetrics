@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::Path;
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::{Engine, PieApp, WeightsConsent};
 
@@ -30,16 +30,7 @@ fn load(path: &str) -> (Vec<u8>, usize, usize) {
     (tight, w, h)
 }
 fn image(pixels: &[u8], w: usize, h: usize) -> Image<'_> {
-    Image::from(
-        PixelSlice::new(
-            pixels,
-            w as u32,
-            h as u32,
-            w * 3,
-            PixelDescriptor::RGB8_SRGB,
-        )
-        .unwrap(),
-    )
+    Image::from(PixelView::new(pixels, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap())
 }
 fn main() {
     let args: Vec<_> = std::env::args().collect();

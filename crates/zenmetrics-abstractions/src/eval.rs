@@ -247,7 +247,7 @@ pub fn apply_map_request(
 
 struct OwnedMap {
     name: &'static str,
-    pixels: zenpixels::PixelBuffer,
+    pixels: zenpixels::PixelBuf,
     polarity: MapPolarity,
     geometry: MapGeometry,
 }
@@ -302,7 +302,7 @@ impl Resampled {
     fn view<'s>(&'s self, m: &'s OwnedMap) -> MapView<'s> {
         MapView {
             name: m.name,
-            pixels: PixelCow::Borrowed(m.pixels.as_slice()),
+            pixels: PixelCow::Borrowed(m.pixels.as_view()),
             polarity: m.polarity,
             geometry: m.geometry,
             served: self.served,
@@ -314,7 +314,7 @@ impl Resampled {
 mod tests {
     use super::*;
 
-    struct WithMap(zenpixels::PixelBuffer);
+    struct WithMap(zenpixels::PixelBuf);
 
     impl Evaluation for WithMap {
         fn score(&self) -> f64 {
@@ -323,7 +323,7 @@ mod tests {
         fn map(&self) -> Option<MapView<'_>> {
             MapView::new(
                 "diff",
-                self.0.as_slice(),
+                self.0.as_view(),
                 MapPolarity::Difference,
                 MapGeometry::identity(4, 2),
             )

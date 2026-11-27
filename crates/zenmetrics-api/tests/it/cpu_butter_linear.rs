@@ -93,7 +93,7 @@ fn f32_bytes(vals: &[f32]) -> Vec<u8> {
 /// one descriptor-driven call. (zenpixels is the primary entry; CPU is native.)
 #[test]
 fn cpu_butter_hdr_via_zenpixels_slice_matches_nits() {
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
     let (w, h) = (64_u32, 64_u32);
     // Display-relative [0,1] linear, and the same content as nits (×peak).
     let to_lin = |seed: u32| -> Vec<f32> {
@@ -128,22 +128,8 @@ fn cpu_butter_hdr_via_zenpixels_slice_matches_nits() {
         .primary();
     let via_pixels = cpu
         .compute_pixels_multi(
-            PixelSlice::new(
-                &f32_bytes(&ref_lin),
-                w,
-                h,
-                row,
-                PixelDescriptor::RGBF32_LINEAR,
-            )
-            .unwrap(),
-            PixelSlice::new(
-                &f32_bytes(&dis_lin),
-                w,
-                h,
-                row,
-                PixelDescriptor::RGBF32_LINEAR,
-            )
-            .unwrap(),
+            PixelView::new(&f32_bytes(&ref_lin), w, h, row, &formats::RGBF32_LINEAR).unwrap(),
+            PixelView::new(&f32_bytes(&dis_lin), w, h, row, &formats::RGBF32_LINEAR).unwrap(),
         )
         .expect("pixels")
         .primary();

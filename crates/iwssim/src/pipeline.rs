@@ -953,6 +953,9 @@ impl Iwssim {
     }
 }
 
+za::impl_zenpsy_metric!(Iwssim);
+za::impl_zenpsy_prepare_reference!(Iwssim);
+
 /// `Iwssim` implements the generic surface on packed `RGB8_SRGB`, re-planning
 /// when the input size differs from the constructed one. `per_scale` values
 /// ride `scores()` as `wmcs_0..4`. [`za::Metric::warm_reference`] reuses the

@@ -1,6 +1,6 @@
 use brisque::Brisque;
 use std::io::BufRead;
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use za::{EvalOpts, Image, NoReferenceMetric};
 use zenmetrics_abstractions as za;
 
@@ -26,8 +26,7 @@ fn main() {
     for (p, expected) in &rows {
         let img = image::open(root.join(p)).unwrap().to_rgb8();
         let (w, h) = img.dimensions();
-        let slice =
-            PixelSlice::new(&img, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+        let slice = PixelView::new(&img, w, h, w as usize * 3, &formats::RGB8_SRGB).unwrap();
         let got = match Brisque::new().evaluate_image(Image::from(slice), EvalOpts::new()) {
             Ok(e) => e.score(),
             Err(_) => {

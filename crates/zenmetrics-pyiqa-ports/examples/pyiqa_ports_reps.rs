@@ -14,7 +14,7 @@
 //! RGB PNGs of size `<WxH>`). Accepts the non-commercial weights' terms for
 //! the run (a benchmark tool, not a consent path).
 
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::WeightsConsent;
 use zenmetrics_pyiqa_ports::{AhiqPyiqa, CwSsimPyiqa, DmmPyiqa, Engine, PieAppPyiqa, WadiqamPyiqa};
@@ -39,7 +39,7 @@ fn load(path: &str) -> (Vec<u8>, u32, u32) {
 }
 
 fn image(px: &[u8], w: u32, h: u32) -> Image<'_> {
-    Image::from(PixelSlice::new(px, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap())
+    Image::from(PixelView::new(px, w, h, w as usize * 3, &formats::RGB8_SRGB).unwrap())
 }
 
 fn main() {
