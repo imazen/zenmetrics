@@ -10,9 +10,9 @@ name = "hdr-decode"
 path = "src/main.rs"
 
 [dependencies]
-ultrahdr-rs = { path = "../../../ultrahdr/ultrahdr-rs" }
-ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
-heic = { path = "../../../heic", features = ["backend-rust"] }
+ultrahdr-rs = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b" }
+heic = { git = "https://github.com/imazen/heic", rev = "028c0329a87c22eac3ab9c84db77cc613fab3b66", features = ["backend-rust"] }
 enough = "0.4.2"
 bytemuck = "1"
 image = { version = "0.25", features = ["exr"] }

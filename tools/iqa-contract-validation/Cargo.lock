@@ -174,7 +174,7 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 [[package]]
 name = "fast-ssim2"
 version = "0.9.1"
-source = "git+https://github.com/imazen/fast-ssim2?rev=6d27c728a4094cbbcf5f04e3b61859f062951f2e#6d27c728a4094cbbcf5f04e3b61859f062951f2e"
+source = "git+https://github.com/imazen/fast-ssim2?rev=f6557a5bc51d3161d442c269acd33afabfc4794b#f6557a5bc51d3161d442c269acd33afabfc4794b"
 dependencies = [
  "archmage 0.9.33",
  "bytemuck",
@@ -183,7 +183,7 @@ dependencies = [
  "magetypes 0.9.33",
  "num-traits",
  "thiserror",
- "zenpixels 0.2.16",
+ "zenpixels",
 ]
 
 [[package]]
@@ -236,7 +236,6 @@ dependencies = [
  "piqe",
  "zenmetrics-abstractions",
  "zenmetrics-orchestrator",
- "zenpixels 0.2.16",
  "zenpsy-api",
  "zensim",
 ]
@@ -759,7 +758,7 @@ dependencies = [
  "how-far",
  "libm",
  "whereat",
- "zenpixels 0.5.0",
+ "zenpixels",
  "zenpsy-api",
 ]
 
@@ -776,16 +775,6 @@ dependencies = [
  "thiserror",
  "toml",
  "zenpsy-api",
-]
-
-[[package]]
-name = "zenpixels"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
-dependencies = [
- "bytemuck",
- "whereat",
 ]
 
 [[package]]
@@ -815,7 +804,7 @@ source = "git+https://github.com/imazen/zenpixels?rev=7fa068834f8074c2630a352b25
 dependencies = [
  "how-far",
  "whereat",
- "zenpixels 0.5.0",
+ "zenpixels",
 ]
 
 [[package]]

@@ -3,9 +3,7 @@ use iqa::zenpixels::{
     Transfer, formats,
 };
 use iqa::{EvalOpts, Evaluation, Metric, PrepareReference};
-use iqa_contract_validation::{
-    Butter, Ssim2, SsimNative, Zen, ZenNative, fixture, ssim2_slice, zen_source,
-};
+use iqa_contract_validation::{Butter, Ssim2, SsimNative, Zen, ZenNative, fixture, zen_source};
 use zenpsy_api as iqa;
 fn image(bytes: &[u8], w: u32, h: u32, padding: usize) -> PixelView<'_> {
     PixelView::new(bytes, w, h, w as usize * 3 + padding, &formats::RGB8_SRGB).unwrap()
@@ -154,10 +152,8 @@ fn ssim2_preserves_every_native_component_and_grid_on_edges_and_prepared_calls()
         let ri = image(&r, w, h, 0);
         let di = image(&d, w, h, 0);
         let opts = EvalOpts::new().with_native_map();
-        let rs02 = ssim2_slice(&ri).unwrap();
-        let ds02 = ssim2_slice(&di).unwrap();
-        let direct = fast_ssim2::compute_ssimulacra2_maps(&rs02, &ds02).unwrap();
-        let scalar = fast_ssim2::compute_ssimulacra2(&rs02, &ds02).unwrap();
+        let direct = fast_ssim2::compute_ssimulacra2_maps(&ri, &di).unwrap();
+        let scalar = fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap();
         assert_eq!(direct.score.to_bits(), scalar.to_bits());
         let mut m = Ssim2;
         let cold = iqa::score(&mut m, &ri, &di, opts).unwrap();

@@ -74,7 +74,7 @@ fn decode_heic(bytes: &[u8]) -> Result<PixelBuffer, String> {
         base.data,
         base.width,
         base.height,
-        PixelFormat::Rgb8,
+        PixelFormat::RGB8,
         ColorPrimaries::DisplayP3,
         TransferFunction::Srgb,
     )
@@ -100,7 +100,7 @@ fn decode_heic(bytes: &[u8]) -> Result<PixelBuffer, String> {
 fn to_rgb_nits(hdr: &PixelBuffer) -> (usize, usize, Vec<f32>, f64, f32) {
     let w = hdr.width() as usize;
     let h = hdr.height() as usize;
-    let raw = hdr.as_slice().as_strided_bytes();
+    let raw = hdr.as_view().as_strided_bytes();
     let f: &[f32] = bytemuck::cast_slice(raw);
     let row_px = f.len() / 4 / h;
     let mut rgb = vec![0.0f32; w * h * 3];

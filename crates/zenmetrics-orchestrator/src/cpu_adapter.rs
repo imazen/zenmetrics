@@ -466,8 +466,8 @@ impl CpuAdapter {
                 .map_err(|e| CpuAdapterError::Failed(e.to_string())),
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
-                let img = ssim2_image_ref(ref_bytes, s.width, s.height);
-                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| {
+                let img = ssim2_pixel_view(ref_bytes, s.width, s.height)?;
+                let precomputed = fast_ssim2::Ssimulacra2Reference::new(&img).map_err(|e| {
                     CpuAdapterError::Failed(format!("fast-ssim2 Ssimulacra2Reference::new: {e}"))
                 })?;
                 s.cached_ref = Some(precomputed);
@@ -594,18 +594,19 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
-                // fast-ssim2 0.8.1 `compute_ssimulacra2_strip` walks the
+                // fast-ssim2 `Ssimulacra2Config::strips` walks the
                 // image in horizontal strips with a 96-row halo. Bounds
                 // peak heap to ~24 × strip_h × width × 4 B. Default
                 // strip_height of 256 matches the documented sweet spot
                 // (220 MiB at 7700x5200).
                 let h = if strip_height == 0 { 256 } else { strip_height };
-                let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
-                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
-                let v =
-                    fast_ssim2::compute_ssimulacra2_strip(ref_img, dist_img, h).map_err(|e| {
+                let ref_img = ssim2_pixel_view(ref_bytes, s.width, s.height)?;
+                let dist_img = ssim2_pixel_view(dist_bytes, s.width, s.height)?;
+                let cfg = fast_ssim2::Ssimulacra2Config::strips(h as usize);
+                let v = fast_ssim2::compute_ssimulacra2_with_config(&ref_img, &dist_img, &cfg)
+                    .map_err(|e| {
                         CpuAdapterError::Failed(format!(
-                            "fast-ssim2 compute_ssimulacra2_strip: {e}"
+                            "fast-ssim2 compute_ssimulacra2_with_config(strips): {e}"
                         ))
                     })?;
                 Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
@@ -731,7 +732,7 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
-                // fast-ssim2 0.8.1 `Ssimulacra2Reference::compare_strip`
+                // fast-ssim2 `Ssimulacra2Reference::compare_with_config(strips)`
                 // strip-walks the dist side; cached ref-side data stays
                 // resident (so peak heap is bounded by dist-side only,
                 // ~220 MiB at 40 MP).
@@ -741,10 +742,13 @@ impl CpuAdapter {
                     )
                 })?;
                 let h = if strip_height == 0 { 256 } else { strip_height };
-                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
-                let v = precomputed.compare_strip(dist_img, h).map_err(|e| {
-                    CpuAdapterError::Failed(format!("fast-ssim2 compare_strip: {e}"))
-                })?;
+                let dist_img = ssim2_pixel_view(dist_bytes, s.width, s.height)?;
+                let cfg = fast_ssim2::Ssimulacra2Config::strips(h as usize);
+                let v = precomputed
+                    .compare_with_config(&dist_img, &cfg)
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!("fast-ssim2 compare_strip: {e}"))
+                    })?;
                 Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
             }
             #[cfg(feature = "cpu-dssim")]
@@ -881,9 +885,9 @@ impl CpuAdapter {
                         "ssim2: no cached reference; call set_reference first".into(),
                     )
                 })?;
-                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
+                let dist_img = ssim2_pixel_view(dist_bytes, s.width, s.height)?;
                 let v = precomputed
-                    .compare(dist_img)
+                    .compare(&dist_img)
                     .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compare: {e}")))?;
                 Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
             }
@@ -1101,20 +1105,22 @@ fn construct_ssim2(
     Err(CpuAdapterError::FeatureNotEnabled(MetricKind::Ssim2))
 }
 
-/// Borrow an interleaved sRGB-u8 byte buffer as an `ImgRef<'_, [u8; 3]>`.
-///
-/// fast-ssim2's `ToLinearRgb` impl for `ImgRef<'_, [u8; 3]>` reads `[r, g, b]`
-/// triplets directly. `[u8; 3]` is `bytemuck::Pod`, so we can reinterpret the
-/// raw bytes in place via `bytemuck::cast_slice` — no allocation, no copy.
-///
-/// Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
-/// path that built a 120 MB `Vec<[u8; 3]>` per side at 40 MP. Heaptrack
-/// confirmed 240 MB / pair adapter overhead on the ssim2 row before this
-/// swap.
+/// Borrow an interleaved sRGB-u8 byte buffer as a `fast_ssim2::PixelView`.
+/// Zero allocation, zero copy.
 #[cfg(feature = "cpu-ssim2")]
-fn ssim2_image_ref<'a>(bytes: &'a [u8], w: usize, h: usize) -> imgref::ImgRef<'a, [u8; 3]> {
-    let pixels: &[[u8; 3]] = bytemuck::cast_slice(bytes);
-    imgref::ImgRef::new(pixels, w, h)
+fn ssim2_pixel_view<'a>(
+    bytes: &'a [u8],
+    w: usize,
+    h: usize,
+) -> Result<fast_ssim2::PixelView<'a>, CpuAdapterError> {
+    fast_ssim2::PixelView::new(
+        bytes,
+        w as u32,
+        h as u32,
+        w * 3,
+        &fast_ssim2::formats::RGB8_SRGB,
+    )
+    .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 PixelView: {e:?}")))
 }
 
 #[cfg(feature = "cpu-ssim2")]
@@ -1123,9 +1129,9 @@ fn compute_ssim2(
     ref_bytes: &[u8],
     dist_bytes: &[u8],
 ) -> Result<Score, CpuAdapterError> {
-    let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
-    let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
-    let v = fast_ssim2::compute_ssimulacra2(ref_img, dist_img)
+    let ref_img = ssim2_pixel_view(ref_bytes, s.width, s.height)?;
+    let dist_img = ssim2_pixel_view(dist_bytes, s.width, s.height)?;
+    let v = fast_ssim2::compute_ssimulacra2(&ref_img, &dist_img)
         .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compute_ssimulacra2: {e}")))?;
     Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
 }

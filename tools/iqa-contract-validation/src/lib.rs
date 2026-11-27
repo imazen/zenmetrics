@@ -122,25 +122,8 @@ fn packed_rgb8(p: &PixelView<'_>) -> MetricResult<Vec<u8>> {
         .flat_map(|y| p.row(y).iter().copied())
         .collect())
 }
-/// Zero-copy bridge from `zenpixels 0.5` `PixelView` to `fast-ssim2 0.9.1`'s `zenpixels 0.2` `PixelSlice`.
-pub fn ssim2_slice<'a>(p: &'a PixelView<'_>) -> MetricResult<zenpixels_02::PixelSlice<'a>> {
-    let desc = if p.format() == &formats::RGB8_SRGB {
-        zenpixels_02::PixelDescriptor::RGB8_SRGB
-    } else if p.format() == &formats::RGBAF32_LINEAR {
-        zenpixels_02::PixelDescriptor::RGBAF32_LINEAR
-    } else {
-        return iqa::fail(iqa::MetricError::new(ErrorKind::UnsupportedInput));
-    };
-    zenpixels_02::PixelSlice::new(
-        p.as_strided_bytes(),
-        p.width(),
-        p.height(),
-        p.stride_bytes(),
-        desc,
-    )
-    .metric_err("ssim2", ErrorKind::UnsupportedInput)
-}
-/// Zero-copy bridge from `zenpixels 0.5` `PixelView` to `zensim::StridedBytes`.
+/// Zero-copy adapter from `zenpixels 0.5` `PixelView` to `zensim::StridedBytes`
+/// (public `imazen/zensim` has not yet migrated its optional `zenpixels` feature to 0.5).
 pub fn zen_source<'a>(p: &'a PixelView<'_>) -> MetricResult<zensim::StridedBytes<'a>> {
     if p.format() == &formats::RGB8_SRGB {
         zensim::StridedBytes::try_new(
@@ -263,16 +246,14 @@ impl Metric for Ssim2 {
         d: &PixelView<'_>,
         opts: EvalOpts<'_>,
     ) -> MetricResult<Self::Output> {
-        let rs = ssim2_slice(r)?;
-        let ds = ssim2_slice(d)?;
         let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
         if opts.diagnostics() {
-            let n = fast_ssim2::compute_ssimulacra2_maps_with_config(&rs, &ds, &config)
+            let n = fast_ssim2::compute_ssimulacra2_maps_with_config(r, d, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             let v = n.score;
             Ok(one(SsimNative::Maps(n), v))
         } else {
-            let v = fast_ssim2::compute_ssimulacra2_with_config(&rs, &ds, &config)
+            let v = fast_ssim2::compute_ssimulacra2_with_config(r, d, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             Ok(one(SsimNative::Scalar(v), v))
         }
@@ -281,9 +262,8 @@ impl Metric for Ssim2 {
 impl PrepareReference for Ssim2 {
     type Prepared<'a> = SsimWarm;
     fn warm_reference(&mut self, r: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<SsimWarm> {
-        let rs = ssim2_slice(r)?;
         fast_ssim2::Ssimulacra2Reference::new_with_config(
-            &rs,
+            r,
             &fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop()),
         )
         .metric_err_with("ssim2", ssim_error)
@@ -293,19 +273,18 @@ impl PrepareReference for Ssim2 {
 impl WarmReference for SsimWarm {
     type Output = Assessment<SsimNative, 1>;
     fn evaluate(&mut self, d: &PixelView<'_>, opts: EvalOpts<'_>) -> MetricResult<Self::Output> {
-        let ds = ssim2_slice(d)?;
         let config = fast_ssim2::Ssimulacra2Config::default().with_stop(opts.stop());
         if opts.diagnostics() {
             let n = self
                 .0
-                .compare_with_maps_with_config(&ds, &config)
+                .compare_with_maps_with_config(d, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             let v = n.score;
             Ok(one(SsimNative::Maps(n), v))
         } else {
             let v = self
                 .0
-                .compare_with_config(&ds, &config)
+                .compare_with_config(d, &config)
                 .metric_err_with("ssim2", ssim_error)?;
             Ok(one(SsimNative::Scalar(v), v))
         }

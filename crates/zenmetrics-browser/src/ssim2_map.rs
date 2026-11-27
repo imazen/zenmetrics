@@ -25,7 +25,7 @@
 use std::borrow::Cow;
 
 use zenmetrics_abstractions as za;
-use zenmetrics_abstractions::zenpixels::PixelDescriptor;
+use zenmetrics_abstractions::zenpixels::{PixelFormat, formats};
 
 /// Output revision of [`Ssimulacra2`] on the generic surface.
 const SCORE_REVISION: u32 = 1;
@@ -89,9 +89,9 @@ fn fail<T>(e: fast_ssim2::Ssimulacra2Error) -> za::MetricResult<T> {
 }
 
 #[track_caller]
-fn packed<'a, 'b>(img: &'a za::Image<'b>) -> za::MetricResult<&'a za::zenpixels::PixelSlice<'b>> {
+fn packed<'a, 'b>(img: &'a za::Image<'b>) -> za::MetricResult<&'a za::zenpixels::PixelView<'b>> {
     match img.as_packed() {
-        Some(s) if accepts_descriptor(s.descriptor()) => Ok(s),
+        Some(s) if accepts_format(s.format()) => Ok(s),
         _ => za::fail(
             za::unsupported(&img.format(), "packed RGB8/RGBA8 sRGB or linear RGBF32")
                 .with_metric("ssim2"),
@@ -99,13 +99,8 @@ fn packed<'a, 'b>(img: &'a za::Image<'b>) -> za::MetricResult<&'a za::zenpixels:
     }
 }
 
-fn accepts_descriptor(d: PixelDescriptor) -> bool {
-    [
-        PixelDescriptor::RGB8_SRGB,
-        PixelDescriptor::RGBA8_SRGB,
-        PixelDescriptor::RGBF32_LINEAR,
-    ]
-    .contains(&d)
+fn accepts_format(f: &PixelFormat) -> bool {
+    *f == formats::RGB8_SRGB || *f == formats::RGBA8_SRGB || *f == formats::RGBF32_LINEAR
 }
 
 /// A score with its maps, in serving order.
@@ -194,8 +189,8 @@ impl za::Evaluation for Ssim2Maps {
 }
 
 fn evaluate_pair(
-    r: &za::zenpixels::PixelSlice<'_>,
-    d: &za::zenpixels::PixelSlice<'_>,
+    r: &za::zenpixels::PixelView<'_>,
+    d: &za::zenpixels::PixelView<'_>,
     opts: za::EvalOpts<'_>,
 ) -> za::MetricResult<Box<dyn za::Evaluation>> {
     let stop = opts.stop();
@@ -211,7 +206,7 @@ fn evaluate_pair(
         Err(e) => return fail(e),
     };
     opts.checkpoint()?;
-    za::apply_map_request(Box::new(Ssim2Maps::new(maps, r.width(), r.rows())), req)
+    za::apply_map_request(Box::new(Ssim2Maps::new(maps, r.width(), r.height())), req)
 }
 
 impl za::Metric for Ssimulacra2 {
@@ -230,7 +225,7 @@ impl za::Metric for Ssimulacra2 {
     }
 
     fn accepts(&self, format: &za::InputFormat) -> bool {
-        format.packed().is_some_and(accepts_descriptor)
+        format.packed().is_some_and(accepts_format)
     }
 
     fn evaluate(
@@ -288,7 +283,7 @@ impl za::WarmReference for Ssim2Warm {
             Err(e) => return fail(e),
         };
         opts.checkpoint()?;
-        za::apply_map_request(Box::new(Ssim2Maps::new(maps, dp.width(), dp.rows())), req)
+        za::apply_map_request(Box::new(Ssim2Maps::new(maps, dp.width(), dp.height())), req)
     }
 
     fn reuses_reference_work(&self) -> bool {
@@ -300,10 +295,10 @@ impl za::WarmReference for Ssim2Warm {
 mod tests {
     use super::*;
     use za::Metric as _;
-    use za::zenpixels::PixelSlice;
+    use za::zenpixels::{PixelView, formats};
 
     fn image(px: &[u8], w: usize, h: usize, stride: usize) -> za::Image<'_> {
-        PixelSlice::new(px, w as u32, h as u32, stride, PixelDescriptor::RGB8_SRGB)
+        PixelView::new(px, w as u32, h as u32, stride, &formats::RGB8_SRGB)
             .unwrap()
             .into()
     }

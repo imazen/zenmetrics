@@ -1,5 +1,5 @@
 //! Native output adapters; no IO or display conversion inside these calls.
-use za::zenpixels::{PixelDescriptor, PixelSlice};
+use za::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions as za;
 #[cfg(iqa_compete_ingress)]
 use zenmetrics_abstractions::Metric;
@@ -139,16 +139,16 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
     if name == "ssim2" {
         return Some(Box::new(move || {
             let pixel = |p: &'static Rgb8Image| {
-                PixelSlice::new(
+                PixelView::new(
                     &p.pixels,
                     p.width,
                     p.height,
                     p.width as usize * 3,
-                    PixelDescriptor::RGB8_SRGB,
+                    &formats::RGB8_SRGB,
                 )
                 .unwrap()
             };
-            let result = fast_ssim2_current::compute_ssimulacra2_maps(&pixel(r), &pixel(d))
+            let result = fast_ssim2::compute_ssimulacra2_maps(&pixel(r), &pixel(d))
                 .map_err(|e| e.to_string())?;
             std::hint::black_box(&result);
             Ok(result.score)
@@ -193,12 +193,12 @@ pub(super) fn native(name: &str, r: &'static Rgb8Image, d: &'static Rgb8Image) -
     };
     let image = |p: &'static Rgb8Image| {
         za::Image::from(
-            PixelSlice::new(
+            PixelView::new(
                 &p.pixels,
                 p.width,
                 p.height,
                 p.width as usize * 3,
-                PixelDescriptor::RGB8_SRGB,
+                &formats::RGB8_SRGB,
             )
             .unwrap(),
         )
@@ -239,17 +239,30 @@ fn vmaf_image(
     w: usize,
     h: usize,
 ) -> Result<za::Image<'_>, String> {
-    use za::PlaneLayout;
-    use za::zenpixels::ChannelType;
-    fn gray(p: &[u8], w: usize, h: usize) -> Result<PixelSlice<'_>, String> {
-        PixelSlice::new(p, w as u32, h as u32, w, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
+    use za::zenpixels::{PlanarView, PlaneFormat, PlaneRole, PlaneView, SampleType};
+    fn plane(
+        p: &[u8],
+        w: usize,
+        h: usize,
+        role: PlaneRole,
+        sub: (u8, u8),
+    ) -> Result<PlaneView<'_>, String> {
+        PlaneView::new(
+            p,
+            w as u32,
+            h as u32,
+            w,
+            PlaneFormat::new(role, SampleType::U8).with_subsampling(sub.0, sub.1),
+        )
+        .map_err(|e| e.to_string())
     }
-    za::Planes::new(
-        PlaneLayout::ycbcr_420(ChannelType::U8),
-        vec![
-            gray(&planes.0, w, h)?,
-            gray(&planes.1, w / 2, h / 2)?,
-            gray(&planes.2, w / 2, h / 2)?,
+    PlanarView::new(
+        w as u32,
+        h as u32,
+        &[
+            plane(&planes.0, w, h, PlaneRole::Y, (1, 1))?,
+            plane(&planes.1, w / 2, h / 2, PlaneRole::Cb, (2, 2))?,
+            plane(&planes.2, w / 2, h / 2, PlaneRole::Cr, (2, 2))?,
         ],
     )
     .map(za::Image::from)

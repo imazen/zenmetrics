@@ -308,7 +308,7 @@ fn codec_encode_estimate(
     // RGB8 sRGB is the representative source format for the sweep (opaque
     // stills); a codec whose estimate cares about alpha still gets a sound
     // typical figure from the opaque path.
-    let image = ImageCharacteristics::new(width, height, zenpixels::PixelDescriptor::RGB8_SRGB);
+    let image = ImageCharacteristics::new(width, height, zenpixels::formats::RGB8_SRGB.clone());
     let env = ComputeEnvironment::conservative().with_cores(cores as usize);
 
     // Each arm builds the codec's public trait-config type at a representative

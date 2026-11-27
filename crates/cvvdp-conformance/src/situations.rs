@@ -331,7 +331,7 @@ fn load_corpus_crop(path: &PathBuf, w: u32, h: u32) -> Option<Vec<u8>> {
         &enough::Unstoppable,
     )
     .ok()?;
-    let img = out.pixels.try_as_imgref::<rgb::Rgb<u8>>()?;
+    let img = out.pixels.as_view().as_imgref::<rgb::Rgb<u8>>().ok()?;
     let (iw, ih) = (img.width() as u32, img.height() as u32);
     if iw < w || ih < h {
         return None;

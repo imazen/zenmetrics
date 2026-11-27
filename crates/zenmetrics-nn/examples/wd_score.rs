@@ -16,13 +16,17 @@ fn load(path: &str) -> (Vec<u8>, usize, usize) {
         &enough::Unstoppable,
     )
     .expect("PNG decode");
-    let s = decoded.pixels.as_slice();
-    assert_eq!(s.descriptor().bytes_per_pixel(), 3, "RGB8 required: {path}");
-    let (w, h) = (s.width() as usize, s.rows() as usize);
+    let s = decoded.pixels.as_view();
+    assert_eq!(
+        s.format().layout.bytes_per_pixel(),
+        3,
+        "RGB8 required: {path}"
+    );
+    let (w, h) = (s.width() as usize, s.height() as usize);
     let bytes = s.as_strided_bytes();
     let mut pixels = Vec::with_capacity(w * h * 3);
     for y in 0..h {
-        pixels.extend_from_slice(&bytes[y * s.stride()..y * s.stride() + w * 3]);
+        pixels.extend_from_slice(&bytes[y * s.stride_bytes()..y * s.stride_bytes() + w * 3]);
     }
     (pixels, w, h)
 }

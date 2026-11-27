@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric};
 use zenmetrics_nn::WeightsConsent;
 use zenmetrics_pyiqa_ports::{
@@ -86,12 +86,12 @@ fn load(column: &'static str) -> Result<Box<dyn Metric>, Box<dyn std::error::Err
 }
 
 fn image(img: &Rgb8Image) -> Result<Image<'_>, Box<dyn std::error::Error>> {
-    let s = PixelSlice::new(
+    let s = PixelView::new(
         &img.pixels,
         img.width,
         img.height,
         img.width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        &formats::RGB8_SRGB,
     )?;
     Ok(Image::from(s))
 }

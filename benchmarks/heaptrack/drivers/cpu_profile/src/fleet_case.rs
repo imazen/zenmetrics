@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use zenmetrics_api::{Backend, MetricKind, Warm};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelView, formats};
 
 #[cfg(any(feature = "study-gpu-wgpu", feature = "study-gpu-cuda"))]
 #[path = "fleet_gpu.rs"]
@@ -91,13 +91,13 @@ fn read_rgb8(path: &Path, width: u32, height: u32, stride_bytes: usize) -> Resul
     }
     Ok(packed)
 }
-fn pixels<'a>(bytes: &'a [u8], case: &Case) -> Result<PixelSlice<'a>, Error> {
-    Ok(PixelSlice::new(
+fn pixels<'a>(bytes: &'a [u8], case: &Case) -> Result<PixelView<'a>, Error> {
+    Ok(PixelView::new(
         bytes,
         case.width,
         case.height,
         case.width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        &formats::RGB8_SRGB,
     )?)
 }
 fn warm_kind(name: &str) -> Result<MetricKind, Error> {

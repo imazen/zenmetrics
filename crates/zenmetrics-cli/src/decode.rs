@@ -445,8 +445,8 @@ fn decode_avif_default_with_policy(
     // Other accepted SDR transfer codes stay at today's code-value behavior.
     // Tagging BT.709, for example, would perform a real BT.709 -> sRGB
     // conversion and change scores for a metadata-only AVIF edit.
-    let desc = avif_sdr_descriptor(pixels.descriptor(), &info);
-    let pixels = pixels.with_descriptor(desc);
+    let desc = avif_sdr_descriptor(pixels.format(), &info);
+    let pixels = pixels.reinterpret_bytes(desc)?;
     pixel_buffer_to_rgb8_with_policy(&pixels, policy)
 }
 
@@ -524,13 +524,15 @@ fn decode_avif_zencodec_with_policy(
 
 #[cfg(feature = "avif")]
 fn avif_sdr_descriptor(
-    desc: zenpixels::PixelDescriptor,
+    fmt: &zenpixels::PixelFormat,
     info: &zenavif::ImageInfo,
-) -> zenpixels::PixelDescriptor {
+) -> zenpixels::PixelFormat {
     if info.transfer_characteristics.0 == 13 && info.color_primaries.0 == 1 {
-        desc.with_transfer(zenpixels::TransferFunction::Srgb)
+        fmt.clone()
+            .with_transfer(zenpixels::Transfer::Srgb)
+            .with_primaries(zenpixels::Primaries::Bt709)
     } else {
-        desc
+        fmt.clone().with_transfer(zenpixels::Transfer::Unknown)
     }
 }
 
@@ -696,7 +698,7 @@ fn decode_bmp_with_policy(
     )
 }
 
-#[cfg(feature = "bmp")]
+#[cfg(all(test, feature = "bmp"))]
 fn bmp_layout_to_rgb8(
     pixels: &[u8],
     width: u32,
@@ -738,7 +740,12 @@ fn bmp_layout_to_rgb8_with_policy(
         }
         PixelLayout::Bgra8 => {
             let mut rgba = vec![0u8; n * 4];
-            for (src, dst) in pixels.chunks_exact(4).zip(rgba.chunks_exact_mut(4)) {
+            for (src, dst) in pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(rgba.as_chunks_mut::<4>().0.iter_mut())
+            {
                 dst[0] = src[2];
                 dst[1] = src[1];
                 dst[2] = src[0];
@@ -794,7 +801,12 @@ fn bmp_layout_to_rgb8_with_policy(
                 }
                 PixelLayout::Rgba16 => {
                     let mut rgba = vec![0u8; n * 4];
-                    for (s, d) in pixels.chunks_exact(8).zip(rgba.chunks_exact_mut(4)) {
+                    for (s, d) in pixels
+                        .as_chunks::<8>()
+                        .0
+                        .iter()
+                        .zip(rgba.as_chunks_mut::<4>().0.iter_mut())
+                    {
                         d[0] = (u16::from_ne_bytes([s[0], s[1]]) >> 8) as u8;
                         d[1] = (u16::from_ne_bytes([s[2], s[3]]) >> 8) as u8;
                         d[2] = (u16::from_ne_bytes([s[4], s[5]]) >> 8) as u8;
@@ -887,10 +899,10 @@ fn decode_bmp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     feature = "tiff"
 ))]
 fn pixel_buffer_to_rgb8_with_policy(
-    buf: &zenpixels::PixelBuffer,
+    buf: &zenpixels::PixelBuf,
     policy: zenmetrics_api::alpha::AlphaPolicy,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    pixel_slice_to_rgb8_with_policy(&buf.as_slice(), policy)
+    pixel_slice_to_rgb8_with_policy(&buf.as_view(), policy)
 }
 
 #[cfg(any(
@@ -902,7 +914,7 @@ fn pixel_buffer_to_rgb8_with_policy(
 ))]
 #[cfg(test)]
 fn pixel_buffer_to_rgb8(
-    buf: &zenpixels::PixelBuffer,
+    buf: &zenpixels::PixelBuf,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     pixel_buffer_to_rgb8_with_policy(buf, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -915,36 +927,56 @@ fn pixel_buffer_to_rgb8(
     feature = "tiff"
 ))]
 pub fn pixel_slice_to_rgb8_with_policy(
-    pixels: &zenpixels::PixelSlice<'_>,
+    pixels: &zenpixels::PixelView<'_>,
     alpha_policy: zenmetrics_api::alpha::AlphaPolicy,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    use zenpixels::PixelDescriptor;
-    use zenpixels_convert::policy::ConvertOptions;
+    use zenpixels::{AlphaMode, ColorSpace, Transfer, formats};
+    use zenpixels_convert::{ConvertPolicy, convert_to_buf};
 
     let width = pixels.width();
-    let height = pixels.rows();
-    let src_stride = pixels.stride();
-    let src_desc = pixels.descriptor();
-    let src_bytes = pixels.as_strided_bytes();
+    let height = pixels.height();
+    let src_fmt = pixels.format();
+    let has_alpha = matches!(
+        src_fmt.color.alpha(),
+        AlphaMode::Straight | AlphaMode::Premultiplied
+    );
+    let target_fmt = |base: zenpixels::PixelFormat| {
+        let mut dst = base;
+        match src_fmt.color {
+            ColorSpace::Rgb {
+                primaries,
+                transfer,
+                ..
+            } => {
+                if transfer == Transfer::Unknown {
+                    dst = dst
+                        .with_transfer(Transfer::Unknown)
+                        .with_primaries(primaries);
+                } else if primaries == zenpixels::Primaries::Unknown {
+                    dst = dst.with_primaries(zenpixels::Primaries::Unknown);
+                }
+            }
+            ColorSpace::Gray {
+                transfer: Transfer::Unknown,
+                ..
+            } => {
+                dst = dst.with_transfer(Transfer::Unknown);
+            }
+            _ => {}
+        }
+        dst
+    };
+    let policy = ConvertPolicy::permissive();
 
-    if src_desc.has_alpha() {
-        let dst_desc = PixelDescriptor::RGBA8_SRGB;
-        let options = ConvertOptions::permissive();
-        let cow = zenpixels_convert::adapt::adapt_for_encode_explicit_cow(
-            src_bytes,
-            src_desc,
-            width,
-            height,
-            src_stride,
-            &[dst_desc],
-            &options,
-        )
-        .map_err(|e| format!("decode: cannot convert {src_desc:?} → RGBA8_SRGB: {e}"))?;
+    if has_alpha {
+        let dst_fmt = target_fmt(formats::RGBA8_SRGB.clone());
+        let converted = convert_to_buf(pixels, &dst_fmt, &policy)
+            .map_err(|e| format!("decode: cannot convert {src_fmt:?} → RGBA8_SRGB: {e}"))?;
 
-        let slice = cow.as_slice();
+        let view = converted.as_view();
         let mut rgba = vec![0u8; (width as usize * 4) * height as usize];
         for y in 0..height {
-            let src_row = slice.row(y);
+            let src_row = view.row(y);
             let dst_row =
                 &mut rgba[y as usize * width as usize * 4..(y as usize + 1) * width as usize * 4];
             dst_row.copy_from_slice(src_row);
@@ -957,23 +989,14 @@ pub fn pixel_slice_to_rgb8_with_policy(
             height,
         })
     } else {
-        let dst_desc = PixelDescriptor::RGB8_SRGB;
-        let options = ConvertOptions::permissive();
-        let cow = zenpixels_convert::adapt::adapt_for_encode_explicit_cow(
-            src_bytes,
-            src_desc,
-            width,
-            height,
-            src_stride,
-            &[dst_desc],
-            &options,
-        )
-        .map_err(|e| format!("decode: cannot convert {src_desc:?} → RGB8_SRGB: {e}"))?;
+        let dst_fmt = target_fmt(formats::RGB8_SRGB.clone());
+        let converted = convert_to_buf(pixels, &dst_fmt, &policy)
+            .map_err(|e| format!("decode: cannot convert {src_fmt:?} → RGB8_SRGB: {e}"))?;
 
-        let slice = cow.as_slice();
+        let view = converted.as_view();
         let mut dst = vec![0u8; (width as usize * 3) * height as usize];
         for y in 0..height {
-            let src_row = slice.row(y);
+            let src_row = view.row(y);
             let dst_row =
                 &mut dst[y as usize * width as usize * 3..(y as usize + 1) * width as usize * 3];
             dst_row.copy_from_slice(src_row);
@@ -996,7 +1019,7 @@ pub fn pixel_slice_to_rgb8_with_policy(
 ))]
 #[cfg(test)]
 fn pixel_slice_to_rgb8(
-    pixels: &zenpixels::PixelSlice<'_>,
+    pixels: &zenpixels::PixelView<'_>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     pixel_slice_to_rgb8_with_policy(pixels, zenmetrics_api::alpha::AlphaPolicy::RequireOpaque)
 }
@@ -1012,7 +1035,7 @@ fn enough_unstoppable() -> Box<dyn enough::Stop + Send + Sync> {
 #[cfg(all(test, feature = "avif"))]
 mod tests {
     use super::{avif_sdr_descriptor, decode_avif, hdr_transfer_name, pixel_buffer_to_rgb8};
-    use zenpixels::{ChannelLayout, ChannelType, TransferFunction};
+    use zenpixels::{ChannelOrder, SampleType, Transfer};
 
     const REF_64_AVIF: &[u8] = include_bytes!("../tests/fixtures/ref_64.avif");
     // Generated by zenavif-serialize/examples/make_mono_avif.rs.
@@ -1035,17 +1058,22 @@ mod tests {
             let mut decoder = zenavif::ManagedAvifDecoder::new(&bytes, &cfg).unwrap();
             let (native, info) = decoder.decode_full(&enough::Unstoppable).unwrap();
             assert_eq!(info.transfer_characteristics.0, tc as u8);
-            let desc = avif_sdr_descriptor(native.descriptor(), &info);
+            let desc = avif_sdr_descriptor(native.format(), &info);
+            let transfer = match desc.color {
+                zenpixels::ColorSpace::Rgb { transfer, .. }
+                | zenpixels::ColorSpace::Gray { transfer, .. } => transfer,
+                other => panic!("expected RGB/Gray color space, got {other:?}"),
+            };
             assert_eq!(
-                desc.transfer(),
+                transfer,
                 if tc == 13 {
-                    TransferFunction::Srgb
+                    Transfer::Srgb
                 } else {
-                    TransferFunction::Unknown
+                    Transfer::Unknown
                 },
                 "transfer {tc} at converter ingress"
             );
-            let tagged = native.with_descriptor(desc);
+            let tagged = native.reinterpret_bytes(desc).unwrap();
             let actual = pixel_buffer_to_rgb8(&tagged).unwrap();
             let via_decode = decode_avif(&bytes).unwrap();
             assert_eq!(
@@ -1057,19 +1085,19 @@ mod tests {
                 "transfer {tc} changed code values"
             );
 
-            let slice = tagged.as_slice();
-            assert_eq!(slice.descriptor().layout(), ChannelLayout::Rgb);
-            let bpc = match slice.descriptor().channel_type() {
-                ChannelType::U8 => 1,
-                ChannelType::U16 => 2,
+            let slice = tagged.as_view();
+            assert_eq!(slice.format().layout.order, ChannelOrder::Rgb);
+            let bpc = match slice.format().layout.sample {
+                SampleType::U8 => 1,
+                SampleType::U16 => 2,
                 other => panic!("unexpected native channel type {other:?}"),
             };
             let mut bad = 0usize;
-            for y in 0..slice.rows() as usize {
+            for y in 0..slice.height() as usize {
                 let bytes = slice.as_strided_bytes();
                 for x in 0..slice.width() as usize {
                     for c in 0..3 {
-                        let off = y * slice.stride() + (x * 3 + c) * bpc;
+                        let off = y * slice.stride_bytes() + (x * 3 + c) * bpc;
                         let want = if bpc == 1 {
                             bytes[off]
                         } else {
@@ -1098,14 +1126,14 @@ mod tests {
         assert_eq!(info.bit_depth, 10);
         // This vector has no colr box; stamp sRGB to exercise the same
         // converter descriptor that the separate nclx=13 ingress test checks.
-        let desc = native.descriptor().with_transfer(TransferFunction::Srgb);
-        let tagged = native.with_descriptor(desc);
-        let slice = tagged.as_slice();
-        assert_eq!(slice.descriptor().channel_type(), ChannelType::U16);
-        let channels = slice.descriptor().layout().channels();
+        let desc = native.format().clone().with_transfer(Transfer::Srgb);
+        let tagged = native.reinterpret_bytes(desc).unwrap();
+        let slice = tagged.as_view();
+        assert_eq!(slice.format().layout.sample, SampleType::U16);
+        let channels = slice.format().layout.order.channels();
         assert!(matches!(
-            slice.descriptor().layout(),
-            ChannelLayout::Gray | ChannelLayout::Rgb
+            slice.format().layout.order,
+            ChannelOrder::Gray | ChannelOrder::Rgb
         ));
         let got = decode_avif(MONO_10B_AVIF).unwrap();
         let tagged_rgb8 = pixel_buffer_to_rgb8(&tagged).unwrap();
@@ -1115,11 +1143,11 @@ mod tests {
         );
         let src = slice.as_strided_bytes();
         let mut bad = 0usize;
-        for y in 0..slice.rows() as usize {
+        for y in 0..slice.height() as usize {
             for x in 0..slice.width() as usize {
                 for c in 0..3 {
                     let source_channel = if channels == 1 { 0 } else { c };
-                    let off = y * slice.stride() + (x * channels + source_channel) * 2;
+                    let off = y * slice.stride_bytes() + (x * channels + source_channel) * 2;
                     let v = u16::from_ne_bytes([src[off], src[off + 1]]);
                     let want = ((u32::from(v) * 255 + 32767) / 65535) as u8;
                     bad +=
@@ -1170,19 +1198,33 @@ mod tests {
 #[cfg(all(test, feature = "png"))]
 mod high_depth_funnel_tests {
     use super::pixel_buffer_to_rgb8;
-    use zenpixels::{PixelBuffer, PixelDescriptor};
+    use zenpixels::{
+        AlphaMode, ColorSpace, PixelBuf, PixelFormat, SampleLayout, SignalRange, Transfer, formats,
+    };
 
     #[test]
     fn integer_sdr_funnel_rounds_native_codes_exactly() {
         let codes = [0u16, 1, 128, 33025, 32768, 65535];
+        let graya16_srgb = PixelFormat::new(
+            SampleLayout::GRAYA16,
+            ColorSpace::Gray {
+                transfer: Transfer::Srgb,
+                range: SignalRange::Full,
+                alpha: AlphaMode::Straight,
+                white: None,
+            },
+        );
         for desc in [
-            PixelDescriptor::RGB16_SRGB,
-            PixelDescriptor::RGBA16_SRGB,
-            PixelDescriptor::GRAY16_SRGB,
-            PixelDescriptor::GRAYA16_SRGB,
+            formats::RGB16_SRGB.clone(),
+            formats::RGBA16_SRGB.clone(),
+            formats::GRAY16_SRGB.clone(),
+            graya16_srgb,
         ] {
-            let channels = desc.layout().channels();
-            let has_alpha = desc.has_alpha();
+            let channels = desc.layout.order.channels();
+            let has_alpha = matches!(
+                desc.color.alpha(),
+                AlphaMode::Straight | AlphaMode::Premultiplied
+            );
             let mut bytes = Vec::new();
             for code in codes {
                 let color_channels = if has_alpha { channels - 1 } else { channels };
@@ -1193,7 +1235,7 @@ mod high_depth_funnel_tests {
                     bytes.extend_from_slice(&65535u16.to_ne_bytes());
                 }
             }
-            let pixels = PixelBuffer::from_vec(bytes, codes.len() as u32, 1, desc).unwrap();
+            let pixels = PixelBuf::from_bytes(bytes, codes.len() as u32, 1, desc.clone()).unwrap();
             let got = pixel_buffer_to_rgb8(&pixels).unwrap();
             for (x, code) in codes.into_iter().enumerate() {
                 let want = ((u32::from(code) * 255 + 32767) / 65535) as u8;
@@ -1237,8 +1279,8 @@ mod png16_route_tests {
         )
         .unwrap();
         assert_eq!(
-            native.pixels.descriptor().channel_type(),
-            zenpixels::ChannelType::U16
+            native.pixels.format().layout.sample,
+            zenpixels::SampleType::U16
         );
         let got = decode_png(&encoded).unwrap();
         for (x, code) in codes.into_iter().enumerate() {
@@ -1275,8 +1317,8 @@ mod jxl16_route_tests {
         assert!(encoded.len() < 30_000);
         let native = zenjxl::decode(&encoded, None, &[]).unwrap();
         assert_eq!(
-            native.pixels.descriptor().channel_type(),
-            zenpixels::ChannelType::U16
+            native.pixels.format().layout.sample,
+            zenpixels::SampleType::U16
         );
         let got = decode_jxl(&encoded).unwrap();
         for i in 0..w * h {
@@ -1295,7 +1337,7 @@ mod jxl16_route_tests {
 #[cfg(all(test, feature = "tiff"))]
 mod tiff16_route_tests {
     use super::decode_tiff;
-    use zenpixels::{PixelBuffer, PixelDescriptor};
+    use zenpixels::{PixelBuf, formats};
 
     #[test]
     fn imazen_encoded_tiff16_narrows_exactly() {
@@ -1307,9 +1349,9 @@ mod tiff16_route_tests {
             }
         }
         let source =
-            PixelBuffer::from_vec(raw, codes.len() as u32, 1, PixelDescriptor::RGB16_SRGB).unwrap();
+            PixelBuf::from_bytes(raw, codes.len() as u32, 1, formats::RGB16_SRGB.clone()).unwrap();
         let encoded = zentiff::encode(
-            &source.as_slice(),
+            &source.as_view(),
             &zentiff::TiffEncodeConfig::default(),
             &enough::Unstoppable,
         )
@@ -1322,8 +1364,8 @@ mod tiff16_route_tests {
         )
         .unwrap();
         assert_eq!(
-            native.pixels.descriptor().channel_type(),
-            zenpixels::ChannelType::U16
+            native.pixels.format().layout.sample,
+            zenpixels::SampleType::U16
         );
         let got = decode_tiff(&encoded).unwrap();
         for (x, v) in codes.into_iter().enumerate() {

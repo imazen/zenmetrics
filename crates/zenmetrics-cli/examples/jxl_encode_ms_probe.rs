@@ -63,7 +63,7 @@ fn env_list(key: &str, default: &str) -> Vec<u32> {
 fn main() {
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
     use zenjxl::JxlEncoderConfig;
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let sizes = env_list("ZEN_PROBE_SIZES", "64,128,256,384,512");
     let efforts = env_list("ZEN_PROBE_EFFORTS", "1,5,9");
@@ -96,9 +96,8 @@ fn main() {
                 let cfg = JxlEncoderConfig::new()
                     .with_generic_quality(75.0)
                     .with_generic_effort(e as i32);
-                let slice =
-                    PixelSlice::new(&px, n, n, (n as usize) * 3, PixelDescriptor::RGB8_SRGB)
-                        .expect("pixel slice");
+                let slice = PixelView::new(&px, n, n, (n as usize) * 3, &formats::RGB8_SRGB)
+                    .expect("pixel view");
                 let t0 = Instant::now();
                 let encoder = cfg.job().encoder().expect("encoder");
                 let t1 = Instant::now();
@@ -153,8 +152,7 @@ fn main() {
                     .with_generic_quality(75.0)
                     .with_generic_effort(e as i32);
                 let slice =
-                    PixelSlice::new(&px, n, n, (n as usize) * 3, PixelDescriptor::RGB8_SRGB)
-                        .expect("slice");
+                    PixelView::new(&px, n, n, (n as usize) * 3, &formats::RGB8_SRGB).expect("view");
                 let t = Instant::now();
                 let _ = cfg
                     .job()
@@ -173,14 +171,9 @@ fn main() {
                             let cfg = JxlEncoderConfig::new()
                                 .with_generic_quality(75.0)
                                 .with_generic_effort(e as i32);
-                            let slice = PixelSlice::new(
-                                px,
-                                n,
-                                n,
-                                (n as usize) * 3,
-                                PixelDescriptor::RGB8_SRGB,
-                            )
-                            .expect("slice");
+                            let slice =
+                                PixelView::new(px, n, n, (n as usize) * 3, &formats::RGB8_SRGB)
+                                    .expect("view");
                             let t = Instant::now();
                             let _ = cfg
                                 .job()

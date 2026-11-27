@@ -163,20 +163,20 @@ fn main() {
     // SSIMULACRA2 straight from fast-ssim2, independent of the browser's
     // adapter: the fused diffmap, one cell per input pixel.
     let ssim2 = fast_ssim2::compute_ssimulacra2_maps(
-        &zenpixels::PixelSlice::new(
+        &zenpixels::PixelView::new(
             bytemuck::cast_slice(&reference),
             w as u32,
             h as u32,
             w * 3,
-            zenpixels::PixelDescriptor::RGB8_SRGB,
+            &zenpixels::formats::RGB8_SRGB,
         )
         .unwrap(),
-        &zenpixels::PixelSlice::new(
+        &zenpixels::PixelView::new(
             bytemuck::cast_slice(&distorted),
             w as u32,
             h as u32,
             w * 3,
-            zenpixels::PixelDescriptor::RGB8_SRGB,
+            &zenpixels::formats::RGB8_SRGB,
         )
         .unwrap(),
     )
@@ -187,12 +187,12 @@ fn main() {
     // Maps served through the unified metric interface itself.
     fn packed(px: &[u8], w: usize, h: usize) -> zenmetrics_abstractions::Image<'_> {
         zenmetrics_abstractions::Image::from(
-            zenpixels::PixelSlice::new(
+            zenpixels::PixelView::new(
                 px,
                 w as u32,
                 h as u32,
                 w * 3,
-                zenpixels::PixelDescriptor::RGB8_SRGB,
+                &zenpixels::formats::RGB8_SRGB,
             )
             .unwrap(),
         )
@@ -290,17 +290,31 @@ fn main() {
         w: usize,
         h: usize,
     ) -> zenmetrics_abstractions::Image<'_> {
-        let plane = |p, w: usize, h: usize| {
-            zenpixels::PixelSlice::new(p, w as u32, h as u32, w, zenpixels::PixelDescriptor::GRAY8)
-                .unwrap()
-        };
+        fn plane<'a>(
+            p: &'a [u8],
+            w: usize,
+            h: usize,
+            role: zenpixels::PlaneRole,
+            sub: (u8, u8),
+        ) -> zenpixels::PlaneView<'a> {
+            zenpixels::PlaneView::new(
+                p,
+                w as u32,
+                h as u32,
+                w,
+                zenpixels::PlaneFormat::new(role, zenpixels::SampleType::U8)
+                    .with_subsampling(sub.0, sub.1),
+            )
+            .unwrap()
+        }
         zenmetrics_abstractions::Image::from(
-            zenmetrics_abstractions::Planes::new(
-                zenmetrics_abstractions::PlaneLayout::ycbcr_420(zenpixels::ChannelType::U8),
-                vec![
-                    plane(y, w, h),
-                    plane(cb, w / 2, h / 2),
-                    plane(cr, w / 2, h / 2),
+            zenpixels::PlanarView::new(
+                w as u32,
+                h as u32,
+                &[
+                    plane(y, w, h, zenpixels::PlaneRole::Y, (1, 1)),
+                    plane(cb, w / 2, h / 2, zenpixels::PlaneRole::Cb, (2, 2)),
+                    plane(cr, w / 2, h / 2, zenpixels::PlaneRole::Cr, (2, 2)),
                 ],
             )
             .unwrap(),

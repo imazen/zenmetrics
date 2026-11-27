@@ -44,10 +44,10 @@ fn prepare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         let down = w <= r.width && h <= r.height;
         for (label, src) in [("reference", &r), ("distorted", &d)] {
             let pixels = if down {
-                use zenresize::{Filter, PixelDescriptor, ResizeConfig, Resizer};
+                use zenresize::{Filter, PixelFormat, ResizeConfig, Resizer};
                 let c = ResizeConfig::builder(r.width, r.height, w, h)
                     .filter(Filter::Lanczos)
-                    .format(PixelDescriptor::RGB8_SRGB)
+                    .format(PixelFormat::RGB8_SRGB)
                     .build();
                 Resizer::new(&c).resize(&src.pixels)
             } else {

@@ -44,7 +44,7 @@ zenbench = "0.1.7"
 # repo policy). `enough` must come from crates.io — zenpng's own manifest
 # requests the crates-io copy, and a second source would make its `Stop`
 # trait a different type.
-zenpng = { git = "https://github.com/imazen/zenpng", branch = "main" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007" }
 enough = "0.4.2"
 rgb = { workspace = true }
 

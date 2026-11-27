@@ -28,10 +28,10 @@ fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
         &enough::Unstoppable,
     )
     .expect("png decode");
-    let s = out.pixels.as_slice();
-    let (w, h) = (s.width() as usize, s.rows() as usize);
+    let s = out.pixels.as_view();
+    let (w, h) = (s.width() as usize, s.height() as usize);
     assert_eq!(
-        s.descriptor().bytes_per_pixel(),
+        s.format().layout.bytes_per_pixel(),
         3,
         "{}: expected RGB8",
         path.display()
@@ -39,7 +39,7 @@ fn load_rgb8(path: &Path) -> (Vec<u8>, usize, usize) {
     let bytes = s.as_strided_bytes();
     let mut px = Vec::with_capacity(w * h * 3);
     for y in 0..h {
-        px.extend_from_slice(&bytes[y * s.stride()..y * s.stride() + w * 3]);
+        px.extend_from_slice(&bytes[y * s.stride_bytes()..y * s.stride_bytes() + w * 3]);
     }
     (px, w, h)
 }

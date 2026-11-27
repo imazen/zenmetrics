@@ -45,7 +45,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # crates"). This bypasses the root [patch.crates-io] zenpng→../zenpng
 # path pin (patches only rewrite crates-io deps) intentionally: the
 # patch keeps `n` on the local checkout while this crate tracks main.
-zenpng = { git = "https://github.com/imazen/zenpng", branch = "main" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007" }
 # `enough` must come from crates.io, NOT git main: zenpng's own
 # manifest requests crates-io `enough`, and a second-source copy
 # would make `enough::Stop` a different trait — `&Unstoppable` would

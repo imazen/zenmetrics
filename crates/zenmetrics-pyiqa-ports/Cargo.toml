@@ -34,7 +34,7 @@ ort = { version = "=2.0.0-rc.14", optional = true, default-features = false, fea
 rustfft = "6.4.1"
 
 [dev-dependencies]
-zenpng = { path = "../../../zenpng" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007" }
 enough = "0.4.4"
 
 [[test]]

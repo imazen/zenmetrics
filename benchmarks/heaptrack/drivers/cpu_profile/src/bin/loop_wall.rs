@@ -501,8 +501,17 @@ fn main() {
 
             // ---------------- ssim2 ----------------
             if want("ssim2") {
-                use fast_ssim2::Ssimulacra2Reference;
-                use imgref::Img;
+                use fast_ssim2::{PixelView, Ssimulacra2Reference, formats};
+                fn view_packed(buf: &[[f32; 3]], w: usize, h: usize) -> PixelView<'_> {
+                    PixelView::new(
+                        bytemuck::cast_slice(buf),
+                        w as u32,
+                        h as u32,
+                        w * 12,
+                        &formats::RGBF32_LINEAR,
+                    )
+                    .unwrap()
+                }
                 g.bench("ssim2__oneshot", {
                     let (rp, dp) = (refp.clone(), distp.clone());
                     move |b| {
@@ -511,9 +520,8 @@ fn main() {
                         b.iter(|| {
                             interleave_into(&mut ri, &rp, stride, w, h);
                             interleave_into(&mut di, &dp, stride, w, h);
-                            let pre =
-                                Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
-                            zenbench::black_box(pre.compare(Img::new(di.as_slice(), w, h)).unwrap())
+                            let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
+                            zenbench::black_box(pre.compare(&view_packed(&di, w, h)).unwrap())
                         })
                     }
                 });
@@ -524,7 +532,7 @@ fn main() {
                         b.iter(|| {
                             interleave_into(&mut ri, &rp, stride, w, h);
                             zenbench::black_box(
-                                Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h))
+                                Ssimulacra2Reference::new(&view_packed(&ri, w, h))
                                     .unwrap()
                                     .width(),
                             )
@@ -537,41 +545,26 @@ fn main() {
                     let (rp, dp) = (refp.clone(), distp.clone());
                     let mut ri: Vec<[f32; 3]> = Vec::new();
                     interleave_into(&mut ri, &rp, stride, w, h);
-                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
+                    let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
                     move |b| {
                         let mut di: Vec<[f32; 3]> = Vec::new();
                         b.iter(|| {
                             interleave_into(&mut di, &dp, stride, w, h);
-                            zenbench::black_box(pre.compare(Img::new(di.as_slice(), w, h)).unwrap())
+                            zenbench::black_box(pre.compare(&view_packed(&di, w, h)).unwrap())
                         })
                     }
                 });
-                // ---- CORRECTION 2026-08-30: the stride A/B the first pass missed.
-                //
-                // The cells above pre-flatten planar -> a PACKED interleaved Vec and
-                // hand fast-ssim2 a tight `Img::new(...)`. So they never exercised a
-                // strided input at all, and the first pass wrongly concluded from
-                // reading `ToLinearRgb` that fast-ssim2 cannot take stride. It CAN:
-                // `impl ToLinearRgb for ImgRef<'_, [f32; 3]>` walks `self.pixels()`,
-                // which honours the stride (`input.rs:261-266`).
-                //
-                // These two cells isolate the real question the workspace stride rule
-                // asks — "does accepting a stride cost anything ON THE PACKED PATH?" —
-                // by handing the SAME entry point an interleaved buffer twice: once
-                // tight, once padded. The caller does NO repack in either; the buffer
-                // is built outside the timed region, exactly as a caller holding
-                // interleaved pixels would have it.
                 g.bench("ssim2__warm_imgref_packed", {
                     let (rp, dp) = (refp.clone(), distp.clone());
                     let mut ri: Vec<[f32; 3]> = Vec::new();
                     interleave_into(&mut ri, &rp, stride, w, h);
-                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
+                    let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
                     // Tight interleaved distorted: stride == width.
                     let mut di: Vec<[f32; 3]> = Vec::new();
                     interleave_into(&mut di, &dp, stride, w, h);
                     move |b| {
                         b.iter(|| {
-                            zenbench::black_box(pre.compare(Img::new(di.as_slice(), w, h)).unwrap())
+                            zenbench::black_box(pre.compare(&view_packed(&di, w, h)).unwrap())
                         })
                     }
                 });
@@ -579,7 +572,7 @@ fn main() {
                     let (rp, dp) = (refp.clone(), distp.clone());
                     let mut ri: Vec<[f32; 3]> = Vec::new();
                     interleave_into(&mut ri, &rp, stride, w, h);
-                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
+                    let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
                     // PADDED interleaved distorted: a `stride`-wide row of [f32; 3]
                     // holding `w` real pixels, then PAD columns of filler that a
                     // correct stride-aware ingress must never read.
@@ -592,34 +585,29 @@ fn main() {
                     }
                     move |b| {
                         b.iter(|| {
-                            zenbench::black_box(
-                                pre.compare(imgref::Img::new_stride(
-                                    di_pad.as_slice(),
-                                    w,
-                                    h,
-                                    stride,
-                                ))
-                                .unwrap(),
+                            let dv = PixelView::new(
+                                bytemuck::cast_slice(&di_pad),
+                                w as u32,
+                                h as u32,
+                                stride * 12,
+                                &formats::RGBF32_LINEAR,
                             )
+                            .unwrap();
+                            zenbench::black_box(pre.compare(&dv).unwrap())
                         })
                     }
                 });
-                // Same, through the scratch-recycling entry (zero Vec allocs
-                // after the first call).
+                // Compare against warm reference (fast-ssim2 0.9.1 dropped separate CompareContext).
                 g.bench("ssim2__warm_zeroalloc", {
                     let (rp, dp) = (refp.clone(), distp.clone());
                     let mut ri: Vec<[f32; 3]> = Vec::new();
                     interleave_into(&mut ri, &rp, stride, w, h);
-                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
-                    let mut ctx = pre.compare_context();
+                    let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
                     move |b| {
                         let mut di: Vec<[f32; 3]> = Vec::new();
                         b.iter(|| {
                             interleave_into(&mut di, &dp, stride, w, h);
-                            zenbench::black_box(
-                                pre.compare_with(&mut ctx, Img::new(di.as_slice(), w, h))
-                                    .unwrap(),
-                            )
+                            zenbench::black_box(pre.compare(&view_packed(&di, w, h)).unwrap())
                         })
                     }
                 });
@@ -642,15 +630,11 @@ fn main() {
                         let mut di: Vec<[f32; 3]> = Vec::new();
                         b.iter(|| {
                             interleave_into(&mut ri, &rp, stride, w, h);
-                            let pre =
-                                Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
-                            let mut ctx = pre.compare_context();
+                            let pre = Ssimulacra2Reference::new(&view_packed(&ri, w, h)).unwrap();
                             let mut acc = 0.0f64;
                             for _ in 0..LOOP_N {
                                 interleave_into(&mut di, &dp, stride, w, h);
-                                acc += pre
-                                    .compare_with(&mut ctx, Img::new(di.as_slice(), w, h))
-                                    .unwrap();
+                                acc += pre.compare(&view_packed(&di, w, h)).unwrap();
                             }
                             zenbench::black_box(acc)
                         })
@@ -801,36 +785,40 @@ fn record_scores(
         ));
     }
     if want("ssim2") {
-        use fast_ssim2::Ssimulacra2Reference;
-        use imgref::Img;
+        use fast_ssim2::{PixelView, Ssimulacra2Reference, formats};
         let mut ri: Vec<[f32; 3]> = Vec::new();
         let mut di: Vec<[f32; 3]> = Vec::new();
         interleave_into(&mut ri, rp, stride, w, h);
         interleave_into(&mut di, dp, stride, w, h);
-        let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
-        let s_warm = pre.compare(Img::new(di.as_slice(), w, h)).unwrap();
-        let s_cold = fast_ssim2::compute_ssimulacra2(
-            Img::new(ri.as_slice(), w, h),
-            Img::new(di.as_slice(), w, h),
+        let rv = PixelView::new(
+            bytemuck::cast_slice(&ri),
+            w as u32,
+            h as u32,
+            w * 12,
+            &formats::RGBF32_LINEAR,
         )
         .unwrap();
-        let mut ctx = pre.compare_context();
-        let s_ctx = pre
-            .compare_with(&mut ctx, Img::new(di.as_slice(), w, h))
-            .unwrap();
+        let dv = PixelView::new(
+            bytemuck::cast_slice(&di),
+            w as u32,
+            h as u32,
+            w * 12,
+            &formats::RGBF32_LINEAR,
+        )
+        .unwrap();
+        let pre = Ssimulacra2Reference::new(&rv).unwrap();
+        let s_warm = pre.compare(&dv).unwrap();
+        let s_cold = fast_ssim2::compute_ssimulacra2(&rv, &dv).unwrap();
+        let s_ctx = pre.compare(&dv).unwrap();
         scores.push(("ssim2".into(), s_warm));
         // Does the warm-reference path agree with the cold one-shot?
         scores.push((
             "ssim2__warm_vs_cold_abs_delta".into(),
             (s_warm - s_cold).abs(),
         ));
-        // Does the scratch-recycling path agree with the allocating one?
+        // Does the repeat path agree?
         scores.push(("ssim2__zeroalloc_abs_delta".into(), (s_warm - s_ctx).abs()));
 
-        // CORRECTION 2026-08-30: does a STRIDED ImgRef score the same as a packed
-        // one? If the ingress read the padding columns this would be non-zero.
-        // This is the actual test of "supports stride", as opposed to merely
-        // accepting the type — and it is the check the first pass never ran.
         let mut di_pad: Vec<[f32; 3]> = vec![[0.5, 0.5, 0.5]; stride * h];
         for y in 0..h {
             for x in 0..w {
@@ -838,9 +826,15 @@ fn record_scores(
                 di_pad[y * stride + x] = [dp[0][s], dp[1][s], dp[2][s]];
             }
         }
-        let s_strided_imgref = pre
-            .compare(imgref::Img::new_stride(di_pad.as_slice(), w, h, stride))
-            .unwrap();
+        let dv_pad = PixelView::new(
+            bytemuck::cast_slice(&di_pad),
+            w as u32,
+            h as u32,
+            stride * 12,
+            &formats::RGBF32_LINEAR,
+        )
+        .unwrap();
+        let s_strided_imgref = pre.compare(&dv_pad).unwrap();
         scores.push((
             "ssim2__imgref_stride_parity_abs_delta".into(),
             (s_warm - s_strided_imgref).abs(),

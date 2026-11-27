@@ -15,7 +15,7 @@ butteraugli = { workspace = true }
 dssim-core = { workspace = true }
 rgb = { workspace = true }
 clap = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 bytemuck = { workspace = true }
 cvvdp = { workspace = true, features = ["std", "parallel"] }
 iwssim = { workspace = true, features = ["std", "parallel"] }
@@ -26,7 +26,7 @@ zenmetrics-abstractions = { path = "../zenmetrics-abstractions", default-feature
 # SSIMULACRA2's native spatial terms (`compute_ssimulacra2_maps`) for the
 # unified-surface adapter in `src/ssim2_map.rs`; the scalar route stays on
 # zenmetrics-api's `cpu-ssim2`.
-fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", default-features = false }
+fast-ssim2 = { workspace = true }
 fsim = { workspace = true, features = ["std", "parallel"], optional = true }
 vsi = { workspace = true, features = ["std", "parallel"], optional = true }
 msssim = { workspace = true, features = ["std", "parallel"], optional = true }
@@ -38,12 +38,12 @@ nlpd = { path = "../nlpd", features = ["parallel"], optional = true }
 piqe = { workspace = true, features = ["std"], optional = true }
 niqe = { workspace = true, features = ["std"], optional = true }
 brisque = { workspace = true, features = ["std"], optional = true }
-zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, features = ["zencodec"] }
-zenpng = { path = "../../../zenpng", optional = true }
-zenwebp = { path = "../../../zenwebp", default-features = false, optional = true }
-zenjxl = { path = "../../../zenjxl", default-features = false, features = ["decode"], optional = true }
-zenpixels = { version = ">=0.2.16, <0.4.0" }
-zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimental"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "80dac328d0b9279413d037c0291477c8df6ae53b", default-features = false, features = ["zencodec"] }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007", optional = true }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "82cd643dbe7950f7a5c69afe8d5bf69652dd4aef", default-features = false, optional = true }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "27a69d531938d1781777fd99ec7d7f74b805abdf", default-features = false, features = ["decode"], optional = true }
+zenpixels = { workspace = true, features = ["std"] }
+zenpixels-convert = { workspace = true, features = ["std", "hdr-transfers"] }
 enough = "0.4.5"
 how-far = "0.1.0"
 zensim = { workspace = true, features = ["training", "feature-regime-v2", "custom-profiles", "deprecated-profiles", "candidate-profiles"] }
@@ -103,7 +103,7 @@ imgref = { workspace = true }
 # The browser_oracle example pins zensim's dispatch tier; this must be the
 # registry archmage copy zensim links (currently 0.9.33), or the disable has no effect.
 archmage-zensim = { package = "archmage", version = ">=0.9.30, <0.10" }
-jxl-encoder = { path = "../../../jxl-encoder/jxl-encoder", default-features = false }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "7fdd3ea2839b5a0ccd73dd61c9a99b8fe95857fe", default-features = false }
 # nn_oracle scores the learned metrics natively on the rten engine.
 zenmetrics-nn = { path = "../zenmetrics-nn" }
 

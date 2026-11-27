@@ -27,13 +27,17 @@ fn load(path: &str) -> (Vec<u8>, u32, u32) {
         &enough::Unstoppable,
     )
     .unwrap_or_else(|e| panic!("{path}: {e}"));
-    let s = out.pixels.as_slice();
-    assert_eq!(s.descriptor().bytes_per_pixel(), 3, "{path}: expected RGB8");
-    let (w, h) = (s.width(), s.rows());
+    let s = out.pixels.as_view();
+    assert_eq!(
+        s.format().layout.bytes_per_pixel(),
+        3,
+        "{path}: expected RGB8"
+    );
+    let (w, h) = (s.width(), s.height());
     let bytes = s.as_strided_bytes();
     let mut px = Vec::with_capacity(w as usize * h as usize * 3);
     for y in 0..h as usize {
-        px.extend_from_slice(&bytes[y * s.stride()..][..w as usize * 3]);
+        px.extend_from_slice(&bytes[y * s.stride_bytes()..][..w as usize * 3]);
     }
     (px, w, h)
 }

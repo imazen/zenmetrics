@@ -34,13 +34,17 @@ fn load_rgb8(path: &str) -> (Vec<u8>, usize, usize, usize) {
         &enough::Unstoppable,
     )
     .unwrap_or_else(|e| panic!("{path}: {e}"));
-    let s = out.pixels.as_slice();
-    assert_eq!(s.descriptor().bytes_per_pixel(), 3, "RGB8 required: {path}");
+    let s = out.pixels.as_view();
+    assert_eq!(
+        s.format().layout.bytes_per_pixel(),
+        3,
+        "RGB8 required: {path}"
+    );
     (
         s.as_strided_bytes().to_vec(),
         s.width() as usize,
-        s.rows() as usize,
-        s.stride() as usize,
+        s.height() as usize,
+        s.stride_bytes(),
     )
 }
 

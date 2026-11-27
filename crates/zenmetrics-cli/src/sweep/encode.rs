@@ -780,7 +780,7 @@ fn encode_jpeg(
         HuffmanStrategy, InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout,
         ProgressiveScanMode, TinyFileMode, XybSubsampling,
     };
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     // Quality flows through the cross-codec generic scale so the sweep
     // grid produces comparable-looking output across zen codecs.
@@ -1140,14 +1140,14 @@ fn encode_jpeg(
     }
 
     let stride = (source.width as usize) * 3;
-    let slice = PixelSlice::new(
+    let slice = PixelView::new(
         &source.pixels,
         source.width,
         source.height,
         stride,
-        PixelDescriptor::RGB8_SRGB,
+        &formats::RGB8_SRGB,
     )
-    .map_err(|e| format!("zenjpeg: pixel slice construction failed: {e}"))?;
+    .map_err(|e| format!("zenjpeg: pixel view construction failed: {e}"))?;
 
     let start = Instant::now();
     let encoder = cfg
@@ -1921,7 +1921,7 @@ fn encode_jxl_wrapper(
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
     use zenjxl::JxlEncoderConfig;
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     let mut cfg = if lossless {
         JxlEncoderConfig::new().with_lossless(true)
@@ -1940,14 +1940,14 @@ fn encode_jxl_wrapper(
     }
 
     let stride = (source.width as usize) * 3;
-    let slice = PixelSlice::new(
+    let slice = PixelView::new(
         &source.pixels,
         source.width,
         source.height,
         stride,
-        PixelDescriptor::RGB8_SRGB,
+        &formats::RGB8_SRGB,
     )
-    .map_err(|e| format!("zenjxl: pixel slice construction failed: {e}"))?;
+    .map_err(|e| format!("zenjxl: pixel view construction failed: {e}"))?;
 
     let start = Instant::now();
     let encoder = cfg

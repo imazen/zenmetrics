@@ -254,15 +254,15 @@ fn main() {
 
             // ---- ssim2 ----
             if want("ssim2") {
-                use fast_ssim2::Ssimulacra2Reference;
-                use imgref::ImgRef;
+                use fast_ssim2::{PixelView, Ssimulacra2Config, Ssimulacra2Reference, formats};
+                let strip_cfg = Ssimulacra2Config::strips(STRIP_H as usize);
                 g.bench("ssim2__full", {
                     let (r, d) = (r.clone(), d.clone());
                     move |b| {
                         b.iter(|| {
-                            let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(fast_ssim2::compute_ssimulacra2(ri, di).unwrap())
+                            let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            zenbench::black_box(fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap())
                         })
                     }
                 });
@@ -270,10 +270,11 @@ fn main() {
                     let (r, d) = (r.clone(), d.clone());
                     move |b| {
                         b.iter(|| {
-                            let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
+                            let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
                             zenbench::black_box(
-                                fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H).unwrap(),
+                                fast_ssim2::compute_ssimulacra2_with_config(&ri, &di, &strip_cfg)
+                                    .unwrap(),
                             )
                         })
                     }
@@ -282,21 +283,21 @@ fn main() {
                     let (r, d) = (r.clone(), d.clone());
                     move |b| {
                         b.iter(|| {
-                            let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                            let pre = Ssimulacra2Reference::new(ri).unwrap();
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(pre.compare(di).unwrap())
+                            let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            let pre = Ssimulacra2Reference::new(&ri).unwrap();
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            zenbench::black_box(pre.compare(&di).unwrap())
                         })
                     }
                 });
                 g.bench("ssim2__warm_ref__warm", {
                     let (r, d) = (r.clone(), d.clone());
-                    let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                    let pre = Ssimulacra2Reference::new(ri).unwrap();
+                    let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                    let pre = Ssimulacra2Reference::new(&ri).unwrap();
                     move |b| {
                         b.iter(|| {
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(pre.compare(di).unwrap())
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            zenbench::black_box(pre.compare(&di).unwrap())
                         })
                     }
                 });
@@ -304,21 +305,21 @@ fn main() {
                     let (r, d) = (r.clone(), d.clone());
                     move |b| {
                         b.iter(|| {
-                            let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                            let pre = Ssimulacra2Reference::new(ri).unwrap();
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(pre.compare_strip(di, STRIP_H).unwrap())
+                            let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            let pre = Ssimulacra2Reference::new(&ri).unwrap();
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            zenbench::black_box(pre.compare_with_config(&di, &strip_cfg).unwrap())
                         })
                     }
                 });
                 g.bench("ssim2__warm_ref_strip__warm", {
                     let (r, d) = (r.clone(), d.clone());
-                    let ri = ImgRef::new(rgb_pix(&r), wu, hu);
-                    let pre = Ssimulacra2Reference::new(ri).unwrap();
+                    let ri = PixelView::new(&r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                    let pre = Ssimulacra2Reference::new(&ri).unwrap();
                     move |b| {
                         b.iter(|| {
-                            let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(pre.compare_strip(di, STRIP_H).unwrap())
+                            let di = PixelView::new(&d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+                            zenbench::black_box(pre.compare_with_config(&di, &strip_cfg).unwrap())
                         })
                     }
                 });
@@ -655,17 +656,17 @@ fn record_scores(
         );
     }
     if want("ssim2") {
-        let ri = ImgRef::new(rgb_pix(r), wu, hu);
-        let di = ImgRef::new(rgb_pix(d), wu, hu);
+        use fast_ssim2::{PixelView, Ssimulacra2Config, formats};
+        let ri = PixelView::new(r, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
+        let di = PixelView::new(d, w, h, wu * 3, &formats::RGB8_SRGB).unwrap();
         push(
             "ssim2__full",
-            fast_ssim2::compute_ssimulacra2(ri, di).unwrap(),
+            fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap(),
         );
-        let ri = ImgRef::new(rgb_pix(r), wu, hu);
-        let di = ImgRef::new(rgb_pix(d), wu, hu);
+        let strip_cfg = Ssimulacra2Config::strips(STRIP_H as usize);
         push(
             "ssim2__strip",
-            fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H).unwrap(),
+            fast_ssim2::compute_ssimulacra2_with_config(&ri, &di, &strip_cfg).unwrap(),
         );
     }
     if want("dssim") {

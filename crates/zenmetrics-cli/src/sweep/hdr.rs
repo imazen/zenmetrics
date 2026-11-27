@@ -304,7 +304,7 @@ fn encode_jxl_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result
     use std::time::Instant;
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
     use zenjxl::JxlEncoderConfig;
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     if let Some(unknown) = knobs.keys().find(|k| !JXL_HDR_KNOBS.contains(&k.as_str())) {
         return Err(format!(
@@ -340,14 +340,14 @@ fn encode_jxl_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result
         bytes.extend_from_slice(&v.to_ne_bytes());
     }
     let stride = (source.width as usize) * 3 * 2;
-    let slice = PixelSlice::new(
+    let slice = PixelView::new(
         &bytes,
         source.width,
         source.height,
         stride,
-        PixelDescriptor::RGB16_BT2100_PQ,
+        &formats::RGB16_BT2100_PQ,
     )
-    .map_err(|e| format!("zenjxl hdr: pixel slice construction failed: {e}"))?;
+    .map_err(|e| format!("zenjxl hdr: pixel view construction failed: {e}"))?;
 
     let meta = zencodec::Metadata::none().with_cicp(source.cicp);
 
@@ -357,7 +357,8 @@ fn encode_jxl_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result
     // encoding) — nothing privacy-relevant to strip.
     let encoder = cfg
         .job()
-        .with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact)
+        .map_err(|e| format!("zenjxl hdr metadata policy failed: {e}"))?
         .encoder()
         .map_err(|e| format!("zenjxl hdr encoder construction failed: {e}"))?;
     let output = encoder
@@ -404,7 +405,7 @@ fn encode_avif_hdr(
     use std::time::Instant;
     use zenavif::AvifEncoderConfig;
     use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-    use zenpixels::{PixelDescriptor, PixelSlice};
+    use zenpixels::{PixelView, formats};
 
     if let Some(unknown) = knobs.keys().find(|k| !AVIF_HDR_KNOBS.contains(&k.as_str())) {
         return Err(format!(
@@ -435,14 +436,14 @@ fn encode_avif_hdr(
         bytes.extend_from_slice(&v.to_ne_bytes());
     }
     let stride = (source.width as usize) * 3 * 2;
-    let slice = PixelSlice::new(
+    let slice = PixelView::new(
         &bytes,
         source.width,
         source.height,
         stride,
-        PixelDescriptor::RGB16_BT2100_PQ,
+        &formats::RGB16_BT2100_PQ,
     )
-    .map_err(|e| format!("zenavif hdr: pixel slice construction failed: {e}"))?;
+    .map_err(|e| format!("zenavif hdr: pixel view construction failed: {e}"))?;
 
     let meta = zencodec::Metadata::none().with_cicp(source.cicp);
 
@@ -452,7 +453,8 @@ fn encode_avif_hdr(
     // nothing privacy-relevant to strip.
     let encoder = cfg
         .job()
-        .with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact)
+        .map_err(|e| format!("zenavif hdr metadata policy failed: {e}"))?
         .encoder()
         .map_err(|e| format!("zenavif hdr encoder construction failed: {e}"))?;
     let output = encoder
@@ -765,7 +767,7 @@ fn encode_gainmap_hdr(
         lin,
         source.width,
         source.height,
-        PixelFormat::RgbaF32,
+        PixelFormat::RGBAF32,
         primaries,
         TransferFunction::Linear,
     )
@@ -779,7 +781,7 @@ fn encode_gainmap_hdr(
         sdr_pixels,
         source.width,
         source.height,
-        PixelFormat::Rgba8,
+        PixelFormat::RGBA8,
         ColorPrimaries::Bt709,
         TransferFunction::Srgb,
     )
@@ -857,21 +859,30 @@ fn decode_jxl_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
     // The standalone `zenjxl::decode` surfaces the codestream's CICP on
     // `info.cicp` (the zencodec-adapter path additionally enriches the
     // pixel descriptor, but this path does not) — gate on either signal.
+    let view = output.pixels.as_view();
     let cicp_is_pq = matches!(output.info.cicp, Some((_, 16, _, _)));
-    let desc_is_pq =
-        output.pixels.as_slice().descriptor().transfer() == zenpixels::TransferFunction::Pq;
+    let desc_is_pq = matches!(
+        view.format().color,
+        zenpixels::ColorSpace::Rgb {
+            transfer: zenpixels::Transfer::Pq,
+            ..
+        } | zenpixels::ColorSpace::Gray {
+            transfer: zenpixels::Transfer::Pq,
+            ..
+        }
+    );
     if !cicp_is_pq && !desc_is_pq {
         return Err(format!(
             "HDR decode-back: decoded variant carries no PQ signaling \
-             (info.cicp={:?}, descriptor transfer={:?}) — the codec did not \
+             (info.cicp={:?}, color={:?}) — the codec did not \
              round-trip the HDR color encoding, so this is not an HDR variant \
              (refusing to guess a nits scale)",
             output.info.cicp,
-            output.pixels.as_slice().descriptor().transfer(),
+            view.format().color,
         )
         .into());
     }
-    pq_slice_to_nits(&output.pixels.as_slice())
+    pq_slice_to_nits(&view)
 }
 
 #[cfg(not(feature = "jxl"))]
@@ -902,7 +913,7 @@ fn decode_avif_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
         )
         .into());
     }
-    pq_slice_to_nits(&buffer.as_slice())
+    pq_slice_to_nits(&buffer.as_view())
 }
 
 #[cfg(not(feature = "avif"))]
@@ -971,24 +982,24 @@ pub(crate) fn decode_png_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
 /// linear, when the codestream carries CICP PQ). Alpha drops, gray
 /// broadcasts.
 #[cfg(any(feature = "jxl", feature = "avif"))]
-fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
+fn pq_slice_to_nits(s: &zenpixels::PixelView<'_>) -> Result<NitsImage, Err> {
     use zenmetrics_api::hdr::pq_eotf;
-    use zenpixels::{ChannelLayout, ChannelType};
+    use zenpixels::{ChannelOrder, SampleType};
 
-    let desc = s.descriptor();
-    let (w, h) = (s.width() as usize, s.rows() as usize);
-    let channels: usize = match desc.layout() {
-        ChannelLayout::Rgb => 3,
-        ChannelLayout::Rgba => 4,
-        ChannelLayout::Gray => 1,
-        ChannelLayout::GrayAlpha => 2,
+    let fmt = s.format();
+    let (w, h) = (s.width() as usize, s.height() as usize);
+    let channels: usize = match fmt.layout.order {
+        ChannelOrder::Rgb => 3,
+        ChannelOrder::Rgba => 4,
+        ChannelOrder::Gray => 1,
+        ChannelOrder::GrayAlpha => 2,
         other => {
             return Err(format!("HDR decode-back: unsupported channel layout {other:?}").into());
         }
     };
     let color_channels = if channels >= 3 { 3 } else { 1 };
     let bytes = s.as_strided_bytes();
-    let stride = s.stride();
+    let stride = s.stride_bytes();
     let mut rgb = Vec::with_capacity(w * h * 3);
     let push_px = |rgb: &mut Vec<f32>, px: &[f32]| {
         if color_channels == 1 {
@@ -998,8 +1009,8 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             rgb.extend_from_slice(&[pq_eotf(px[0]), pq_eotf(px[1]), pq_eotf(px[2])]);
         }
     };
-    match desc.channel_type() {
-        ChannelType::U16 => {
+    match fmt.layout.sample {
+        SampleType::U16 => {
             let row_bytes = w * channels * 2;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -1013,7 +1024,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
                 }
             }
         }
-        ChannelType::U8 => {
+        SampleType::U8 => {
             let row_bytes = w * channels;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -1026,7 +1037,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
                 }
             }
         }
-        ChannelType::F32 => {
+        SampleType::F32 => {
             let row_bytes = w * channels * 4;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -1477,7 +1488,7 @@ pub(crate) mod tests {
             lin,
             w,
             h,
-            PixelFormat::RgbaF32,
+            PixelFormat::RGBAF32,
             ColorPrimaries::Bt2020,
             TransferFunction::Linear,
         )
@@ -1487,7 +1498,7 @@ pub(crate) mod tests {
             sdr_pixels,
             w,
             h,
-            PixelFormat::Rgba8,
+            PixelFormat::RGBA8,
             ColorPrimaries::Bt709,
             TransferFunction::Srgb,
         )

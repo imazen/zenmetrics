@@ -169,7 +169,9 @@ impl PlannedConfig {
                 // stills; the still-image variant pins use_transparency off).
                 let pixels: Vec<zengif::Rgba> = source
                     .pixels
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|p| zengif::Rgba {
                         r: p[0],
                         g: p[1],
@@ -190,17 +192,17 @@ impl PlannedConfig {
             }
             #[cfg(feature = "tiff")]
             Self::Zentiff(variant) => {
-                use zenpixels::{PixelDescriptor, PixelSlice};
+                use zenpixels::{PixelView, formats};
                 let cfg = variant.build();
                 let stride = (source.width as usize) * 3;
-                let slice = PixelSlice::new(
+                let slice = PixelView::new(
                     &source.pixels,
                     source.width,
                     source.height,
                     stride,
-                    PixelDescriptor::RGB8_SRGB,
+                    &formats::RGB8_SRGB,
                 )
-                .map_err(|e| format!("zentiff plan-cell: pixel slice construction failed: {e}"))?;
+                .map_err(|e| format!("zentiff plan-cell: pixel view construction failed: {e}"))?;
                 zentiff::encode(&slice, &cfg, &enough::Unstoppable)
                     .map_err(|e| format!("zentiff plan-cell encode failed: {e:?}"))?
             }

@@ -114,13 +114,9 @@ rayon = { version = "1.12.0", optional = true }
 # `-gpu` crates already use for parity tests).
 cvvdp = { workspace = true, optional = true, features = ["avx512"] }
 # Phase 8h (2026-05-27): replaced upstream `ssimulacra2` 0.5 with
-# Imazen's SIMD-accelerated `fast-ssim2`. fast-ssim2 0.8 is on crates.io
-# and pulled at version-level (no workspace pin yet — only this crate
-# depends on it directly). The `imgref` feature wires up the
-# `ImgRef<[u8; 3]> -> LinearRgbImage` adapter so we don't have to
-# manually transcode sRGB-u8 bytes ourselves like the prior `ssimulacra2`
-# path did. See `docs/CPU_BACKENDS.md` for the rationale.
-fast-ssim2 = { version = "0.8.1", optional = true, features = ["imgref"] }
+# Imazen's SIMD-accelerated `fast-ssim2`. Uses the workspace cohort pin
+# (zenpixels 0.5) so only one fast-ssim2 / zenpixels resolves across the repo.
+fast-ssim2 = { workspace = true, optional = true, features = ["imgref"] }
 dssim-core = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim = { workspace = true, optional = true }

@@ -394,14 +394,8 @@ mod tests {
         let ((ra, stride), (rb, _)) = (rgba(&a, w, 12), rgba(&b, w, 12));
         let packed = |px| {
             za::Image::from(
-                zenpixels::PixelSlice::new(
-                    px,
-                    w,
-                    h,
-                    w as usize * 3,
-                    zenpixels::PixelDescriptor::RGB8_SRGB,
-                )
-                .unwrap(),
+                zenpixels::PixelView::new(px, w, h, w as usize * 3, &zenpixels::formats::RGB8_SRGB)
+                    .unwrap(),
             )
         };
         let mut iw = iwssim::Iwssim::new(w, h).unwrap();
@@ -542,14 +536,8 @@ mod tests {
         let ((ra, stride), (rb, _)) = (rgba(&a, w, 4), rgba(&b, w, 4));
         let image = |px| {
             za::Image::from(
-                zenpixels::PixelSlice::new(
-                    px,
-                    w,
-                    h,
-                    w as usize * 3,
-                    zenpixels::PixelDescriptor::RGB8_SRGB,
-                )
-                .unwrap(),
+                zenpixels::PixelView::new(px, w, h, w as usize * 3, &zenpixels::formats::RGB8_SRGB)
+                    .unwrap(),
             )
         };
         let mut iw = iwssim::Iwssim::new(w, h).unwrap();
@@ -673,14 +661,8 @@ mod tests {
         .unwrap();
         let image = |px| {
             za::Image::from(
-                zenpixels::PixelSlice::new(
-                    px,
-                    w,
-                    h,
-                    w as usize * 3,
-                    zenpixels::PixelDescriptor::RGB8_SRGB,
-                )
-                .unwrap(),
+                zenpixels::PixelView::new(px, w, h, w as usize * 3, &zenpixels::formats::RGB8_SRGB)
+                    .unwrap(),
             )
         };
         let mut metric =
@@ -869,31 +851,48 @@ const NOT_IN_MODULE: &str = "decoder not in this module";
 #[wasm_bindgen]
 pub fn decode_image(bytes: &[u8], filename: &str) -> Result<Vec<u32>, JsError> {
     #[allow(dead_code)]
-    fn rgba(buffer: &zenpixels::PixelBuffer) -> Result<(Vec<u8>, u32, u32), String> {
-        let pixels = buffer.as_slice();
-        if matches!(
-            pixels.descriptor().transfer,
-            zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
-        ) {
+    fn rgba(buffer: &zenpixels::PixelBuf) -> Result<(Vec<u8>, u32, u32), String> {
+        let pixels = buffer.as_view();
+        if pixels.format().color.is_hdr() {
             return Err("HDR input requires an absolute-nits scoring path".into());
         }
-        let (w, h) = (pixels.width(), pixels.rows());
-        let mut output = vec![0; w as usize * h as usize * 4];
-        let mut converter = zenpixels_convert::converter::RowConverter::new(
-            pixels.descriptor(),
-            zenpixels::PixelDescriptor::RGBA8_SRGB,
+        let (w, h) = (pixels.width(), pixels.height());
+        let mut dst_fmt = zenpixels::formats::RGBA8_SRGB.clone();
+        match pixels.format().color {
+            zenpixels::ColorSpace::Rgb {
+                primaries,
+                transfer,
+                ..
+            } => {
+                if transfer == zenpixels::Transfer::Unknown {
+                    dst_fmt = dst_fmt
+                        .with_transfer(zenpixels::Transfer::Unknown)
+                        .with_primaries(primaries);
+                } else if primaries == zenpixels::Primaries::Unknown {
+                    dst_fmt = dst_fmt.with_primaries(zenpixels::Primaries::Unknown);
+                }
+            }
+            zenpixels::ColorSpace::Gray {
+                transfer: zenpixels::Transfer::Unknown,
+                ..
+            } => {
+                dst_fmt = dst_fmt.with_transfer(zenpixels::Transfer::Unknown);
+            }
+            _ => {}
+        }
+        let converted = zenpixels_convert::convert_to_buf(
+            &pixels,
+            &dst_fmt,
+            &zenpixels_convert::ConvertPolicy::permissive(),
         )
         .map_err(|e| e.to_string())?;
-        converter
-            .convert_rows(
-                pixels.as_strided_bytes(),
-                pixels.stride(),
-                &mut output,
-                w as usize * 4,
-                w,
-                h,
-            )
-            .map_err(|e| e.to_string())?;
+        let view = converted.as_view();
+        let mut output = vec![0u8; w as usize * h as usize * 4];
+        for y in 0..h {
+            let row = view.row(y);
+            output[y as usize * w as usize * 4..(y as usize + 1) * w as usize * 4]
+                .copy_from_slice(row);
+        }
         Ok((output, w, h))
     }
     let png = bytes.starts_with(b"\x89PNG\r\n\x1a\n");
@@ -1162,15 +1161,15 @@ fn evaluate_spatial_map(
     width: u32,
     height: u32,
 ) -> Result<Vec<SpatialMap>, String> {
-    use za::zenpixels::{PixelDescriptor, PixelSlice};
+    use za::zenpixels::{PixelView, formats};
     use zenmetrics_abstractions as za;
     let image = |pixels| {
-        PixelSlice::new(
+        PixelView::new(
             pixels,
             width,
             height,
             width as usize * 3,
-            PixelDescriptor::RGB8_SRGB,
+            &formats::RGB8_SRGB,
         )
         .map(za::Image::from)
         .map_err(|e| e.to_string())
@@ -1237,18 +1236,31 @@ fn yuv420_image(
     width: u32,
     height: u32,
 ) -> Result<zenmetrics_abstractions::Image<'_>, String> {
-    use za::PlaneLayout;
-    use za::zenpixels::{ChannelType, PixelDescriptor, PixelSlice};
+    use za::zenpixels::{PlanarView, PlaneFormat, PlaneRole, PlaneView, SampleType};
     use zenmetrics_abstractions as za;
-    let plane = |p, w: u32, h: u32| {
-        PixelSlice::new(p, w, h, w as usize, PixelDescriptor::GRAY8).map_err(|e| e.to_string())
-    };
-    za::Planes::new(
-        PlaneLayout::ycbcr_420(ChannelType::U8),
-        vec![
-            plane(y, width, height)?,
-            plane(u, width / 2, height / 2)?,
-            plane(v, width / 2, height / 2)?,
+    fn plane<'a>(
+        p: &'a [u8],
+        w: u32,
+        h: u32,
+        role: PlaneRole,
+        sub: (u8, u8),
+    ) -> Result<PlaneView<'a>, String> {
+        PlaneView::new(
+            p,
+            w,
+            h,
+            w as usize,
+            PlaneFormat::new(role, SampleType::U8).with_subsampling(sub.0, sub.1),
+        )
+        .map_err(|e| e.to_string())
+    }
+    PlanarView::new(
+        width,
+        height,
+        &[
+            plane(y, width, height, PlaneRole::Y, (1, 1))?,
+            plane(u, width / 2, height / 2, PlaneRole::Cb, (2, 2))?,
+            plane(v, width / 2, height / 2, PlaneRole::Cr, (2, 2))?,
         ],
     )
     .map(za::Image::from)

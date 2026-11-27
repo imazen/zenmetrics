@@ -23,13 +23,13 @@ fn load(path: &Path) -> (Vec<u8>, usize, usize) {
         &enough::Unstoppable,
     )
     .unwrap();
-    let s = decoded.pixels.as_slice();
-    assert_eq!(s.descriptor().bytes_per_pixel(), 3);
-    let (w, h) = (s.width() as usize, s.rows() as usize);
+    let s = decoded.pixels.as_view();
+    assert_eq!(s.format().layout.bytes_per_pixel(), 3);
+    let (w, h) = (s.width() as usize, s.height() as usize);
     let bytes = s.as_strided_bytes();
     let mut out = Vec::new();
     for y in 0..h {
-        out.extend_from_slice(&bytes[y * s.stride()..y * s.stride() + 3 * w]);
+        out.extend_from_slice(&bytes[y * s.stride_bytes()..y * s.stride_bytes() + 3 * w]);
     }
     (out, w, h)
 }

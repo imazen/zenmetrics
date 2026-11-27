@@ -98,10 +98,9 @@ cpu = [
 # mirroring zenmetrics-orchestrator's `cpu_adapter`. Wired per-metric (one
 # per chunk); a metric without its `cpu-*` feature returns
 # `Error::BackendNotEnabled` for `Backend::Cpu`.
-# `dep:zenpixels` names the `hdr::DiffuseWhite` anchor the native HDR feeding puts
-# on fast-ssim2's `PixelSlice` (fast-ssim2 re-exports the slice types but not
-# the HDR context); zenpixels is already in the graph through fast-ssim2.
-cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck", "dep:zenpixels-02"]
+# `dep:zenpixels` names `DiffuseWhite` for native HDR feeding on fast-ssim2's
+# `PixelView`; zenpixels 0.5 is unified across the workspace and fast-ssim2.
+cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck", "dep:zenpixels"]
 # `cvvdp`/`iwssim` are workspace deps with `default-features = false`, and
 # both are no_std+alloc crates with an explicit `std` feature. The umbrella
 # uses `std` (process probes, format!, Vec) so the optimized-CPU path needs
@@ -177,11 +176,11 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # phase 2). Pulled only by the `cpu-*` features above; pins match the ones
 # zenmetrics-orchestrator's cpu_adapter uses (workspace consistency).
 #
-# fast-ssim2 0.9.1 (registry) ships the native HDR path the CPU dispatch
-# routes for `hdr_feeding(Ssim2, Backend::Cpu)`: `compute_ssimulacra2` on an
-# `RGBF32_LINEAR` slice with a `DiffuseWhite` anchor. Its PU21 entry
+# fast-ssim2 0.9.1 (zenpixels 0.5 cohort pin) ships the native HDR path the CPU
+# dispatch routes for `hdr_feeding(Ssim2, Backend::Cpu)`: `compute_ssimulacra2`
+# on an `RGBF32_LINEAR` view with a `DiffuseWhite` anchor. Its PU21 entry
 # (`hdr-pu`) is deprecated there and no longer used here.
-fast-ssim2  = { version = "0.9.1", optional = true, features = ["imgref", "rayon"] }
+fast-ssim2  = { workspace = true, optional = true, features = ["imgref", "rayon"] }
 cvvdp       = { workspace = true, optional = true, features = ["std", "avx512", "parallel"] }
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
@@ -197,9 +196,6 @@ rayon       = { version = "1.10", optional = true }
 
 # Re-exported pixel view for the umbrella `compute_pixels` path (zenpixels 0.5).
 zenpixels = { workspace = true, features = ["std"], optional = true }
-# zenpixels 0.2 bridge for fast-ssim2 0.9.1's `DiffuseWhite` anchor until
-# fast-ssim2 upgrades to zenpixels 0.5.
-zenpixels-02 = { package = "zenpixels", version = "0.2.16", default-features = false, features = ["std"], optional = true }
 # PixelView -> sRGB8 / linear conversion for the optimized-CPU `compute_pixels` path
 # (task #159 phase 3); the GPU arms convert inside each `-gpu` crate.
 zenpixels-convert = { workspace = true, features = ["std", "hdr-transfers"], optional = true }
@@ -219,8 +215,6 @@ almost-enough = "0.4.4"
 image = { workspace = true, features = ["exr", "png"] }
 # Smoke tests construct PixelViews for the `compute_pixels` path (zenpixels 0.5).
 zenpixels = { workspace = true, features = ["std"] }
-# fast-ssim2 0.9.1 native HDR test constructs a 0.2 DiffuseWhite anchor.
-zenpixels-02 = { package = "zenpixels", version = "0.2.16", default-features = false, features = ["std"] }
 # Phase 4 compute_handles test needs the cubecl runtime to build a
 # shared client. Only used by `tests/compute_handles.rs`, which is
 # gated on `cuda,cubecl-types`.

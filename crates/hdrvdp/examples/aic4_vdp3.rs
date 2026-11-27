@@ -47,7 +47,7 @@ fn load_srgb01(path: &Path) -> Option<(Vec<f64>, usize, usize)> {
         &enough::Unstoppable,
     )
     .ok()?;
-    let img = out.pixels.try_as_imgref::<rgb::Rgb<u8>>()?;
+    let img = out.pixels.as_view().as_imgref::<rgb::Rgb<u8>>().ok()?;
     let (w, h) = (img.width(), img.height());
     let (buf, stride) = (img.buf(), img.stride());
     let mut px = Vec::with_capacity(w * h * 3);

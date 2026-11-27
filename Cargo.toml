@@ -179,6 +179,8 @@ butteraugli = { version = "0.9.4" }
 dssim-core = { git = "https://github.com/lilith/dssim", rev = "22e9ab033d5e5ac41ee961de00e7ae9bd959b634", default-features = false, features = ["threads"] }
 ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
+fast-ssim2 = { version = "0.9.1", default-features = false }
+zencodec = { version = "0.3.0", default-features = false }
 
 # Common deps.
 # Published 0.9.31-beta.1 source revision (crate VCS metadata). Keep a
@@ -295,225 +297,37 @@ codegen-units = 1
 [patch.crates-io]
 # Reviewed effective-dispatch API; publishing remains a separate decision.
 zenquant = { git = "https://github.com/imazen/zenquant", rev = "8ec37ee21f0216cf9b138e407eecc470ee620493" }
-# Pin zenpixels 0.5 Stage D (zenpixels, zenpixels-convert, zenpsy-api) and its
-# matching garb + linear-srgb revisions. Unmigrated crates requiring
-# zenpixels >=0.2.16, <0.4.0 (zenmetrics-cli, zenmetrics-browser, zencodec,
-# fast-ssim2, codecs) coexist cleanly via crates.io 0.2.16 until Phase 2.
+# Pin the converged zenpixels 0.5 / zencodec 0.3 / zenmeta 0.2 cohort to verified
+# GitHub revisions so every workspace crate resolves ONE zenpixels 0.5.0 without
+# mutating sibling `main` checkouts.
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "7fa068834f8074c2630a352b25f355f7c90751f8" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "7fa068834f8074c2630a352b25f355f7c90751f8" }
 garb = { git = "https://github.com/imazen/garb", rev = "457ff8b9153e9d675a39dc098052b2ffeb6206fa" }
 linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "ae83f19426737635fee3dd16f228681019f52585" }
-# zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
-# because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
-# 0.2.16 is on crates.io and the zenpng sibling now requires
-# `zenpixels-convert >=0.2.16, <0.3`, which the old pin (0.2.15) conflicted
-# with — crates.io 0.2.16 satisfies both it and ultrahdr-core's ^0.2.15.
-# Local sibling of the canonical zensim repo. The feat/principled-activity
-# branch landed on main weeks ago — the previous path-pin to
-# ../zensim--principled-activity was carrying a stale checkout that
-# would drift behind canonical on every push. Pointing at
-# ../zensimx/zensim (canonical main) means a `jj git fetch` in the
-# zensim repo bubbles up to zenmetrics builds automatically.
-#
-# Equivalent git ref (use when the sibling checkout is gone):
-#   { git = "https://github.com/imazen/zensimx", rev = "<commit>" }
-zensim = { path = "../zensimx/zensim" }
-# 0.9.31-beta lives as a direct git dep in [workspace.dependencies] (see
-# above) — a [patch] here would force single-source resolution and fail:
-# the prerelease can't satisfy sibling crates' ^0.9.x reqs.
-# 2026-05-19: switched codec deps from crates.io + git-rev to local
-# sibling worktrees so we always pick up in-flight improvements.
-# User confirmed: "jxl encoder local has been improved, verify no
-# crates.io codecs are used." These [patch.crates-io] entries
-# substitute path deps for any workspace crate that depends on the
-# corresponding crates.io version.
-#
-#   ~/work/zen/zenpng      (0.1.4)
-#   ~/work/zen/zenwebp     (0.4.5)
-#   ~/work/zen/zenavif     (0.1.6 — git tip; verify before next release)
-#   ~/work/zen/zenjxl      (0.2.1 — git tip post 9ac0cd5a)
-#   ~/work/zen/jxl-encoder (post 6b8eefc1 + local improvements)
-#
-# zenjpeg: zenmetrics-cli takes it by path (`../../../zenjpeg/zenjpeg`), and
-# this patch sends every crates.io `zenjpeg` requirement to the same checkout.
-# Since ultrahdr d77976b, ultrahdr-rs asks for registry `zenjpeg = "0.9.0"`
-# (unpublished; crates.io has 0.8.4) and supplies it through ultrahdr's OWN
-# [patch.crates-io], which does not apply here, so a dev tree with that
-# ultrahdr failed to resolve (2026-10-11). Same checkout as the path dep, so
-# one zenjpeg in the graph. Drop when zenjpeg 0.9.0 publishes.
-zenjpeg      = { path = "../zenjpeg/zenjpeg" }
-# zenanalyze: same "a dependency's [patch] is ignored, only the root's counts"
-# rule as rav1d-safe below. zenjpeg's 2026-08-28 zenanalyze migration made it
-# take `zenanalyze = "0.2.0"` from the registry and supply the unpublished
-# 0.2.x line through zenjpeg's OWN [patch.crates-io]; consumed here as a path
-# dep, that patch does not apply, so every resolve failed with `failed to
-# select a version for the requirement zenanalyze = "^0.2.0"` (crates.io
-# latest is 0.1.0; the 0.2.x line lives on git until it publishes).
-# PATH, not git: `zenfleet-vastai` (../../../zenanalyze) and the `zenavif`
-# path dep already bind the local checkout, and ci.yml clones it to
-# ../zenanalyze — a git patch would put a SECOND zenanalyze in the graph and
-# nothing crossing between the two copies would type-unify.
-# Drop when zenanalyze 0.2.0 publishes.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
+zenmeta = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
+zensim = { git = "https://github.com/imazen/zensimx", rev = "6da0e710bafafa474b6b63f3cf6a476e43bbe799" }
+fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "f6557a5bc51d3161d442c269acd33afabfc4794b" }
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "e6c077561dcb426b23d8e7c3da1ca0e12cc13c5f" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "80dac328d0b9279413d037c0291477c8df6ae53b" }
+zenyuv = { git = "https://github.com/imazen/zenjpeg", rev = "80dac328d0b9279413d037c0291477c8df6ae53b" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007" }
+zenwebp = { git = "https://github.com/imazen/zenwebp", rev = "82cd643dbe7950f7a5c69afe8d5bf69652dd4aef" }
+zengif = { git = "https://github.com/imazen/zengif", rev = "edbbd1a1a30f15018a41079fcd54683cf875bef9" }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "8868bc5ebeeed6ba55ec2e94eb8f1c6cb425e7ac" }
+zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "8868bc5ebeeed6ba55ec2e94eb8f1c6cb425e7ac" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b" }
+ultrahdr-rs = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b" }
+heic = { git = "https://github.com/imazen/heic", rev = "028c0329a87c22eac3ab9c84db77cc613fab3b66" }
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps", rev = "e50a9037a3583f18ab7ef45ca5bd086401a35299" }
+zentiff = { git = "https://github.com/imazen/zenextras", rev = "a0f119c35e8443e7b39b8c528f2cc2bb9be2efa8" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "7fdd3ea2839b5a0ccd73dd61c9a99b8fe95857fe" }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "27a69d531938d1781777fd99ec7d7f74b805abdf" }
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "e1c366b089b29511ef66f1b5af5d9e208dbff5d1" }
+# Remaining non-cohort sibling path patches (pinned in ci/sibling-pins.tsv).
 zenanalyze   = { path = "../zenanalyze" }
-zenpng       = { path = "../zenpng" }
-# Share the CI-pinned main implementation with PNG and HDR compression.
 zenflate     = { path = "../zenflate" }
-zenwebp      = { path = "../zenwebp" }
-# zenavif: the former ../zenavif--main worktree (zenavif main) was
-# removed by worktree cleanup; ../zenavif is now the source of truth —
-# checked out at zenavif main (31a9b54), which retains `pub mod expert`
-# + the `__expert` feature (Cargo.toml:149, src/lib.rs:73). The speed6
-# branch that lacked both is no longer the ../zenavif checkout.
-zenavif      = { path = "../zenavif" }
-# rav1d-safe: DELIBERATELY NOT PATCHED, and this workspace CANNOT pin it.
-# The entry that used to sit here —
-#   rav1d-safe = { git = "…/rav1d-safe", rev = "f6aed27e81ba…" }
-# — was dead, and its comment described a world zenavif has left. It read:
-# "zenavif's OWN [patch.crates-io] pins this to git rev f6aed27e … a
-# dependency's [patch] is ignored, only the root's counts … without
-# replicating it, rav1d-safe resolves to crates.io ^0.5.3 → 11 compile errors
-# in zenavif. Mirrors ../zenavif/Cargo.toml:301." Every clause of that is now
-# false: zenavif deleted its crates-io patch and made rav1d-safe a DIRECT GIT
-# DEP on its dependency line (../zenavif/Cargo.toml:95, and its own note at
-# :565 records the removal), so nothing in this graph requires rav1d-safe from
-# crates.io and a crates-io patch has nothing to replace. Cargo agreed: the
-# entry was recorded as `[[patch.unused]]` in Cargo.lock and pinned nothing —
-# the lock was resolving 140f9145, not f6aed27e, and the line number the
-# comment mirrored had moved.
-#
-# A git-source patch does not work either. `[patch."https://github.com/imazen/
-# rav1d-safe"] rav1d-safe = { git = <same url>, rev = <other> }` is REJECTED —
-# measured 2026-08-29, `cargo metadata` exits 101 with "patch for `rav1d-safe`
-# points to the same source, but patches must point to different sources".
-# Cargo compares the patch's source by URL; `?rev=` is not part of that
-# identity, so a same-repo-different-rev patch is not a distinct source. Only
-# a `path`/other-URL patch would qualify, which would mean cloning rav1d-safe
-# on every CI runner to pin a rev we do not otherwise need locally.
-#
-# So the rav1d-safe rev this workspace builds is OWNED BY ZENAVIF'S DEPENDENCY
-# LINE, and the only lever this repo has is WHICH ZENAVIF it resolves against:
-#   * locally — the sibling checkout, bound TWICE and at two different relative
-#     depths: the `zenavif = { path = "../zenavif" }` entry just above, and
-#     zenmetrics-cli's OWN direct `zenavif = { path = "../../../zenavif",
-#     optional = true }` (crates/zenmetrics-cli/Cargo.toml). The direct dep is
-#     the one that actually binds for the CLI — a root patch does not override
-#     a path dep — so repointing only the entry above does nothing;
-#   * in CI  — the pinned `git clone …/zenavif.git ../zenavif` +
-#     `git -C ../zenavif checkout <rev>` in .github/workflows/ci.yml (all five
-#     copies of the "Clone sibling-repo path-dep targets" step).
-# Those two silently drifted apart, which is how the dead entry above went
-# unnoticed. Treat the CI zenavif pin as the rav1d-safe pin, and re-check the
-# rev on ../zenavif/Cargo.toml:95 whenever you move it.
-# zenrav1e: ../zenavif -> ravif (zenravif 0.2.0, ../ravif/ravif) depends on
-# zenrav1e = "0.2.0" BY CRATES.IO VERSION, but only 0.1.4 is published, so a
-# fresh resolve fails (`failed to select a version for zenrav1e = ^0.2.0`).
-# The local ../zenrav1e IS 0.2.0 — pin it here so the avif chain resolves
-# (the "unpublished dep -> patch it in, don't stall" rule). Dev-only: drop
-# this when zenrav1e 0.2.0 (and zenravif 0.2.0) publish to crates.io.
-# Equivalent git ref when the sibling checkout is gone:
-#   { git = "https://github.com/imazen/zenrav1e", rev = "<commit>" }
-zenrav1e     = { path = "../zenrav1e" }
-# zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
-# requirement to `zenavif-serialize = "0.2.0"` (needed for
-# `set_gain_map_alt_icc`) — the ravif Cargo.toml comment says as much:
-# "supplied by [patch.crates-io] until 0.2.0 publishes". Only 0.1.4 is
-# published, so a fresh resolve fails (`failed to select a version for
-# zenavif-serialize = ^0.2.0`), which breaks resolution for the ENTIRE
-# workspace (not just avif-touching members) because Cargo resolves
-# the full dependency graph up front. The local ../zenavif-serialize
-# checkout IS 0.2.0 — pin it here so the avif chain resolves (the
-# "unpublished dep -> patch it in, don't stall" rule). Dev-only: drop
-# this once zenavif-serialize 0.2.0 publishes to crates.io.
-# Equivalent git ref when the sibling checkout is gone:
-#   { git = "https://github.com/imazen/zenavif-serialize", rev = "<commit>" }
-zenavif-serialize = { path = "../zenavif/zenavif-serialize" }
-# zenavif-parse: deliberately NOT patched. ../zenavif absorbed it as a
-# workspace member on 2026-07-16 and declares it as
-# `zenavif-parse = { version = "0.7.0", path = "zenavif-parse" }`, so the
-# avif chain gets 0.7.0 from zenavif's own member — a crates.io patch here is
-# never consulted. A `[patch.crates-io] zenavif-parse = { path =
-# "../zenavif-parse" }` entry existed briefly (0c9b16f5) and did nothing but
-# break CI: Cargo.lock recorded it as `[[patch.unused]]`, while cargo still
-# had to stat the path up front, so every platform died with "failed to load
-# source for dependency `zenavif-parse`" (the sibling is not cloned in CI, and
-# the standalone imazen/zenavif-parse repo is now a moved-to-zenavif pointer).
-# If a patch is ever genuinely needed again, add the matching sibling clone to
-# EVERY bootstrap block in .github/workflows/ci.yml in the same commit.
-# zenjxl: the canonical ../zenjxl checkout (now carries the
-# AnimationParams/AnimationFrame API for jxl-encoder 0.3.2). The
-# former ../zenjxl--main worktree was removed by worktree cleanup;
-# ../zenjxl is the source of truth.
-zenjxl       = { path = "../zenjxl" }
-# zenjxl-decoder: 0.3.10 published 2026-06-11 (the orientation API that
-# previously forced a path patch), but zenjxl main moved again the next
-# day — b04ca75 (2026-06-12) gates allow_progressive during decode via
-# `JxlDecoderOptions::reject_progressive`, which is on the decoder's main
-# (966f9c5) but NOT in the published 0.3.10. zenjxl's own workspace
-# carries the same patch; cargo patches don't propagate across
-# workspaces, so without this entry the zenmetrics workspace resolves
-# crates.io 0.3.10 and zenjxl fails to compile (E0609 reject_progressive).
-# 2026-06-18: zenjxl main (3ad46e1) advanced again — #14 (c560121) + #15
-# (5d33e76) migrated the decoder boundary to whereat `At<Error>` (decode
-# returns are `At`-wrapped; zenjxl calls `.map_error()` / `.map_err_at()`).
-# The old git-rev pin 0bd33d21 predates the migration, so zenjxl failed to
-# compile (E0599 map_err_at/map_error). 2026-06-19: re-pinned from the
-# sibling-path-patch hold to a PUSHED decoder rev that carries the At<Error>
-# migration — 0599dcf is zenjxl-decoder origin/main (#29 changelog tip), so
-# cargo fetches it itself and CI needs no sibling clone (matches the comment
-# at the clone step in .github/workflows/ci.yml).
-# 2026-08-27: zenjxl main (9226d3a, the zencodec 0.1.26 build) now REQUIRES
-# `zenjxl-decoder = "0.4.0"` (the `jxl::api::ErrorClass` taxonomy its
-# error.rs matches on + `reject_progressive`), which is unpublished
-# (crates.io latest: 0.3.10) — zenjxl carries a sibling-path patch for it
-# that this workspace ignores, and the old 0599dcf rev is 0.3.10, so the
-# workspace could no longer resolve at all. Re-pinned to f1faec7 =
-# zenjxl-decoder origin/main, version 0.4.0. Drop this patch when
-# zenjxl-decoder 0.4.0 publishes AND zenjxl bumps its `jxl` dep to it.
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "f1faec70e41b0c1f31e9db3d2142071bf02d08d5" }
-jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
-# butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
-# version 0.9.2 but carries `compare_linear_planar_into` (the recycled-
-# buffer planar-compare production path) which the PUBLISHED crates.io
-# 0.9.2 does NOT expose. jxl-encoder (patched above) calls it from its
-# vardct perceptual backend (perceptual_backend.rs:637); without this
-# patch the workspace unifies on crates.io 0.9.2 and the jxl-encoder
-# build fails `no method compare_linear_planar_into`. This points
-# zenmetrics at the SAME local sibling jxl-encoder's own Cargo.toml uses
-# (../../butteraugli/butteraugli from each repo root), so the whole
-# workspace resolves one butteraugli. Equivalent git ref when the
-# sibling checkout is gone: { git = "https://github.com/imazen/butteraugli", rev = "<commit>" }.
 butteraugli  = { path = "../../butteraugli/butteraugli" }
-# dssim-core: NO patch here on purpose (#43). This used to point at the local
-# sibling ~/work/dssim/dssim-core so dssim scores used local source rather than
-# the crates.io artifact. The intent is right -- the standing rule is to verify
-# zen-family deps against local sources -- but a committed [patch] is the wrong
-# mechanism for it: it is checked in, so every box and CI runner that lacks the
-# sibling (or has it at a different version) fails workspace resolution, which
-# is exactly what #43 was. The sibling here was an UNPUSHED 3.5.0 that existed
-# on one machine, and that machine has no NVIDIA GPU, so the dssim-gpu parity
-# tests which actually consume dssim-core could never run against it.
-#
-# For a local-source build, use a gitignored .cargo/config.toml:
-#     [paths]  ->  paths = ["../../dssim/dssim-core"]
-# which overrides the dep for YOUR builds only and leaves CI on the registry.
-# fast-ssim2: no [patch] since 2026-11-04. The sibling path pin existed for the
-# git-only `hdr-pu` PU21 HDR entry; fast-ssim2 0.9.1 (registry) ships the native
-# absolute-light HDR path zenmetrics-api now routes instead
-# (`hdr::HdrFeeding::NativeNits`) and deprecates the PU21 entry, so
-# zenmetrics-api and cvvdp take 0.9.1 from the registry. zenmetrics-cli and the
-# browser/py adapters keep their direct path dep on the sibling
-# (`../../../fast-ssim2/fast-ssim2`, CI clone pinned in ci/sibling-pins.tsv),
-# and jxl-encoder requires an older fast-ssim2, so the graph carries several
-# copies; anything benchmarking against this workspace records the RESOLVED
-# version (`cargo tree -p <pkg> -i fast-ssim2`), not the declared one
-# (benchmarks/metric_loop_2026-08-30.md section 6).
-# zencodec: sibling `../zengif` (zenmetrics-cli's gif feature path dep)
-# bumped to `zencodec >=0.1.27` while 0.1.27 is unpublished — its own
-# [patch.crates-io] pin is ignored for consumers ("a dependency's [patch]
-# is ignored, only the root's counts"). House rule: unpublished dep ->
-# patch it in, don't stall. Same rev zengif carries: zencodec main, 0.1.27.
-# Drop this patch when zencodec 0.1.27 publishes.
-zencodec     = { git = "https://github.com/imazen/zencodec", rev = "2031094449ad1177ff96461d7c4d586c7ed384e6" }
 # Phase 8f (2026-05-27): cubecl-* deps moved from [patch.crates-io] git
 # pins to [workspace.dependencies] package aliases at the top of this
 # file. The zenforks-cubecl-* crates.io publication makes the workspace-

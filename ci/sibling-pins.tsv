@@ -12,191 +12,31 @@
 #   flags — comma list; `sparse-no-benchmarks` = sparse checkout without /benchmarks/ (NTFS-invalid
 #           file names) and core.protectNTFS=false for the checkout; `-` = none
 #
-# zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
-# "../../../zenjpeg/zenjpeg", optional = true }`. Even though
-# it's optional, cargo validates the path during workspace
-# manifest load. zenjpeg itself has `zenpredict = { path =
-# "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
-# Pin to known-good origin HEAD commits for reproducibility.
+# The zenpixels 0.5 / zencodec 0.3 / zenmeta 0.2 cohort (zenpixels, zencodec,
+# zensim, fast-ssim2, zenresize, zenjpeg, zenpng, zenwebp, zengif, zenavif,
+# ultrahdr, heic, zenbitmaps, zenextras, jxl-encoder, zenjxl, garb,
+# linear-srgb) is pinned directly by GitHub rev in Cargo.toml / [patch.crates-io]
+# so no sibling clones are needed for those repos. Only the remaining non-cohort
+# path-dependency siblings stay here.
 #
 # EVERY pin below must resolve `cargo metadata --locked` against the
-# committed Cargo.lock: path-dependency siblings enter the lock with
-# their version AND their dependency lists, so a sibling newer or
-# older than the lock's snapshot fails with "cannot update the lock
-# file ... --locked" (or a version-requirement error) before any job
-# runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
-# snapshot (siblings checked out at exactly these revs) and
-# `cargo metadata --locked`. Re-pinned 2026-09-26 against master
-# 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
-# zenjpeg 1a05d47c: the newest commit whose deps match the lock's
-# zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
-# zenresize edge); later zenjpeg mains change that dependency list.
-#
-zenjpeg	https://github.com/imazen/zenjpeg.git	../zenjpeg	1a05d47c38632a26089843b5182c26f9d82722cd	-
+# committed Cargo.lock.
+
+# crates/zenfleet-vastai optional `source-features` dep (`../../../zenanalyze`)
+# and workspace [patch.crates-io].
 zenanalyze	https://github.com/imazen/zenanalyze.git	../zenanalyze	6b080abf84ae2407bc7f2b127940404b3adb70b0	-
-# jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-# zenmetrics workspace root) — pulled in by zenmetrics-cli's
-# `sweep` feature transitively. Pin to a stable rev for CI
-# reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
-# version; the former pin cd9a7325 was 0.3.x, so the workspace's
-# `^0.4.0` requirement failed) and the newest commit whose dependency
-# list still matches the lock's jxl-encoder entry (no serde /
-# serde_json / sha2 / zenpixels-convert / zenpredict edges, which
-# b71eefb0 and later add).
-# jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
-# on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
-# everything except benchmarks/ — no workspace member lives there, so
-# the build is unaffected (and the clone is smaller/faster).
-# core.protectNTFS rejects the '>' index entries during checkout
-# before skip-worktree applies; disable it so sparse can skip them.
-jxl-encoder	https://github.com/imazen/jxl-encoder.git	../jxl-encoder	df297ea1a08303c7402e5159b6fef95ec05ab2ff	sparse-no-benchmarks
-# Workspace [patch.crates-io] entries point at local siblings
-# for every codec we ship (zenpng, zenwebp, zenavif,
-# zenjxl, zensim/zensim) and butteraugli. Cargo loads
-# every patch manifest even when the patched crate isn't
-# active in the build, so CI must clone them all to satisfy
-# workspace metadata resolution. Pinned to stable revs to
-# make CI reproducible.
-zenpng	https://github.com/imazen/zenpng.git	../zenpng	c461fde90bffeb4c750abc892296e8a4f333a6e5	-
-# zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
-# no longer matches the lock's zenwebp entry.
-zenwebp	https://github.com/imazen/zenwebp.git	../zenwebp	8aa8a7858b97da88f0ba7d9027f8b6108d999196	-
-# zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
-# `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
-# clone dirs matching the workspace [patch] paths).
-# THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
-# direct git dep on its own dependency line, and the workspace cannot
-# override it (see the rav1d-safe note in Cargo.toml's
-# [patch.crates-io]: a crates-io patch is unused because nothing wants
-# rav1d-safe from the registry, and a same-URL git patch is rejected).
-# So whichever zenavif this checks out decides the decoder. (History:
-# b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
-# rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
-# ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
-# 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
-# was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
-# zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
-# and later move it to 2255a342). It also carries
-# `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
-# `sweep` feature has called since 6b3c41fe.
-zenavif	https://github.com/imazen/zenavif.git	../zenavif	4d9990374e5eb4abe59bf330827150ff32375597	-
-# zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
-# `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
-# fix) — without this clone, cargo can't resolve the whole
-# workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
-zenrav1e	https://github.com/imazen/zenrav1e.git	../zenrav1e	e4883037553434efb57ecbf4414c8b49922ba3e4	-
-# zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
-# requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
-# published, so [patch.crates-io] pins the local ../zenavif-serialize
-# sibling (see Cargo.toml:293) — without this clone, cargo can't
-# resolve the workspace on ANY platform ("failed to read
-# .../zenavif-serialize/Cargo.toml").
-zenavif-serialize	https://github.com/imazen/zenavif-serialize.git	../zenavif-serialize	0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a	-
-# zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
-# lock's jxl-encoder 0.4.0 no longer satisfies.
-zenjxl	https://github.com/imazen/zenjxl.git	../zenjxl	4a2c021b4589b5d0465006c48568f6b520128525	-
-zengif	https://github.com/imazen/zengif.git	../zengif	510e7a884b91e4cd573a09efa1086626e13f0576	-
-zenextras	https://github.com/imazen/zenextras.git	../zenextras	340b00e00f0dcb31a53ff3898772a28694591683	-
-ravif	https://github.com/imazen/cavif-rs.git	../ravif	cb06487cfc8013413f5cb268a957bc87c15d9756	-
-# zenjxl-decoder is no longer a sibling-path patch: the workspace
-# [patch.crates-io] pins a git rev directly (see Cargo.toml patch
-# comment), so cargo fetches it itself — no clone needed here.
-# zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
-# feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-# request. The old upper bound (< 471ce401, whose `feature_v2.rs`
-# called `crate::attribution::*` behind `custom-profiles` and broke
-# `cargo build -p zenmetrics-cli --no-default-features --features
-# cpu-metrics` with E0433) no longer applies.
-# Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
-# CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
-# zensim's `candidate-profiles` feature, which does not exist at
-# ea7d493d — `cargo clippy --workspace --no-default-features
-# --features wgpu,all-metrics` failed with "failed to select a
-# version for `zensim`: ... does not have that feature" on EVERY
-# job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
-# which is what surfaced this pin as stale. ea7d493d is an ancestor
-# of 5a4d5fa3 (clean forward bump, verified via merge-base). When
-# bumping, re-check `cargo build -p zenmetrics-cli
-# --no-default-features --features cpu-metrics --release` AND
-# `cargo clippy --workspace --no-default-features --features
-# wgpu,all-metrics -- -D warnings` — both verified locally against
-# this exact pin via a full sibling-worktree CI reproduction before
-# landing.
-# Bumped from 96c3c9bb (2026-09-26) to 2ac9f073 (2026-10-27, zensim
-# origin/main) for the 2026-10-28 jxlav1 feature wave: the executor's
-# `feature-rev` arm needs `FormulaRevision::Rev7` (the `rowlanes`
-# era, landed bad544a3) — 96c3c9bb tops out at Rev5. Also pulls the
-# Rev6 `globaff`/ringhpm-era groundwork the Rev7 measure builds on.
-# Bumped from 2ac9f073 (2026-10-27) to 878f5768 (2026-11-23, zensim
-# origin/main) for the zenpixels 0.5 + zenpsy-api migration: 2ac9f073
-# capped `magetypes <= 0.9.31-beta.1`, conflicting with `zenpixels-convert
-# 0.5` (`magetypes 0.9.33`). `abec986d` upgraded zensim to
-# `archmage/magetypes 0.9.33`, `ef588fcc` fixed profile attribution
-# scoring, and `878f5768` landed publication-free leaf dispatch/size cuts.
-zensim	https://github.com/imazen/zensimx.git	../zensimx	878f57688257349c90d08a015fe6444d0d6792bf	-
-# butteraugli's local layout is a Cargo workspace at
-# ~/work/butteraugli/ with the package at
-# ~/work/butteraugli/butteraugli/. The workspace's
-# [patch.crates-io] points at the *package* path
-# (../../butteraugli/butteraugli from zenmetrics' workspace
-# root). On CI we clone the workspace repo into
-# ../../butteraugli so that ../../butteraugli/butteraugli/
-# is the package dir.
-butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	791d08d725f27b5331ef7b96e73aad89ed895f45	-
-# fast-ssim2: zenmetrics-api and cvvdp take it from the registry (0.9.1, native HDR
-# path) since 2026-11-04 and the root [patch.crates-io] pin is gone; the crates with
-# a direct path dep (`../../../fast-ssim2/fast-ssim2`: zenmetrics-cli and the
-# browser/py adapters) still need the sibling checkout, so the clone stays.
-fast-ssim2	https://github.com/imazen/fast-ssim2.git	../fast-ssim2	7c71ca00f08df3e6582f54c10edeef228ce2cb3c	-
-dssim	https://github.com/lilith/dssim.git	../../dssim	eec33f556d7ee991c4b906198c3a1b74f6f6063d	-
-# zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
-# and `../../../heic`). OFF in every CI build below, but cargo
-# validates optional path-dep paths during workspace manifest load,
-# so they must exist. ultrahdr-core has an optional `zentone`
-# path-dep (`../../zentone`); clone it too. ultrahdr's workspace
-# root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
-# pinned to the ISO 21496-1 tmap-preference fix.
-ultrahdr	https://github.com/imazen/ultrahdr.git	../ultrahdr	230552db465af5ea48f1bba17bc206041d977fe1	-
-heic	https://github.com/imazen/heic.git	../heic	8d40c94e018082f4bffcfc688dfbb8e83925a1b0	-
-zentone	https://github.com/imazen/zentone.git	../zentone	df84ca43dcc4f6ca10b6b53631c182853b84ea43	-
-# zenmetrics-cli's `hdr-svt` feature path-dep
-# (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
-# arm). OFF in every CI build below, but cargo validates the path
-# during workspace manifest load. Pinned to the rev the corpus
-# images were built against. No submodules needed — the C reference
-# tree is a differential-test asset, not a cargo dependency.
-# 6532bfe9: the lock resolves the zenav1-svt path packages against
-# this tree; aeb619cd's package/dependency set no longer matches.
+
+# Workspace [patch.crates-io] (`../../butteraugli/butteraugli`) and
+# benchmarks/heaptrack/drivers/cpu_profile direct path dep.
+butteraugli	https://github.com/imazen/butteraugli.git	../../butteraugli	48387382c3b3086f8c23548598afcd4066ea9f5f	-
+
+# zenmetrics-cli optional `hdr-svt` feature path dep (`../../../zenav1-svt/rust/svtav1`).
 zenav1-svt	https://github.com/imazen/zenav1-svt.git	../zenav1-svt	6532bfe951dbef0365871bf0209f5282cfec80c1	-
-# zenmetrics-cli's `hdr` feature path-deps `zenflate` too
-# (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
-# added in 9093cc23 without this clone, which is what turned every
-# CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
-# OFF in every CI build below, but the path must exist.
+
+# zenmetrics-cli optional `hdr` feature path dep (`../../../zenflate`)
+# and workspace [patch.crates-io].
 zenflate	https://github.com/imazen/zenflate.git	../zenflate	71ee10b6ce5317de74b2e9b03c78b39fcaf805df	-
-# zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
-# (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
-# pure-Rust libaom-port differential bench/oracle/DSP crates added in
-# 2690d66e without this clone — the same "path must exist even though
-# the feature is off" failure as zenflate above: "failed to load
-# manifest for dependency `zenav1-aom-bench`" / "failed to read
-# .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
-# below, but cargo validates optional path-dep paths during workspace
-# manifest load, so the path must exist. None of zenav1-aom's crates
-# carry a path dep outside its own repo (verified against its
-# workspace + per-crate manifests), so no further siblings cascade
-# from this one. Pinned to a zenav1-aom main commit with green CI.
-# 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
-# longer match the lock.
+
+# zenmetrics-cli optional `avif-aom` feature path deps
+# (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`).
 zenav1-aom	https://github.com/imazen/zenav1-aom.git	../zenav1-aom	5d779f86a65e59f549884dd77d94842e5a199c99	-
-# zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
-# (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
-# 5be5da80's BMP decode arm without this clone, the same "path must
-# exist even though the feature is off" failure as zenav1-aom/
-# zenflate above: "failed to load manifest for dependency
-# `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
-# every CI build below, but the path must exist. zenbitmaps' own
-# zennode path dep is commented out (unpublished), so nothing
-# cascades from this clone. Pinned to a zenbitmaps main commit with
-# green CI.
-zenbitmaps	https://github.com/imazen/zenbitmaps.git	../zenbitmaps	32376ef8b4f6f765ff8b9964599ec2468683e77a	-

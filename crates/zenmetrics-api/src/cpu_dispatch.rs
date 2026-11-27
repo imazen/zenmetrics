@@ -1350,50 +1350,50 @@ fn check_srgb_len(kind: &'static str, width: u32, height: u32, r: &[u8], d: &[u8
 // fast-ssim2 wiring — mirrors cpu_adapter::{ssim2_image_ref, compute_ssim2}.
 // ---------------------------------------------------------------------------
 
-/// Borrow an interleaved linear-light f32 nits buffer as a `PixelSlice`
-/// — no copy (`[f32; 3]` is `bytemuck::Pod`).
-#[cfg(feature = "cpu-ssim2")]
-fn ssim2_nits_slice<'a>(nits: &'a [f32], w: usize, h: usize) -> Result<fast_ssim2::PixelSlice<'a>> {
-    fast_ssim2::PixelSlice::new(
-        bytemuck::cast_slice(nits),
-        w as u32,
-        h as u32,
-        w * 12,
-        fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
-    )
-    .map_err(|e| Error::Metric {
-        kind: "ssim2",
-        message: format!("fast-ssim2 PixelSlice: {e:?}"),
-    })
-}
-
-/// The same borrowed nits buffer as the **native HDR** input fast-ssim2's
-/// reference conversion takes: `RGBF32_LINEAR` with a diffuse white of
-/// 1 cd/m², which declares the buffer's unit as one nit (fast-ssim2 then
-/// anchors 255 cd/m² at 1.0 before its cube-root opsin, the libjxl
-/// convention). Without the diffuse white a linear f32 slice is read as
-/// display-relative `[0, 1]` SDR and clipped — never feed nits that way.
+/// Borrow an interleaved linear-light f32 nits buffer as the **native HDR**
+/// input fast-ssim2's reference conversion takes: `RGBF32_LINEAR` with a
+/// diffuse white of 1 cd/m², which declares the buffer's unit as one nit
+/// (fast-ssim2 then anchors 255 cd/m² at 1.0 before its cube-root opsin,
+/// the libjxl convention). Without the diffuse white a linear f32 view is
+/// read as display-relative `[0, 1]` SDR and clipped — never feed nits that
+/// way.
 #[cfg(feature = "cpu-ssim2")]
 fn ssim2_native_nits_slice<'a>(
     nits: &'a [f32],
     w: usize,
     h: usize,
-) -> Result<fast_ssim2::PixelSlice<'a>> {
-    Ok(ssim2_nits_slice(nits, w, h)?.with_diffuse_white(zenpixels_02::hdr::DiffuseWhite::new(1.0)))
+) -> Result<fast_ssim2::PixelView<'a>> {
+    static RGBF32_LINEAR_NITS: std::sync::LazyLock<zenpixels::PixelFormat> =
+        std::sync::LazyLock::new(|| {
+            fast_ssim2::formats::RGBF32_LINEAR
+                .clone()
+                .with_white(zenpixels::DiffuseWhite::new_or_panic(1.0))
+        });
+    fast_ssim2::PixelView::new(
+        bytemuck::cast_slice(nits),
+        w as u32,
+        h as u32,
+        w * 12,
+        &RGBF32_LINEAR_NITS,
+    )
+    .map_err(|e| Error::Metric {
+        kind: "ssim2",
+        message: format!("fast-ssim2 PixelView (nits): {e:?}"),
+    })
 }
 
 #[cfg(feature = "cpu-ssim2")]
-fn ssim2_slice<'a>(bytes: &'a [u8], w: usize, h: usize) -> Result<fast_ssim2::PixelSlice<'a>> {
-    fast_ssim2::PixelSlice::new(
+fn ssim2_slice<'a>(bytes: &'a [u8], w: usize, h: usize) -> Result<fast_ssim2::PixelView<'a>> {
+    fast_ssim2::PixelView::new(
         bytes,
         w as u32,
         h as u32,
         w * 3,
-        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+        &fast_ssim2::formats::RGB8_SRGB,
     )
     .map_err(|e| Error::Metric {
         kind: "ssim2",
-        message: format!("fast-ssim2 PixelSlice: {e:?}"),
+        message: format!("fast-ssim2 PixelView: {e:?}"),
     })
 }
 

@@ -3,7 +3,7 @@
 //! models from `ZENMETRICS_NN_MODEL_DIR`, as the CLI does (WaDIQaM's from
 //! `ZENMETRICS_NN_WADIQAM_DIR` and WD's from `ZENMETRICS_NN_WD_DIR`, their own
 //! export sets), and prints JSON.
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 use zenmetrics_nn::{
     Arniqa, Ckdn, DeepDc, Dists, Engine, Hyperiqa, Lpips, LpipsNet, Maniqa, Musiq, WadiqamFr,
@@ -169,8 +169,7 @@ fn main() {
         for (pair, w, h, r, d) in &pairs {
             fn image(px: &[u8], w: usize, h: usize) -> Image<'_> {
                 Image::from(
-                    PixelSlice::new(px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
-                        .unwrap(),
+                    PixelView::new(px, w as u32, h as u32, w * 3, &formats::RGB8_SRGB).unwrap(),
                 )
             }
             let started = std::time::Instant::now();

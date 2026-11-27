@@ -62,10 +62,10 @@ fn load_png16_clip(dir: &str) -> Vec<Vec<u16>> {
             let out = zenpng::decode(&data, &zenpng::PngDecodeConfig::default(), &Unstoppable)
                 .unwrap_or_else(|e| panic!("decode {}: {e}", p.display()));
             assert_eq!(out.info.bit_depth, 16, "{} not 16-bit", p.display());
-            let img = out
-                .pixels
-                .try_as_imgref::<rgb::Rgb<u16>>()
-                .unwrap_or_else(|| panic!("{} not RGB16", p.display()));
+            let view = out.pixels.as_view();
+            let img = view
+                .as_imgref::<rgb::Rgb<u16>>()
+                .unwrap_or_else(|_| panic!("{} not RGB16", p.display()));
             let (w, h, stride, buf) = (img.width(), img.height(), img.stride(), img.buf());
             let mut v = Vec::with_capacity(w * h * 3);
             for y in 0..h {

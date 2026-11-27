@@ -496,47 +496,31 @@ zenmetrics-math = { path = "../zenmetrics-math", features = ["std"] }
 # cleanup; ../../../zenavif is the source of truth — it's at zenavif
 # main (31a9b54), which keeps `pub mod expert` + the `__expert` feature
 # (the speed6 branch that lacked both is no longer the ../zenavif checkout).
-zenpng       = { path = "../../../zenpng",                                     optional = true }
-zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true }
+zenpng       = { git = "https://github.com/imazen/zenpng", rev = "af5d24b89d91efb3db91a632047a0e0c835fe007", optional = true }
+zenjpeg      = { git = "https://github.com/imazen/zenjpeg", rev = "80dac328d0b9279413d037c0291477c8df6ae53b", default-features = false, optional = true }
 # JPEG AI (learned codec) — pinned git rev so CI resolves it without a sibling
 # checkout (crates.io-only deps, no submodules). Bump the rev to pick up
 # upstream movement.
 zenjpegai    = { git = "https://github.com/imazen/zenjpegai", rev = "9b0b052beefbf571ba3c4b5ca53aeb333c508b6d", optional = true }
-zenwebp      = { path = "../../../zenwebp",                                    optional = true }
-zenavif      = { path = "../../../zenavif",                                    optional = true }
-# zenavif-parse: the container parser, taken from zenavif's OWN workspace member
-# (`../zenavif/Cargo.toml`: `zenavif-parse = { path = "zenavif-parse" }`) rather
-# than crates.io, so it resolves to the identical canonical directory zenavif
-# links and cargo unifies them into one crate — no second copy, no extra build
-# time. Deliberately NOT a `[patch.crates-io]` entry: see the workspace
-# Cargo.toml note explaining why patching this name is inert here.
-# Direct consumer: `examples/avif_depth_verify.rs` (gate G3), which needs the
-# `av1C` box + AV1 sequence header reads that `zenavif` does not re-export.
-zenavif-parse = { path = "../../../zenavif/zenavif-parse",                     optional = true }
-zenjxl       = { path = "../../../zenjxl",                                     optional = true }
-# zengif/zentiff: plan-driven sweep codecs (encode + sweep planner). zengif's
-# `zenquant` backend is the build default (matches its `compiled_backends()`
-# default-first stratum, the perceptual quantizer picker-training wants);
-# zentiff's `lzw`+`deflate` are its default methods. Both pulled in only by
-# the `gif` / `tiff` CLI features below — a non-gif/tiff sweep never compiles
-# them.
-zengif       = { path = "../../../zengif",                default-features = false, optional = true, features = ["std", "zenquant"] }
-zentiff      = { path = "../../../zenextras/zentiff",     default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
-# BMP decode only (the `bmp` CLI feature above) — TID2013 and PIPAL also ship
-# `.bmp`, but LIVE (databaserelease2) is the one blocking a G-BITEXACT re-run.
-zenbitmaps   = { path = "../../../zenbitmaps",             default-features = false, optional = true, features = ["std", "bmp"] }
+zenwebp      = { git = "https://github.com/imazen/zenwebp", rev = "82cd643dbe7950f7a5c69afe8d5bf69652dd4aef", optional = true }
+zenavif      = { git = "https://github.com/imazen/zenavif", rev = "8868bc5ebeeed6ba55ec2e94eb8f1c6cb425e7ac", optional = true }
+zenavif-parse = { git = "https://github.com/imazen/zenavif", rev = "8868bc5ebeeed6ba55ec2e94eb8f1c6cb425e7ac", optional = true }
+zenjxl       = { git = "https://github.com/imazen/zenjxl", rev = "27a69d531938d1781777fd99ec7d7f74b805abdf", optional = true }
+zengif       = { git = "https://github.com/imazen/zengif", rev = "edbbd1a1a30f15018a41079fcd54683cf875bef9", default-features = false, optional = true, features = ["std", "zenquant"] }
+zentiff      = { git = "https://github.com/imazen/zenextras", rev = "a0f119c35e8443e7b39b8c528f2cc2bb9be2efa8", default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
+zenbitmaps   = { git = "https://github.com/imazen/zenbitmaps", rev = "e50a9037a3583f18ab7ef45ca5bd086401a35299", default-features = false, optional = true, features = ["std", "bmp"] }
 # HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
 # absolute-luminance; image provides the EXR reader.
-ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
-ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
-heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+ultrahdr-rs  = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b", optional = true }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b", optional = true }
+heic         = { git = "https://github.com/imazen/heic", rev = "028c0329a87c22eac3ab9c84db77cc613fab3b66", optional = true, features = ["backend-rust"] }
 # zenav1-svt (lib name `svtav1`): the byte-gated pure-Rust SVT-AV1 port —
 # still-picture 10-bit 4:2:0 CQP for the HDR corpus's `zenav1-svt` arm
 # (`hdr-svt` feature). Git-only crate (not on crates.io); path dep like the
 # other codec siblings. CI clones the repo at a pinned rev.
 zenav1-svt   = { path = "../../../zenav1-svt/rust/svtav1",                     optional = true }
 # AVIF/MIAF muxer for the zenav1-svt arm's raw AV1 OBUs. Version resolves to
-# the workspace [patch.crates-io] entry (local ../zenavif-serialize sibling).
+# the workspace [patch.crates-io] entry (imazen/zenavif cohort rev).
 zenavif-serialize = { version = "0.2.0",                                       optional = true }
 # zenav1-aom (the pure-Rust libaom port, sibling checkout) for the `avif-aom` arm:
 # the bench crate owns the end-to-end ALLINTRA driver (`EncodeCell::port_encode`),
@@ -547,7 +531,7 @@ aom-sys-ref = { package = "zenav1-aom-sys-ref", path = "../../../zenav1-aom/crat
 aom-dsp     = { package = "zenav1-aom-dsp",     path = "../../../zenav1-aom/crates/aom-dsp",     optional = true }
 # zenyuv (zenjpeg workspace member): THE RGB->YCbCr 4:2:0 owner for the aom-rs arm
 # (BT.601 full range — the same convention zenavif's svt-rs backend codes).
-zenyuv      = { path = "../../../zenjpeg/zenyuv", optional = true }
+zenyuv      = { git = "https://github.com/imazen/zenjpeg", rev = "80dac328d0b9279413d037c0291477c8df6ae53b", optional = true }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
 # In-process pooled S3/R2 client for the jobexec fetch path — replaces the
@@ -559,9 +543,8 @@ tokio        = { version = "1.52.3", optional = true, default-features = false, 
 bytes        = { version = "1", optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
-# not surface. Local path (matches the workspace [patch.crates-io] entry)
-# so workspace consumers always see the same version + improvements.
-jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = true, default-features = false, features = [
+# not surface. Pinned to the converged zenpixels 0.5 cohort revision.
+jxl-encoder  = { git = "https://github.com/imazen/jxl-encoder", rev = "7fdd3ea2839b5a0ccd73dd61c9a99b8fe95857fe", optional = true, default-features = false, features = [
     "std",
     "parallel",
     "butteraugli-loop",
@@ -575,17 +558,14 @@ jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = t
 # Pulled in by the `sweep` feature. zencodec exposes the EncodeJob /
 # Encoder traits that drive zenjxl encoding; almost_enough is the
 # cooperative-cancellation crate zenavif's encoder takes by value.
-zencodec = { version = ">=0.1.26, <0.3.0", optional = true }
+zencodec = { workspace = true, optional = true }
 almost-enough = { version = "0.4.3", optional = true }
 
-# zenpixels exposes the PixelBuffer / PixelSlice types returned by zen
-# decoders. We pin to a version compatible with the decoders above.
-zenpixels = ">=0.2.16, <0.4.0"
-# zenpixels-convert handles every supported source pixel layout (u8/u16/f32,
-# Gray/RGB/RGBA, premul/straight, sRGB/linear) → RGB8 sRGB through a single
-# RowConverter. This is the canonical path; the CLI used to ship bespoke
-# u16/f32 → u8 helpers that have all been deleted in favour of delegation.
-zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimental"] }
+# zenpixels 0.5 exposes PixelBuf / PixelView / PixelFormat returned by zen decoders.
+zenpixels = { workspace = true, features = ["std"] }
+# zenpixels-convert 0.5 handles source pixel layout conversions (u8/u16/f32,
+# Gray/RGB/RGBA, premul/straight, sRGB/linear) and HDR transfer/measurement helpers.
+zenpixels-convert = { workspace = true, features = ["std", "hdr-transfers"] }
 # enough provides the cooperative cancellation token zenpng's decode wants.
 enough = "0.4.4"
 
@@ -595,10 +575,10 @@ butteraugli = { version = "0.9.2", optional = true }
 zenflate = { version = "0.4.0", path = "../../../zenflate", optional = true }
 # 0.3.0 adds principled per-channel H-blur activity for masked/IW features
 # (feat/principled-activity branch). 0.2.8 added `Zensim::compute_extended_features()`.
-zensim = { version = "0.3.0", optional = true }
-# ssim2 metric uses Imazen's local fast-ssim2 (our SIMD SSIMULACRA2), NOT the third-party crates.io
-# `ssimulacra2` ("scores use local, crates versions banned"). Local sibling, not the published 0.8.1.
-fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", optional = true, features = ["imgref", "rayon"] }
+zensim = { workspace = true, optional = true }
+# ssim2 metric uses Imazen's fast-ssim2 (our SIMD SSIMULACRA2), pinned to the
+# zenpixels 0.5 cohort revision via workspace [patch.crates-io].
+fast-ssim2 = { workspace = true, optional = true, features = ["imgref", "rayon"] }
 dssim-core = { workspace = true, optional = true }
 rgb = { version = "0.8", optional = true }
 imgref = { version = "1", optional = true }

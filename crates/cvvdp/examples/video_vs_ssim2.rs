@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let n: usize = args[4].parse()?;
     let fps: f32 = args.get(5).map(|s| s.parse()).transpose()?.unwrap_or(30.0);
     let reps: usize = args.get(6).map(|s| s.parse()).transpose()?.unwrap_or(3);
-    let (wu, hu) = (w as usize, h as usize);
+    let (wu, _hu) = (w as usize, h as usize);
 
     let mut run = move || -> f64 {
         match metric {
@@ -161,20 +161,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for t in 0..n {
                     let rf = make_frame(w, h, t, 1234);
                     let df = distort_frame(&rf, t, 9876);
-                    let ri = fast_ssim2::PixelSlice::new(
+                    let ri = fast_ssim2::PixelView::new(
                         &rf,
                         w,
                         h,
                         wu * 3,
-                        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+                        &fast_ssim2::formats::RGB8_SRGB,
                     )
                     .unwrap();
-                    let di = fast_ssim2::PixelSlice::new(
+                    let di = fast_ssim2::PixelView::new(
                         &df,
                         w,
                         h,
                         wu * 3,
-                        fast_ssim2::PixelDescriptor::RGB8_SRGB,
+                        &fast_ssim2::formats::RGB8_SRGB,
                     )
                     .unwrap();
                     sum += fast_ssim2::compute_ssimulacra2(&ri, &di).unwrap();

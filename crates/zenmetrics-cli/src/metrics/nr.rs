@@ -4,19 +4,19 @@
 //! files or environment setup: these metrics are stateless, so a fresh
 //! `PairedNoReference` per call is cheap (unlike `nn.rs`'s cached models).
 
-use zenmetrics_abstractions::zenpixels::{PixelDescriptor, PixelSlice};
+use zenmetrics_abstractions::zenpixels::{PixelView, formats};
 use zenmetrics_abstractions::{EvalOpts, Image, Metric, PairedNoReference};
 
 use super::MetricKind;
 use crate::decode::Rgb8Image;
 
 fn image(img: &Rgb8Image) -> Result<Image<'_>, Box<dyn std::error::Error>> {
-    Ok(Image::from(PixelSlice::new(
+    Ok(Image::from(PixelView::new(
         &img.pixels,
         img.width,
         img.height,
         img.width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        &formats::RGB8_SRGB,
     )?))
 }
 

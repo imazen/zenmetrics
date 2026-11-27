@@ -73,23 +73,29 @@ pub struct NitsImage {
 /// granularity, ample for a display model). Negative/NaN samples clamp
 /// to 0 inside the owner.
 pub fn measured_display_peak_nits(img: &NitsImage) -> f32 {
-    use zenpixels::hdr::{ContentLightLevel, DiffuseWhite};
-    use zenpixels_convert::hdr::measure::{CllMeasure, LightLevelMethod};
+    use zenpixels::{DiffuseWhite, PixelView, formats};
+    use zenpixels_convert::{LightLevelMethod, measure_content_light_level};
     let bytes: &[u8] = bytemuck::cast_slice(&img.rgb);
-    let cll = zenpixels::PixelSlice::new(
+    let cll = PixelView::new(
         bytes,
         img.width,
         img.height,
         img.width as usize * 12,
-        zenpixels::PixelDescriptor::RGBF32_LINEAR,
+        &formats::RGBF32_LINEAR,
     )
     .ok()
     .and_then(|px| {
-        ContentLightLevel::measure_max(px, DiffuseWhite::new(1.0), LightLevelMethod::MaxRgb)
+        measure_content_light_level(
+            &px,
+            DiffuseWhite::new_or_panic(1.0),
+            None,
+            LightLevelMethod::MaxRgb,
+        )
+        .ok()
     });
     match cll {
         Some(c) => f32::from(c.max_content_light_level).clamp(SDR_WHITE_NITS, 10_000.0),
-        // Zero-area / descriptor-rejected input (unreachable for decoded
+        // Zero-area / format-rejected input (unreachable for decoded
         // images): fall back to the SDR-white floor rather than guessing.
         None => SDR_WHITE_NITS,
     }
@@ -179,20 +185,17 @@ pub(crate) fn decode_to_common_nits(path: &Path) -> Result<NitsImage, Err> {
 }
 
 fn nits_to_common_primaries(image: NitsImage, cp: u8) -> Result<NitsImage, Err> {
-    use zenpixels::{ColorPrimaries, PixelDescriptor};
-    use zenpixels_convert::{RowConverter, policy::ConvertOptions};
+    use zenpixels::{Primaries, formats};
+    use zenpixels_convert::{ConvertPolicy, GamutPolicy, RowPlan};
     let primaries = match cp {
         1 => return Ok(image),
-        9 => ColorPrimaries::Bt2020,
-        12 => ColorPrimaries::DisplayP3,
+        9 => Primaries::Bt2020,
+        12 => Primaries::DisplayP3,
         _ => return Err(format!("unsupported HDR primaries {cp}; full CMS required").into()),
     };
-    let options = ConvertOptions::permissive().with_clip_out_of_gamut(false);
-    let mut converter = RowConverter::new_explicit(
-        PixelDescriptor::RGBF32_LINEAR.with_primaries(primaries),
-        PixelDescriptor::RGBF32_LINEAR,
-        &options,
-    )?;
+    let policy = ConvertPolicy::permissive().with_gamut(GamutPolicy::PreserveExtended);
+    let src_fmt = formats::RGBF32_LINEAR.clone().with_primaries(primaries);
+    let plan = RowPlan::build(&src_fmt, &formats::RGBF32_LINEAR, &policy, None)?;
     let mut rgb = vec![0.0f32; image.rgb.len()];
     let width = image.width as usize;
     for (src, dst) in image
@@ -200,11 +203,11 @@ fn nits_to_common_primaries(image: NitsImage, cp: u8) -> Result<NitsImage, Err> 
         .chunks_exact(width * 3)
         .zip(rgb.chunks_exact_mut(width * 3))
     {
-        converter.convert_row(
+        plan.convert_row(
             bytemuck::cast_slice(src),
             bytemuck::cast_slice_mut(dst),
             image.width,
-        );
+        )?;
     }
     if !rgb.iter().all(|v| v.is_finite()) {
         return Err("nonfinite HDR primary conversion".into());
@@ -239,7 +242,7 @@ fn decode_pq_avif(path: &Path) -> Result<NitsImage, Err> {
         )
         .into());
     }
-    pq_slice_to_nits(&buffer.as_slice())
+    pq_slice_to_nits(&buffer.as_view())
 }
 
 #[cfg(not(feature = "avif"))]
@@ -264,21 +267,30 @@ fn decode_pq_jxl(path: &Path) -> Result<NitsImage, Err> {
 fn decode_pq_jxl_in_basis(path: &Path, common: bool) -> Result<NitsImage, Err> {
     let data = std::fs::read(path)?;
     let output = zenjxl::decode(&data, None, &[]).map_err(|e| format!("zenjxl: {e}"))?;
+    let view = output.pixels.as_view();
     let cicp_is_pq = matches!(output.info.cicp, Some((_, 16, _, _)));
-    let desc_is_pq =
-        output.pixels.as_slice().descriptor().transfer() == zenpixels::TransferFunction::Pq;
+    let desc_is_pq = matches!(
+        view.format().color,
+        zenpixels::ColorSpace::Rgb {
+            transfer: zenpixels::Transfer::Pq,
+            ..
+        } | zenpixels::ColorSpace::Gray {
+            transfer: zenpixels::Transfer::Pq,
+            ..
+        }
+    );
     if !cicp_is_pq && !desc_is_pq {
         return Err(format!(
             "HDR JXL decode: variant carries no PQ signaling (info.cicp={:?}, \
-             descriptor transfer={:?}) — the codec did not round-trip the HDR \
+             color={:?}) — the codec did not round-trip the HDR \
              color encoding, so this is not an HDR variant (refusing to guess a \
              nits scale). Score it through the SDR path instead (drop --hdr).",
             output.info.cicp,
-            output.pixels.as_slice().descriptor().transfer(),
+            view.format().color,
         )
         .into());
     }
-    let nits = pq_slice_to_nits(&output.pixels.as_slice())?;
+    let nits = pq_slice_to_nits(&view)?;
     if common {
         let (cp, 16, 0, true) = output
             .info
@@ -306,24 +318,24 @@ fn decode_pq_jxl(_path: &Path) -> Result<NitsImage, Err> {
 /// `sweep::hdr::pq_slice_to_nits` so the inline-sweep and score-pairs HDR
 /// decode-back paths agree bit-for-bit.
 #[cfg(any(feature = "jxl", feature = "avif"))]
-fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
+fn pq_slice_to_nits(s: &zenpixels::PixelView<'_>) -> Result<NitsImage, Err> {
     use zenmetrics_api::hdr::pq_eotf;
-    use zenpixels::{ChannelLayout, ChannelType};
+    use zenpixels::{ChannelOrder, SampleType};
 
-    let desc = s.descriptor();
-    let (w, h) = (s.width() as usize, s.rows() as usize);
-    let channels: usize = match desc.layout() {
-        ChannelLayout::Rgb => 3,
-        ChannelLayout::Rgba => 4,
-        ChannelLayout::Gray => 1,
-        ChannelLayout::GrayAlpha => 2,
+    let fmt = s.format();
+    let (w, h) = (s.width() as usize, s.height() as usize);
+    let channels: usize = match fmt.layout.order {
+        ChannelOrder::Rgb => 3,
+        ChannelOrder::Rgba => 4,
+        ChannelOrder::Gray => 1,
+        ChannelOrder::GrayAlpha => 2,
         other => {
             return Err(format!("HDR JXL decode: unsupported channel layout {other:?}").into());
         }
     };
     let color_channels = if channels >= 3 { 3 } else { 1 };
     let bytes = s.as_strided_bytes();
-    let stride = s.stride();
+    let stride = s.stride_bytes();
     let mut rgb = Vec::with_capacity(w * h * 3);
     let push_px = |rgb: &mut Vec<f32>, px: &[f32]| {
         if color_channels == 1 {
@@ -333,8 +345,8 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
             rgb.extend_from_slice(&[pq_eotf(px[0]), pq_eotf(px[1]), pq_eotf(px[2])]);
         }
     };
-    match desc.channel_type() {
-        ChannelType::U16 => {
+    match fmt.layout.sample {
+        SampleType::U16 => {
             let row_bytes = w * channels * 2;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -348,7 +360,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
                 }
             }
         }
-        ChannelType::U8 => {
+        SampleType::U8 => {
             let row_bytes = w * channels;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -361,7 +373,7 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
                 }
             }
         }
-        ChannelType::F32 => {
+        SampleType::F32 => {
             let row_bytes = w * channels * 4;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -474,28 +486,28 @@ fn png_to_rgb16_pq_in_basis(
             .into());
         }
     }
-    let (rgb16, width, height) = slice_to_rgb16(&output.pixels.as_slice())?;
+    let (rgb16, width, height) = slice_to_rgb16(&output.pixels.as_view())?;
     Ok((rgb16, width, height, cicp))
 }
 
-/// Normalise any u8/u16 slice layout to tight interleaved RGB u16 **code
+/// Normalise any u8/u16 view layout to tight interleaved RGB u16 **code
 /// values** (no transfer math): alpha dropped, gray broadcast, u8 scaled
 /// by 257 (0..255 → 0..65535). Strided input handled per row.
 #[cfg(feature = "png")]
-fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32), Err> {
-    use zenpixels::{ChannelLayout, ChannelType};
-    let (w, h) = (s.width() as usize, s.rows() as usize);
-    let desc = s.descriptor();
-    let channels: usize = match desc.layout() {
-        ChannelLayout::Rgb => 3,
-        ChannelLayout::Rgba => 4,
-        ChannelLayout::Gray => 1,
-        ChannelLayout::GrayAlpha => 2,
+fn slice_to_rgb16(s: &zenpixels::PixelView<'_>) -> Result<(Vec<u16>, u32, u32), Err> {
+    use zenpixels::{ChannelOrder, SampleType};
+    let (w, h) = (s.width() as usize, s.height() as usize);
+    let fmt = s.format();
+    let channels: usize = match fmt.layout.order {
+        ChannelOrder::Rgb => 3,
+        ChannelOrder::Rgba => 4,
+        ChannelOrder::Gray => 1,
+        ChannelOrder::GrayAlpha => 2,
         other => return Err(format!("HDR PNG: unsupported channel layout {other:?}").into()),
     };
     let color_channels = if channels >= 3 { 3 } else { 1 };
     let bytes = s.as_strided_bytes();
-    let stride = s.stride();
+    let stride = s.stride_bytes();
     let mut rgb16 = Vec::with_capacity(w * h * 3);
     let push_px = |rgb16: &mut Vec<u16>, px: &[u16]| {
         if color_channels == 1 {
@@ -504,8 +516,8 @@ fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32),
             rgb16.extend_from_slice(&px[..3]);
         }
     };
-    match desc.channel_type() {
-        ChannelType::U16 => {
+    match fmt.layout.sample {
+        SampleType::U16 => {
             let row_bytes = w * channels * 2;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -518,7 +530,7 @@ fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32),
                 }
             }
         }
-        ChannelType::U8 => {
+        SampleType::U8 => {
             let row_bytes = w * channels;
             for y in 0..h {
                 let row = &bytes[y * stride..y * stride + row_bytes];
@@ -641,7 +653,7 @@ fn decode_heic(path: &Path) -> Result<NitsImage, Err> {
         base.data,
         base.width,
         base.height,
-        PixelFormat::Rgb8,
+        PixelFormat::RGB8,
         ColorPrimaries::DisplayP3,
         TransferFunction::Srgb,
     )
@@ -669,7 +681,7 @@ fn decode_heic(path: &Path) -> Result<NitsImage, Err> {
 fn pixelbuffer_to_nits(hdr: &ultrahdr_core::PixelBuffer) -> NitsImage {
     let w = hdr.width() as usize;
     let h = hdr.height() as usize;
-    let raw = hdr.as_slice().as_strided_bytes();
+    let raw = hdr.as_view().as_strided_bytes();
     let f: &[f32] = bytemuck::cast_slice(raw);
     let row_px = f.len() / 4 / h;
     let mut rgb = vec![0.0f32; w * h * 3];

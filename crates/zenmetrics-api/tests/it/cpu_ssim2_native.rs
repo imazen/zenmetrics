@@ -33,19 +33,24 @@ fn hdr_pair(w: u32, h: u32) -> (Vec<f32>, Vec<f32>) {
     (r, d)
 }
 
-/// Borrow interleaved nits as the slice fast-ssim2's native HDR entry takes
+/// Borrow interleaved nits as the view fast-ssim2's native HDR entry takes
 /// (`[f32; 3]` is `bytemuck::Pod` — a zero-copy reinterpret), with the
 /// 1 cd/m² diffuse white that declares the buffer's unit as one nit.
-fn native_nits_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelSlice<'a> {
-    fast_ssim2::PixelSlice::new(
+fn native_nits_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelView<'a> {
+    static RGBF32_LINEAR_NITS: std::sync::LazyLock<zenpixels::PixelFormat> =
+        std::sync::LazyLock::new(|| {
+            fast_ssim2::formats::RGBF32_LINEAR
+                .clone()
+                .with_white(zenpixels::DiffuseWhite::new_or_panic(1.0))
+        });
+    fast_ssim2::PixelView::new(
         bytemuck::cast_slice(nits),
         w,
         h,
         w as usize * 12,
-        fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
+        &RGBF32_LINEAR_NITS,
     )
-    .expect("PixelSlice RGBF32_LINEAR")
-    .with_diffuse_white(zenpixels_02::hdr::DiffuseWhite::new(1.0))
+    .expect("PixelView RGBF32_LINEAR (nits)")
 }
 
 /// The umbrella's CPU-ssim2 HDR score equals calling
@@ -80,15 +85,15 @@ fn cpu_ssim2_native_matches_direct_compute_ssimulacra2() {
 /// the two equal.
 #[test]
 fn cpu_ssim2_native_anchor_differs_from_clipped_sdr_linear() {
-    fn sdr_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelSlice<'a> {
-        fast_ssim2::PixelSlice::new(
+    fn sdr_slice<'a>(nits: &'a [f32], w: u32, h: u32) -> fast_ssim2::PixelView<'a> {
+        fast_ssim2::PixelView::new(
             bytemuck::cast_slice(nits),
             w,
             h,
             w as usize * 12,
-            fast_ssim2::PixelDescriptor::RGBF32_LINEAR,
+            &fast_ssim2::formats::RGBF32_LINEAR,
         )
-        .expect("PixelSlice RGBF32_LINEAR")
+        .expect("PixelView RGBF32_LINEAR")
     }
     let (w, h) = (128u32, 96u32);
     let (r, d) = hdr_pair(w, h);

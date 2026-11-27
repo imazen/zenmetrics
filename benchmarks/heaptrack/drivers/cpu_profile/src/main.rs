@@ -162,46 +162,35 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 }
 
 fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
-    use fast_ssim2::Ssimulacra2Reference;
-    use imgref::ImgRef;
+    use fast_ssim2::{PixelView, Ssimulacra2Config, Ssimulacra2Reference, formats};
     // Strip body height — picks 512 to match cvvdp/iwssim's
     // STRIP_H_BODY_DEFAULT. fast-ssim2 takes an explicit strip_height; it
     // has no separate "body" const (only HALO_ROWS_DEFAULT = 96).
-    const STRIP_H: u32 = 512;
+    const STRIP_H: usize = 512;
     let wu = w as usize;
-    let hu = h as usize;
+    let ri = PixelView::new(r, w, h, wu * 3, &formats::RGB8_SRGB).map_err(|e| format!("{e:?}"))?;
+    let di = PixelView::new(d, w, h, wu * 3, &formats::RGB8_SRGB).map_err(|e| format!("{e:?}"))?;
     match mode {
         "full" => {
-            let ri = ImgRef::new(rgb_pix(r), wu, hu);
-            let di = ImgRef::new(rgb_pix(d), wu, hu);
-            let v = fast_ssim2::compute_ssimulacra2(ri, di).map_err(|e| format!("{e:?}"))?;
+            let v = fast_ssim2::compute_ssimulacra2(&ri, &di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "warm_ref" => {
-            let ri = ImgRef::new(rgb_pix(r), wu, hu);
-            let di = ImgRef::new(rgb_pix(d), wu, hu);
-            let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
-            let v = pre.compare(di).map_err(|e| format!("{e:?}"))?;
+            let pre = Ssimulacra2Reference::new(&ri).map_err(|e| format!("{e:?}"))?;
+            let v = pre.compare(&di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "strip" => {
-            // fast-ssim2 0.8.1 real strip walker: bounds peak working set
-            // to O(strip_height * width). Cold (each call builds both
-            // sides). ImgRef<RGB8> satisfies the ToLinearRgb bound.
-            let ri = ImgRef::new(rgb_pix(r), wu, hu);
-            let di = ImgRef::new(rgb_pix(d), wu, hu);
-            let v = fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H)
+            let cfg = Ssimulacra2Config::strips(STRIP_H);
+            let v = fast_ssim2::compute_ssimulacra2_with_config(&ri, &di, &cfg)
                 .map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "warm_ref_strip" => {
-            // Cached-ref + strip-bounded dist: ref held in the
-            // Ssimulacra2Reference, dist strip-walked.
-            let ri = ImgRef::new(rgb_pix(r), wu, hu);
-            let di = ImgRef::new(rgb_pix(d), wu, hu);
-            let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
+            let cfg = Ssimulacra2Config::strips(STRIP_H);
+            let pre = Ssimulacra2Reference::new(&ri).map_err(|e| format!("{e:?}"))?;
             let v = pre
-                .compare_strip(di, STRIP_H)
+                .compare_with_config(&di, &cfg)
                 .map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }

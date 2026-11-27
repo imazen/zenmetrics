@@ -23,7 +23,7 @@ path = "src/bin/cpu_wall.rs"
 # dispatch with the metrics threaded. fast-ssim2's switch is named `rayon`.
 [features]
 compete-nn = ["compete", "zenmetrics-cli/nn-ort", "zenmetrics-cli/nr"]
-compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "dep:fast-ssim2-current", "avx512"]
+compete = [ "dep:zenresize", "dep:zenmetrics-abstractions", "dep:nlpd", "avx512"]
 # Directly included CLI modules resolve dependencies and cfgs in this package.
 avx512 = ["archmage/avx512", "magetypes/avx512", "zenmetrics-math/avx512", "zenmetrics-cli/avx512"]
 heap-phases = ["zenbench/heap-profiling"]
@@ -44,37 +44,22 @@ magetypes.workspace = true
 zenmetrics-math = { path = "../../../../crates/zenmetrics-math", features = ["std"] }
 sha2 = "0.11.0"
 nlpd = { path = "../../../../crates/nlpd", optional = true, features = ["parallel", "avx512"] }
-zenresize = { git = "https://github.com/imazen/zenresize", rev = "e3975fb9d6d6b7baa96038a0eb8e27febb37c012", optional = true }
+zenresize = { git = "https://github.com/imazen/zenresize", rev = "e6c077561dcb426b23d8e7c3da1ca0e12cc13c5f", optional = true }
 zenmetrics-abstractions = { path = "../../../../crates/zenmetrics-abstractions", optional = true }
 cubecl = { workspace = true, optional = true }
 cudarc = { version = "0.19.10", default-features = false, features = ["std", "driver", "fallback-dynamic-loading", "cuda-version-from-build-system", "fallback-latest"], optional = true }
 zenmetrics-api = { workspace = true, features = ["cpu-metrics", "pixels", "hdr"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-zenpixels = { version = "0.2.16", default-features = false, features = ["std"] }
+zenpixels = { workspace = true, features = ["std"] }
 zenbench = { git = "https://github.com/imazen/zenbench", rev = "ac675d3", default-features = false, features = ["precise-timing", "alloc-profiling"] }
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std", "avx512"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std", "avx512"] }
-zensim       = { path = "../../../../../zensimx/zensim" }
-# RESOLVED VERSION: this requirement reads 0.8.1, but the workspace's
-# [patch.crates-io] supplies the LOCAL sibling, so `cargo tree -p cpu-profile -i
-# fast-ssim2` resolves **0.8.2 (local path)**. Always check the resolver, not
-# this line — the graph also contains a registry 0.7.1 that jxl-encoder's ^0.7.1
-# pins, and the two are easy to confuse (zenmetrics Cargo.toml, fast-ssim2 note).
-#
-# Do NOT add `rayon` on the strength of the aarch64 A/B alone. It is off by
-# default and no consumer enables it (jxl-encoder Cargo.toml:65,
-# zenmetrics-api:165, zenmetrics-orchestrator:119 all take ["imgref"]).
-# MEASURED 2026-08-30 on THIS host only (Apple M4 Pro, aarch64, fast-ssim2 0.8.2;
-# min-of-2 MT runs, benchmarks/metric_loop_2026-08-30.md):
-#   64^2  0.31x  (rayon 3.2x SLOWER - dispatch overhead on a 0.1 ms kernel)
-#   256^2 1.00x   1024^2 1.04x   2048^2 1.03x   4096^2 0.98x
-# i.e. no speedup above the noise floor on aarch64, big regression at thumbnail
-# sizes. **x86 is NOT MEASURED** and the owner reports it used to benefit from
-# more threads there — do not extrapolate either way. Keep the feature set
-# identical to production consumers so the harness measures what ships.
-fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
-fast-ssim2-current = { package = "fast-ssim2", path = "../../../../../fast-ssim2/fast-ssim2", optional = true }
+zensim       = { workspace = true }
+# RESOLVED VERSION: workspace [patch.crates-io] supplies fast-ssim2 0.9.1
+# (zenpixels 0.5 cohort pin). Keep `rayon` off by default here; `metrics-parallel`
+# turns it on explicitly.
+fast-ssim2   = { workspace = true, features = ["imgref"] }
 # Inherit the workspace spec (3.5 + `threads`). The local dssim-core pin's
 # no-`threads` path doesn't compile (its zero-dep rayon fallback is a WIP
 # stub), and dssim-core's parallelism is what we profile anyway.
